@@ -196,6 +196,14 @@ Nama | Nilai
 Satu | 1
 Dua | 2
 
+Tabel dengan format, pipa yang di-escape, pemisah satu strip, serta CJK dan emoji:
+
+| Fitur | Contoh |
+| - | :-: |
+| Pipa di dalam sel | a \| b |
+| CJK dan emoji | 日本語 🎉 |
+| ~~Coret~~ dan ==stabilo== | *miring* dan `kode` |
+
 ## 11. Garis pemisah
 
 Tiga gaya:

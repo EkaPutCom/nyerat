@@ -7,6 +7,7 @@
 //   2. inlineHtml()  memformat isi tiap blok: tebal, miring, kode, tautan, dll.
 
 import { RE, ESCAPE_OR_CODE, startsTable } from './syntax.js';
+import { parseTable, tableEnd } from './table.js';
 
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const slug = (s: string): string => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
@@ -44,7 +45,6 @@ function inlineHtml(s: string): string {
     return s;
 }
 
-const tableCells = (l: string): string[] => l.trim().replace(/^\|/, '').replace(/\|$/, '').split(/(?<!\\)\|/).map(c => c.trim());
 const indentWidth = (s: string): number => s.replace(/\t/g, '    ').length;
 // Lebar indentasi di awal baris (tab = 4 spasi).
 const indentOf = (line: string): number => indentWidth(/^[ \t]*/.exec(line)![0]);
@@ -144,14 +144,13 @@ function blocksHtml(lines: string[]): string {
         }
         if (startsTable(lines, i)) {
             flush();
-            const head = tableCells(line);
-            const al = tableCells(lines[i + 1]).map((c): string =>
-                c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : c.startsWith(':') ? 'left' : '');
-            const cell = (tg: string, c: string, k: number) => `<${tg}${al[k] ? ` style="text-align:${al[k]}"` : ''}>${inlineHtml(c)}</${tg}>`;
-            let html = `<table>\n<thead><tr>${head.map((c, k) => cell('th', c, k)).join('')}</tr></thead>\n<tbody>\n`;
-            for (i += 2; i < lines.length && lines[i].includes('|') && lines[i].trim(); i++)
-                html += `<tr>${tableCells(lines[i]).map((c, k) => cell('td', c, k)).join('')}</tr>\n`;
-            out.push(`${html}</tbody>\n</table>`);
+            const end = tableEnd(lines, i);
+            const table = parseTable(lines.slice(i, end + 1));
+            const cell = (tag: string, text: string, col: number) =>
+                `<${tag}${table.aligns[col] ? ` style="text-align:${table.aligns[col]}"` : ''}>${inlineHtml(text)}</${tag}>`;
+            const row = (tag: string, cells: string[]) => `<tr>${cells.map((c, k) => cell(tag, c, k)).join('')}</tr>`;
+            out.push(`<table>\n<thead>${row('th', table.header)}</thead>\n<tbody>\n${table.rows.map(r => `${row('td', r)}\n`).join('')}</tbody>\n</table>`);
+            i = end + 1;
             continue;
         }
         if (RE.list.test(line) && (para.length === 0 || RE.list.exec(line)![3])) {

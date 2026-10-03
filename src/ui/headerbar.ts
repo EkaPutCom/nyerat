@@ -4,7 +4,19 @@
 import Gtk from 'gi://Gtk?version=3.0';
 import Gio from 'gi://Gio';
 
-const MENU = [
+type Item = [label: string, action: string];
+
+// Perintah untuk tabel di posisi kursor (aksinya di actions.ts).
+const TABLE_MENU: Item[][] = [
+    [['Tambah Baris di Bawah', 'app.table-row-below'], ['Tambah Baris di Atas', 'app.table-row-above'],
+        ['Hapus Baris', 'app.table-delete-row']],
+    [['Tambah Kolom di Kanan', 'app.table-col-right'], ['Tambah Kolom di Kiri', 'app.table-col-left'],
+        ['Hapus Kolom', 'app.table-delete-col']],
+    [['Rata Kiri', 'app.table-align-left'], ['Rata Tengah', 'app.table-align-center'], ['Rata Kanan', 'app.table-align-right']],
+    [['Rapikan Tabel', 'app.table-format']],
+];
+
+const MENU: Item[][] = [
     [['Buka Folder…', 'app.open-folder'], ['Simpan Sebagai…', 'app.save-as'], ['Ekspor HTML…', 'app.export-html']],
     [['Cari', 'app.find'], ['Sisipkan Gambar…', 'app.image'], ['Sisipkan Tabel', 'app.table'],
         ['Sisipkan Blok Kode', 'app.codeblock']],
@@ -34,6 +46,16 @@ export function createHeaderBar(): Gtk.HeaderBar {
     for (const section of MENU) {
         const part = new Gio.Menu();
         for (const [label, action] of section) part.append(label, action);
+        // Submenu Tabel mengikuti item "Sisipkan Tabel".
+        if (section.some(([, action]) => action === 'app.table')) {
+            const sub = new Gio.Menu();
+            for (const group of TABLE_MENU) {
+                const groupMenu = new Gio.Menu();
+                for (const [label, action] of group) groupMenu.append(label, action);
+                sub.append_section(null, groupMenu);
+            }
+            part.append_submenu('Edit Tabel', sub);
+        }
         menu.append_section(null, part);
     }
     const menuButton = new Gtk.MenuButton({ menu_model: menu, tooltip_text: 'Menu' });

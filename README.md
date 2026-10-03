@@ -72,7 +72,9 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 
 **Penulisan ala Typora**
 - Heading, **tebal**, *miring*, ~~coret~~, ==stabilo==, `kode inline`, tautan, dan gambar langsung tampil terformat
-- Blok kode, kutipan, tabel, dan garis pemisah diberi gaya; baris pembatas ```` ``` ```` disembunyikan di luar blok
+- Blok kode, kutipan, dan garis pemisah diberi gaya; baris pembatas ```` ``` ```` disembunyikan di luar blok
+- **Tabel dirender sebagai grid** (garis sel, header tebal, rata kiri/tengah/kanan, dan **tebal**/*miring*/`kode`/tautan di dalam sel). Saat kursor masuk ke tabel, teks mentahnya muncul untuk disunting; klik sebuah sel di grid untuk langsung menyunting sel itu. Tabel yang lebih lebar dari kolom teks dipersempit dan teks yang terpotong diberi "…" (isi lengkapnya muncul sebagai tooltip)
+- Di dalam tabel: `Tab` / `Shift+Tab` pindah antar sel (di sel terakhir, `Tab` menambah baris), `Enter` pindah ke baris berikutnya (di baris kosong terakhir, `Enter` keluar dari tabel). Menu ☰ → **Edit Tabel** untuk tambah/hapus baris dan kolom, rata kiri/tengah/kanan, dan merapikan kolom
 - Isi blok kode diwarnai sesuai bahasanya (```` ```js ````, ```` ```python ````, ```` ```rust ````, dan ratusan bahasa lain dari GtkSourceView), dengan skema warna yang mengikuti mode terang/gelap
 - Daftar tugas `- [ ]` bisa dicentang dengan mengklik kotaknya
 - Tautan dibuka dengan **Ctrl+klik** (path relatif dihitung dari folder file)
@@ -115,6 +117,9 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 | Ctrl+Shift+I | Sisipkan gambar |
 | Ctrl+Shift+K | Sisipkan blok kode |
 | Ctrl+T | Sisipkan tabel |
+| Tab / Shift+Tab | Pindah sel (di dalam tabel) |
+| Enter | Pindah ke baris berikutnya (di dalam tabel) |
+| Ctrl+Shift+T | Rapikan tabel |
 | Ctrl+1 … Ctrl+6 | Heading 1–6 |
 | Ctrl+0 | Kembalikan ke paragraf |
 | Ctrl+Shift+Q | Kutipan |
@@ -135,6 +140,7 @@ Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `di
 
 - **Konversi** Markdown → HTML dan pengurai format inline, tanpa GUI
 - **Editor**: membuka jendela sungguhan, lalu memeriksa sintaks yang disembunyikan/ditampilkan, Enter dan Tab di daftar, shortcut format, undo, klik kotak tugas, serta simpan dan buka file
+- **Tabel**: aturan pengenalan tabel (pemisah satu strip, tanpa pipa di tepi, berhenti di blok lain), pemecahan sel, perataan, merapikan kolom (termasuk lebar CJK dan emoji), operasi baris/kolom, konversi format inline ke markup Pango, lebar kolom; lalu di editor: grid yang muncul dan hilang mengikuti kursor, letak grid di antara paragraf, klik sel, Tab/Shift+Tab/Enter, semua perintah menu, satu perintah = satu langkah undo, mode source, serta tabel beremoji yang tidak membuat GTK gagal menggambar
 - **Warna blok kode**: alias nama bahasa, warna kata kunci/string/komentar, blok tanpa bahasa atau bahasa tak dikenal, pewarnaan ulang saat mengetik, emoji sebelum blok, skema terang/gelap, dan mode fokus yang tetap meredupkan blok kode
 - **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan
 - **Dokumen contoh lengkap**: membuka `tests/samples/semua-format.md`, lalu memeriksa tag setiap format, kasus-kasus sulit, dan hasil ekspor HTML-nya
@@ -188,6 +194,8 @@ src/
 ├── markdown/             memahami Markdown (TypeScript murni, tanpa GTK)
 │   ├── syntax.ts         regex untuk heading, daftar, kutipan, tabel, penekanan
 │   ├── inline.ts         parseInline(): format di dalam satu baris
+│   ├── table.ts          tabel: mengenali blok, memecah sel, rapikan, tambah/hapus baris dan kolom
+│   ├── pango.ts          isi sel tabel (Markdown inline) → markup Pango untuk Gtk.Label
 │   └── html.ts           markdownToHtml(): untuk Ekspor HTML
 │
 ├── editor/               mesin editor ala Typora
@@ -199,6 +207,8 @@ src/
 │   ├── lists.ts          Enter dan Tab di daftar dan kutipan
 │   ├── clicks.ts         klik kotak tugas, membaca URL tautan
 │   ├── images.ts         menampilkan gambar di bawah barisnya
+│   ├── tablelayer.ts     merender tabel sebagai grid yang muncul/hilang mengikuti kursor
+│   ├── tableedit.ts      Tab/Enter di tabel dan perintah menu Edit Tabel
 │   ├── codehighlight.ts  mewarnai isi blok kode sesuai bahasanya
 │   └── offsets.ts        konversi posisi UTF-16 ↔ code point
 │
@@ -262,6 +272,7 @@ Teks berubah ───► queueHighlight() ───► highlight()
                                           ├─ highlighter.ts   pasang tag gaya,
                                           │                   kumpulkan marker + heading
                                           ├─ codehighlight.ts warnai isi blok kode
+                                          ├─ tablelayer.ts    render tabel sebagai grid
                                           ├─ images.ts        tampilkan gambar yang ditemukan
                                           ├─ onHighlighted()  → outline, status bar
                                           └─ updateCursor(true)
@@ -286,7 +297,9 @@ Keduanya ditunda dengan `GLib.idle_add(PRIORITY_HIGH_IDLE)`. Beberapa perubahan 
 
 **Posisi teks (`editor/offsets.ts`).** GtkTextBuffer menghitung posisi per karakter Unicode, sedangkan string JavaScript menghitung per unit UTF-16. Emoji 🎉 bernilai 1 di GTK tetapi 2 di JavaScript. Penyorot bekerja dengan posisi JavaScript, lalu mengonversinya dengan `makeCpMap()` tepat sebelum menyentuh buffer.
 
-**Menyembunyikan teks tanpa `invisible` (`editor/tags.ts`).** Atribut `invisible` milik GtkTextView di GTK 3 bisa memicu crash *"Byte index is off the end of the line"*. Karena itu tag `hidden` membuat teks sangat kecil (`size: 1`) dan berwarna sama dengan latar. Hasilnya di layar sama, tapi jalur kode GTK yang bermasalah tidak tersentuh.
+**Menyembunyikan teks tanpa `invisible` (`editor/tags.ts`).** Atribut `invisible` milik GtkTextView di GTK 3 bisa memicu crash *"Byte index is off the end of the line"*. Karena itu tag `hidden` membuat teks sangat kecil dan berwarna sama dengan latar. Hasilnya di layar sama, tapi jalur kode GTK yang bermasalah tidak tersentuh.
+
+Ukurannya **bukan 1** (satuan Pango, 1/1024 pt) melainkan 256 (`TINY` di `editor/tags.ts`). Font emoji berwarna adalah font bitmap, dan pada ukuran 1 skalanya menjadi nol sehingga GTK gagal menggambar seluruh jendela (*"invalid matrix (not invertible)"*). Ini ketahuan saat tabel berisi emoji dikecilkan; ada tes yang menjaganya.
 
 **Kolom teks di tengah (`editor/view.ts`).** Margin kiri/kanan dihitung dari lebar ScrolledWindow, dan ScrolledWindow memakai `hscrollbar_policy: EXTERNAL`, bukan `NEVER`. Lebar minimum GtkTextView yang dibungkus sama dengan lebarnya saat ini ditambah margin. Dengan `NEVER`, lebar minimum itu diteruskan ke jendela, sehingga jendela tidak bisa mengecil dan terus membesar setiap margin dihitung ulang.
 
@@ -301,6 +314,23 @@ Gambar tidak dimasukkan ke buffer teks. Jika memakai `GtkTextChildAnchor`, setia
 5. Widget dicocokkan berdasarkan URI, bukan nomor baris. Jika ada baris baru di atasnya, widget yang sama hanya dipindahkan, tidak dibuat ulang.
 
 Seperti format lain, seluruh `![alt](url)` didaftarkan sebagai marker, jadi sintaksnya tersembunyi kecuali di baris aktif.
+
+### Cara kerja tabel (`editor/tablelayer.ts`, `tableedit.ts`, `markdown/table.ts`)
+
+Tabel memakai cara yang sama dengan gambar: widget ditempel di atas ruang kosong di dalam teks, sehingga isi dokumen tidak berubah. Bedanya, tabel punya dua keadaan yang mengikuti kursor:
+
+| Kursor | Teks tabel | Grid |
+| --- | --- | --- |
+| di luar tabel | dikecilkan jadi ~1 px per baris (tag `tablehide`) | tampil, di ruang yang disediakan di bawah baris terakhir |
+| di dalam tabel | tampil sebagai teks mentah, untuk disunting | hilang |
+
+1. `markdown/table.ts` mengenali blok tabel (`findTables()`), dan itu satu-satunya tempat aturan tabel ditulis: penyorot, perintah edit, dan ekspor HTML semuanya memakainya.
+2. `highlighter.ts` meneruskan rentang baris tiap tabel ke `TableLayer`.
+3. Saat tabel perlu tampil sebagai grid, `TableLayer` memecah isinya (`parseTable()`), membuat `Gtk.Label` untuk setiap sel dengan markup Pango dari `markdown/pango.ts` (tebal, miring, kode, tautan), lalu menyusunnya di `Gtk.Grid`. Grid baru dibuat saat dibutuhkan, jadi mengetik di dalam tabel tidak membangun ulang apa pun.
+4. Ruang kosong disediakan lewat tag `pixels_below_lines` di baris terakhir tabel setinggi grid, lalu grid ditempel di atasnya dengan `add_child_in_window()`. Posisinya dihitung ulang dari `get_line_yrange()` setiap tata letak berubah.
+5. Lebar kolom sebesar teks terpanjang. Jika jumlahnya melebihi lebar kolom teks, kolom yang sempit dibiarkan dan sisa ruang dibagi ke kolom yang lebar (`fitColumns()`), lalu teksnya dipotong dengan "…". Lebarnya harus dipaksa dengan `set_size_request`, karena TextView hanya memberi anak widget ukuran minimumnya.
+6. Klik sel menaruh kursor di sel itu pada teks mentah (`cellStart()`), yang otomatis membuka tabelnya.
+7. `tableedit.ts` membaca ulang dokumen dari buffer setiap kali dipakai (bukan dari hasil penyorotan terakhir), lalu menulis ulang baris tabel dalam satu langkah undo. Perintah menu selalu menghasilkan tabel yang dirapikan, karena menambah atau menghapus kolom mengubah lebar kolom.
 
 ### Cara kerja warna blok kode (`editor/codehighlight.ts`)
 
@@ -322,7 +352,7 @@ Untuk mempelajari kodenya, urutan berikut bergerak dari yang paling sederhana:
 2. `src/editor/tags.ts` → `highlighter.ts` → `decorations.ts`: inti efek Typora
 3. `src/editor/view.ts`: bagaimana semuanya digerakkan oleh sinyal GTK
 4. `src/editor/editing.ts`, `lists.ts`, `clicks.ts`: interaksi pengguna
-5. `src/editor/images.ts` dan `codehighlight.ts`: gambar dan warna kode
+5. `src/editor/images.ts`, `codehighlight.ts`, dan `tablelayer.ts`: gambar, warna kode, dan tabel (`markdown/table.ts` lebih dulu)
 6. `src/ui/*`: komponen antarmuka
 7. `src/window.ts` dan `src/actions.ts`: bagaimana semuanya disatukan
 8. `tests/run-tests.ts`: contoh pemakaian setiap bagian
@@ -344,9 +374,12 @@ Disimpan di `~/.config/nyerat/settings.json`: mode gelap, sidebar dan tab yang t
 ## Keterbatasan
 
 - Gambar yang diubah di disk tidak dimuat ulang sampai aplikasi dibuka lagi (ada cache per URI); GIF animasi hanya menampilkan frame pertama
-- Gambar di dalam tabel tidak ditampilkan, dan gambar di dalam daftar atau kutipan tidak ikut menjorok
+- Gambar di dalam sel tabel tidak ditampilkan (hanya teks alt-nya), dan gambar di dalam daftar atau kutipan tidak ikut menjorok
 - Warna blok kode belum ikut ke hasil Ekspor HTML; di HTML blok kode hanya diberi kelas `language-…`
-- Tabel masih berupa teks monospace, belum jadi grid yang bisa diedit
+- Sel tabel disunting di teks mentahnya (klik sel atau gerakkan kursor ke dalam tabel), bukan langsung di grid
+- Teks sel yang terlalu panjang dipotong dengan "…", tidak dibungkus ke baris berikutnya, dan isi sel hanya satu baris
+- Merapikan tabel (`Ctrl+Shift+T` dan semua perintah di menu Edit Tabel) membuang sel yang berlebih dibanding baris judul, sesuai aturan GFM
+- Tabel yang kursornya di dalamnya tampil mentah; jika seluruh dokumen hanya berisi satu tabel dan kursor ada di dalamnya, grid baru tampil setelah kursor keluar
 - Garis pemisah tampil sebagai teks `---` pudar di tengah, bukan garis
 - Kutipan bersarang (`>>`) tidak ditampilkan lebih menjorok dari kutipan biasa
 - Penyorotan memproses ulang seluruh dokumen setiap kali teks berubah, sehingga dokumen yang sangat panjang (puluhan ribu baris) bisa terasa lambat

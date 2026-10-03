@@ -11,6 +11,12 @@ import type { Palette } from '../ui/theme.js';
 
 const W = Pango.Weight, S = Pango.Style;
 
+// Ukuran font teks yang "disembunyikan", dalam satuan Pango (1/1024 pt). Jangan 1:
+// font emoji berwarna adalah font bitmap, dan pada ukuran 1 skalanya menjadi nol
+// sehingga GTK gagal menggambar seluruh jendela ("invalid matrix (not invertible)").
+// 256 (seperempat poin) sudah tak terlihat dan aman.
+const TINY = 256;
+
 const TAG_DEFS = {
     // Hasil penyorotan sintaks (dipasang ulang setiap teks berubah)
     h1: { scale: 2.0, weight: W.ULTRABOLD, pixels_above_lines: 22, pixels_below_lines: 10 },
@@ -40,19 +46,22 @@ const TAG_DEFS = {
     done: { strikethrough: true },
     marker: { weight: W.NORMAL, style: S.NORMAL, strikethrough: false, underline: Pango.Underline.NONE },
 
-    // Dekorasi yang bergantung pada posisi kursor (lihat decorations.ts)
+    // Dekorasi yang bergantung pada posisi kursor (lihat decorations.ts, tablelayer.ts)
+    // Baris tabel yang sudah dirender sebagai grid: dikecilkan jadi ~1 px dan tanpa spasi
+    // antarparagraf; ruang untuk grid-nya disediakan tablelayer.ts.
+    tablehide: { size: TINY, letter_spacing: 0, pixels_above_lines: 0, pixels_below_lines: 0, strikethrough: false, underline: Pango.Underline.NONE },
     dim: {},
     // Bukan `invisible`: teks tak terlihat di GtkTextView GTK 3 bisa memicu crash
     // "Byte index is off the end of the line". Marker cukup dibuat sangat kecil
     // dan berwarna sama dengan latar.
-    hidden: { size: 1, letter_spacing: 0, strikethrough: false, underline: Pango.Underline.NONE },
+    hidden: { size: TINY, letter_spacing: 0, strikethrough: false, underline: Pango.Underline.NONE },
 } satisfies Record<string, Partial<Gtk.TextTag.ConstructorProps>>;
 
 export type TagName = keyof typeof TAG_DEFS;
 export type Tags = Record<TagName, Gtk.TextTag>;
 
 // Tag yang dihapus lalu dipasang ulang oleh highlighter.ts.
-export const SYNTAX_TAGS = (Object.keys(TAG_DEFS) as TagName[]).filter(n => n !== 'dim' && n !== 'hidden');
+export const SYNTAX_TAGS = (Object.keys(TAG_DEFS) as TagName[]).filter(n => n !== 'dim' && n !== 'hidden' && n !== 'tablehide');
 
 // Membuat semua tag di buffer. Hasil: { namaTag: Gtk.TextTag }.
 export function createTags(buffer: Gtk.TextBuffer): Tags {
@@ -88,6 +97,7 @@ export function paintTags(t: Tags, p: Palette): void {
     t.marker.foreground = p.faint;
     t.dim.foreground = p.dim;
     t.hidden.foreground = p.bg;
+    t.tablehide.foreground = p.bg;
 }
 
 // Margin tag bersifat absolut, jadi perlu diperbarui saat margin editor berubah.

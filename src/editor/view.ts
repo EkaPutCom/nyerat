@@ -8,6 +8,7 @@
 //   clicks.ts       klik kotak tugas dan Ctrl+klik tautan
 //   images.ts       gambar ditampilkan di bawah barisnya
 //   codehighlight.ts  isi blok kode diwarnai sesuai bahasanya
+//   tablelayer.ts   tabel dirender sebagai grid, tableedit.ts menyuntingnya
 //
 // Widget ini tidak tahu apa-apa soal file, menu, atau sidebar. Ia memberi kabar
 // lewat callback yang dipasang oleh jendela (window.ts):
@@ -29,6 +30,10 @@ import { continueBlock, indentListItem, isInCodeBlock } from './lists.js';
 import { toggleTaskAt, linkAt } from './clicks.js';
 import { ImageLayer } from './images.js';
 import { CodeHighlighter } from './codehighlight.js';
+import { TableLayer } from './tablelayer.js';
+import { cellStart, type TableRange } from '../markdown/table.js';
+import { enterInTable, tabInTable, runTableCommand, type TableCommand } from './tableedit.js';
+import { cpLength } from './offsets.js';
 import type { Tags } from './tags.js';
 import type { HighlightResult, Heading, Marker } from './highlighter.js';
 import type { Palette } from '../ui/theme.js';
@@ -48,10 +53,12 @@ export class MarkdownView {
     readonly tags: Tags;
     readonly images: ImageLayer;
     readonly code: CodeHighlighter;
+    readonly tableLayer: TableLayer;
 
     markers: Marker[] = [];
     headings: Heading[] = [];
     lines: string[] = [];
+    tables: TableRange[] = [];
     modes: Record<Mode, boolean> = { source: false, focus: false, typewriter: false };
 
     onHighlighted: (result: HighlightResult) => void = () => {};
@@ -85,6 +92,16 @@ export class MarkdownView {
             const top = this.buffer.get_tag_table().get_size() - 1;
             this.tags.dim.set_priority(top);
             this.tags.hidden.set_priority(top);
+        };
+
+        this.tableLayer = new TableLayer(this.view, this.tags.tablehide);
+        // Klik sel di grid → kursor ke sel itu di teks mentah (yang membuka tabelnya).
+        this.tableLayer.onActivate = (line, col) => {
+            const text = this.lines[line] ?? '';
+            const it = this.buffer.get_iter_at_line(line);
+            it.forward_chars(cpLength(text.slice(0, cellStart(text, col))));
+            this.buffer.place_cursor(it);
+            this.view.grab_focus();
         };
 
         this.images = new ImageLayer(this.view);
@@ -137,13 +154,17 @@ export class MarkdownView {
     setPalette(palette: Palette): void {
         paintTags(this.tags, palette);
         this.code.setScheme(palette.codeScheme);
+        this.tableLayer.setPalette(palette);
         this.highlight();  // warnai ulang blok kode dengan skema baru
     }
 
     // name: 'source' | 'focus' | 'typewriter'
     setMode(name: Mode, enabled: boolean): void {
         this.modes[name] = enabled;
-        if (name === 'source') this.images.setEnabled(!enabled);
+        if (name === 'source') {
+            this.images.setEnabled(!enabled);
+            this.tableLayer.setEnabled(!enabled);
+        }
         this.queueCursorUpdate(true);
     }
 
@@ -170,6 +191,7 @@ export class MarkdownView {
             this.view.set_right_margin(m);
             setTagMargins(this.tags, m);
             this.images.setMaxWidth(width - 2 * m);
+            this.tableLayer.setMaxWidth(width - 2 * m);
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -198,6 +220,8 @@ export class MarkdownView {
         this.markers = result.markers;
         this.lines = result.lines;
         this.headings = result.headings;
+        this.tables = result.tables;
+        this.tableLayer.update(result.tables, result.lines);
         this.code.apply(result.codeBlocks);
         this.images.update(result.images);
         this.onHighlighted(result);
@@ -229,6 +253,7 @@ export class MarkdownView {
             this.cursorKey = key;
             concealMarkers(buf, this.tags.hidden, this.markers, l0, l1, !this.modes.source);
             dimOutsideParagraph(buf, this.tags.dim, this.lines, l0, l1, this.modes.focus);
+            this.tableLayer.setCursor(l0, l1);
             if (this.modes.typewriter)
                 this.view.scroll_to_mark(buf.get_insert(), 0, true, 0, 0.5);
         }
@@ -245,9 +270,16 @@ export class MarkdownView {
         if (this.buffer.get_has_selection()) return false;
         const shift = (state & Gdk.ModifierType.SHIFT_MASK) !== 0;
 
+        // Di dalam tabel: Tab/Shift+Tab pindah sel, Enter pindah baris.
+        const line = this.buffer.get_iter_at_mark(this.buffer.get_insert()).get_line();
+        if (this.tables.some(t => line >= t.start && line <= t.end)) {
+            if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_ISO_Left_Tab)
+                return tabInTable(this.buffer, shift || keyval === Gdk.KEY_ISO_Left_Tab);
+            if ((keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) && !shift) return enterInTable(this.buffer);
+        }
+
         if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
             if (shift) return false;
-            const line = this.buffer.get_iter_at_mark(this.buffer.get_insert()).get_line();
             if (isInCodeBlock(this.lines, line)) return false;
             if (!continueBlock(this.buffer)) return false;
             this.view.scroll_mark_onscreen(this.buffer.get_insert());
@@ -277,6 +309,13 @@ export class MarkdownView {
             }
         }
         return false;
+    }
+
+    // Perintah tabel dari menu/shortcut. Pesan kegagalan ditampilkan lewat onMessage.
+    tableCommand(command: TableCommand): void {
+        const result = runTableCommand(this.buffer, command);
+        if (!result.ok) this.onMessage(result.reason);
+        this.view.grab_focus();
     }
 
     openUrl(url: string): void {

@@ -8,6 +8,7 @@ import GLib from 'gi://GLib';
 import { wrapSelection, insertLink, insertBlock, togglePrefix, setHeading } from './editor/editing.js';
 import { showAbout } from './ui/dialogs.js';
 import type Gtk from 'gi://Gtk?version=3.0';
+import type { TableCommand } from './editor/tableedit.js';
 import type { MainWindow, Option } from './window.js';
 
 const TABLE_TEMPLATE: [before: string, after: string] = ['| Kolom 1 | Kolom 2 | Kolom 3 |\n| ------- | ------- | ------- |\n| ', ' |  |  |\n'];
@@ -55,6 +56,15 @@ export function registerActions(app: Gtk.Application, w: MainWindow): void {
     // Blok
     action('codeblock', ['<Control><Shift>k'], () => insertBlock(buf, '```\n', '\n```'));
     action('table', ['<Control>t'], () => insertBlock(buf, ...TABLE_TEMPLATE));
+
+    // Edit tabel di posisi kursor
+    const tableActions: [string, TableCommand, string[] | null][] = [
+        ['table-row-below', 'row-below', null], ['table-row-above', 'row-above', null], ['table-delete-row', 'delete-row', null],
+        ['table-col-right', 'col-right', null], ['table-col-left', 'col-left', null], ['table-delete-col', 'delete-col', null],
+        ['table-align-left', 'align-left', null], ['table-align-center', 'align-center', null], ['table-align-right', 'align-right', null],
+        ['table-format', 'format', ['<Control><Shift>t']],
+    ];
+    for (const [name, command, accels] of tableActions) action(name, accels, () => w.editor.tableCommand(command));
     action('quote', ['<Control><Shift>q'], () => togglePrefix(buf, /^>\s?/, '> '));
     action('ulist', ['<Control><Shift>bracketright'], () => togglePrefix(buf, /^[-*+]\s+/, '- '));
     action('olist', ['<Control><Shift>bracketleft'], () => togglePrefix(buf, /^\d+[.)]\s+/, '1. '));

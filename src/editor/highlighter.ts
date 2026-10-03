@@ -10,9 +10,11 @@
 //   lines     isi dokumen per baris
 //   images    gambar yang perlu ditampilkan: { line, url, alt }
 //   codeBlocks isi blok kode beserta bahasanya, untuk diwarnai (lihat codehighlight.ts)
+//   tables    rentang baris setiap tabel, untuk dirender sebagai grid (lihat tablelayer.ts)
 
 import type Gtk from 'gi://Gtk?version=3.0';
-import { RE, startsTable, isTableSeparator } from '../markdown/syntax.js';
+import { RE, isTableSeparator } from '../markdown/syntax.js';
+import { findTables, type TableRange } from '../markdown/table.js';
 import { parseInline } from '../markdown/inline.js';
 import { makeCpMap } from './offsets.js';
 import { SYNTAX_TAGS, type TagName, type Tags } from './tags.js';
@@ -45,6 +47,7 @@ export interface HighlightResult {
     headings: Heading[];
     images: ImageRef[];
     codeBlocks: CodeBlock[];
+    tables: TableRange[];
 }
 
 export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
@@ -77,7 +80,13 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
         }
     };
 
-    let off = 0, inTable = false;
+    // Tabel dikenali lebih dulu dari seluruh dokumen, supaya aturannya sama dengan
+    // yang dipakai perintah edit dan ekspor HTML (markdown/table.ts).
+    const tables = findTables(lines);
+    const tableOf = new Map<number, TableRange>();
+    for (const t of tables) for (let l = t.start; l <= t.end; l++) tableOf.set(l, t);
+
+    let off = 0;
     let fence: { line: number; ch: string; len: number; a: number; b: number; lang: string } | null = null;
     const codeBlocks: CodeBlock[] = [];
     // Blok kode selesai di baris lastLine (eksklusif): catat isinya.
@@ -104,13 +113,10 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
         }
         if ((m = RE.fence.exec(line)) && !(m[2][0] === '`' && m[3].includes('`'))) {
             fence = { line: i, ch: m[2][0], len: m[2].length, a: off, b: lineEnd + nl, lang: m[3].trim().split(/\s+/)[0] ?? '' };
-            inTable = false;
             apply('codeblock', off, lineEnd + nl);
             apply('fence', off, lineEnd);
             continue;
         }
-        // Tabel: dimulai baris judul + baris pemisah, berlanjut selama baris memuat '|'.
-        inTable = inTable ? line.includes('|') && line.trim() !== '' : startsTable(lines, i);
         if ((m = RE.heading.exec(line))) {
             const lvl = m[1].length, pl = m[0].length;
             apply(`h${lvl}` as TagName, off, lineEnd);  // lvl selalu 1–6
@@ -121,10 +127,11 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
             continue;
         }
         if (RE.hr.test(line)) { apply('hr', off, lineEnd); continue; }
-        if (inTable) {
+        const table = tableOf.get(i);
+        if (table) {
             apply('table', off, lineEnd);
-            if (isTableSeparator(line)) apply('tablesep', off, lineEnd);
-            else if (startsTable(lines, i)) apply('tablehead', off, lineEnd);
+            if (i === table.start) apply('tablehead', off, lineEnd);
+            else if (i === table.start + 1 && isTableSeparator(line)) apply('tablesep', off, lineEnd);
             for (let k = 0; k < line.length; k++) if (line[k] === '|') apply('marker', off + k, off + k + 1);
             inline(off, line, i, false);
             continue;
@@ -159,5 +166,5 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
         closeBlock(fence, lines.length);  // blok yang belum ditutup berlanjut sampai akhir dokumen
     }
 
-    return { text, lines, markers, headings, images, codeBlocks };
+    return { text, lines, markers, headings, images, codeBlocks, tables };
 }
