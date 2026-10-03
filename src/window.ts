@@ -13,11 +13,11 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
 import { APP_NAME } from './config.js';
-import { saveSettings } from './settings.js';
+import { saveSettings, type Settings } from './settings.js';
 import { readTextFile, writeTextFile, fileExists } from './files.js';
 import { markdownToHtml } from './markdown/html.js';
 import { WELCOME } from './welcome.js';
-import { MarkdownView } from './editor/view.js';
+import { MarkdownView, type Mode } from './editor/view.js';
 import { Outline } from './ui/outline.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
@@ -28,22 +28,38 @@ import { registerActions } from './actions.js';
 
 const UNTITLED = 'Tanpa Judul';
 
+const errorMessage = (e: unknown): string => e instanceof Error ? e.message : String(e);
+
 // Ukuran jendela tersimpan bisa lebih besar dari layar (misalnya setelah pindah
 // ke monitor yang lebih kecil); batasi ke area kerja monitor.
-function fitToScreen(width, height) {
+function fitToScreen(width: number, height: number): [number, number] {
     const display = Gdk.Display.get_default();
     const monitor = display?.get_primary_monitor() ?? display?.get_monitor(0);
     if (!monitor) return [width, height];
     const area = monitor.get_workarea();
     return [Math.min(width, area.width), Math.min(height, area.height)];
 }
-const MODE_LABELS = { source: 'Source', focus: 'Fokus', typewriter: 'Typewriter' };
+const MODE_LABELS: Record<Mode, string> = { source: 'Source', focus: 'Fokus', typewriter: 'Typewriter' };
+
+// Pilihan tampilan yang bisa diubah dari menu.
+export type Option = 'sidebar' | 'dark' | Mode;
 
 export class MainWindow {
-    constructor(app, settings, path = null) {
+    readonly app: Gtk.Application;
+    readonly settings: Settings;
+    readonly editor: MarkdownView;
+    readonly outline: Outline;
+    readonly findBar: FindBar;
+    readonly statusBar: StatusBar;
+    readonly header: Gtk.HeaderBar;
+    readonly win: Gtk.ApplicationWindow;
+
+    file: string | null = null;   // path dokumen, null = belum pernah disimpan
+    dark: boolean;
+
+    constructor(app: Gtk.Application, settings: Settings, path: string | null = null) {
         this.app = app;
         this.settings = settings;
-        this.file = null;
         this.dark = settings.dark ?? systemPrefersDark();
 
         // Komponen
@@ -63,7 +79,7 @@ export class MainWindow {
         };
         this.editor.onCursorMoved = (line, column) => {
             this.statusBar.setCursor(line, column);
-            this.statusBar.setModes(Object.keys(MODE_LABELS).filter(m => this.editor.modes[m]).map(m => MODE_LABELS[m]));
+            this.statusBar.setModes((Object.keys(MODE_LABELS) as Mode[]).filter(m => this.editor.modes[m]).map(m => MODE_LABELS[m]));
         };
         this.editor.onMessage = msg => this.statusBar.toast(msg);
         this.editor.getBaseDir = () => this.file ? GLib.path_get_dirname(this.file) : GLib.get_home_dir();
@@ -105,17 +121,17 @@ export class MainWindow {
 
     // ---------- Pengaturan tampilan ----------
 
-    setDark(dark) {
+    setDark(dark: boolean): void {
         this.dark = dark;
         this.editor.setPalette(applyTheme(dark));
     }
 
-    // Ubah pengaturan, simpan, lalu terapkan. key: 'sidebar' | 'focus' | 'typewriter' | 'dark' | 'source'
-    setOption(key, value) {
+    // Ubah pilihan tampilan lalu terapkan. Semua kecuali mode source disimpan ke pengaturan.
+    setOption(key: Option, value: boolean): void {
         if (key === 'sidebar') this.outline.setVisible(value);
         else if (key === 'dark') this.setDark(value);
         else this.editor.setMode(key, value);
-        if (key in this.settings) {
+        if (key !== 'source') {
             this.settings[key] = value;
             saveSettings(this.settings);
         }
@@ -123,17 +139,17 @@ export class MainWindow {
 
     // ---------- Dokumen ----------
 
-    get documentName() {
+    get documentName(): string {
         return this.file ? GLib.path_get_basename(this.file) : UNTITLED;
     }
 
     // Nama file usulan dari heading pertama.
-    suggestName() {
+    suggestName(): string {
         const h = this.editor.headings[0];
         return h?.text ? h.text.replace(/[\/\\:*?"<>|]/g, '').slice(0, 60) : UNTITLED;
     }
 
-    updateTitle() {
+    updateTitle(): void {
         const mark = this.editor.buffer.get_modified() ? '• ' : '';
         this.header.set_title(`${mark}${this.documentName}`);
         this.header.set_subtitle(this.file ? GLib.path_get_dirname(this.file).replace(GLib.get_home_dir(), '~') : APP_NAME);
@@ -141,22 +157,22 @@ export class MainWindow {
     }
 
     // Jika ada perubahan, tanya dulu. true = boleh lanjut membuang dokumen ini.
-    confirmDiscard() {
+    confirmDiscard(): boolean {
         if (!this.editor.buffer.get_modified()) return true;
         const answer = askSaveChanges(this.win, this.documentName);
         if (answer === 'save') return this.save();
         return answer === 'discard';
     }
 
-    newDocument() {
+    newDocument(): void {
         if (!this.confirmDiscard()) return;
         this.file = null;
         this.editor.setText('');
         this.updateTitle();
     }
 
-    load(path) {
-        const absolute = Gio.File.new_for_path(path).get_path();
+    load(path: string): boolean {
+        const absolute = Gio.File.new_for_path(path).get_path() ?? path;
         try {
             const text = fileExists(absolute) ? readTextFile(absolute) : '';  // file baru jika belum ada
             // this.file diisi sebelum setText(): path gambar relatif dihitung dari foldernya.
@@ -165,36 +181,36 @@ export class MainWindow {
             this.updateTitle();
             return true;
         } catch (e) {
-            showError(this.win, `Gagal membuka file:\n${e.message}`);
+            showError(this.win, `Gagal membuka file:\n${errorMessage(e)}`);
             return false;
         }
     }
 
-    open() {
+    open(): void {
         if (!this.confirmDiscard()) return;
         const path = chooseFile(this.win, { title: 'Buka Markdown', filters: ['markdown', 'all'] });
         if (path) this.load(path);
     }
 
-    _write(path, text) {
+    private write(path: string, text: string): boolean {
         try {
             writeTextFile(path, text);
             return true;
         } catch (e) {
-            showError(this.win, `Gagal menyimpan:\n${e.message}`);
+            showError(this.win, `Gagal menyimpan:\n${errorMessage(e)}`);
             return false;
         }
     }
 
-    save() {
+    save(): boolean {
         if (!this.file) return this.saveAs();
-        if (!this._write(this.file, this.editor.getText())) return false;
+        if (!this.write(this.file, this.editor.getText())) return false;
         this.editor.buffer.set_modified(false);
         this.statusBar.toast('Tersimpan');
         return true;
     }
 
-    saveAs() {
+    saveAs(): boolean {
         let path = chooseFile(this.win, {
             title: 'Simpan Markdown', save: true, filters: ['markdown', 'all'],
             name: this.file ? this.documentName : `${this.suggestName()}.md`,
@@ -206,7 +222,7 @@ export class MainWindow {
         return this.save();
     }
 
-    exportHtml() {
+    exportHtml(): void {
         const base = this.file ? this.documentName.replace(/\.[^.]+$/, '') : this.suggestName();
         const path = chooseFile(this.win, {
             title: 'Ekspor HTML', save: true, filters: ['html', 'all'], name: `${base}.html`,
@@ -214,11 +230,11 @@ export class MainWindow {
         });
         if (!path) return;
         const html = markdownToHtml(this.editor.getText(), this.editor.headings[0]?.text || base);
-        if (this._write(path, html)) this.statusBar.toast(`Diekspor ke ${GLib.path_get_basename(path)}`);
+        if (this.write(path, html)) this.statusBar.toast(`Diekspor ke ${GLib.path_get_basename(path)}`);
     }
 
     // Sisipkan ![nama](path). Path dibuat relatif terhadap file jika memungkinkan.
-    insertImage() {
+    insertImage(): void {
         let path = chooseFile(this.win, { title: 'Pilih Gambar', filters: ['image'] });
         if (!path) return;
         if (this.file) {
@@ -230,7 +246,7 @@ export class MainWindow {
     }
 
     // true = jendela boleh ditutup.
-    onClose() {
+    onClose(): boolean {
         if (!this.confirmDiscard()) return false;
         const [width, height] = this.win.get_size();
         Object.assign(this.settings, { width, height });

@@ -1,5 +1,5 @@
 // Header bar: tombol-tombol dan menu ☰. Setiap tombol/menu hanya menyebut nama
-// aksi ("app.save"); aksinya sendiri didaftarkan di actions.js.
+// aksi ("app.save"); aksinya sendiri didaftarkan di actions.ts.
 
 import Gtk from 'gi://Gtk?version=3.0';
 import Gio from 'gi://Gio';
@@ -13,7 +13,7 @@ const MENU = [
     [['Tentang Nyerat', 'app.about'], ['Keluar', 'app.quit']],
 ];
 
-function iconButton(icon, action, tooltip, toggle = false) {
+function iconButton(icon: string, action: string, tooltip: string, toggle = false): Gtk.Button {
     const button = toggle ? new Gtk.ToggleButton() : new Gtk.Button();
     button.set_image(Gtk.Image.new_from_icon_name(icon, Gtk.IconSize.BUTTON));
     button.set_action_name(action);
@@ -21,7 +21,7 @@ function iconButton(icon, action, tooltip, toggle = false) {
     return button;
 }
 
-export function createHeaderBar() {
+export function createHeaderBar(): Gtk.HeaderBar {
     const bar = new Gtk.HeaderBar({ show_close_button: true });
     bar.pack_start(iconButton('format-justify-left-symbolic', 'app.sidebar', 'Outline (Ctrl+\\)', true));
     bar.pack_start(iconButton('document-open-symbolic', 'app.open', 'Buka (Ctrl+O)'));

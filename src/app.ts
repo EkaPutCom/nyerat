@@ -9,7 +9,7 @@ import { loadSettings, saveSettings } from './settings.js';
 import { MainWindow } from './window.js';
 
 // argv: argumen baris perintah; argumen pertama yang bukan opsi = file yang dibuka.
-export function main(argv) {
+export function main(argv: string[]): number {
     const file = argv.find(a => !a.startsWith('-')) ?? null;
     // NON_UNIQUE: setiap perintah membuka jendela (proses) sendiri.
     const app = new Gtk.Application({ application_id: APP_ID, flags: Gio.ApplicationFlags.NON_UNIQUE });

@@ -3,7 +3,17 @@
 import GLib from 'gi://GLib';
 import { readTextFile, writeTextFile } from './files.js';
 
-export const DEFAULTS = {
+export interface Settings {
+    dark: boolean | null;
+    sidebar: boolean;
+    typewriter: boolean;
+    focus: boolean;
+    width: number;
+    height: number;
+    welcomed: boolean;
+}
+
+export const DEFAULTS: Settings = {
     dark: null,          // null = ikuti tema sistem
     sidebar: true,
     typewriter: false,
@@ -17,7 +27,7 @@ export const DEFAULTS = {
 const configDir = () => GLib.build_filenamev([GLib.get_user_config_dir(), 'nyerat']);
 const configFile = () => GLib.build_filenamev([configDir(), 'settings.json']);
 
-export function loadSettings() {
+export function loadSettings(): Settings {
     try {
         return { ...DEFAULTS, ...JSON.parse(readTextFile(configFile())) };
     } catch (e) {
@@ -25,7 +35,7 @@ export function loadSettings() {
     }
 }
 
-export function saveSettings(settings) {
+export function saveSettings(settings: Settings): void {
     try {
         GLib.mkdir_with_parents(configDir(), 0o755);
         writeTextFile(configFile(), JSON.stringify(settings, null, 2));

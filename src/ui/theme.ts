@@ -1,11 +1,17 @@
 // Warna, font, dan CSS aplikasi untuk mode terang dan gelap.
-// Warna tag teks editor diatur terpisah di editor/tags.js (paintTags).
+// Warna tag teks editor diatur terpisah di editor/tags.ts (paintTags).
 
 import Gtk from 'gi://Gtk?version=3.0';
 import Gdk from 'gi://Gdk?version=3.0';
 import { FONT_TEXT } from '../config.js';
 
-export const PALETTES = {
+export interface Palette {
+    bg: string; fg: string; heading: string; faint: string; dim: string;
+    accent: string; codeBg: string; codeFg: string; quoteFg: string;
+    quoteBg: string; markBg: string; sel: string; sideBg: string; sideFg: string;
+}
+
+export const PALETTES: Record<'light' | 'dark', Palette> = {
     light: {
         bg: '#ffffff', fg: '#333333', heading: '#1f2328', faint: '#b4b9bf', dim: '#cdd1d5',
         accent: '#4183c4', codeBg: '#f3f4f4', codeFg: '#c7254e', quoteFg: '#6a737d',
@@ -18,9 +24,9 @@ export const PALETTES = {
     },
 };
 
-export const systemPrefersDark = () => /dark/i.test(Gtk.Settings.get_default().gtk_theme_name ?? '');
+export const systemPrefersDark = (): boolean => /dark/i.test(Gtk.Settings.get_default()?.gtk_theme_name ?? '');
 
-const buildCss = p => `
+const buildCss = (p: Palette): string => `
     .editor, .editor text { background-color: ${p.bg}; color: ${p.fg}; }
     .editor { font-family: ${FONT_TEXT}; font-size: 16px; caret-color: ${p.accent}; }
     .editor text selection { background-color: ${p.sel}; color: ${p.fg}; }
@@ -32,17 +38,18 @@ const buildCss = p => `
     .statusbar { background-color: ${p.bg}; color: ${p.faint}; font-size: 12px; padding: 4px 14px; }
 `;
 
-let provider = null;
+let provider: Gtk.CssProvider | null = null;
 
 // Pasang CSS untuk seluruh aplikasi dan beri tahu GTK tema mana yang dipakai.
 // Mengembalikan palet supaya pemanggil bisa mewarnai tag editor.
-export function applyTheme(dark) {
+export function applyTheme(dark: boolean): Palette {
     const palette = PALETTES[dark ? 'dark' : 'light'];
-    Gtk.Settings.get_default().gtk_application_prefer_dark_theme = dark;
+    const settings = Gtk.Settings.get_default();
+    if (settings) settings.gtk_application_prefer_dark_theme = dark;
     if (!provider) {
         provider = new Gtk.CssProvider();
-        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+        const screen = Gdk.Screen.get_default();
+        if (screen) Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
     }
     provider.load_from_data(new TextEncoder().encode(buildCss(palette)));
     return palette;

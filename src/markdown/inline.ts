@@ -9,17 +9,30 @@
 // disembunyikan), dan images [{ alt, url, start, end }].
 // Posisi dalam satuan UTF-16 dan relatif terhadap awal string.
 
-import { EMPHASIS, ESCAPE_OR_CODE } from './syntax.js';
+import { EMPHASIS, ESCAPE_OR_CODE, type InlineTag } from './syntax.js';
+
+export interface InlineImage {
+    alt: string;
+    url: string;
+    start: number;
+    end: number;
+}
+
+export interface InlineResult {
+    tags: [InlineTag, number, number][];
+    marks: [number, number][];
+    images: InlineImage[];
+}
 
 // Mengurai format inline satu baris. Hasil: tag [nama, awal, akhir] dan
 // rentang "marker" (sintaks yang disembunyikan saat kursor di baris lain).
-export function parseInline(s) {
-    const tags = [], marks = [], images = [];
+export function parseInline(s: string): InlineResult {
+    const tags: InlineResult['tags'] = [], marks: InlineResult['marks'] = [], images: InlineImage[] = [];
     const m = s.split('');
-    const mask = (a, b) => { for (let i = a; i < b; i++) m[i] = '\0'; };
+    const mask = (a: number, b: number) => { for (let i = a; i < b; i++) m[i] = '\0'; };
     const cur = () => m.join('');
-    const mark = (a, b) => { if (b > a) { marks.push([a, b]); tags.push(['marker', a, b]); } };
-    let r, t;
+    const mark = (a: number, b: number) => { if (b > a) { marks.push([a, b]); tags.push(['marker', a, b]); } };
+    let r: RegExpExecArray | null, t: string;
 
     const reEscCode = ESCAPE_OR_CODE();
     while ((r = reEscCode.exec(s))) {

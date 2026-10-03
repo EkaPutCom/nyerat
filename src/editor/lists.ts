@@ -1,11 +1,12 @@
 // Perilaku Enter dan Tab di dalam daftar dan kutipan.
 
+import type Gtk from 'gi://Gtk?version=3.0';
 import { RE } from '../markdown/syntax.js';
 import { lineText } from './editing.js';
 
 // Apakah baris lineNo berada di dalam blok kode ```?
-export function isInCodeBlock(lines, lineNo) {
-    let open = null;
+export function isInCodeBlock(lines: string[], lineNo: number): boolean {
+    let open: string | null = null;
     for (let i = 0; i < lineNo && i < lines.length; i++) {
         const m = RE.fence.exec(lines[i]);
         if (!m) continue;
@@ -21,12 +22,12 @@ export function isInCodeBlock(lines, lineNo) {
 //   "- [x] a"  → baris baru "- [ ] "
 //   "> a"      → baris baru "> "
 //   item kosong ("- " atau "> ") → awalannya dihapus, daftar/kutipan berakhir
-export function continueBlock(buffer) {
+export function continueBlock(buffer: Gtk.TextBuffer): boolean {
     const [line, ls, le] = lineText(buffer, buffer.get_iter_at_mark(buffer.get_insert()));
-    const qp = /^(?:[ \t]*>[ \t]?)*/.exec(line)[0];
+    const qp = /^(?:[ \t]*>[ \t]?)*/.exec(line)![0];
     const rest = line.slice(qp.length);
     const lm = RE.list.exec(rest);
-    let prefix = null;
+    let prefix: string | null = null;
     if (lm) {
         if (!rest.slice(lm[0].length).trim()) {
             buffer.begin_user_action();
@@ -56,7 +57,7 @@ export function continueBlock(buffer) {
 }
 
 // Tab / Shift+Tab di baris daftar: tambah atau kurangi indentasi 4 spasi.
-export function indentListItem(buffer, outdent) {
+export function indentListItem(buffer: Gtk.TextBuffer, outdent: boolean): boolean {
     const [line, ls] = lineText(buffer, buffer.get_iter_at_mark(buffer.get_insert()));
     if (!RE.list.test(line.replace(/^(?:[ \t]*>[ \t]?)+/, ''))) return false;
     buffer.begin_user_action();

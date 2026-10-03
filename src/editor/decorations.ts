@@ -1,8 +1,11 @@
 // Dekorasi yang bergantung pada posisi kursor. Dipanggil setiap kursor pindah baris.
 
+import type Gtk from 'gi://Gtk?version=3.0';
+import type { Marker } from './highlighter.js';
+
 // Inti efek "ala Typora": sembunyikan semua marker, kecuali yang aktif di
 // baris l0..l1 (baris kursor atau baris yang terseleksi).
-export function concealMarkers(buffer, tag, markers, l0, l1, enabled) {
+export function concealMarkers(buffer: Gtk.TextBuffer, tag: Gtk.TextTag, markers: Marker[], l0: number, l1: number, enabled: boolean): void {
     const [start, end] = buffer.get_bounds();
     buffer.remove_tag(tag, start, end);
     if (!enabled) return;
@@ -14,11 +17,11 @@ export function concealMarkers(buffer, tag, markers, l0, l1, enabled) {
 
 // Mode fokus: redupkan semua teks di luar paragraf yang memuat baris l0..l1.
 // Paragraf = baris-baris berurutan yang dibatasi baris kosong.
-export function dimOutsideParagraph(buffer, tag, lines, l0, l1, enabled) {
+export function dimOutsideParagraph(buffer: Gtk.TextBuffer, tag: Gtk.TextTag, lines: string[], l0: number, l1: number, enabled: boolean): void {
     const [start, end] = buffer.get_bounds();
     buffer.remove_tag(tag, start, end);
     if (!enabled || !lines.length) return;
-    const blank = n => !lines[n] || !lines[n].trim();
+    const blank = (n: number) => !lines[n] || !lines[n].trim();
     let b0 = l0, b1 = l1;
     while (b0 > 0 && !blank(b0 - 1)) b0--;
     while (b1 < lines.length - 1 && !blank(b1 + 1)) b1++;

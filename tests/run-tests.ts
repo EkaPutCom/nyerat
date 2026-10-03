@@ -1,69 +1,75 @@
-#!/usr/bin/env -S gjs -m
-// Tes otomatis Nyerat.
+// Tes otomatis Nyerat. Dibundel Vite menjadi dist/run-tests.js.
 //
-//   gjs -m tests/run-tests.js                     tes konversi + tes editor (GUI)
-//   gjs -m tests/run-tests.js --no-gui            hanya tes konversi Markdown → HTML
-//   gjs -m tests/run-tests.js --mouse             tambah klik mouse sungguhan (pointer akan bergerak)
-//   gjs -m tests/run-tests.js --screenshot=a.png  simpan tangkapan layar jendela editor
+//   npm test                                         build, lalu semua tes
+//   gjs -m dist/run-tests.js --no-gui                hanya tes konversi Markdown → HTML
+//   gjs -m dist/run-tests.js --mouse                 tambah klik mouse sungguhan (pointer akan bergerak)
+//   gjs -m dist/run-tests.js --screenshot=a.png      simpan tangkapan layar jendela editor
 //
 // Tes GUI membuka jendela sungguhan, jadi perlu sesi desktop (X11/Wayland).
 
 import GLib from 'gi://GLib';
+import Gtk from 'gi://Gtk?version=3.0';
+import Gdk from 'gi://Gdk?version=3.0';
+import Gio from 'gi://Gio';
+import GdkPixbuf from 'gi://GdkPixbuf';
 import System from 'system';
 
-const argv = System.programArgs;
-const opt = name => argv.includes(`--${name}`);
-const optVal = name => argv.find(a => a.startsWith(`--${name}=`))?.split('=').slice(1).join('=');
+import { parseInline } from '../src/markdown/inline.js';
+import { markdownToHtml } from '../src/markdown/html.js';
+import { makeCpMap } from '../src/editor/offsets.js';
+import { DEFAULTS, loadSettings, saveSettings } from '../src/settings.js';
+import { WELCOME } from '../src/welcome.js';
+import { readTextFile } from '../src/files.js';
+import { MainWindow, type Option } from '../src/window.js';
+import type { TagName } from '../src/editor/tags.js';
 
-// Pengaturan dan file tes ditaruh di folder sementara, bukan ~/.config.
-// Harus di-set sebelum modul aplikasi di-import.
+const argv = System.programArgs;
+const opt = (name: string) => argv.includes(`--${name}`);
+const optVal = (name: string) => argv.find(a => a.startsWith(`--${name}=`))?.split('=').slice(1).join('=');
+
+// Folder proyek. File ini berada di tests/ (sumber) atau dist/ (hasil build),
+// jadi folder proyek adalah induk dari foldernya.
+const ROOT = GLib.path_get_dirname(GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0]));
+
+// Pengaturan dan file tes ditaruh di folder sementara, bukan ~/.config. Aman di-set
+// setelah import karena settings.ts baru membaca XDG_CONFIG_HOME saat dipanggil.
 const tmp = GLib.dir_make_tmp('nyerat-test-XXXXXX');
 GLib.setenv('XDG_CONFIG_HOME', tmp, true);
 
-const { default: Gtk } = await import('gi://Gtk?version=3.0');
-const { default: Gdk } = await import('gi://Gdk?version=3.0');
-const { default: Gio } = await import('gi://Gio');
-const { default: GdkPixbuf } = await import('gi://GdkPixbuf');
-const { parseInline } = await import('../src/markdown/inline.js');
-const { markdownToHtml } = await import('../src/markdown/html.js');
-const { makeCpMap } = await import('../src/editor/offsets.js');
-const { DEFAULTS, loadSettings, saveSettings } = await import('../src/settings.js');
-const { WELCOME } = await import('../src/welcome.js');
-const { readTextFile } = await import('../src/files.js');
-const { MainWindow } = await import('../src/window.js');
+const errorMessage = (e: unknown): string => e instanceof Error ? e.message : String(e);
 
 // ───────────────────────── Mini framework ─────────────────────────
 
-let passed = 0, failed = 0, group = '';
+let passed = 0, failed = 0;
 const RED = '\x1b[31m', GREEN = '\x1b[32m', DIM = '\x1b[2m', RESET = '\x1b[0m';
 
-function section(name) { group = name; print(`\n${name}`); }
+function section(name: string): void { print(`\n${name}`); }
 
-function test(name, fn) {
+function test(name: string, fn: () => void): void {
     try {
         fn();
         passed++;
         print(`  ${GREEN}✓${RESET} ${name}`);
     } catch (e) {
         failed++;
-        print(`  ${RED}✗ ${name}${RESET}\n    ${e.message.split('\n').join('\n    ')}`);
+        print(`  ${RED}✗ ${name}${RESET}\n    ${errorMessage(e).split('\n').join('\n    ')}`);
     }
 }
 
-function eq(actual, expected, what = 'nilai') {
+function eq(actual: unknown, expected: unknown, what = 'nilai'): void {
     const a = JSON.stringify(actual), b = JSON.stringify(expected);
     if (a !== b) throw new Error(`${what} salah\n    dapat:    ${a}\n    harapan:  ${b}`);
 }
 
-function ok(cond, msg) { if (!cond) throw new Error(msg); }
+function ok(cond: unknown, msg: string): asserts cond { if (!cond) throw new Error(msg); }
 
-function contains(haystack, needle) {
+function contains(haystack: string, needle: string): void {
     if (!haystack.includes(needle)) throw new Error(`tidak mengandung ${JSON.stringify(needle)}\n    dalam: ${JSON.stringify(haystack.slice(0, 300))}`);
 }
 
 // ───────────────────────── Tes konversi (tanpa GUI) ─────────────────────────
 
-const body = md => markdownToHtml(md, 't').split('<body>\n')[1].split('\n</body>')[0];
+const body = (md: string) => markdownToHtml(md, 't').split('<body>\n')[1].split('\n</body>')[0];
 
 function runUnitTests() {
     section('parseInline');
@@ -146,7 +152,7 @@ function runUnitTests() {
 
 // ───────────────────────── Tes editor (GUI) ─────────────────────────
 
-function runGuiTests(app) {
+function runGuiTests(app: Gtk.Application): void {
     const settings = { ...DEFAULTS, welcomed: true, dark: false };
     const w = new MainWindow(app, settings, null);
     const ed = w.editor;
@@ -154,27 +160,27 @@ function runGuiTests(app) {
     const ctx = GLib.MainContext.default();
     const pump = () => { for (let i = 0; i < 200 && ctx.pending(); i++) ctx.iteration(false); };
     const text = () => { const [s, e] = buf.get_bounds(); return buf.get_text(s, e, true); };
-    const setText = t => { ed.setText(t); pump(); };
-    const cursorTo = (line, col = 0) => {
+    const setText = (t: string) => { ed.setText(t); pump(); };
+    const cursorTo = (line: number, col = 0) => {
         const it = buf.get_iter_at_line(line);
         if (col < 0) it.forward_to_line_end(); else it.forward_chars(col);
         buf.place_cursor(it);
         pump();
     };
-    const hidden = off => buf.get_iter_at_offset(off).has_tag(ed.tags.hidden);
-    const tagAt = (off, name) => buf.get_iter_at_offset(off).has_tag(ed.tags[name]);
-    const key = (keyval, state = 0) => {
+    const hidden = (off: number) => buf.get_iter_at_offset(off).has_tag(ed.tags.hidden);
+    const tagAt = (off: number, name: TagName) => buf.get_iter_at_offset(off).has_tag(ed.tags[name]);
+    const key = (keyval: number, state = 0 as Gdk.ModifierType) => {
         const handled = ed.onKey({ get_keyval: () => [true, keyval], get_state: () => [true, state] });
         if (!handled) buf.insert_at_cursor(keyval === Gdk.KEY_Return ? '\n' : '', -1);
         pump();
     };
-    const action = name => { app.lookup_action(name).activate(null); pump(); };
-    const clickAt = off => {
+    const action = (name: string | Option) => { app.lookup_action(name)!.activate(null); pump(); };
+    const clickAt = (off: number) => {
         const rect = ed.view.get_iter_location(buf.get_iter_at_offset(off));
         const [x, y] = ed.view.buffer_to_window_coords(Gtk.TextWindowType.TEXT, rect.x + 2, rect.y + rect.height / 2);
         const handled = ed.onClick({
             get_button: () => [true, 1], get_event_type: () => Gdk.EventType.BUTTON_PRESS,
-            get_coords: () => [true, x, y], get_state: () => [true, 0],
+            get_coords: () => [true, x, y], get_state: () => [true, 0 as Gdk.ModifierType],
         });
         pump();
         return handled;
@@ -249,7 +255,7 @@ function runGuiTests(app) {
     });
     test('Enter di dalam blok kode tidak menambah bullet', () => {
         setText('```\n- a\n```'); cursorTo(1, -1);
-        ok(!ed.onKey({ get_keyval: () => [true, Gdk.KEY_Return], get_state: () => [true, 0] }), 'Enter ditangani sebagai daftar');
+        ok(!ed.onKey({ get_keyval: () => [true, Gdk.KEY_Return], get_state: () => [true, 0 as Gdk.ModifierType] }), 'Enter ditangani sebagai daftar');
     });
     test('Tab dan Shift+Tab mengatur indentasi', () => {
         setText('- a'); cursorTo(0, -1);
@@ -324,7 +330,7 @@ function runGuiTests(app) {
         }
         pump();
     };
-    const hasGap = line => buf.get_iter_at_line(line).get_tags().some(t => t.name?.startsWith('image-gap-'));
+    const hasGap = (line: number) => buf.get_iter_at_line(line).get_tags().some(t => t.name?.startsWith('image-gap-'));
 
     test('gambar lokal dimuat dan ditampilkan di bawah barisnya', () => {
         w.file = GLib.build_filenamev([tmp, 'dok.md']);
@@ -332,7 +338,7 @@ function runGuiTests(app) {
         waitImages();
         eq(images().length, 1, 'jumlah blok gambar');
         const block = images()[0];
-        eq(block.items[0].entry.status, 'ok', 'status muat');
+        eq(block.items[0].entry?.status, 'ok', 'status muat');
         ok(block.box.get_visible(), 'widget gambar tidak terlihat');
         ok(hasGap(2), 'ruang di bawah baris gambar tidak disediakan');
         const [lineY] = ed.view.get_line_yrange(buf.get_iter_at_line(2));
@@ -359,7 +365,7 @@ function runGuiTests(app) {
     test('gambar yang tidak ada menampilkan pesan', () => {
         setText('![hilang](gambar/tidak-ada.png)');
         waitImages();
-        eq(images()[0].items[0].entry.status, 'error', 'status muat');
+        eq(images()[0].items[0].entry?.status, 'error', 'status muat');
         const label = images()[0].content.get_children()[0];
         ok(label instanceof Gtk.Label && label.label.includes('hilang'), 'label error tidak tampil');
     });
@@ -388,8 +394,8 @@ function runGuiTests(app) {
     w.file = null;
 
     section('Dokumen contoh semua format (tests/samples/semua-format.md)');
-    const samplePath = GLib.build_filenamev([GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0]), 'samples', 'semua-format.md']);
-    const offsetOf = needle => {
+    const samplePath = GLib.build_filenamev([ROOT, 'tests', 'samples', 'semua-format.md']);
+    const offsetOf = (needle: string) => {
         const t = text(), i = t.indexOf(needle);
         ok(i >= 0, `teks ${JSON.stringify(needle)} tidak ditemukan`);
         return Array.from(t.slice(0, i)).length;
@@ -404,7 +410,7 @@ function runGuiTests(app) {
     });
     test('format inline mendapat tag yang benar', () => {
         cursorTo(0);
-        const cases = [['tebal dengan bintang', 'bold'], ['miring dengan garis bawah', 'italic'], ['tebal miring*', 'bolditalic'],
+        const cases: [string, TagName][] = [['tebal dengan bintang', 'bold'], ['miring dengan garis bawah', 'italic'], ['tebal miring*', 'bolditalic'],
             ['dicoret', 'strike'], ['distabilo', 'mark'], ['gjs -m nyerat.js', 'code'], ['GTK](', 'link'], ['Logo GTK', 'image']];
         for (const [needle, tag] of cases) ok(tagAt(offsetOf(needle) + 1, tag), `"${needle}" tidak bertag ${tag}`);
     });
@@ -445,7 +451,7 @@ function runGuiTests(app) {
         w.win.resize(1100, 700); settle();
         const before = winWidth();
         ok(w.load(samplePath), 'load() file pertama gagal'); waitImages(); settle();
-        ok(w.load(GLib.build_filenamev([GLib.path_get_dirname(samplePath), '..', '..', 'README.md'])), 'load() file kedua gagal');
+        ok(w.load(GLib.build_filenamev([ROOT, 'README.md'])), 'load() file kedua gagal');
         settle();
         eq(winWidth(), before, 'lebar jendela');
     });
@@ -497,11 +503,11 @@ function runGuiTests(app) {
         section('Klik mouse sungguhan (XTest)');
         test('klik di seluruh area teks', () => {
             setText(WELCOME);
-            const tw = ed.view.get_window(Gtk.TextWindowType.TEXT);
+            const tw = ed.view.get_window(Gtk.TextWindowType.TEXT)!;
             for (let y = 20; y < tw.get_height(); y += 23) {
                 for (const x of [20, 250, 600]) {
-                    Gdk.test_simulate_button(tw, x, y, 1, 0, Gdk.EventType.BUTTON_PRESS);
-                    Gdk.test_simulate_button(tw, x, y, 1, 0, Gdk.EventType.BUTTON_RELEASE);
+                    Gdk.test_simulate_button(tw, x, y, 1, 0 as Gdk.ModifierType, Gdk.EventType.BUTTON_PRESS);
+                    Gdk.test_simulate_button(tw, x, y, 1, 0 as Gdk.ModifierType, Gdk.EventType.BUTTON_RELEASE);
                     pump();
                 }
             }
@@ -512,9 +518,10 @@ function runGuiTests(app) {
     if (shot) {
         setText(WELCOME);
         cursorTo(0);
+        ed.view.scroll_to_iter(buf.get_start_iter(), 0, false, 0, 0);
         for (let i = 0; i < 20; i++) { pump(); GLib.usleep(20000); }
-        const gw = w.win.get_window();
-        Gdk.pixbuf_get_from_window(gw, 0, 0, gw.get_width(), gw.get_height()).savev(shot, 'png', [], []);
+        const gw = w.win.get_window()!;
+        Gdk.pixbuf_get_from_window(gw, 0, 0, gw.get_width(), gw.get_height())?.savev(shot, 'png', [], []);
         print(`\n${DIM}Tangkapan layar: ${shot}${RESET}`);
     }
 
@@ -538,7 +545,7 @@ if (!opt('no-gui')) {
                     runGuiTests(app);
                 } catch (e) {
                     failed++;
-                    print(`${RED}Tes GUI berhenti: ${e.message}${RESET}\n${e.stack}`);
+                    print(`${RED}Tes GUI berhenti: ${errorMessage(e)}${RESET}\n${e instanceof Error ? e.stack : ''}`);
                 }
                 app.release();
                 app.quit();

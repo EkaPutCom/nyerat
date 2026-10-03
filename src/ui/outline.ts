@@ -3,15 +3,20 @@
 import Gtk from 'gi://Gtk?version=3.0';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
+import type { Heading } from '../editor/highlighter.js';
 
 export class Outline {
-    constructor() {
-        this.onJump = () => {};  // dipanggil dengan nomor baris heading
-        this._signature = '';
+    readonly list: Gtk.ListBox;
+    readonly widget: Gtk.Revealer;
+    onJump: (line: number) => void = () => {};  // heading diklik
 
+    private headings: Heading[] = [];
+    private signature = '';
+
+    constructor() {
         this.list = new Gtk.ListBox({ activate_on_single_click: true });
         this.list.set_selection_mode(Gtk.SelectionMode.NONE);
-        this.list.connect('row-activated', (_, row) => this.onJump(row._line));
+        this.list.connect('row-activated', (_list, row) => this.onJump(this.headings[row.get_index()].line));
         const placeholder = new Gtk.Label({ label: 'Belum ada heading', margin: 16 });
         placeholder.get_style_context().add_class('dim-label');
         placeholder.show();
@@ -34,16 +39,17 @@ export class Outline {
         this.widget.add(wrap);
     }
 
-    setVisible(visible) {
+    setVisible(visible: boolean): void {
         this.widget.set_reveal_child(visible);
     }
 
-    // headings: [{ level, text, line }] dari editor/highlighter.js
-    update(headings) {
+    // headings dari editor/highlighter.ts
+    update(headings: Heading[]): void {
         // Daftar dibangun ulang hanya jika heading benar-benar berubah.
         const signature = JSON.stringify(headings);
-        if (signature === this._signature) return;
-        this._signature = signature;
+        if (signature === this.signature) return;
+        this.signature = signature;
+        this.headings = headings;
 
         for (const child of this.list.get_children()) child.destroy();
         for (const h of headings) {
@@ -55,7 +61,6 @@ export class Outline {
             if (h.level === 1) label.set_markup(`<b>${GLib.markup_escape_text(text, -1)}</b>`);
             const row = new Gtk.ListBoxRow();
             row.add(label);
-            row._line = h.line;
             row.show_all();
             this.list.add(row);
         }

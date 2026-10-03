@@ -3,7 +3,7 @@
 // di GTK tetapi 2 unit di JavaScript, jadi posisi perlu dikonversi.
 
 // Mengembalikan fungsi: offset UTF-16 → offset code point.
-export function makeCpMap(text) {
+export function makeCpMap(text: string): (offset: number) => number {
     if (!/[\uD800-\uDFFF]/.test(text)) return x => x;
     const map = new Int32Array(text.length + 1);
     let cp = 0;
@@ -18,7 +18,7 @@ export function makeCpMap(text) {
 }
 
 // Offset code point → offset UTF-16 di dalam string s.
-export const cpToU16 = (s, cp) => Array.from(s).slice(0, cp).join('').length;
+export const cpToU16 = (s: string, cp: number): number => Array.from(s).slice(0, cp).join('').length;
 
 // Panjang string dalam code point (satuan yang dipakai GtkTextBuffer).
-export const cpLength = s => Array.from(s).length;
+export const cpLength = (s: string): number => Array.from(s).length;

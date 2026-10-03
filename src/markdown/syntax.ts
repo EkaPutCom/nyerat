@@ -1,5 +1,5 @@
 // Pola regex untuk mengenali sintaks Markdown.
-// Dipakai bersama oleh penyorot editor (editor/highlighter.js) dan ekspor HTML (markdown/html.js).
+// Dipakai bersama oleh penyorot editor (editor/highlighter.ts) dan ekspor HTML (markdown/html.ts).
 
 // Pola tingkat blok: diuji terhadap satu baris utuh.
 export const RE = {
@@ -13,21 +13,25 @@ export const RE = {
 
 // Baris pemisah tabel ("| --- | :-: |" atau "--- | ---"). Wajib memuat '|' supaya
 // tidak tertukar dengan garis pemisah "---".
-export const isTableSeparator = line => line.includes('|') && RE.tableSep.test(line);
+export const isTableSeparator = (line: string): boolean => line.includes('|') && RE.tableSep.test(line);
 
 // Awal tabel: baris berisi '|' yang diikuti baris pemisah.
-export const startsTable = (lines, i) => lines[i].includes('|') && i + 1 < lines.length && isTableSeparator(lines[i + 1]);
+export const startsTable = (lines: string[], i: number): boolean => lines[i].includes('|') && i + 1 < lines.length && isTableSeparator(lines[i + 1]);
 
 // Escape (\*) dan kode inline (`kode`) dalam SATU regex, supaya dikenali bersamaan
 // dari kiri ke kanan seperti di CommonMark:
 //   \`bukan kode\`   escape menang, karena backtick-nya sudah "dimakan" escape
 //   `C:\*`           kode menang, karena backslash ada di dalam kode
 // Grup: 1 = karakter yang di-escape, 2 = backtick pembuka, 3 = isi kode.
-export const ESCAPE_OR_CODE = () => /\\([\\`*_{}[\]()#+\-.!~=|<>])|(`+)([^`]|[^`][\s\S]*?[^`])\2(?!`)/g;
+export const ESCAPE_OR_CODE = (): RegExp => /\\([\\`*_{}[\]()#+\-.!~=|<>])|(`+)([^`]|[^`][\s\S]*?[^`])\2(?!`)/g;
+
+// Nama format inline yang dihasilkan parseInline().
+export type InlineTag = 'code' | 'marker' | 'link' | 'image' | EmphasisTag;
+export type EmphasisTag = 'bold' | 'italic' | 'bolditalic' | 'strike' | 'mark';
 
 // Pola penekanan inline: [nama tag, regex, panjang penanda].
 // Urutannya penting: *** dicoba sebelum **, dan ** sebelum *.
-export const EMPHASIS = [
+export const EMPHASIS: [EmphasisTag, RegExp, number][] = [
     ['bolditalic', /(\*\*\*)(?=\S)([\s\S]*?\S)\*\*\*/g, 3],
     ['bolditalic', /(?<!\w)(___)(?=\S)([\s\S]*?\S)___(?!\w)/g, 3],
     ['bold', /(\*\*)(?=\S)([\s\S]*?\S)\*\*/g, 2],

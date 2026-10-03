@@ -7,21 +7,27 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { wrapSelection, insertLink, insertBlock, togglePrefix, setHeading } from './editor/editing.js';
 import { showAbout } from './ui/dialogs.js';
+import type Gtk from 'gi://Gtk?version=3.0';
+import type { MainWindow, Option } from './window.js';
 
-const TABLE_TEMPLATE = ['| Kolom 1 | Kolom 2 | Kolom 3 |\n| ------- | ------- | ------- |\n| ', ' |  |  |\n'];
+const TABLE_TEMPLATE: [before: string, after: string] = ['| Kolom 1 | Kolom 2 | Kolom 3 |\n| ------- | ------- | ------- |\n| ', ' |  |  |\n'];
 
-export function registerActions(app, w) {
+export function registerActions(app: Gtk.Application, w: MainWindow): void {
     const buf = w.editor.buffer;
 
-    const action = (name, accels, run) => {
+    const action = (name: string, accels: string[] | null, run: () => void) => {
         const a = new Gio.SimpleAction({ name });
         a.connect('activate', () => run());
         app.add_action(a);
         if (accels) app.set_accels_for_action(`app.${name}`, accels);
     };
-    const toggle = (name, accels, initial, run) => {
+    const toggle = (name: Option, accels: string[], initial: boolean) => {
         const a = Gio.SimpleAction.new_stateful(name, null, GLib.Variant.new_boolean(initial));
-        a.connect('change-state', (act, value) => { act.set_state(value); run(value.get_boolean()); });
+        a.connect('change-state', (act, value) => {
+            if (!value) return;
+            act.set_state(value);
+            w.setOption(name, value.get_boolean());
+        });
         app.add_action(a);
         if (accels) app.set_accels_for_action(`app.${name}`, accels);
     };
@@ -56,9 +62,9 @@ export function registerActions(app, w) {
 
     // Tampilan
     const s = w.settings;
-    toggle('sidebar', ['<Control>backslash', '<Control><Shift>1'], s.sidebar, v => w.setOption('sidebar', v));
-    toggle('source', ['<Control>slash'], false, v => w.setOption('source', v));
-    toggle('focus', ['F8'], s.focus, v => w.setOption('focus', v));
-    toggle('typewriter', ['F9'], s.typewriter, v => w.setOption('typewriter', v));
-    toggle('dark', ['<Control><Shift>d'], w.dark, v => w.setOption('dark', v));
+    toggle('sidebar', ['<Control>backslash', '<Control><Shift>1'], s.sidebar);
+    toggle('source', ['<Control>slash'], false);
+    toggle('focus', ['F8'], s.focus);
+    toggle('typewriter', ['F9'], s.typewriter);
+    toggle('dark', ['<Control><Shift>d'], w.dark);
 }

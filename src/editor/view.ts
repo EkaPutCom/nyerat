@@ -1,15 +1,15 @@
 // MarkdownView: widget editor ala Typora.
 //
 // Menyatukan GtkSourceView dengan modul-modul di folder ini:
-//   tags.js         gaya teks
-//   highlighter.js  dijalankan setiap teks berubah
-//   decorations.js  dijalankan setiap kursor pindah baris
-//   lists.js        Enter dan Tab
-//   clicks.js       klik kotak tugas dan Ctrl+klik tautan
-//   images.js       gambar ditampilkan di bawah barisnya
+//   tags.ts         gaya teks
+//   highlighter.ts  dijalankan setiap teks berubah
+//   decorations.ts  dijalankan setiap kursor pindah baris
+//   lists.ts        Enter dan Tab
+//   clicks.ts       klik kotak tugas dan Ctrl+klik tautan
+//   images.ts       gambar ditampilkan di bawah barisnya
 //
 // Widget ini tidak tahu apa-apa soal file, menu, atau sidebar. Ia memberi kabar
-// lewat callback yang dipasang oleh jendela (window.js):
+// lewat callback yang dipasang oleh jendela (window.ts):
 //   onHighlighted({ text, headings })   setelah penyorotan
 //   onCursorMoved(line, column)         setelah kursor pindah
 //   onMessage(text)                     pesan singkat untuk pengguna
@@ -27,27 +27,43 @@ import { concealMarkers, dimOutsideParagraph } from './decorations.js';
 import { continueBlock, indentListItem, isInCodeBlock } from './lists.js';
 import { toggleTaskAt, linkAt } from './clicks.js';
 import { ImageLayer } from './images.js';
+import type { Tags } from './tags.js';
+import type { HighlightResult, Heading, Marker } from './highlighter.js';
+import type { Palette } from '../ui/theme.js';
 
 const TEXT_WIDTH = 780;  // lebar kolom teks maksimum, dalam piksel
 
+export type Mode = 'source' | 'focus' | 'typewriter';
+
+// Bagian dari Gdk.Event yang dipakai onKey/onClick (memudahkan tes membuat event tiruan).
+export type KeyEvent = Pick<Gdk.Event, 'get_keyval' | 'get_state'>;
+export type ButtonEvent = Pick<Gdk.Event, 'get_button' | 'get_event_type' | 'get_coords' | 'get_state'>;
+
 export class MarkdownView {
+    readonly buffer: GtkSource.Buffer;
+    readonly view: GtkSource.View;
+    readonly widget: Gtk.ScrolledWindow;
+    readonly tags: Tags;
+    readonly images: ImageLayer;
+
+    markers: Marker[] = [];
+    headings: Heading[] = [];
+    lines: string[] = [];
+    modes: Record<Mode, boolean> = { source: false, focus: false, typewriter: false };
+
+    onHighlighted: (result: HighlightResult) => void = () => {};
+    onCursorMoved: (line: number, column: number) => void = () => {};
+    onMessage: (text: string) => void = () => {};
+    getBaseDir: () => string = () => GLib.get_home_dir();
+
+    private margin = -1;
+    private width = -1;
+    private cursorKey = '';
+    private highlightQueued = false;
+    private cursorQueued = false;
+    private cursorForce = false;
+
     constructor() {
-        this.markers = [];
-        this.headings = [];
-        this.lines = [];
-        this.modes = { source: false, focus: false, typewriter: false };
-
-        this.onHighlighted = () => {};
-        this.onCursorMoved = () => {};
-        this.onMessage = () => {};
-        this.getBaseDir = () => GLib.get_home_dir();
-
-        this._margin = -1;
-        this._cursorKey = '';
-        this._highlightQueued = false;
-        this._cursorQueued = false;
-        this._cursorForce = false;
-
         this.buffer = new GtkSource.Buffer();
         this.buffer.set_highlight_syntax(false);
         this.buffer.set_highlight_matching_brackets(false);
@@ -81,20 +97,22 @@ export class MarkdownView {
         });
         // Margin dihitung dari lebar ScrolledWindow (area yang terlihat), bukan dari
         // TextView, supaya margin tidak ikut menentukan lebarnya sendiri.
-        this.widget.connect('size-allocate', (_w, alloc) => this._updateMargins(alloc.width));
-        this.view.connect('key-press-event', (_w, ev) => this.onKey(ev));
-        this.view.connect('button-press-event', (_w, ev) => this.onClick(ev));
+        this.widget.connect('size-allocate', (_w, alloc) => this.updateMargins(alloc.width));
+        // Tipe @girs menyebut EventKey/EventButton (struct tanpa method), tapi saat
+        // runtime GJS memberikan Gdk.Event yang punya get_keyval(), get_coords(), dst.
+        this.view.connect('key-press-event', (_w, ev) => this.onKey(ev as unknown as Gdk.Event));
+        this.view.connect('button-press-event', (_w, ev) => this.onClick(ev as unknown as Gdk.Event));
     }
 
     // ---------- Isi dan tampilan ----------
 
-    getText() {
+    getText(): string {
         const [s, e] = this.buffer.get_bounds();
         return this.buffer.get_text(s, e, true);
     }
 
     // Ganti seluruh isi tanpa masuk riwayat undo (dipakai saat membuka file).
-    setText(text) {
+    setText(text: string): void {
         const buf = this.buffer;
         buf.begin_not_undoable_action();
         buf.set_text(text, -1);
@@ -104,18 +122,18 @@ export class MarkdownView {
         this.highlight();
     }
 
-    setPalette(palette) {
+    setPalette(palette: Palette): void {
         paintTags(this.tags, palette);
     }
 
     // name: 'source' | 'focus' | 'typewriter'
-    setMode(name, enabled) {
+    setMode(name: Mode, enabled: boolean): void {
         this.modes[name] = enabled;
         if (name === 'source') this.images.setEnabled(!enabled);
         this.queueCursorUpdate(true);
     }
 
-    jumpToLine(n) {
+    jumpToLine(n: number): void {
         const it = this.buffer.get_iter_at_line(n);
         it.forward_to_line_end();
         this.buffer.place_cursor(it);
@@ -127,11 +145,11 @@ export class MarkdownView {
     }
 
     // Kolom teks di tengah: margin kiri/kanan mengikuti lebar jendela.
-    _updateMargins(width) {
+    private updateMargins(width: number): void {
         const m = Math.max(36, Math.floor((width - TEXT_WIDTH) / 2));
-        if (m === this._margin && width === this._width) return;
-        this._margin = m;
-        this._width = width;
+        if (m === this.margin && width === this.width) return;
+        this.margin = m;
+        this.width = width;
         // Jangan ubah ukuran di dalam size-allocate; tunda ke idle.
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this.view.set_left_margin(m);
@@ -151,17 +169,17 @@ export class MarkdownView {
     // jadi satu proses, dan prosesnya selesai sebelum GTK menggambar ulang layar
     // sehingga tidak berkedip.
 
-    queueHighlight() {
-        if (this._highlightQueued) return;
-        this._highlightQueued = true;
+    queueHighlight(): void {
+        if (this.highlightQueued) return;
+        this.highlightQueued = true;
         GLib.idle_add(GLib.PRIORITY_HIGH_IDLE, () => {
-            this._highlightQueued = false;
+            this.highlightQueued = false;
             this.highlight();
             return GLib.SOURCE_REMOVE;
         });
     }
 
-    highlight() {
+    highlight(): void {
         const result = highlight(this.buffer, this.tags);
         this.markers = result.markers;
         this.lines = result.lines;
@@ -171,19 +189,19 @@ export class MarkdownView {
         this.updateCursor(true);
     }
 
-    queueCursorUpdate(force = false) {
-        this._cursorForce ||= force;
-        if (this._cursorQueued) return;
-        this._cursorQueued = true;
+    queueCursorUpdate(force = false): void {
+        this.cursorForce ||= force;
+        if (this.cursorQueued) return;
+        this.cursorQueued = true;
         GLib.idle_add(GLib.PRIORITY_HIGH_IDLE, () => {
-            this._cursorQueued = false;
-            this.updateCursor(this._cursorForce);
-            this._cursorForce = false;
+            this.cursorQueued = false;
+            this.updateCursor(this.cursorForce);
+            this.cursorForce = false;
             return GLib.SOURCE_REMOVE;
         });
     }
 
-    updateCursor(force = false) {
+    updateCursor(force = false): void {
         const buf = this.buffer;
         const ins = buf.get_iter_at_mark(buf.get_insert());
         const sel = buf.get_iter_at_mark(buf.get_selection_bound());
@@ -192,8 +210,8 @@ export class MarkdownView {
 
         // Dekorasi hanya perlu dihitung ulang jika baris aktif berubah.
         const key = `${l0}:${l1}`;
-        if (force || key !== this._cursorKey) {
-            this._cursorKey = key;
+        if (force || key !== this.cursorKey) {
+            this.cursorKey = key;
             concealMarkers(buf, this.tags.hidden, this.markers, l0, l1, !this.modes.source);
             dimOutsideParagraph(buf, this.tags.dim, this.lines, l0, l1, this.modes.focus);
             if (this.modes.typewriter)
@@ -205,7 +223,7 @@ export class MarkdownView {
     // ---------- Input ----------
 
     // Dipanggil untuk setiap tombol. true = sudah ditangani, GTK tidak memprosesnya lagi.
-    onKey(ev) {
+    onKey(ev: KeyEvent): boolean {
         const [, keyval] = ev.get_keyval();
         const [, state] = ev.get_state();
         if (state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.MOD1_MASK)) return false;
@@ -225,7 +243,7 @@ export class MarkdownView {
         return false;
     }
 
-    onClick(ev) {
+    onClick(ev: ButtonEvent): boolean {
         const [, button] = ev.get_button();
         if (button !== 1 || ev.get_event_type() !== Gdk.EventType.BUTTON_PRESS) return false;
         const [, x, y] = ev.get_coords();
@@ -246,15 +264,15 @@ export class MarkdownView {
         return false;
     }
 
-    openUrl(url) {
+    openUrl(url: string): void {
         let uri = url;
         if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) {
             const path = GLib.path_is_absolute(url) ? url : GLib.build_filenamev([this.getBaseDir(), decodeURI(url)]);
             uri = Gio.File.new_for_path(path).get_uri();
         }
         try {
-            Gtk.show_uri_on_window(this.view.get_toplevel(), uri, Gdk.CURRENT_TIME);
-        } catch (e) {
+            Gtk.show_uri_on_window(this.view.get_toplevel() as Gtk.Window, uri, Gdk.CURRENT_TIME);
+        } catch {
             this.onMessage(`Tidak bisa membuka ${url}`);
         }
     }

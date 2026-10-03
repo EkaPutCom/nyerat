@@ -8,10 +8,10 @@
 
 import { RE, ESCAPE_OR_CODE, startsTable } from './syntax.js';
 
-const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const slug = s => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const slug = (s: string): string => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
 
-function emphHtml(s) {
+function emphHtml(s: string): string {
     return s
         .replace(/\*\*\*(?=\S)([\s\S]*?\S)\*\*\*/g, '<strong><em>$1</em></strong>')
         .replace(/(?<!\w)___(?=\S)([\s\S]*?\S)___(?!\w)/g, '<strong><em>$1</em></strong>')
@@ -23,35 +23,45 @@ function emphHtml(s) {
         .replace(/==(?=\S)([\s\S]*?\S)==/g, '<mark>$1</mark>');
 }
 
-function inlineHtml(s) {
-    const codes = [], escs = [], links = [];
-    s = s.replace(ESCAPE_OR_CODE(), (_, ch, ticks, code) => ch !== undefined
+function inlineHtml(s: string): string {
+    const codes: string[] = [], escs: string[] = [], links: string[] = [];
+    s = s.replace(ESCAPE_OR_CODE(), (_: string, ch: string | undefined, _ticks: string, code: string) => ch !== undefined
         ? `\u0002${escs.push(esc(ch)) - 1}\u0002`
         : `\u0001${codes.push(`<code>${esc(code)}</code>`) - 1}\u0001`);
     s = esc(s);
-    const tok = html => `\u0003${links.push(html) - 1}\u0003`;
+    const tok = (html: string) => `\u0003${links.push(html) - 1}\u0003`;
     s = s.replace(/!\[([^\]]*)\]\(([^)\s]*)(?:\s+&quot;(.*?)&quot;)?\)/g,
-        (_, alt, src, t) => tok(`<img src="${src}" alt="${alt}"${t ? ` title="${t}"` : ''}>`));
+        (_: string, alt: string, src: string, t?: string) => tok(`<img src="${src}" alt="${alt}"${t ? ` title="${t}"` : ''}>`));
     s = s.replace(/\[([^\]]*)\]\(([^)\s]*)(?:\s+&quot;(.*?)&quot;)?\)/g,
-        (_, txt, href, t) => tok(`<a href="${href}"${t ? ` title="${t}"` : ''}>${emphHtml(txt)}</a>`));
-    s = s.replace(/&lt;((?:https?|mailto|ftp):[^\s&]+)&gt;/g, (_, u) => tok(`<a href="${u}">${u}</a>`));
+        (_: string, txt: string, href: string, t?: string) => tok(`<a href="${href}"${t ? ` title="${t}"` : ''}>${emphHtml(txt)}</a>`));
+    s = s.replace(/&lt;((?:https?|mailto|ftp):[^\s&]+)&gt;/g, (_: string, u: string) => tok(`<a href="${u}">${u}</a>`));
     s = s.replace(/\bhttps?:\/\/[^\s<\u0003]*[^\s<\u0003.,;:!?)\]'"]/g, u => tok(`<a href="${u}">${u}</a>`));
     s = emphHtml(s);
     s = s.replace(/ {2,}\n|\\\n/g, '<br>\n');
-    s = s.replace(/\u0003(\d+)\u0003/g, (_, i) => links[i]);
-    s = s.replace(/\u0002(\d+)\u0002/g, (_, i) => escs[i]);
-    s = s.replace(/\u0001(\d+)\u0001/g, (_, i) => codes[i]);
+    s = s.replace(/\u0003(\d+)\u0003/g, (_, i: string) => links[Number(i)]);
+    s = s.replace(/\u0002(\d+)\u0002/g, (_, i: string) => escs[Number(i)]);
+    s = s.replace(/\u0001(\d+)\u0001/g, (_, i: string) => codes[Number(i)]);
     return s;
 }
 
-const tableCells = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split(/(?<!\\)\|/).map(c => c.trim());
-const indentWidth = s => s.replace(/\t/g, '    ').length;
+const tableCells = (l: string): string[] => l.trim().replace(/^\|/, '').replace(/\|$/, '').split(/(?<!\\)\|/).map(c => c.trim());
+const indentWidth = (s: string): number => s.replace(/\t/g, '    ').length;
+// Lebar indentasi di awal baris (tab = 4 spasi).
+const indentOf = (line: string): number => indentWidth(/^[ \t]*/.exec(line)![0]);
 
-function parseList(lines, i) {
-    const first = RE.list.exec(lines[i]);
+interface ListItem {
+    num: number;
+    task: boolean | null;   // null = bukan daftar tugas
+    lines: string[];
+    ci: number;             // indentasi isi item
+}
+
+// Mengurai daftar mulai baris i. Hasil: [html, indeks baris setelah daftar].
+function parseList(lines: string[], i: number): [string, number] {
+    const first = RE.list.exec(lines[i])!;
     const ordered = /\d/.test(first[2]);
     const base = indentWidth(first[1]);
-    const items = [];
+    const items: ListItem[] = [];
     let loose = false;
     while (i < lines.length) {
         const m = RE.list.exec(lines[i]);
@@ -68,7 +78,7 @@ function parseList(lines, i) {
             while (j < lines.length && !lines[j].trim()) j++;
             if (j >= lines.length) break;
             const nm = RE.list.exec(lines[j]);
-            const ind = indentWidth(lines[j].match(/^[ \t]*/)[0]);
+            const ind = indentOf(lines[j]);
             if ((nm && ind === base) || ind > base) {
                 loose = true;
                 for (; i < j; i++) it.lines.push('');
@@ -76,7 +86,7 @@ function parseList(lines, i) {
             }
             break;
         }
-        const ind = indentWidth(lines[i].match(/^[ \t]*/)[0]);
+        const ind = indentOf(lines[i]);
         if (ind > base) {
             it.lines.push(lines[i].replace(/^[ \t]*/, ' '.repeat(Math.max(0, ind - it.ci))));
             i++;
@@ -90,8 +100,8 @@ function parseList(lines, i) {
     }
     const tag = ordered ? 'ol' : 'ul';
     const start = ordered && items[0].num !== 1 ? ` start="${items[0].num}"` : '';
-    const body = items.map(it => {
-        let html = blocksHtml(it.lines);
+    const body = items.map((it): string => {
+        let html: string = blocksHtml(it.lines);
         if (!loose) html = html.replace(/^<p>([\s\S]*?)<\/p>/, '$1');
         if (it.task !== null)
             return `<li class="task"><input type="checkbox" disabled${it.task ? ' checked' : ''}> ${html}</li>`;
@@ -100,9 +110,9 @@ function parseList(lines, i) {
     return [`<${tag}${start}>\n${body}\n</${tag}>`, i];
 }
 
-function blocksHtml(lines) {
-    const out = [];
-    let para = [], i = 0, m;
+function blocksHtml(lines: string[]): string {
+    const out: string[] = [];
+    let para: string[] = [], i = 0, m: RegExpExecArray | null;
     const flush = () => { if (para.length) { out.push(`<p>${inlineHtml(para.join('\n'))}</p>`); para = []; } };
     while (i < lines.length) {
         const line = lines[i];
@@ -135,16 +145,16 @@ function blocksHtml(lines) {
         if (startsTable(lines, i)) {
             flush();
             const head = tableCells(line);
-            const al = tableCells(lines[i + 1]).map(c =>
+            const al = tableCells(lines[i + 1]).map((c): string =>
                 c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : c.startsWith(':') ? 'left' : '');
-            const cell = (tg, c, k) => `<${tg}${al[k] ? ` style="text-align:${al[k]}"` : ''}>${inlineHtml(c)}</${tg}>`;
+            const cell = (tg: string, c: string, k: number) => `<${tg}${al[k] ? ` style="text-align:${al[k]}"` : ''}>${inlineHtml(c)}</${tg}>`;
             let html = `<table>\n<thead><tr>${head.map((c, k) => cell('th', c, k)).join('')}</tr></thead>\n<tbody>\n`;
             for (i += 2; i < lines.length && lines[i].includes('|') && lines[i].trim(); i++)
                 html += `<tr>${tableCells(lines[i]).map((c, k) => cell('td', c, k)).join('')}</tr>\n`;
             out.push(`${html}</tbody>\n</table>`);
             continue;
         }
-        if (RE.list.test(line) && (para.length === 0 || RE.list.exec(line)[3])) {
+        if (RE.list.test(line) && (para.length === 0 || RE.list.exec(line)![3])) {
             flush();
             const [html, ni] = parseList(lines, i);
             out.push(html);
@@ -158,7 +168,7 @@ function blocksHtml(lines) {
     return out.join('\n');
 }
 
-export function markdownToHtml(src, title) {
+export function markdownToHtml(src: string, title: string): string {
     const body = blocksHtml(src.replace(/\r\n?/g, '\n').split('\n'));
     return `<!DOCTYPE html>
 <html lang="id">

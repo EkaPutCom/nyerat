@@ -10,29 +10,53 @@
 //   lines     isi dokumen per baris
 //   images    gambar yang perlu ditampilkan: { line, url, alt }
 
+import type Gtk from 'gi://Gtk?version=3.0';
 import { RE, startsTable, isTableSeparator } from '../markdown/syntax.js';
 import { parseInline } from '../markdown/inline.js';
 import { makeCpMap } from './offsets.js';
-import { SYNTAX_TAGS } from './tags.js';
+import { SYNTAX_TAGS, type TagName, type Tags } from './tags.js';
 
-export function highlight(buffer, tags) {
+// Sintaks yang boleh disembunyikan: [awal, akhir, barisPertama, barisTerakhir].
+export type Marker = [start: number, end: number, firstLine: number, lastLine: number];
+
+export interface Heading {
+    level: number;
+    text: string;
+    line: number;
+}
+
+export interface ImageRef {
+    line: number;
+    url: string;
+    alt: string;
+}
+
+export interface HighlightResult {
+    text: string;
+    lines: string[];
+    markers: Marker[];
+    headings: Heading[];
+    images: ImageRef[];
+}
+
+export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
     const [start, end] = buffer.get_bounds();
     const text = buffer.get_text(start, end, true);
     for (const name of SYNTAX_TAGS) buffer.remove_tag(tags[name], start, end);
 
     // Semua posisi di bawah ini dalam UTF-16 (string JS); dikonversi saat menyentuh buffer.
     const toCp = makeCpMap(text);
-    const iter = off => buffer.get_iter_at_offset(toCp(off));
-    const apply = (name, a, b) => { if (b > a) buffer.apply_tag(tags[name], iter(a), iter(b)); };
-    const markers = [];
-    const hide = (a, b, l0, l1) => { if (b > a) markers.push([toCp(a), toCp(b), l0, l1]); };
-    const headings = [];
+    const iter = (off: number) => buffer.get_iter_at_offset(toCp(off));
+    const apply = (name: TagName, a: number, b: number) => { if (b > a) buffer.apply_tag(tags[name], iter(a), iter(b)); };
+    const markers: Marker[] = [];
+    const hide = (a: number, b: number, l0: number, l1: number) => { if (b > a) markers.push([toCp(a), toCp(b), l0, l1]); };
+    const headings: Heading[] = [];
     const lines = text.split('\n');
 
-    const images = [];
+    const images: ImageRef[] = [];
 
     // withImages = false untuk baris tabel: gambar di bawah baris tabel merusak tata letaknya.
-    const inline = (base, s, line, withImages = true) => {
+    const inline = (base: number, s: string, line: number, withImages = true) => {
         const { tags: found, marks, images: imgs } = parseInline(s);
         for (const [n, a, b] of found) apply(n, base + a, base + b);
         for (const [a, b] of marks) hide(base + a, base + b, line, line);
@@ -40,17 +64,18 @@ export function highlight(buffer, tags) {
         for (const img of imgs) {
             images.push({ line, url: img.url, alt: img.alt });
             // Seperti Typora: di baris yang tidak aktif, seluruh ![alt](url) disembunyikan
-            // dan hanya gambarnya yang terlihat (lihat editor/images.js).
+            // dan hanya gambarnya yang terlihat (lihat editor/images.ts).
             hide(base + img.start, base + img.end, line, line);
         }
     };
 
-    let off = 0, fence = null, inTable = false;
+    let off = 0, inTable = false;
+    let fence: { line: number; ch: string; len: number; a: number; b: number } | null = null;
     for (let i = 0; i < lines.length; off += lines[i].length + 1, i++) {
         const line = lines[i];
         const lineEnd = off + line.length;
         const nl = i < lines.length - 1 ? 1 : 0;
-        let m;
+        let m: RegExpExecArray | null;
 
         // Di dalam blok kode: tidak ada format lain, cari pembatas penutup.
         if (fence) {
@@ -75,7 +100,7 @@ export function highlight(buffer, tags) {
         inTable = inTable ? line.includes('|') && line.trim() !== '' : startsTable(lines, i);
         if ((m = RE.heading.exec(line))) {
             const lvl = m[1].length, pl = m[0].length;
-            apply(`h${lvl}`, off, lineEnd);
+            apply(`h${lvl}` as TagName, off, lineEnd);  // lvl selalu 1–6
             apply('marker', off, off + pl);
             hide(off, off + pl, i, i);
             inline(off + pl, line.slice(pl), i);

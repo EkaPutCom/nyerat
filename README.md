@@ -1,6 +1,6 @@
 # Nyerat
 
-Editor Markdown ala [Typora](https://typora.io) untuk desktop Linux, dibuat dengan **GTK 3**, **GtkSourceView 4**, dan **GJS** (JavaScript untuk GNOME).
+Editor Markdown ala [Typora](https://typora.io) untuk desktop Linux, dibuat dengan **GTK 3**, **GtkSourceView 4**, dan **GJS** (JavaScript untuk GNOME). Kodenya ditulis dalam **TypeScript** dan dibundel dengan **Vite**.
 
 Tidak ada panel pratinjau terpisah: teks langsung tampil terformat. Sintaks Markdown seperti `#`, `**`, `` ` `` dan `[](url)` disembunyikan, lalu muncul lagi saat kursor berada di baris tersebut.
 
@@ -9,6 +9,7 @@ Tidak ada panel pratinjau terpisah: teks langsung tampil terformat. Sintaks Mark
 - Linux dengan desktop X11 atau Wayland
 - GJS (diuji dengan versi 1.80)
 - GTK 3 dan GtkSourceView 4 (biasanya sudah terpasang di desktop GNOME)
+- Node.js 20.19+ atau 22.12+ (syarat Vite), **hanya untuk build** (diuji dengan Node.js 24). Aplikasinya sendiri dijalankan GJS, bukan Node.js.
 
 Di Ubuntu/Debian:
 
@@ -16,19 +17,33 @@ Di Ubuntu/Debian:
 sudo apt install gjs gir1.2-gtk-3.0 gir1.2-gtksource-4
 ```
 
-Tidak perlu compile, Node.js, atau npm.
-
 ## Menjalankan
 
-```bash
-gjs -m nyerat.js
-```
-
-Membuka file tertentu (file yang belum ada akan dibuat saat disimpan):
+Sekali saja, pasang dependensi pengembangan (Vite, TypeScript, dan tipe GJS/GTK):
 
 ```bash
-gjs -m nyerat.js catatan.md
+npm install
 ```
+
+Build lalu jalankan:
+
+```bash
+npm start
+```
+
+Setelah di-build, aplikasi bisa dijalankan langsung tanpa npm, termasuk untuk membuka file tertentu (file yang belum ada akan dibuat saat disimpan):
+
+```bash
+gjs -m dist/nyerat.js catatan.md
+```
+
+| Perintah | Fungsi |
+| --- | --- |
+| `npm run build` | Periksa tipe (`tsc --noEmit`), lalu bundel dengan Vite ke `dist/` |
+| `npm run watch` | Build ulang otomatis setiap file disimpan (tutup dan buka lagi aplikasinya untuk melihat perubahan) |
+| `npm run typecheck` | Hanya periksa tipe |
+| `npm start` | Build, lalu jalankan aplikasi |
+| `npm test` | Build, lalu jalankan semua tes |
 
 ## Fitur
 
@@ -86,25 +101,21 @@ gjs -m nyerat.js catatan.md
 ## Tes
 
 ```bash
-gjs -m tests/run-tests.js
+npm test
 ```
 
-Tes ditulis dengan GJS saja, tanpa framework tambahan, dan keluar dengan kode `1` jika ada yang gagal. Isinya:
+Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `dist/run-tests.js`, lalu dijalankan GJS. Script keluar dengan kode `1` jika ada yang gagal. Isinya:
 
 - **Konversi** Markdown → HTML dan pengurai format inline, tanpa GUI
 - **Editor**: membuka jendela sungguhan, lalu memeriksa sintaks yang disembunyikan/ditampilkan, Enter dan Tab di daftar, shortcut format, undo, klik kotak tugas, serta simpan dan buka file
 - **Dokumen contoh lengkap**: membuka `tests/samples/semua-format.md`, lalu memeriksa tag setiap format, kasus-kasus sulit, dan hasil ekspor HTML-nya
 - **Ketahanan**: kursor disapu ke semua baris, mengetik di tiap baris, dan dokumen dihapus sedikit demi sedikit untuk mencari crash
 
-### File contoh
-
-[`tests/samples/semua-format.md`](tests/samples/semua-format.md) berisi semua format yang didukung beserta kasus-kasus sulit: penekanan bersarang, escape, URL bergaris bawah, emoji dan teks non-Latin, tabel tanpa pipa di tepi, blok kode empat backtick, serta penekanan yang tidak ditutup. Buka di editor untuk memeriksa tampilannya secara manual:
+Opsi tambahan, dijalankan setelah `npm run build`:
 
 ```bash
-gjs -m nyerat.js tests/samples/semua-format.md
+gjs -m dist/run-tests.js --mouse
 ```
-
-File ini juga dipakai oleh tes otomatis, jadi jika menambah format baru, tambahkan juga contohnya di sini.
 
 | Opsi | Fungsi |
 | --- | --- |
@@ -114,83 +125,115 @@ File ini juga dipakai oleh tes otomatis, jadi jika menambah format baru, tambahk
 
 Tes memakai folder pengaturan sementara, jadi pengaturan Anda tidak tersentuh.
 
+### File contoh
+
+[`tests/samples/semua-format.md`](tests/samples/semua-format.md) berisi semua format yang didukung beserta kasus-kasus sulit: penekanan bersarang, escape, URL bergaris bawah, emoji dan teks non-Latin, tabel tanpa pipa di tepi, blok kode empat backtick, serta penekanan yang tidak ditutup. Buka di editor untuk memeriksa tampilannya secara manual:
+
+```bash
+gjs -m dist/nyerat.js tests/samples/semua-format.md
+```
+
+File ini juga dipakai oleh tes otomatis, jadi jika menambah format baru, tambahkan juga contohnya di sini.
+
 ## Arsitektur
 
 ### Struktur folder
 
 ```
-nyerat.js                 titik masuk: hanya memanggil main() dari src/app.js
+package.json              script npm dan dependensi pengembangan
+tsconfig.json             pengaturan pemeriksaan tipe TypeScript
+vite.config.ts            pengaturan build Vite
+dist/                     hasil build (tidak masuk git)
 src/
-├── app.js                membuat Gtk.Application dan jendela
-├── window.js             MainWindow: menyusun komponen + buka/simpan/ekspor
-├── actions.js            semua aksi menu dan shortcut keyboard
-├── config.js             nama, ID, versi aplikasi, dan font
-├── settings.js           baca/tulis ~/.config/nyerat/settings.json
-├── files.js              baca/tulis file teks UTF-8
-├── welcome.js            dokumen contoh saat pertama dibuka
+├── main.ts               titik masuk: hanya memanggil main() dari app.ts
+├── env.d.ts              tipe untuk GJS dan modul gi:// (dari paket @girs)
+├── app.ts                membuat Gtk.Application dan jendela
+├── window.ts             MainWindow: menyusun komponen + buka/simpan/ekspor
+├── actions.ts            semua aksi menu dan shortcut keyboard
+├── config.ts             nama, ID, versi aplikasi, dan font
+├── settings.ts           baca/tulis ~/.config/nyerat/settings.json
+├── files.ts              baca/tulis file teks UTF-8
+├── welcome.ts            dokumen contoh saat pertama dibuka
 │
-├── markdown/             memahami Markdown (JavaScript murni, tanpa GTK)
-│   ├── syntax.js         regex untuk heading, daftar, kutipan, tabel, penekanan
-│   ├── inline.js         parseInline(): format di dalam satu baris
-│   └── html.js           markdownToHtml(): untuk Ekspor HTML
+├── markdown/             memahami Markdown (TypeScript murni, tanpa GTK)
+│   ├── syntax.ts         regex untuk heading, daftar, kutipan, tabel, penekanan
+│   ├── inline.ts         parseInline(): format di dalam satu baris
+│   └── html.ts           markdownToHtml(): untuk Ekspor HTML
 │
 ├── editor/               mesin editor ala Typora
-│   ├── view.js           MarkdownView: widget editor, menyatukan modul di bawah
-│   ├── tags.js           gaya teks (GtkTextTag) dan warnanya
-│   ├── highlighter.js    memasang tag sesuai sintaks, mengumpulkan marker
-│   ├── decorations.js    menyembunyikan marker, meredupkan (mode fokus)
-│   ├── editing.js        perintah format: tebal, tautan, heading, kutipan
-│   ├── lists.js          Enter dan Tab di daftar dan kutipan
-│   ├── clicks.js         klik kotak tugas, membaca URL tautan
-│   ├── images.js         menampilkan gambar di bawah barisnya
-│   └── offsets.js        konversi posisi UTF-16 ↔ code point
+│   ├── view.ts           MarkdownView: widget editor, menyatukan modul di bawah
+│   ├── tags.ts           gaya teks (GtkTextTag) dan warnanya
+│   ├── highlighter.ts    memasang tag sesuai sintaks, mengumpulkan marker
+│   ├── decorations.ts    menyembunyikan marker, meredupkan (mode fokus)
+│   ├── editing.ts        perintah format: tebal, tautan, heading, kutipan
+│   ├── lists.ts          Enter dan Tab di daftar dan kutipan
+│   ├── clicks.ts         klik kotak tugas, membaca URL tautan
+│   ├── images.ts         menampilkan gambar di bawah barisnya
+│   └── offsets.ts        konversi posisi UTF-16 ↔ code point
 │
 └── ui/                   komponen antarmuka
-    ├── headerbar.js      tombol dan menu ☰
-    ├── outline.js        sidebar daftar heading
-    ├── findbar.js        bilah pencarian
-    ├── statusbar.js      hitungan kata, posisi kursor, pesan singkat
-    ├── dialogs.js        pilih file, konfirmasi simpan, error, tentang
-    └── theme.js          palet warna, font, CSS terang/gelap
+    ├── headerbar.ts      tombol dan menu ☰
+    ├── outline.ts        sidebar daftar heading
+    ├── findbar.ts        bilah pencarian
+    ├── statusbar.ts      hitungan kata, posisi kursor, pesan singkat
+    ├── dialogs.ts        pilih file, konfirmasi simpan, error, tentang
+    └── theme.ts          palet warna, font, CSS terang/gelap
 tests/
-├── run-tests.js          tes otomatis
+├── run-tests.ts          tes otomatis
 └── samples/
     ├── semua-format.md   dokumen berisi semua format, untuk tes dan pemeriksaan manual
     └── gambar/contoh.png gambar lokal yang dirujuk dokumen itu
 ```
+
+### Build: TypeScript + Vite
+
+Vite dipakai sebagai **bundler** saja (mode library di [`vite.config.ts`](vite.config.ts)). Dev server dan HMR-nya tidak dipakai, karena ini aplikasi GTK yang dijalankan GJS, bukan halaman web.
+
+```
+src/main.ts ─────────┐                        ┌─► dist/nyerat.js         (aplikasi)
+                     ├─► tsc --noEmit ─► vite ┼─► dist/run-tests.js      (tes)
+tests/run-tests.ts ──┘   (cek tipe)   (bundel)└─► dist/chunks/window.js  (kode bersama)
+```
+
+- **Dua langkah build.** Vite (lewat esbuild) hanya membuang anotasi tipe tanpa memeriksanya. Karena itu `npm run build` menjalankan `tsc --noEmit` lebih dulu, dan build berhenti jika ada kesalahan tipe.
+- **Modul bawaan GJS ditandai `external`**: `gi://...`, `system`, `gettext`, `cairo`, dan `console`. Modul-modul ini disediakan GJS saat runtime, jadi tidak ikut dibundel dan tidak dicari di `node_modules`.
+- **Target `firefox115`**, karena GJS 1.80 memakai mesin JavaScript SpiderMonkey 115.
+- **Tipe untuk GTK, GLib, dan lainnya** berasal dari paket `@girs/*` (proyek ts-for-gir). Paket-paket itu didaftarkan di [`src/env.d.ts`](src/env.d.ts), sehingga `import Gtk from 'gi://Gtk?version=3.0'` dikenali TypeScript. Paket ini hanya dipakai saat pengecekan tipe dan tidak ikut ke `dist/`.
+- **Import antarmodul tetap memakai akhiran `.js`** (misalnya `'./tags.js'`), meskipun filenya `.ts`. TypeScript dan Vite sama-sama memetakannya ke file `.ts`.
+- **Satu pengecualian tipe di `editor/view.ts`.** Tipe `@girs` menyebut parameter sinyal `key-press-event` sebagai `EventKey`, yaitu struct tanpa method. Padahal saat runtime GJS memberikan `Gdk.Event` yang punya `get_keyval()` dan sejenisnya. Karena itu event tersebut di-*cast* ke `Gdk.Event`.
 
 ### Lapisan dan arah ketergantungan
 
 Kode dibagi menjadi lapisan. Setiap lapisan hanya boleh memakai lapisan di bawahnya, tidak pernah ke atas:
 
 ```
- app.js
-   └─ window.js ── actions.js
+ app.ts
+   └─ window.ts ── actions.ts
         ├─ ui/*            komponen antarmuka
         ├─ editor/*        mesin editor
         │    └─ markdown/* aturan Markdown (tanpa GTK)
-        └─ settings.js, files.js, config.js
+        └─ settings.ts, files.ts, config.ts
 ```
 
 - **`markdown/`** tidak meng-import GTK sama sekali. Isinya hanya fungsi string → data, jadi paling mudah dipelajari dan diuji.
 - **`editor/`** tidak tahu apa-apa soal file, menu, atau sidebar. `MarkdownView` hanya memberi kabar lewat callback (`onHighlighted`, `onCursorMoved`, `onMessage`).
 - **`ui/`** berisi komponen yang berdiri sendiri. `Outline` tidak kenal editor; ia hanya menerima daftar heading dan memanggil `onJump(baris)` saat diklik.
-- **`window.js`** adalah satu-satunya tempat komponen saling dihubungkan. Contoh: setelah penyorotan, editor memanggil `onHighlighted`, lalu jendela meneruskan heading ke `Outline` dan teks ke `StatusBar`.
+- **`window.ts`** adalah satu-satunya tempat komponen saling dihubungkan. Contoh: setelah penyorotan, editor memanggil `onHighlighted`, lalu jendela meneruskan heading ke `Outline` dan teks ke `StatusBar`.
 
 ### Alur kerja editor
 
-Ada dua siklus utama di `editor/view.js`:
+Ada dua siklus utama di `editor/view.ts`:
 
 ```
 Teks berubah ───► queueHighlight() ───► highlight()
-                                          ├─ highlighter.js   pasang tag gaya,
+                                          ├─ highlighter.ts   pasang tag gaya,
                                           │                   kumpulkan marker + heading
-                                          ├─ images.js        tampilkan gambar yang ditemukan
+                                          ├─ images.ts        tampilkan gambar yang ditemukan
                                           ├─ onHighlighted()  → outline, status bar
                                           └─ updateCursor(true)
 
 Kursor pindah ──► queueCursorUpdate() ──► updateCursor()
-                                          ├─ decorations.js   sembunyikan marker di luar
+                                          ├─ decorations.ts   sembunyikan marker di luar
                                           │                   baris aktif, redupkan (fokus)
                                           └─ onCursorMoved()  → status bar
 ```
@@ -199,25 +242,25 @@ Keduanya ditunda dengan `GLib.idle_add(PRIORITY_HIGH_IDLE)`. Beberapa perubahan 
 
 ### Cara kerja efek "ala Typora"
 
-1. **`highlighter.js`** membaca dokumen baris per baris. Untuk setiap sintaks, ia memasang tag gaya pada isinya (misalnya `bold` pada "tebal" di `**tebal**`) dan mencatat posisi penandanya (`**`) sebagai **marker**.
+1. **`highlighter.ts`** membaca dokumen baris per baris. Untuk setiap sintaks, ia memasang tag gaya pada isinya (misalnya `bold` pada "tebal" di `**tebal**`) dan mencatat posisi penandanya (`**`) sebagai **marker**.
 2. Setiap marker menyimpan rentang baris tempat ia "aktif": `[awal, akhir, barisPertama, barisTerakhir]`. Untuk format inline, rentangnya hanya barisnya sendiri. Untuk pembatas ```` ``` ````, rentangnya seluruh blok kode, jadi pembatas muncul selama kursor ada di dalam blok.
-3. **`decorations.js`** memasang tag `hidden` pada semua marker yang rentang barisnya tidak memuat kursor. Begitu kursor pindah baris, hanya langkah ini yang diulang; penyorotan penuh tidak perlu dijalankan lagi.
+3. **`decorations.ts`** memasang tag `hidden` pada semua marker yang rentang barisnya tidak memuat kursor. Begitu kursor pindah baris, hanya langkah ini yang diulang; penyorotan penuh tidak perlu dijalankan lagi.
 
-`parseInline()` di `markdown/inline.js` memakai teknik **masking**: setelah suatu bagian dikenali (misalnya kode inline), karakternya diganti `\0` agar tidak dikenali lagi oleh pola berikutnya. Itu sebabnya `` `**bukan tebal**` `` tetap tampil sebagai kode.
+`parseInline()` di `markdown/inline.ts` memakai teknik **masking**: setelah suatu bagian dikenali (misalnya kode inline), karakternya diganti `\0` agar tidak dikenali lagi oleh pola berikutnya. Itu sebabnya `` `**bukan tebal**` `` tetap tampil sebagai kode.
 
 ### Hal teknis yang perlu diketahui
 
-**Posisi teks (`editor/offsets.js`).** GtkTextBuffer menghitung posisi per karakter Unicode, sedangkan string JavaScript menghitung per unit UTF-16. Emoji 🎉 bernilai 1 di GTK tetapi 2 di JavaScript. Penyorot bekerja dengan posisi JavaScript, lalu mengonversinya dengan `makeCpMap()` tepat sebelum menyentuh buffer.
+**Posisi teks (`editor/offsets.ts`).** GtkTextBuffer menghitung posisi per karakter Unicode, sedangkan string JavaScript menghitung per unit UTF-16. Emoji 🎉 bernilai 1 di GTK tetapi 2 di JavaScript. Penyorot bekerja dengan posisi JavaScript, lalu mengonversinya dengan `makeCpMap()` tepat sebelum menyentuh buffer.
 
-**Menyembunyikan teks tanpa `invisible` (`editor/tags.js`).** Atribut `invisible` milik GtkTextView di GTK 3 bisa memicu crash *"Byte index is off the end of the line"*. Karena itu tag `hidden` membuat teks sangat kecil (`size: 1`) dan berwarna sama dengan latar. Hasilnya di layar sama, tapi jalur kode GTK yang bermasalah tidak tersentuh.
+**Menyembunyikan teks tanpa `invisible` (`editor/tags.ts`).** Atribut `invisible` milik GtkTextView di GTK 3 bisa memicu crash *"Byte index is off the end of the line"*. Karena itu tag `hidden` membuat teks sangat kecil (`size: 1`) dan berwarna sama dengan latar. Hasilnya di layar sama, tapi jalur kode GTK yang bermasalah tidak tersentuh.
 
-**Kolom teks di tengah (`editor/view.js`).** Margin kiri/kanan dihitung dari lebar ScrolledWindow, dan ScrolledWindow memakai `hscrollbar_policy: EXTERNAL`, bukan `NEVER`. Lebar minimum GtkTextView yang dibungkus sama dengan lebarnya saat ini ditambah margin. Dengan `NEVER`, lebar minimum itu diteruskan ke jendela, sehingga jendela tidak bisa mengecil dan terus membesar setiap margin dihitung ulang.
+**Kolom teks di tengah (`editor/view.ts`).** Margin kiri/kanan dihitung dari lebar ScrolledWindow, dan ScrolledWindow memakai `hscrollbar_policy: EXTERNAL`, bukan `NEVER`. Lebar minimum GtkTextView yang dibungkus sama dengan lebarnya saat ini ditambah margin. Dengan `NEVER`, lebar minimum itu diteruskan ke jendela, sehingga jendela tidak bisa mengecil dan terus membesar setiap margin dihitung ulang.
 
-### Cara kerja gambar (`editor/images.js`)
+### Cara kerja gambar (`editor/images.ts`)
 
 Gambar tidak dimasukkan ke buffer teks. Jika memakai `GtkTextChildAnchor`, setiap gambar akan menambah karakter ke dokumen dan ke riwayat undo. Sebagai gantinya:
 
-1. `highlighter.js` mencatat setiap gambar beserta barisnya: `{ line, url, alt }`.
+1. `highlighter.ts` mencatat setiap gambar beserta barisnya: `{ line, url, alt }`.
 2. `ImageLayer` memuat gambar secara async lewat GIO (file lokal, atau http/https lewat gvfs) dan menyimpannya di cache per URI. Mengetik tidak memuat ulang gambar yang sama.
 3. Di bawah baris gambar disediakan ruang kosong dengan tag `pixels_below_lines` setinggi gambarnya.
 4. Widget gambar ditempel di atas ruang itu dengan `add_child_in_window()`. Posisinya dalam koordinat buffer sehingga ikut bergulir, dan dihitung ulang dari `get_line_yrange()` setiap kali tata letak berubah.
@@ -229,24 +272,24 @@ Seperti format lain, seluruh `![alt](url)` didaftarkan sebagai marker, jadi sint
 
 Untuk mempelajari kodenya, urutan berikut bergerak dari yang paling sederhana:
 
-1. `src/markdown/syntax.js` → `inline.js` → `html.js`: aturan Markdown, tanpa GTK
-2. `src/editor/tags.js` → `highlighter.js` → `decorations.js`: inti efek Typora
-3. `src/editor/view.js`: bagaimana semuanya digerakkan oleh sinyal GTK
-4. `src/editor/editing.js`, `lists.js`, `clicks.js`: interaksi pengguna
-5. `src/editor/images.js`: menempelkan widget di atas teks
+1. `src/markdown/syntax.ts` → `inline.ts` → `html.ts`: aturan Markdown, tanpa GTK
+2. `src/editor/tags.ts` → `highlighter.ts` → `decorations.ts`: inti efek Typora
+3. `src/editor/view.ts`: bagaimana semuanya digerakkan oleh sinyal GTK
+4. `src/editor/editing.ts`, `lists.ts`, `clicks.ts`: interaksi pengguna
+5. `src/editor/images.ts`: menempelkan widget di atas teks
 6. `src/ui/*`: komponen antarmuka
-7. `src/window.js` dan `src/actions.js`: bagaimana semuanya disatukan
-8. `tests/run-tests.js`: contoh pemakaian setiap bagian
+7. `src/window.ts` dan `src/actions.ts`: bagaimana semuanya disatukan
+8. `tests/run-tests.ts`: contoh pemakaian setiap bagian
 
 ### Menambah fitur
 
 Contoh menambah format baru, misalnya `^superskrip^`:
 
-1. Tambahkan pola di `EMPHASIS` (`src/markdown/syntax.js`), misalnya `['sup', /(\^)(?=\S)([\s\S]*?\S)\^/g, 1]`
-2. Tambahkan tag `sup` di `TAG_DEFS` (`src/editor/tags.js`), misalnya `{ rise: 4000, scale: 0.8 }`
-3. Tambahkan konversinya di `emphHtml()` (`src/markdown/html.js`)
-4. Jika perlu shortcut, daftarkan di `src/actions.js`: `action('sup', ['<Control><Shift>p'], () => wrapSelection(buf, '^'))`
-5. Tambahkan contohnya di `tests/samples/semua-format.md` dan tesnya di `tests/run-tests.js`
+1. Tambahkan pola di `EMPHASIS` (`src/markdown/syntax.ts`), misalnya `['sup', /(\^)(?=\S)([\s\S]*?\S)\^/g, 1]`, lalu tambahkan `'sup'` ke tipe `EmphasisTag` di file yang sama
+2. Tambahkan tag `sup` di `TAG_DEFS` (`src/editor/tags.ts`), misalnya `{ rise: 4000, scale: 0.8 }`
+3. Tambahkan konversinya di `emphHtml()` (`src/markdown/html.ts`)
+4. Jika perlu shortcut, daftarkan di `src/actions.ts`: `action('sup', ['<Control><Shift>p'], () => wrapSelection(buf, '^'))`
+5. Tambahkan contohnya di `tests/samples/semua-format.md` dan tesnya di `tests/run-tests.ts`
 
 ## Pengaturan
 

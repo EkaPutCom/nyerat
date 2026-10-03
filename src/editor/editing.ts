@@ -1,12 +1,13 @@
 // Perintah format yang mengubah isi buffer: tebal, tautan, heading, kutipan, dll.
 // Setiap perintah dibungkus begin/end_user_action supaya satu Ctrl+Z membatalkannya.
 
+import type Gtk from 'gi://Gtk?version=3.0';
 import { cpLength } from './offsets.js';
 
-const cursorIter = buffer => buffer.get_iter_at_mark(buffer.get_insert());
+const cursorIter = (buffer: Gtk.TextBuffer) => buffer.get_iter_at_mark(buffer.get_insert());
 
 // Isi satu baris beserta iter awal dan akhirnya: [teks, awal, akhir].
-export function lineText(buffer, iter) {
+export function lineText(buffer: Gtk.TextBuffer, iter: Gtk.TextIter): [string, Gtk.TextIter, Gtk.TextIter] {
     const s = iter.copy();
     s.set_line_offset(0);
     const e = iter.copy();
@@ -15,7 +16,7 @@ export function lineText(buffer, iter) {
 }
 
 // Nomor baris pertama dan terakhir dari seleksi (atau baris kursor).
-export function selectedLines(buffer) {
+export function selectedLines(buffer: Gtk.TextBuffer): [number, number] {
     const [has, s, e] = buffer.get_selection_bounds();
     const a = has ? s : cursorIter(buffer);
     const b = has ? e : a;
@@ -25,7 +26,7 @@ export function selectedLines(buffer) {
 // Bungkus seleksi dengan penanda, misalnya ** untuk tebal. Jika seleksi sudah
 // terbungkus, penandanya dilepas. Tanpa seleksi: sisipkan pasangan penanda dan
 // taruh kursor di tengahnya.
-export function wrapSelection(buffer, left, right = left) {
+export function wrapSelection(buffer: Gtk.TextBuffer, left: string, right = left): void {
     buffer.begin_user_action();
     const [has, s, e] = buffer.get_selection_bounds();
     if (has) {
@@ -47,7 +48,7 @@ export function wrapSelection(buffer, left, right = left) {
 }
 
 // Seleksi berupa teks → [teks](), berupa URL → [](url). Kursor ditaruh di bagian yang kosong.
-export function insertLink(buffer) {
+export function insertLink(buffer: Gtk.TextBuffer): void {
     const [has, s, e] = buffer.get_selection_bounds();
     buffer.begin_user_action();
     if (has) {
@@ -68,7 +69,7 @@ export function insertLink(buffer) {
 }
 
 // Sisipkan blok (blok kode, tabel) dan taruh kursor di antara before dan after.
-export function insertBlock(buffer, before, after) {
+export function insertBlock(buffer: Gtk.TextBuffer, before: string, after: string): void {
     const [line] = lineText(buffer, cursorIter(buffer));
     buffer.begin_user_action();
     const lead = line.trim() ? '\n\n' : '';
@@ -81,9 +82,9 @@ export function insertBlock(buffer, before, after) {
 
 // Tambah/hapus awalan baris ("> ", "- ", "1. ") pada semua baris terseleksi.
 // Jika semua baris sudah berawalan, awalan dihapus.
-export function togglePrefix(buffer, re, prefix) {
+export function togglePrefix(buffer: Gtk.TextBuffer, re: RegExp, prefix: string): void {
     const [l0, l1] = selectedLines(buffer);
-    const all = [];
+    const all: string[] = [];
     for (let n = l0; n <= l1; n++) all.push(lineText(buffer, buffer.get_iter_at_line(n))[0]);
     const remove = all.every(l => re.test(l));
     buffer.begin_user_action();
@@ -92,7 +93,7 @@ export function togglePrefix(buffer, re, prefix) {
         const line = lineText(buffer, ls)[0];
         if (remove) {
             const e = ls.copy();
-            e.forward_chars(cpLength(re.exec(line)[0]));
+            e.forward_chars(cpLength(re.exec(line)![0]));
             buffer.delete(ls, e);
         } else {
             buffer.insert(ls, prefix === '1. ' ? `${n - l0 + 1}. ` : prefix, -1);
@@ -102,7 +103,7 @@ export function togglePrefix(buffer, re, prefix) {
 }
 
 // Jadikan baris kursor heading level 1–6; level 0 atau level yang sama = paragraf biasa.
-export function setHeading(buffer, level) {
+export function setHeading(buffer: Gtk.TextBuffer, level: number): void {
     const [line, ls] = lineText(buffer, cursorIter(buffer));
     const m = /^#{1,6}[ \t]*/.exec(line);
     const cur = m ? m[0].replace(/\s/g, '').length : 0;

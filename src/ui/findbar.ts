@@ -5,7 +5,14 @@ import Gtk from 'gi://Gtk?version=3.0';
 import GtkSource from 'gi://GtkSource?version=4';
 
 export class FindBar {
-    constructor(buffer, view) {
+    readonly buffer: Gtk.TextBuffer;
+    readonly view: Gtk.TextView;
+    readonly settings: GtkSource.SearchSettings;
+    readonly context: GtkSource.SearchContext;
+    readonly entry: Gtk.SearchEntry;
+    readonly widget: Gtk.SearchBar;
+
+    constructor(buffer: GtkSource.Buffer, view: Gtk.TextView) {
         this.buffer = buffer;
         this.view = view;
         this.settings = new GtkSource.SearchSettings({ wrap_around: true, case_sensitive: false });
@@ -40,33 +47,33 @@ export class FindBar {
         });
     }
 
-    open() {
+    open(): void {
         this.widget.search_mode_enabled = true;
         this.entry.grab_focus();
     }
 
-    close() {
+    close(): void {
         this.widget.search_mode_enabled = false;
         this.view.grab_focus();
     }
 
     // fromSelectionStart: saat teks pencarian berubah, cari mulai dari awal seleksi
     // supaya hasil yang sedang terpilih tetap dipakai jika masih cocok.
-    findNext(fromSelectionStart = false) {
+    findNext(fromSelectionStart = false): void {
         if (!this.settings.search_text) return;
         const [has, s, e] = this.buffer.get_selection_bounds();
         const from = has ? (fromSelectionStart ? s : e) : this.buffer.get_iter_at_mark(this.buffer.get_insert());
-        this._select(this.context.forward(from));
+        this.select(this.context.forward(from));
     }
 
-    findPrevious() {
+    findPrevious(): void {
         if (!this.settings.search_text) return;
         const [has, s] = this.buffer.get_selection_bounds();
-        this._select(this.context.backward(has ? s : this.buffer.get_iter_at_mark(this.buffer.get_insert())));
+        this.select(this.context.backward(has ? s : this.buffer.get_iter_at_mark(this.buffer.get_insert())));
     }
 
-    _select([found, start, end]) {
-        if (!found) return;
+    private select([found, start, end]: [boolean, Gtk.TextIter | null, Gtk.TextIter | null, boolean]): void {
+        if (!found || !start || !end) return;
         this.buffer.select_range(start, end);
         this.view.scroll_to_iter(start, 0.1, false, 0, 0);
     }
