@@ -73,7 +73,8 @@ export class MarkdownView {
     private width = -1;
     private cursorKey = '';
     private highlightQueued = false;
-    private cursorQueued = false;
+    private cursorQueued = 0;
+    private destroyed = false;
     private cursorForce = false;
 
     constructor() {
@@ -135,6 +136,11 @@ export class MarkdownView {
         // runtime GJS memberikan Gdk.Event yang punya get_keyval(), get_coords(), dst.
         this.view.connect('key-press-event', (_w, ev) => this.onKey(ev as unknown as Gdk.Event));
         this.view.connect('button-press-event', (_w, ev) => this.onClick(ev as unknown as Gdk.Event));
+        this.view.connect('destroy', () => {
+            this.destroyed = true;
+            if (this.cursorQueued) GLib.source_remove(this.cursorQueued);
+            this.cursorQueued = 0;
+        });
     }
 
     // ---------- Isi dan tampilan ----------
@@ -260,10 +266,9 @@ export class MarkdownView {
 
     queueCursorUpdate(force = false): void {
         this.cursorForce ||= force;
-        if (this.cursorQueued) return;
-        this.cursorQueued = true;
-        GLib.idle_add(GLib.PRIORITY_HIGH_IDLE, () => {
-            this.cursorQueued = false;
+        if (this.destroyed || this.cursorQueued) return;
+        this.cursorQueued = GLib.idle_add(GLib.PRIORITY_HIGH_IDLE, () => {
+            this.cursorQueued = 0;
             this.updateCursor(this.cursorForce);
             this.cursorForce = false;
             return GLib.SOURCE_REMOVE;

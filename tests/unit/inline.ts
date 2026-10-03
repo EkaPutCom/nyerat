@@ -1,0 +1,39 @@
+// Tes parseInline.
+
+import { makeCpMap } from '../../src/editor/offsets.js';
+import { parseInline } from '../../src/markdown/inline.js';
+import { section, test, eq, ok } from '../framework.js';
+
+export function inlineTests(): void {
+    section('parseInline');
+    test('tebal menghasilkan tag dan marker', () => {
+        const r = parseInline('a **b** c');
+        ok(r.tags.some(([n, s, e]) => n === 'bold' && s === 4 && e === 5), JSON.stringify(r.tags));
+        eq(r.marks, [[2, 4], [5, 7]], 'marker');
+    });
+    test('backtick yang di-escape tidak jadi kode', () => {
+        const r = parseInline('\\`a\\`');
+        ok(!r.tags.some(([n]) => n === 'code'), JSON.stringify(r.tags));
+        eq(r.marks, [[0, 1], [3, 4]], 'marker backslash');
+    });
+    test('isi kode inline tidak diformat', () => {
+        const r = parseInline('`**x**`');
+        ok(!r.tags.some(([n]) => n === 'bold'), 'bold di dalam kode');
+        ok(r.tags.some(([n]) => n === 'code'), 'tag code tidak ada');
+    });
+    test('gambar dikumpulkan beserta url tanpa judul', () => {
+        const r = parseInline('a ![x y](img/a.png "Judul") b ![](c.jpg)');
+        eq(r.images.map(i => [i.alt, i.url, i.start, i.end]), [['x y', 'img/a.png', 2, 27], ['', 'c.jpg', 30, 40]]);
+    });
+    test('underscore di URL tautan tidak jadi miring', () => {
+        const r = parseInline('[x](http://a.com/a_b_c)');
+        ok(!r.tags.some(([n]) => n === 'italic'), JSON.stringify(r.tags));
+    });
+    test('snake_case tidak jadi miring', () => {
+        ok(!parseInline('nama_variabel_ini').tags.some(([n]) => n === 'italic'), 'jadi miring');
+    });
+    test('makeCpMap menghitung emoji sebagai satu karakter', () => {
+        const map = makeCpMap('🎉ab');
+        eq([map(0), map(2), map(3), map(4)], [0, 1, 2, 3]);
+    });
+}
