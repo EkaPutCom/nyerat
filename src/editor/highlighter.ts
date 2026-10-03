@@ -147,7 +147,9 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
         let p = 0;
         if ((m = RE.quote.exec(line))) {
             p = m[0].length;
+            const depth = (m[0].match(/>/g) ?? []).length;
             apply('quote', off, lineEnd);
+            if (depth >= 2) apply(depth >= 3 ? 'quote3' : 'quote2', off, lineEnd);
             apply('marker', off, off + p);
             hide(off, off + p, i, i);
         }

@@ -45,6 +45,7 @@ export function sampleTests(c: GuiContext): void {
         const inner = offsetOf('kode\n```\n````') ;
         ok(tagAt(inner, 'codeblock'), 'isi blok tidak bertag codeblock');
         ok(tagAt(offsetOf('Tingkat tiga'), 'quote'), 'kutipan bersarang tidak bertag quote');
+        ok(tagAt(offsetOf('Tingkat tiga'), 'quote3'), 'kutipan bersarang tidak bertag quote3');
     });
     test('kursor menyapu seluruh dokumen contoh', () => {
         const n = buf.get_line_count();

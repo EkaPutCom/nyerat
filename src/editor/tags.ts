@@ -36,6 +36,9 @@ const TAG_DEFS = {
     link: { underline: Pango.Underline.SINGLE },
     image: { style: S.ITALIC },
     quote: {},
+    // Kutipan bersarang: dipasang setelah quote (prioritas lebih tinggi) agar margin-nya menggantikan.
+    quote2: {},
+    quote3: {},
     hr: { justification: Gtk.Justification.CENTER, pixels_above_lines: 10, pixels_below_lines: 10 },
     table: { family: FONT_MONO, scale: 0.92 },
     tablehead: { weight: W.BOLD },
@@ -91,6 +94,8 @@ export function paintTags(t: Tags, p: Palette): void {
     t.image.foreground = p.accent;
     t.quote.foreground = p.quoteFg;
     t.quote.paragraph_background = p.quoteBg;
+    t.quote2.paragraph_background = p.quoteBg;
+    t.quote3.paragraph_background = p.quoteBg;
     t.hr.foreground = p.faint;
     t.tablesep.foreground = p.faint;
     t.bullet.foreground = p.accent;
@@ -110,4 +115,6 @@ export function setTagMargins(t: Tags, margin: number): void {
     t.codeblock.left_margin = margin + 18;
     t.codeblock.right_margin = margin + 18;
     t.quote.left_margin = margin + 22;
+    t.quote2.left_margin = margin + 44;
+    t.quote3.left_margin = margin + 66;
 }
