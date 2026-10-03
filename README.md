@@ -12,13 +12,21 @@ Landing page-nya ada di [`docs/`](docs/index.html) (HTML statis; aktifkan GitHub
 - GJS (diuji dengan versi 1.80)
 - GTK 3 dan GtkSourceView 4 (biasanya sudah terpasang di desktop GNOME)
 - WebKitGTK 4.1 dengan binding GObject Introspection (`gir1.2-webkit2-4.1` di Debian/Ubuntu), **hanya untuk diagram Mermaid dan DBML**; tanpanya aplikasi tetap berjalan dan diagram menampilkan pesan galat
-- Node.js 20.19+ atau 22.12+ (syarat Vite), **hanya untuk build** (diuji dengan Node.js 24). Aplikasinya sendiri dijalankan GJS, bukan Node.js.
+- Node.js 20.19+ pada seri 20, atau 22.12+ (syarat Vite), **hanya untuk build** (diuji dengan Node.js 24). Aplikasinya sendiri dijalankan GJS, bukan Node.js.
 
 Di Ubuntu/Debian:
 
 ```bash
 sudo apt install gjs gir1.2-gtk-3.0 gir1.2-gtksource-4
 ```
+
+Untuk diagram, tambahkan dependensi opsional:
+
+```bash
+sudo apt install gir1.2-webkit2-4.1
+```
+
+Gambar dari internet dimuat melalui GIO dan memerlukan backend HTTP/HTTPS GVfs yang tersedia pada sistem.
 
 ## Menjalankan
 
@@ -40,6 +48,8 @@ Setelah di-build, aplikasi bisa dijalankan langsung tanpa npm, termasuk untuk me
 gjs -m dist/nyerat.js catatan.md
 ```
 
+Aplikasi memakai argumen pertama yang bukan opsi sebagai path file atau folder. Setiap pemanggilan membuka proses dan jendela sendiri. Pada pembukaan pertama tanpa file, editor menampilkan dokumen contoh; pembukaan berikutnya dimulai dengan dokumen kosong.
+
 Atau membuka sebuah folder, yang isinya tampil di tab Berkas:
 
 ```bash
@@ -53,7 +63,8 @@ gjs -m dist/nyerat.js ~/catatan
 | `npm run watch` | Hanya build ulang otomatis setiap file disimpan, tanpa membuka aplikasi dan tanpa pemeriksaan tipe |
 | `npm run typecheck` | Hanya periksa tipe |
 | `npm start` | Build, lalu jalankan aplikasi |
-| `npm test` | Build, lalu jalankan semua tes |
+| `npm test` | Build, lalu jalankan semua tes unit, GUI, dan mouse kanban di Xvfb |
+| `npm run test:ui` | Build, lalu jalankan rangkaian tes yang sama di desktop X11 |
 | `npm run docs` | Potret aplikasi sungguhan (jendela akan terbuka sebentar), lalu perbarui PNG dan GIF di `docs/assets/` untuk landing page |
 
 ### Mode pengembangan
@@ -95,14 +106,14 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
   - **Outline**: daftar heading dokumen; klik untuk melompat
 - Mode fokus: paragraf selain yang sedang disunting diredupkan
 - Mode typewriter: baris aktif selalu di tengah layar
-- Mode source: semua sintaks Markdown ditampilkan
+- Mode source: semua sintaks Markdown ditampilkan; widget gambar, grid tabel, dan diagram disembunyikan
 - Mode gelap, otomatis mengikuti tema sistem saat pertama dibuka
 - Kolom teks dibuat di tengah dengan lebar baca yang nyaman
 
 **Lainnya**
 - Cari teks, undo/redo, hitungan kata dan karakter, posisi kursor
-- Ekspor ke HTML mandiri (CSS sudah disertakan)
-- Peringatan sebelum menutup jika ada perubahan yang belum disimpan
+- Ekspor ke HTML dengan CSS disertakan. Gambar dan tautan tetap memakai URL/path aslinya; diagram Mermaid/DBML memerlukan internet untuk memuat Mermaid dari CDN
+- Peringatan sebelum menutup, membuat dokumen baru, atau membuka file lain jika ada perubahan yang belum disimpan
 
 ## Shortcut
 
@@ -113,7 +124,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 | Ctrl+S / Ctrl+Shift+S | Simpan / simpan sebagai |
 | Ctrl+Shift+E | Ekspor HTML |
 | Ctrl+F | Cari |
-| Ctrl+Z / Ctrl+Shift+Z | Undo / redo (juga untuk perubahan di papan kanban) |
+| Ctrl+Z / Ctrl+Shift+Z atau Ctrl+Y | Undo / redo (juga untuk perubahan di papan kanban) |
 | Ctrl+Shift+B | Papan kanban: beralih antara tampilan papan dan teks |
 | Ctrl+Q | Keluar |
 | Ctrl+B | Tebal |
@@ -159,7 +170,7 @@ npm run test:ui   # tampilkan jendela dan drag kartu di desktop
 
 Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `dist/run-tests.js`, lalu dijalankan GJS. Script keluar dengan kode `1` jika ada yang gagal. Isinya:
 
-- **Konversi** Markdown → HTML dan pengurai format inline, tanpa GUI
+- **Unit**: konversi Markdown → HTML, pengurai format inline, simpan/baca pengaturan, model tabel dan kanban, alias bahasa kode, serta DBML, tanpa GUI
 - **Editor**: membuka jendela sungguhan, lalu memeriksa sintaks yang disembunyikan/ditampilkan, Enter dan Tab di daftar, shortcut format, undo, klik kotak tugas, serta simpan dan buka file
 - **Tabel**: aturan pengenalan tabel (pemisah satu strip, tanpa pipa di tepi, berhenti di blok lain), pemecahan sel, perataan, merapikan kolom (termasuk lebar CJK dan emoji), operasi baris/kolom, konversi format inline ke markup Pango, lebar kolom; lalu di editor: grid yang muncul dan hilang mengikuti kursor, letak grid di antara paragraf, klik sel, Tab/Shift+Tab/Enter, semua perintah menu, satu perintah = satu langkah undo, mode source, serta tabel beremoji yang tidak membuat GTK gagal menggambar
 - **Kanban**: model (mengenali papan, membaca dan menulis dengan hasil yang stabil, operasi kartu dan daftar, tag dan tanggal); di editor: dokumen dibuka sebagai papan, menambah/mencentang/menyunting/memindahkan lewat menu, seret kartu (jatuh di posisi yang ditunjuk, kartu bayangan dan penanda tujuan dibersihkan, tempat asal tidak mengubah apa pun), gulir otomatis di tepi, undo/redo satu langkah per perubahan, beralih ke tampilan teks dan kembali, aksi pengeditan teks ditolak saat papan tampil, dan simpan
@@ -169,6 +180,7 @@ Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `di
 - **Warna blok kode**: alias nama bahasa, warna kata kunci/string/komentar, blok tanpa bahasa atau bahasa tak dikenal, pewarnaan ulang saat mengetik, emoji sebelum blok, skema terang/gelap, dan mode fokus yang tetap meredupkan blok kode
 - **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan
 - **Dokumen contoh lengkap**: membuka `tests/samples/semua-format.md`, lalu memeriksa tag setiap format, kasus-kasus sulit, dan hasil ekspor HTML-nya
+- **Ukuran jendela**: membuka file kedua tidak memperbesar jendela, jendela bisa diperbesar lalu diperkecil, dan gambar dibatasi lebar kolom teks
 - **Ketahanan**: kursor disapu ke semua baris, mengetik di tiap baris, dan dokumen dihapus sedikit demi sedikit untuk mencari crash
 
 Opsi tambahan, dijalankan setelah `npm run build`:
@@ -185,7 +197,7 @@ Lima skenario memeriksa perpindahan antar daftar beserta catatan/emoji, urutan d
 
 | Opsi | Fungsi |
 | --- | --- |
-| `--no-gui` | Hanya tes konversi, tanpa membuka jendela |
+| `--no-gui` | Semua tes unit, tanpa membuka jendela |
 | `--mouse` | Tambah klik mouse sungguhan lewat XTest (pointer akan bergerak sendiri). Dilewati dengan keterangan jika lingkungan Anda tidak meneruskan tombol mouse XTest ke GTK (terjadi di XFCE/X11 yang dipakai mengembangkan ini); gerak pointer saja tidak dihitung sebagai tes |
 | `--with-kanban-mouse` | Tambahkan lima tes input mouse kanban ke seluruh tes unit dan GUI; dipakai oleh `npm test` di Xvfb dan `npm run test:ui` di desktop. Tidak bisa digabung dengan `--no-gui` |
 | `--screenshot=file.png` | Simpan tangkapan layar jendela editor |
@@ -211,6 +223,9 @@ package.json              script npm dan dependensi pengembangan
 tsconfig.json             pengaturan pemeriksaan tipe TypeScript
 vite.config.ts            pengaturan build Vite
 scripts/dev.mjs           npm run dev: build ulang + buka ulang aplikasi + cek tipe
+scripts/capture.ts        potret editor dan buat PNG/GIF untuk docs/assets/
+scripts/gifenc.d.ts       deklarasi tipe gifenc untuk script capture
+docs/                     landing page statis dan aset tangkapan layar
 dist/                     hasil build (tidak masuk git)
 src/
 ├── main.ts               titik masuk: hanya memanggil main() dari app.ts
@@ -260,9 +275,15 @@ src/
     ├── kanban.ts         tampilan papan kanban: daftar, kartu, menu, seret-lepas
     └── theme.ts          palet warna, font, CSS terang/gelap
 tests/
-├── run-tests.ts          tes otomatis
-├── gui/kanban-mouse.ts   lima tes seret/klik lewat input mouse X11
-├── gui/mouse-input.ts    klien X11/XTest TypeScript melalui Gio
+├── run-tests.ts          titik masuk dan pendaftaran tes unit/GUI
+├── framework.ts          asersi, hasil tes, opsi CLI, folder sementara
+├── fixtures.ts           data papan kanban bersama untuk tes model dan GUI
+├── unit/                 tes tanpa jendela: inline, HTML, settings, tabel, kanban, bahasa kode, DBML
+│   └── helpers.ts        helper untuk mengambil isi body HTML hasil konversi
+├── gui/                  tes editor, file/folder, gambar, tabel, diagram, kanban, ukuran, ketahanan
+│   ├── context.ts        konteks jendela/editor dan helper tes GUI
+│   ├── kanban-mouse.ts   lima tes seret/klik lewat input mouse X11
+│   └── mouse-input.ts    klien X11/XTest TypeScript melalui Gio
 └── samples/
     ├── semua-format.md   dokumen berisi semua format, untuk tes dan pemeriksaan manual
     ├── papan-kanban.md   contoh papan kanban untuk dicoba
@@ -275,11 +296,13 @@ Vite dipakai sebagai **bundler** saja (mode library di [`vite.config.ts`](vite.c
 
 ```
 src/main.ts ─────────┐                        ┌─► dist/nyerat.js         (aplikasi)
-                     ├─► tsc --noEmit ─► vite ┼─► dist/run-tests.js      (tes)
-tests/run-tests.ts ──┘   (cek tipe)   (bundel)└─► dist/chunks/window.js  (kode bersama)
+tests/run-tests.ts ──┼─► tsc --noEmit ─► vite ┼─► dist/run-tests.js      (tes)
+scripts/capture.ts ──┘   (cek tipe)   (bundel)├─► dist/capture.js        (capture docs)
+                                             └─► dist/chunks/*.js       (kode bersama)
+node_modules/mermaid/dist/mermaid.min.js ────────► dist/mermaid.min.js     (salinan skrip browser)
 ```
 
-- **Dua langkah build.** Vite (lewat esbuild) hanya membuang anotasi tipe tanpa memeriksanya. Karena itu `npm run build` menjalankan `tsc --noEmit` lebih dulu, dan build berhenti jika ada kesalahan tipe.
+- **Dua langkah build.** Vite mengubah TypeScript menjadi JavaScript tanpa memeriksa tipe. Karena itu `npm run build` menjalankan `tsc --noEmit` lebih dulu, dan build berhenti jika ada kesalahan tipe.
 - **Modul bawaan GJS ditandai `external`**: `gi://...`, `system`, `gettext`, `cairo`, dan `console`. Modul-modul ini disediakan GJS saat runtime, jadi tidak ikut dibundel dan tidak dicari di `node_modules`.
 - **Target `firefox115`**, karena GJS 1.80 memakai mesin JavaScript SpiderMonkey 115.
 - **Tipe untuk GTK, GLib, dan lainnya** berasal dari paket `@girs/*` (proyek ts-for-gir). Paket-paket itu didaftarkan di [`src/env.d.ts`](src/env.d.ts), sehingga `import Gtk from 'gi://Gtk?version=3.0'` dikenali TypeScript. Paket ini hanya dipakai saat pengecekan tipe dan tidak ikut ke `dist/`.
@@ -312,8 +335,9 @@ Ada dua siklus utama di `editor/view.ts`:
 Teks berubah ───► queueHighlight() ───► highlight()
                                           ├─ highlighter.ts   pasang tag gaya,
                                           │                   kumpulkan marker + heading
+                                          ├─ tablelayer.ts    perbarui blok tabel
                                           ├─ codehighlight.ts warnai isi blok kode
-                                          ├─ tablelayer.ts    render tabel sebagai grid
+                                          ├─ mermaid.ts       perbarui diagram Mermaid/DBML
                                           ├─ images.ts        tampilkan gambar yang ditemukan
                                           ├─ onHighlighted()  → outline, status bar
                                           └─ updateCursor(true)
@@ -321,7 +345,10 @@ Teks berubah ───► queueHighlight() ───► highlight()
 Kursor pindah ──► queueCursorUpdate() ──► updateCursor()
                                           ├─ decorations.ts   sembunyikan marker di luar
                                           │                   baris aktif, redupkan (fokus)
-                                          └─ onCursorMoved()  → status bar
+                                          ├─ tablelayer.ts   tampilkan grid atau teks mentah
+                                          ├─ mermaid.ts      tampilkan diagram atau kode + pratinjau
+                                          ├─ typewriter     gulir baris aktif ke tengah
+                                          └─ onCursorMoved() → status bar
 ```
 
 Keduanya ditunda dengan `GLib.idle_add(PRIORITY_HIGH_IDLE)`. Beberapa perubahan beruntun (misalnya saat menempel teks) digabung jadi satu proses, dan prosesnya selesai sebelum GTK menggambar ulang layar sehingga tidak berkedip.
@@ -403,7 +430,7 @@ kanban: true
 - [x] Pesan tempat
 ```
 
-Frontmatter `kanban: true` menandai dokumen sebagai papan; dokumen tanpa penanda tetap dibuka sebagai teks biasa. Penanda lama `kanban-plugin: …` (dari plugin Kanban Obsidian, nilai apa pun) juga dikenali, dan frontmatter yang sudah ada dipertahankan apa adanya saat disimpan. Heading `##` adalah daftar, item daftar adalah kartu (`[x]` = selesai, tanpa kotak = item biasa), dan baris yang diindentasi di bawah kartu adalah catatannya. Hal yang tidak dikenali (judul papan di atas, baris biasa di dalam daftar seperti `**Complete**` atau `***`, dan blok `%% kanban:settings` di akhir) dipertahankan apa adanya, jadi file dari Obsidian tidak rusak.
+Frontmatter `kanban: true` (juga `kanban: yes`, tanpa membedakan huruf besar/kecil, boleh dikutip) menandai dokumen sebagai papan; penanda dicari dalam 40 baris pertama sebelum penutup frontmatter. Dokumen tanpa penanda tetap dibuka sebagai teks biasa. Penanda lama `kanban-plugin: …` (dari plugin Kanban Obsidian, nilai satu token tidak kosong) juga dikenali, dan frontmatter yang sudah ada dipertahankan apa adanya saat disimpan. Heading `##` adalah daftar, item daftar adalah kartu (`[x]` = selesai, tanpa kotak = item biasa), dan baris yang diindentasi di bawah kartu adalah catatannya. Hal yang tidak dikenali (judul papan di atas, baris biasa di dalam daftar seperti `**Complete**` atau `***`, dan blok `%% kanban:settings` di akhir) dipertahankan apa adanya, jadi file dari Obsidian tidak rusak.
 
 **Alur data.** Teks dokumen di buffer adalah satu-satunya sumber kebenaran:
 
@@ -427,7 +454,7 @@ buffer teks ──parseBoard()──► KanbanBoard (model + tampilan)
 1. Setiap gambar di editor dibungkus `Gtk.EventBox` sendiri, sehingga klik ganda tahu gambar mana yang dimaksud jika satu baris memuat beberapa gambar. Satu klik tetap membuka sintaksnya (`onActivate`); klik ganda (`DOUBLE_BUTTON_PRESS` dari GDK) memanggil `onZoom`, dan menu *Perbesar Gambar* memanggil `MarkdownView.zoomImage()` untuk baris kursor.
 2. `ImageLayer.imageAt()` memberikan **pixbuf ukuran penuh** dari cache (gambar di editor hanya salinan yang diperkecil), jadi penampil menampilkan resolusi aslinya.
 3. `MarkdownView` tidak membuka jendela sendiri. Ia memanggil `onViewImage`, dan `MainWindow` yang membuka `ImageViewer`, sehingga lapisan `editor/` tetap tidak bergantung pada `ui/`.
-4. `ImageViewer` menggambar dengan cairo pada skala zoom di `Gtk.DrawingArea`, bukan membuat salinan yang diperbesar, jadi zoom 800% pada foto besar tidak menghabiskan memori. Zoom di atas 300% memakai filter `NEAREST` supaya piksel tampil apa adanya.
+4. `ImageViewer` menggambar dengan cairo pada skala zoom di `Gtk.DrawingArea`, bukan membuat salinan yang diperbesar, jadi zoom 800% pada foto besar tidak menghabiskan memori. Zoom mulai 300% memakai filter `NEAREST` supaya piksel tampil apa adanya.
 5. Zoom dibatasi 5%–800%, berkelipatan 1,25. Saat roda mouse diputar di atas gambar, titik gambar di bawah penunjuk dijaga tidak bergeser: titik itu dihitung dalam koordinat gambar, lalu posisi gulir diatur ulang setelah tata letak selesai.
 6. Gambar dibuka dalam mode "pas layar tapi tidak diperbesar melebihi 100%", dan mengikuti ukuran jendela selama zoom belum diubah.
 
@@ -464,11 +491,13 @@ Contoh menambah format baru, misalnya `^superskrip^`:
 2. Tambahkan tag `sup` di `TAG_DEFS` (`src/editor/tags.ts`), misalnya `{ rise: 4000, scale: 0.8 }`
 3. Tambahkan konversinya di `emphHtml()` (`src/markdown/html.ts`)
 4. Jika perlu shortcut, daftarkan di `src/actions.ts`: `action('sup', ['<Control><Shift>p'], () => wrapSelection(buf, '^'))`
-5. Tambahkan contohnya di `tests/samples/semua-format.md` dan tesnya di `tests/run-tests.ts`
+5. Tambahkan contohnya di `tests/samples/semua-format.md`, tes penguraian/ekspor di `tests/unit/`, dan tes tampilan/interaksi di `tests/gui/`. Daftarkan modul tes baru di `tests/run-tests.ts`
 
 ## Pengaturan
 
-Disimpan di `~/.config/nyerat/settings.json`: mode gelap, sidebar dan tab yang terakhir dipilih, folder yang terakhir dibuka, mode fokus, mode typewriter, dan ukuran jendela.
+Disimpan di `$XDG_CONFIG_HOME/nyerat/settings.json` (bawaan `~/.config/nyerat/settings.json`): mode gelap, sidebar dan tab yang terakhir dipilih, folder yang terakhir dibuka, mode fokus, mode typewriter, ukuran jendela, dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
+
+Nilai bawaan: sidebar terbuka pada tab Outline, fokus/typewriter mati, ukuran jendela 1100 × 760 piksel, dan mode gelap mengikuti tema sistem (`dark: null`). Setelah mode gelap dipilih lewat menu, pilihan itu disimpan. Ukuran awal jendela dibatasi ke area kerja monitor. Mode source dan pilihan tampilan papan/teks tidak disimpan antar proses.
 
 ## Keterbatasan
 
@@ -478,6 +507,8 @@ Disimpan di `~/.config/nyerat/settings.json`: mode gelap, sidebar dan tab yang t
 - Di tampilan teks, frontmatter papan tampil seperti Markdown biasa (garis `---` dan teks)
 - Klik pertama pada gambar membuka sintaksnya, sehingga gambar bergeser sekitar satu baris ke bawah. Klik ganda yang jatuh di strip tipis tepi atas gambar karenanya bisa meleset ke teks di atasnya
 - Gambar di dalam sel tabel tidak ditampilkan (hanya teks alt-nya), dan gambar di dalam daftar atau kutipan tidak ikut menjorok
+- Ekspor papan kanban menghasilkan Markdown yang dikonversi menjadi heading dan daftar HTML, bukan tampilan papan. Frontmatter tidak diproses khusus; DBML yang salah sintaks diekspor sebagai blok kode biasa
+- Ekspor HTML tidak menyalin atau menyematkan gambar lokal, dan tidak menyesuaikan path relatif jika hasil ekspor disimpan di folder lain
 - Warna blok kode belum ikut ke hasil Ekspor HTML; di HTML blok kode hanya diberi kelas `language-…`
 - Sel tabel disunting di teks mentahnya (klik sel atau gerakkan kursor ke dalam tabel), bukan langsung di grid
 - Teks sel yang terlalu panjang dipotong dengan "…", tidak dibungkus ke baris berikutnya, dan isi sel hanya satu baris
