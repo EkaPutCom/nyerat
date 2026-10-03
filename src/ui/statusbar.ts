@@ -31,6 +31,13 @@ export class StatusBar {
         this.render();
     }
 
+    // Ringkasan papan kanban; menggantikan hitungan kata dan posisi kursor selama papan tampil.
+    setBoardCounts(lists: number, cards: number): void {
+        this.counts = `${lists} daftar · ${cards} kartu`;
+        this.cursor = '';
+        this.render();
+    }
+
     setCursor(line: number, column: number): void {
         this.cursor = `Baris ${line + 1}, Kolom ${column + 1}`;
         this.render();

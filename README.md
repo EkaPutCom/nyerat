@@ -73,6 +73,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 **Penulisan ala Typora**
 - Heading, **tebal**, *miring*, ~~coret~~, ==stabilo==, `kode inline`, tautan, dan gambar langsung tampil terformat
 - Blok kode, kutipan, dan garis pemisah diberi gaya; baris pembatas ```` ``` ```` disembunyikan di luar blok
+- **Papan kanban ala Trello.** File Markdown yang frontmatter-nya memuat `kanban: true` dibuka sebagai papan: heading `##` menjadi daftar, item `- [ ]` menjadi kartu. Seret kartu antar daftar (atau ke posisi lain di daftar yang sama), klik kartu untuk menyunting judul dan catatannya, klik kanan untuk menu (pindahkan, naik/turun, hapus), centang untuk menandai selesai, dan tambah kartu/daftar langsung di papan. `#tag` tampil sebagai label berwarna dan `@{2026-10-20}` sebagai tanggal (merah jika lewat batas). Semua perubahan ditulis ke teks Markdown-nya, dan penanda lama `kanban-plugin:` dari plugin Kanban Obsidian tetap dikenali. `Ctrl+Shift+B` beralih ke tampilan teks dan kembali; menu ☰ → *Papan Kanban Baru* membuat papan kosong
 - **Tabel dirender sebagai grid** (garis sel, header tebal, rata kiri/tengah/kanan, dan **tebal**/*miring*/`kode`/tautan di dalam sel). Saat kursor masuk ke tabel, teks mentahnya muncul untuk disunting; klik sebuah sel di grid untuk langsung menyunting sel itu. Tabel yang lebih lebar dari kolom teks dipersempit dan teks yang terpotong diberi "…" (isi lengkapnya muncul sebagai tooltip)
 - Di dalam tabel: `Tab` / `Shift+Tab` pindah antar sel (di sel terakhir, `Tab` menambah baris), `Enter` pindah ke baris berikutnya (di baris kosong terakhir, `Enter` keluar dari tabel). Menu ☰ → **Edit Tabel** untuk tambah/hapus baris dan kolom, rata kiri/tengah/kanan, dan merapikan kolom
 - Isi blok kode diwarnai sesuai bahasanya (```` ```js ````, ```` ```python ````, ```` ```rust ````, dan ratusan bahasa lain dari GtkSourceView), dengan skema warna yang mengikuti mode terang/gelap
@@ -106,7 +107,8 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 | Ctrl+S / Ctrl+Shift+S | Simpan / simpan sebagai |
 | Ctrl+Shift+E | Ekspor HTML |
 | Ctrl+F | Cari |
-| Ctrl+Z / Ctrl+Shift+Z | Undo / redo |
+| Ctrl+Z / Ctrl+Shift+Z | Undo / redo (juga untuk perubahan di papan kanban) |
+| Ctrl+Shift+B | Papan kanban: beralih antara tampilan papan dan teks |
 | Ctrl+Q | Keluar |
 | Ctrl+B | Tebal |
 | Ctrl+I | Miring |
@@ -141,6 +143,7 @@ Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `di
 - **Konversi** Markdown → HTML dan pengurai format inline, tanpa GUI
 - **Editor**: membuka jendela sungguhan, lalu memeriksa sintaks yang disembunyikan/ditampilkan, Enter dan Tab di daftar, shortcut format, undo, klik kotak tugas, serta simpan dan buka file
 - **Tabel**: aturan pengenalan tabel (pemisah satu strip, tanpa pipa di tepi, berhenti di blok lain), pemecahan sel, perataan, merapikan kolom (termasuk lebar CJK dan emoji), operasi baris/kolom, konversi format inline ke markup Pango, lebar kolom; lalu di editor: grid yang muncul dan hilang mengikuti kursor, letak grid di antara paragraf, klik sel, Tab/Shift+Tab/Enter, semua perintah menu, satu perintah = satu langkah undo, mode source, serta tabel beremoji yang tidak membuat GTK gagal menggambar
+- **Kanban**: model (mengenali papan, membaca dan menulis dengan hasil yang stabil, operasi kartu dan daftar, tag dan tanggal); di editor: dokumen dibuka sebagai papan, menambah/mencentang/menyunting/memindahkan lewat menu, seret kartu (jatuh di posisi yang ditunjuk, kartu bayangan dan penanda tujuan dibersihkan, tempat asal tidak mengubah apa pun), gulir otomatis di tepi, undo/redo satu langkah per perubahan, beralih ke tampilan teks dan kembali, aksi pengeditan teks ditolak saat papan tampil, dan simpan
 - **Zoom gambar**: gambar ukuran penuh dari `imageAt()`, klik sekali vs ganda (dengan event GDK tiruan) dan gambar yang tepat jika satu baris memuat beberapa, perintah menu; di penampil: zoom awal, kelipatan 1,25 dan batas 5%–800%, tombol, titik zoom di penunjuk, geser dengan drag, klik ganda, dan tidak ada peringatan GTK/cairo saat menggambar pada zoom besar
 - **Warna blok kode**: alias nama bahasa, warna kata kunci/string/komentar, blok tanpa bahasa atau bahasa tak dikenal, pewarnaan ulang saat mengetik, emoji sebelum blok, skema terang/gelap, dan mode fokus yang tetap meredupkan blok kode
 - **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan
@@ -196,6 +199,7 @@ src/
 │   ├── syntax.ts         regex untuk heading, daftar, kutipan, tabel, penekanan
 │   ├── inline.ts         parseInline(): format di dalam satu baris
 │   ├── table.ts          tabel: mengenali blok, memecah sel, rapikan, tambah/hapus baris dan kolom
+│   ├── kanban.ts         papan kanban: membaca/menulis Markdown, operasi kartu dan daftar, tag dan tanggal
 │   ├── pango.ts          isi sel tabel (Markdown inline) → markup Pango untuk Gtk.Label
 │   └── html.ts           markdownToHtml(): untuk Ekspor HTML
 │
@@ -222,11 +226,13 @@ src/
     ├── statusbar.ts      hitungan kata, posisi kursor, pesan singkat
     ├── dialogs.ts        pilih file, konfirmasi simpan, error, tentang
     ├── imageviewer.ts    penampil gambar dengan zoom (cairo)
+    ├── kanban.ts         tampilan papan kanban: daftar, kartu, menu, seret-lepas
     └── theme.ts          palet warna, font, CSS terang/gelap
 tests/
 ├── run-tests.ts          tes otomatis
 └── samples/
     ├── semua-format.md   dokumen berisi semua format, untuk tes dan pemeriksaan manual
+    ├── papan-kanban.md   contoh papan kanban untuk dicoba
     └── gambar/contoh.png gambar lokal yang dirujuk dokumen itu
 ```
 
@@ -334,6 +340,45 @@ Tabel memakai cara yang sama dengan gambar: widget ditempel di atas ruang kosong
 6. Klik sel menaruh kursor di sel itu pada teks mentah (`cellStart()`), yang otomatis membuka tabelnya.
 7. `tableedit.ts` membaca ulang dokumen dari buffer setiap kali dipakai (bukan dari hasil penyorotan terakhir), lalu menulis ulang baris tabel dalam satu langkah undo. Perintah menu selalu menghasilkan tabel yang dirapikan, karena menambah atau menghapus kolom mengubah lebar kolom.
 
+### Cara kerja papan kanban (`markdown/kanban.ts`, `ui/kanban.ts`)
+
+**Format.** Papan adalah file Markdown biasa:
+
+```markdown
+---
+kanban: true
+---
+
+## Rencana
+
+- [ ] Tulis laporan #penting @{2026-10-20}
+  catatan kartu (baris yang diindentasi)
+- [ ] Kirim undangan
+
+## Selesai
+
+- [x] Pesan tempat
+```
+
+Frontmatter `kanban: true` menandai dokumen sebagai papan; dokumen tanpa penanda tetap dibuka sebagai teks biasa. Penanda lama `kanban-plugin: …` (dari plugin Kanban Obsidian, nilai apa pun) juga dikenali, dan frontmatter yang sudah ada dipertahankan apa adanya saat disimpan. Heading `##` adalah daftar, item daftar adalah kartu (`[x]` = selesai, tanpa kotak = item biasa), dan baris yang diindentasi di bawah kartu adalah catatannya. Hal yang tidak dikenali (judul papan di atas, baris biasa di dalam daftar seperti `**Complete**` atau `***`, dan blok `%% kanban:settings` di akhir) dipertahankan apa adanya, jadi file dari Obsidian tidak rusak.
+
+**Alur data.** Teks dokumen di buffer adalah satu-satunya sumber kebenaran:
+
+```
+buffer teks ──parseBoard()──► KanbanBoard (model + tampilan)
+     ▲                              │ commit(papan baru)
+     └──── replaceText() ◄── serializeBoard() ◄──┘   (satu langkah undo)
+```
+
+1. Saat dokumen kanban dibuka, `MainWindow.syncMode()` mengganti editor dengan papan (`Gtk.Stack`) dan membaca teksnya dengan `parseBoard()`.
+2. Setiap perubahan dari papan lewat `commit()`: model baru ditulis dengan `serializeBoard()` lalu dimasukkan ke buffer lewat `MarkdownView.replaceText()`, yang hanya mengganti bagian tengah teks yang berbeda dan menjadikannya satu langkah undo.
+3. Undo/redo (aksi `undo`/`redo`, `Ctrl+Z`) mengubah buffer. Perubahan yang bukan dari papan sendiri dikenali dengan membandingkan teks dengan yang terakhir ditulis papan, lalu papan membaca ulang teksnya.
+4. Semua operasi atas model (`addCard`, `moveCard`, `moveColumn`, …) murni dan tidak mengubah papan asal, sehingga mudah diuji. `moveCard` memakai posisi *akhir* kartu di daftar tujuan, jadi memindahkan ke bawah di daftar yang sama tidak butuh penyesuaian.
+
+**Menyeret.** Tidak memakai drag-and-drop bawaan GTK, melainkan penunjuk sendiri: tekan di kartu, gerakkan lebih dari 6 piksel, lepas. Selama menyeret, kartu bayangan (jendela kecil berisi tangkapan kartu) mengikuti penunjuk, kartu asal diredupkan, dan penanda putus-putus menunjukkan tujuan. Tujuan dihitung dari posisi penunjuk: daftar yang melingkupinya (atau yang terdekat), lalu `dropIndex()` menghitung berapa kartu lain yang titik tengahnya di atas penunjuk. Dekat tepi, papan atau daftar tujuan digulir otomatis. Gerakan di bawah 6 piksel dianggap klik biasa dan membuka dialog sunting. Cara ini dipilih supaya perilakunya terkendali dan bisa diuji dengan event penunjuk tiruan.
+
+**Dialog** (`editCardDialog`, `promptDialog`, `confirmDialog`) menahan program sampai ditutup, jadi `KanbanBoard.dialogs` bisa diganti, dan tes memakai pengganti.
+
 ### Cara kerja zoom gambar (`ui/imageviewer.ts`)
 
 1. Setiap gambar di editor dibungkus `Gtk.EventBox` sendiri, sehingga klik ganda tahu gambar mana yang dimaksud jika satu baris memuat beberapa gambar. Satu klik tetap membuka sintaksnya (`onActivate`); klik ganda (`DOUBLE_BUTTON_PRESS` dari GDK) memanggil `onZoom`, dan menu *Perbesar Gambar* memanggil `MarkdownView.zoomImage()` untuk baris kursor.
@@ -385,6 +430,9 @@ Disimpan di `~/.config/nyerat/settings.json`: mode gelap, sidebar dan tab yang t
 ## Keterbatasan
 
 - Gambar yang diubah di disk tidak dimuat ulang sampai aplikasi dibuka lagi (ada cache per URI); GIF animasi hanya menampilkan frame pertama, termasuk di penampil zoom
+- **Seret kartu dengan mouse sungguhan belum pernah dicoba oleh pengembangnya.** Lingkungan tempat ini dikembangkan tidak meneruskan tombol mouse sintetis ke GTK, jadi logika menyeret hanya teruji dengan event penunjuk tiruan. Bila ada yang janggal saat menyeret, itu bagian yang paling perlu dicurigai
+- Papan: hanya item daftar di tingkat atas yang menjadi kartu (daftar bersarang dipertahankan sebagai catatan kartu); baris biasa di antara dua kartu dipindahkan ke akhir daftar saat disimpan. Belum ada arsip, pemilih tanggal, atau penyuntingan label lewat antarmuka (tulis `#tag` dan `@{YYYY-MM-DD}` di judul kartu), dan memindahkan kartu dengan keyboard hanya lewat menu klik kanan
+- Di tampilan teks, frontmatter papan tampil seperti Markdown biasa (garis `---` dan teks)
 - Klik pertama pada gambar membuka sintaksnya, sehingga gambar bergeser sekitar satu baris ke bawah. Klik ganda yang jatuh di strip tipis tepi atas gambar karenanya bisa meleset ke teks di atasnya
 - Gambar di dalam sel tabel tidak ditampilkan (hanya teks alt-nya), dan gambar di dalam daftar atau kutipan tidak ikut menjorok
 - Warna blok kode belum ikut ke hasil Ekspor HTML; di HTML blok kode hanya diberi kelas `language-…`

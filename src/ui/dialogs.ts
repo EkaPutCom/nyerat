@@ -3,6 +3,7 @@
 // langsung dikembalikan.
 
 import Gtk from 'gi://Gtk?version=3.0';
+import Gdk from 'gi://Gdk?version=3.0';
 import { APP_NAME, APP_VERSION } from '../config.js';
 
 type FilterSetup = [label: string, setup: (filter: Gtk.FileFilter) => void];
@@ -79,4 +80,85 @@ export function showAbout(parent: Gtk.Window): void {
     });
     dialog.run();
     dialog.destroy();
+}
+
+// ---------- Dialog untuk papan kanban ----------
+
+export interface CardDraft {
+    text: string;
+    notes: string[];
+}
+
+// Dialog sunting kartu: judul (satu baris) dan catatan (banyak baris).
+// Mengembalikan isi baru, atau null jika dibatalkan.
+export function editCardDialog(parent: Gtk.Window | null, card: CardDraft): CardDraft | null {
+    const dialog = new Gtk.Dialog({ title: 'Sunting Kartu', transient_for: parent, modal: true, default_width: 440 });
+    dialog.add_button('Batal', Gtk.ResponseType.CANCEL);
+    dialog.add_button('Simpan', Gtk.ResponseType.OK);
+    dialog.set_default_response(Gtk.ResponseType.OK);
+
+    const title = new Gtk.Entry({ text: card.text, activates_default: true, hexpand: true });
+    const notes = new Gtk.TextView({ wrap_mode: Gtk.WrapMode.WORD_CHAR, left_margin: 6, right_margin: 6, top_margin: 6, bottom_margin: 6 });
+    notes.buffer.set_text(card.notes.join('\n'), -1);
+    // Ctrl+Enter menyimpan dari kolom catatan (Enter biasa membuat baris baru).
+    notes.connect('key-press-event', (_w, ev) => {
+        const event = ev as unknown as Gdk.Event;
+        const [, keyval] = event.get_keyval();
+        const [, state] = event.get_state();
+        if ((keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) && (state & Gdk.ModifierType.CONTROL_MASK)) {
+            dialog.response(Gtk.ResponseType.OK);
+            return true;
+        }
+        return false;
+    });
+    const frame = new Gtk.ScrolledWindow({ min_content_height: 140, shadow_type: Gtk.ShadowType.IN, hexpand: true, vexpand: true });
+    frame.add(notes);
+
+    const box = dialog.get_content_area();
+    box.spacing = 8;
+    box.margin = 12;
+    box.pack_start(new Gtk.Label({ label: 'Judul', xalign: 0 }), false, false, 0);
+    box.pack_start(title, false, false, 0);
+    box.pack_start(new Gtk.Label({ label: 'Catatan', xalign: 0 }), false, false, 0);
+    box.pack_start(frame, true, true, 0);
+    box.show_all();
+
+    const response = dialog.run();
+    const [start, end] = notes.buffer.get_bounds();
+    const result: CardDraft = {
+        text: title.text.trim(),
+        notes: notes.buffer.get_text(start, end, true).replace(/\s+$/, '').split('\n').filter((l, i, all) => all.length > 1 || l !== ''),
+    };
+    dialog.destroy();
+    return response === Gtk.ResponseType.OK ? result : null;
+}
+
+// Meminta satu baris teks. null jika dibatalkan.
+export function promptDialog(parent: Gtk.Window | null, options: { title: string; label: string; value?: string }): string | null {
+    const dialog = new Gtk.Dialog({ title: options.title, transient_for: parent, modal: true, default_width: 360 });
+    dialog.add_button('Batal', Gtk.ResponseType.CANCEL);
+    dialog.add_button('OK', Gtk.ResponseType.OK);
+    dialog.set_default_response(Gtk.ResponseType.OK);
+    const entry = new Gtk.Entry({ text: options.value ?? '', activates_default: true });
+    const box = dialog.get_content_area();
+    box.spacing = 8;
+    box.margin = 12;
+    box.pack_start(new Gtk.Label({ label: options.label, xalign: 0 }), false, false, 0);
+    box.pack_start(entry, false, false, 0);
+    box.show_all();
+    const response = dialog.run();
+    const value = entry.text.trim();
+    dialog.destroy();
+    return response === Gtk.ResponseType.OK && value ? value : null;
+}
+
+export function confirmDialog(parent: Gtk.Window | null, message: string, detail?: string): boolean {
+    const dialog = new Gtk.MessageDialog({
+        transient_for: parent, modal: true, message_type: Gtk.MessageType.QUESTION, text: message, secondary_text: detail,
+    });
+    dialog.add_button('Batal', Gtk.ResponseType.CANCEL);
+    dialog.add_button('Hapus', Gtk.ResponseType.OK);
+    const response = dialog.run();
+    dialog.destroy();
+    return response === Gtk.ResponseType.OK;
 }

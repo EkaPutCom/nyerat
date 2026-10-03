@@ -29,6 +29,8 @@ import { applyTheme, systemPrefersDark } from './ui/theme.js';
 import { chooseFile, askSaveChanges, showError } from './ui/dialogs.js';
 import { registerActions } from './actions.js';
 import { ImageViewer } from './ui/imageviewer.js';
+import { KanbanBoard } from './ui/kanban.js';
+import { countCards, isKanban, newBoard, parseBoard, serializeBoard, type Board } from './markdown/kanban.js';
 
 const UNTITLED = 'Tanpa Judul';
 
@@ -57,10 +59,15 @@ export class MainWindow {
     readonly sidebar: Sidebar;
     readonly findBar: FindBar;
     readonly statusBar: StatusBar;
+    readonly board: KanbanBoard;
+    private readonly content: Gtk.Stack;
     readonly header: Gtk.HeaderBar;
     readonly win: Gtk.ApplicationWindow;
 
     file: string | null = null;   // path dokumen, null = belum pernah disimpan
+    private textOverride = false;     // pengguna memilih tampilan teks untuk papan kanban ini
+    private boardText = '';           // teks yang terakhir ditulis/dibaca papan; untuk mengenali perubahan dari luar (undo)
+    private reloadQueued = false;
     dark: boolean;
 
     // path: file atau folder yang dibuka saat jendela muncul.
@@ -76,6 +83,7 @@ export class MainWindow {
         this.sidebar = new Sidebar(this.fileTree.widget, this.outline.widget);
         this.findBar = new FindBar(this.editor.buffer, this.editor.view);
         this.statusBar = new StatusBar();
+        this.board = new KanbanBoard();
         this.header = createHeaderBar();
 
         this.editor.modes.focus = settings.focus;
@@ -84,8 +92,9 @@ export class MainWindow {
         // Komponen tidak saling kenal; jendela inilah yang menghubungkan mereka.
         this.editor.onHighlighted = ({ text, headings }) => {
             this.outline.update(headings);
-            this.statusBar.setCounts(text);
+            if (!this.boardMode) this.statusBar.setCounts(text);
         };
+        this.board.onChange = board => this.writeBoard(board);
         this.editor.onCursorMoved = (line, column) => {
             this.statusBar.setCursor(line, column);
             this.statusBar.setModes((Object.keys(MODE_LABELS) as Mode[]).filter(m => this.editor.modes[m]).map(m => MODE_LABELS[m]));
@@ -100,6 +109,8 @@ export class MainWindow {
             saveSettings(this.settings);
         };
         this.editor.buffer.connect('modified-changed', () => this.updateTitle());
+        // Teks berubah selagi papan tampil dan bukan dari papan sendiri (undo/redo): baca ulang.
+        this.editor.buffer.connect('changed', () => this.queueBoardReload());
 
         // Tata letak
         const [width, height] = fitToScreen(settings.width, settings.height);
@@ -108,7 +119,14 @@ export class MainWindow {
         this.win.set_titlebar(this.header);
         const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
         column.pack_start(this.findBar.widget, false, false, 0);
-        column.pack_start(this.editor.widget, true, true, 0);
+        this.content = new Gtk.Stack({ vexpand: true, hexpand: true });
+        this.content.add_named(this.editor.widget, 'editor');
+        this.content.add_named(this.board.widget, 'board');
+        // Anak yang belum ditampilkan tidak bisa dipilih lewat visible_child_name, dan syncMode()
+        // dijalankan sebelum show_all() jendela.
+        this.editor.widget.show_all();
+        this.board.widget.show_all();
+        column.pack_start(this.content, true, true, 0);
         column.pack_start(this.statusBar.widget, false, false, 0);
         const main = new Gtk.Box();
         main.pack_start(this.sidebar.widget, false, false, 0);
@@ -131,6 +149,7 @@ export class MainWindow {
         } else {
             this.editor.setText('');
         }
+        this.syncMode();
         this.updateTitle();
         this.win.show_all();
         this.sidebar.setVisible(settings.sidebar);
@@ -141,7 +160,91 @@ export class MainWindow {
 
     setDark(dark: boolean): void {
         this.dark = dark;
-        this.editor.setPalette(applyTheme(dark));
+        const palette = applyTheme(dark);
+        this.editor.setPalette(palette);
+        this.board.setPalette(palette);
+    }
+
+    // ---------- Papan kanban ----------
+
+    get boardMode(): boolean {
+        return this.content.visible_child_name === 'board';
+    }
+
+    // Dokumen kanban tampil sebagai papan, kecuali pengguna memilih tampilan teks.
+    private syncMode(): void {
+        this.setBoardMode(isKanban(this.editor.getText()) && !this.textOverride);
+    }
+
+    setBoardMode(on: boolean): void {
+        if (on) {
+            this.board.setBoard(parseBoard(this.editor.getText()));
+            this.boardText = this.editor.getText();
+            this.findBar.close();
+            this.content.visible_child_name = 'board';
+            this.showBoardCounts(this.board.getBoard());
+        } else {
+            this.content.visible_child_name = 'editor';
+            this.statusBar.setCounts(this.editor.getText());
+            this.editor.updateCursor(true);
+            this.editor.view.grab_focus();
+        }
+        const action = this.app.lookup_action('kanban-view');
+        if (action instanceof Gio.SimpleAction) action.set_state(GLib.Variant.new_boolean(on));
+    }
+
+    // Menu/pintasan "Tampilan Papan": berganti antara papan dan teks untuk dokumen kanban.
+    toggleBoardView(on: boolean): void {
+        if (on && !isKanban(this.editor.getText())) {
+            this.statusBar.toast('Dokumen ini bukan papan kanban (butuh "kanban: true" di frontmatter)');
+            this.setBoardMode(false);
+            return;
+        }
+        this.textOverride = !on;
+        this.setBoardMode(on);
+    }
+
+    // Dokumen baru berisi papan kanban kosong.
+    newBoardDocument(): void {
+        if (!this.confirmDiscard()) return;
+        this.file = null;
+        this.editor.setText(serializeBoard(newBoard()));
+        this.textOverride = false;
+        this.syncMode();
+        this.updateTitle();
+        this.fileTree.reveal(null);
+    }
+
+    private showBoardCounts(board: Board): void {
+        this.statusBar.setBoardCounts(board.columns.length, countCards(board));
+    }
+
+    // Perubahan dari papan → teks dokumen (satu langkah undo).
+    private writeBoard(board: Board): void {
+        const text = serializeBoard(board);
+        this.boardText = text;   // mengenali perubahan ini sebagai milik papan sendiri
+        this.editor.replaceText(text);
+        this.showBoardCounts(board);
+    }
+
+    private queueBoardReload(): void {
+        if (!this.boardMode || this.reloadQueued) return;
+        this.reloadQueued = true;
+        // Ditunda: undo mengubah teks dalam beberapa langkah, dan yang dibaca harus hasil akhirnya.
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this.reloadQueued = false;
+            const text = this.editor.getText();
+            if (!this.boardMode || text === this.boardText) return GLib.SOURCE_REMOVE;
+            if (isKanban(text)) {
+                this.board.setBoard(parseBoard(text));
+                this.boardText = text;
+                this.showBoardCounts(this.board.getBoard());
+            } else {
+                this.textOverride = true;   // bukan papan lagi (misalnya frontmatter terhapus)
+                this.setBoardMode(false);
+            }
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     // Ubah pilihan tampilan lalu terapkan. Semua kecuali mode source disimpan ke pengaturan.
@@ -186,6 +289,8 @@ export class MainWindow {
         if (!this.confirmDiscard()) return;
         this.file = null;
         this.editor.setText('');
+        this.textOverride = false;
+        this.syncMode();
         this.updateTitle();
         this.fileTree.reveal(null);
     }
@@ -203,6 +308,8 @@ export class MainWindow {
             // this.file diisi sebelum setText(): path gambar relatif dihitung dari foldernya.
             this.file = absolute;
             this.editor.setText(text);
+            this.textOverride = false;
+            this.syncMode();
             this.updateTitle();
             this.fileTree.reveal(absolute);
             return true;

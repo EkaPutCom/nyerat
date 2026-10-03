@@ -20,6 +20,7 @@ const MENU: Item[][] = [
     [['Buka Folder…', 'app.open-folder'], ['Simpan Sebagai…', 'app.save-as'], ['Ekspor HTML…', 'app.export-html']],
     [['Cari', 'app.find'], ['Sisipkan Gambar…', 'app.image'], ['Perbesar Gambar', 'app.zoom-image'], ['Sisipkan Tabel', 'app.table'],
         ['Sisipkan Blok Kode', 'app.codeblock']],
+    [['Papan Kanban Baru', 'app.kanban-new'], ['Tampilan Papan Kanban', 'app.kanban-view']],
     [['Mode Source', 'app.source'], ['Mode Fokus', 'app.focus'], ['Mode Typewriter', 'app.typewriter'],
         ['Mode Gelap', 'app.dark']],
     [['Tentang Nyerat', 'app.about'], ['Keluar', 'app.quit']],

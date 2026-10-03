@@ -155,6 +155,32 @@ export class MarkdownView {
         this.highlight();
     }
 
+    // Ganti isi dokumen dengan suntingan sekecil mungkin (hanya bagian tengah yang berbeda),
+    // dalam satu langkah undo. Dipakai papan kanban untuk menulis perubahannya ke teks.
+    replaceText(text: string): void {
+        const old = this.getText();
+        let head = 0;
+        const max = Math.min(old.length, text.length);
+        while (head < max && old[head] === text[head]) head++;
+        let tail = 0;
+        while (tail < max - head && old[old.length - 1 - tail] === text[text.length - 1 - tail]) tail++;
+        if (head === old.length && head === text.length) return;   // tidak ada perubahan
+
+        // Batas potongan tidak boleh membelah pasangan surrogat (emoji): mundurkan awal, majukan akhir.
+        const isLow = (c: number) => c >= 0xDC00 && c <= 0xDFFF;
+        if (head < old.length && isLow(old.charCodeAt(head))) head--;
+        if (tail > 0 && isLow(old.charCodeAt(old.length - tail))) tail--;
+
+        const buf = this.buffer;
+        const cp = (n: number) => Array.from(old.slice(0, n)).length;
+        const from = buf.get_iter_at_offset(cp(head));
+        const to = buf.get_iter_at_offset(cp(old.length - tail));
+        buf.begin_user_action();
+        buf.delete(from, to);
+        buf.insert(from, text.slice(head, text.length - tail), -1);
+        buf.end_user_action();
+    }
+
     setPalette(palette: Palette): void {
         paintTags(this.tags, palette);
         this.code.setScheme(palette.codeScheme);

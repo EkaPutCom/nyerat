@@ -13,12 +13,24 @@ import type { MainWindow, Option } from './window.js';
 
 const TABLE_TEMPLATE: [before: string, after: string] = ['| Kolom 1 | Kolom 2 | Kolom 3 |\n| ------- | ------- | ------- |\n| ', ' |  |  |\n'];
 
+// Aksi yang menyunting teks dokumen. Saat papan kanban tampil, teksnya tersembunyi, jadi
+// aksi ini ditolak dengan pesan alih-alih mengubah teks yang tidak terlihat.
+const TEXT_ACTIONS = new Set([
+    'find', 'bold', 'italic', 'strike', 'inline-code', 'highlight', 'link', 'image', 'zoom-image', 'codeblock', 'table',
+    'quote', 'ulist', 'olist', 'heading0', 'heading1', 'heading2', 'heading3', 'heading4', 'heading5', 'heading6',
+    'table-row-below', 'table-row-above', 'table-delete-row', 'table-col-right', 'table-col-left', 'table-delete-col',
+    'table-align-left', 'table-align-center', 'table-align-right', 'table-format',
+]);
+
 export function registerActions(app: Gtk.Application, w: MainWindow): void {
     const buf = w.editor.buffer;
 
     const action = (name: string, accels: string[] | null, run: () => void) => {
         const a = new Gio.SimpleAction({ name });
-        a.connect('activate', () => run());
+        a.connect('activate', () => {
+            if (w.boardMode && TEXT_ACTIONS.has(name)) w.statusBar.toast('Beralih ke tampilan teks (Ctrl+Shift+B) untuk menyunting');
+            else run();
+        });
         app.add_action(a);
         if (accels) app.set_accels_for_action(`app.${name}`, accels);
     };
@@ -38,6 +50,18 @@ export function registerActions(app: Gtk.Application, w: MainWindow): void {
     action('open', ['<Control>o'], () => w.open());
     action('open-folder', ['<Control><Shift>o'], () => w.chooseFolder());
     action('save', ['<Control>s'], () => w.save());
+
+    // Undo/redo lewat aksi, supaya juga bekerja saat papan kanban tampil (editor teks tidak
+    // berfokus). Di tampilan teks hasilnya sama dengan pintasan bawaan GtkSourceView.
+    action('undo', ['<Control>z'], () => buf.undo());
+    action('redo', ['<Control><Shift>z', '<Control>y'], () => buf.redo());
+
+    // Papan kanban
+    action('kanban-new', null, () => w.newBoardDocument());
+    const view = Gio.SimpleAction.new_stateful('kanban-view', null, GLib.Variant.new_boolean(false));
+    view.connect('change-state', (_a, value) => { if (value) w.toggleBoardView(value.get_boolean()); });
+    app.add_action(view);
+    app.set_accels_for_action('app.kanban-view', ['<Control><Shift>b']);
     action('save-as', ['<Control><Shift>s'], () => w.saveAs());
     action('export-html', ['<Control><Shift>e'], () => w.exportHtml());
     action('quit', ['<Control>q'], () => w.win.close());
