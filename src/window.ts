@@ -28,6 +28,7 @@ import { createHeaderBar } from './ui/headerbar.js';
 import { applyTheme, systemPrefersDark } from './ui/theme.js';
 import { chooseFile, askSaveChanges, showError } from './ui/dialogs.js';
 import { registerActions } from './actions.js';
+import { ImageViewer } from './ui/imageviewer.js';
 
 const UNTITLED = 'Tanpa Judul';
 
@@ -90,6 +91,7 @@ export class MainWindow {
             this.statusBar.setModes((Object.keys(MODE_LABELS) as Mode[]).filter(m => this.editor.modes[m]).map(m => MODE_LABELS[m]));
         };
         this.editor.onMessage = msg => this.statusBar.toast(msg);
+        this.editor.onViewImage = (pixbuf, title) => new ImageViewer(this.win, pixbuf, title).show();
         this.editor.getBaseDir = () => this.file ? GLib.path_get_dirname(this.file) : GLib.get_home_dir();
         this.outline.onJump = line => this.editor.jumpToLine(line);
         this.fileTree.onOpenFile = file => this.openFile(file);

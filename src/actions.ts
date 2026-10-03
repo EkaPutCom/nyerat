@@ -52,6 +52,7 @@ export function registerActions(app: Gtk.Application, w: MainWindow): void {
     action('highlight', ['<Control><Shift>h'], () => wrapSelection(buf, '=='));
     action('link', ['<Control>k'], () => insertLink(buf));
     action('image', ['<Control><Shift>i'], () => w.insertImage());
+    action('zoom-image', null, () => w.editor.zoomImage());
 
     // Blok
     action('codeblock', ['<Control><Shift>k'], () => insertBlock(buf, '```\n', '\n```'));

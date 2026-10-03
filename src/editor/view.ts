@@ -15,6 +15,7 @@
 //   onHighlighted({ text, headings })   setelah penyorotan
 //   onCursorMoved(line, column)         setelah kursor pindah
 //   onMessage(text)                     pesan singkat untuk pengguna
+//   onViewImage(pixbuf, title)          gambar diminta diperbesar (klik ganda / perintah menu)
 //   getBaseDir()                        folder untuk tautan relatif
 
 import Gtk from 'gi://Gtk?version=3.0';
@@ -22,6 +23,7 @@ import Gdk from 'gi://Gdk?version=3.0';
 import GtkSource from 'gi://GtkSource?version=4';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import type GdkPixbuf from 'gi://GdkPixbuf';
 
 import { createTags, paintTags, setTagMargins } from './tags.js';
 import { highlight } from './highlighter.js';
@@ -64,6 +66,7 @@ export class MarkdownView {
     onHighlighted: (result: HighlightResult) => void = () => {};
     onCursorMoved: (line: number, column: number) => void = () => {};
     onMessage: (text: string) => void = () => {};
+    onViewImage: (pixbuf: GdkPixbuf.Pixbuf, title: string) => void = () => {};  // gambar diminta diperbesar
     getBaseDir: () => string = () => GLib.get_home_dir();
 
     private margin = -1;
@@ -105,6 +108,7 @@ export class MarkdownView {
         };
 
         this.images = new ImageLayer(this.view);
+        this.images.onZoom = (line, index) => this.zoomImage(line, index);
         this.images.getBaseDir = () => this.getBaseDir();
         // Klik gambar → kursor ke barisnya, sehingga sintaks ![alt](url) muncul.
         this.images.onActivate = line => {
@@ -309,6 +313,14 @@ export class MarkdownView {
             }
         }
         return false;
+    }
+
+    // Perbesar gambar di baris `line` (default: baris kursor).
+    zoomImage(line?: number, index = 0): void {
+        const target = line ?? this.buffer.get_iter_at_mark(this.buffer.get_insert()).get_line();
+        const found = this.images.imageAt(target, index);
+        if (found.ok) this.onViewImage(found.pixbuf, found.title);
+        else this.onMessage(found.reason);
     }
 
     // Perintah tabel dari menu/shortcut. Pesan kegagalan ditampilkan lewat onMessage.

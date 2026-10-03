@@ -16,6 +16,7 @@
 // memuat ulang gambar yang sama.
 
 import Gtk from 'gi://Gtk?version=3.0';
+import Gdk from 'gi://Gdk?version=3.0';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -47,6 +48,14 @@ interface BlockItem {
     alt: string;
     entry: CacheEntry | null;
 }
+
+// Bagian dari Gdk.Event yang dipakai penanganan klik (memudahkan tes membuat event tiruan).
+export type ClickEvent = Pick<Gdk.Event, 'get_button' | 'get_event_type'>;
+
+// Hasil mencari gambar untuk diperbesar (imageAt).
+export type ImageLookup =
+    | { ok: true; pixbuf: GdkPixbuf.Pixbuf; title: string }
+    | { ok: false; reason: string };
 
 // Satu blok per baris yang memuat gambar.
 export interface Block {
@@ -100,7 +109,8 @@ export class ImageLayer {
     blocks: Block[] = [];
 
     getBaseDir: () => string = () => GLib.get_home_dir();
-    onActivate: (line: number) => void = () => {};  // gambar diklik
+    onActivate: (line: number) => void = () => {};  // gambar diklik sekali
+    onZoom: (line: number, index: number) => void = () => {};  // gambar diklik dua kali
 
     private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
     private relayoutQueued = false;
@@ -121,6 +131,32 @@ export class ImageLayer {
         if (!adj || adj === this.adjustment) return;
         this.adjustment = adj;
         adj.connect('changed', () => this.queueRelayout());
+    }
+
+    // Tombol mouse ditekan pada gambar ke-`index` di baris `line`. Hanya tombol kiri yang
+    // ditangani; klik ganda datang sebagai peristiwa DOUBLE_BUTTON_PRESS dari GDK.
+    onItemPress(line: number, index: number, event: ClickEvent): boolean {
+        if (event.get_button()[1] !== 1) return false;
+        this.press(line, index, event.get_event_type() === Gdk.EventType.DOUBLE_BUTTON_PRESS);
+        return true;
+    }
+
+    // Gambar di baris `line` diklik. Satu klik: kursor ke barisnya (sintaksnya muncul);
+    // klik ganda: perbesar gambar itu.
+    press(line: number, index: number, doubleClick: boolean): void {
+        if (doubleClick) this.onZoom(line, index);
+        else this.onActivate(line);
+    }
+
+    // Gambar ke-`index` di baris `line` dalam ukuran penuh (bukan yang diperkecil untuk tampilan).
+    imageAt(line: number, index = 0): ImageLookup {
+        const item = this.blocks.find(b => b.line === line)?.items[index];
+        if (!item) return { ok: false, reason: 'Tidak ada gambar di baris ini' };
+        if (item.entry?.status === 'ok' && item.entry.pixbuf) {
+            const name = item.uri.split('/').pop() ?? item.uri;
+            return { ok: true, pixbuf: item.entry.pixbuf, title: item.alt || GLib.uri_unescape_string(name, null) || name };
+        }
+        return { ok: false, reason: item.entry?.status === 'error' ? 'Gambar tidak bisa dimuat' : 'Gambar belum selesai dimuat' };
     }
 
     // images dari highlighter.ts
@@ -180,11 +216,6 @@ export class ImageLayer {
         box.get_style_context().add_class('image-block');
         const block: Block = { line, key, items: [], box, content, height: 0, x: -1, y: -1, destroyed: false };
 
-        box.connect('button-press-event', () => {
-            this.onActivate(block.line);
-            return true;
-        });
-
         for (const { uri, alt } of items) {
             const item: BlockItem = { uri, alt, entry: null };
             block.items.push(item);
@@ -221,7 +252,7 @@ export class ImageLayer {
                 const h = Math.max(1, Math.round(pb.get_height() * scale));
                 const scaled = (scale < 1 ? pb.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR) : null) ?? pb;
                 widget = Gtk.Image.new_from_pixbuf(scaled);
-                widget.set_tooltip_text(item.alt || item.uri);
+                widget.set_tooltip_text(`${item.alt || item.uri}\nKlik ganda untuk memperbesar`);
                 height += h;
             } else {
                 const text = item.entry?.status === 'error'
@@ -234,8 +265,13 @@ export class ImageLayer {
                 if (item.entry?.error) widget.set_tooltip_text(item.entry.error);
                 height += 24;
             }
-            widget.halign = Gtk.Align.START;
-            block.content.add(widget);
+            // Setiap gambar punya penerima kliknya sendiri, supaya klik ganda tahu gambar mana
+            // yang dimaksud jika satu baris memuat beberapa gambar.
+            const clickable = new Gtk.EventBox({ visible_window: false, halign: Gtk.Align.START });
+            clickable.add(widget);
+            const index = block.items.indexOf(item);
+            clickable.connect('button-press-event', (_w, ev) => this.onItemPress(block.line, index, ev as unknown as Gdk.Event));
+            block.content.add(clickable);
         }
         height += SPACING * Math.max(0, block.items.length - 1);
         block.content.show_all();

@@ -29,6 +29,7 @@ import {
 } from '../src/markdown/table.js';
 import { cellMarkup } from '../src/markdown/pango.js';
 import { fitColumns } from '../src/editor/tablelayer.js';
+import { ImageViewer, MAX_ZOOM, MIN_ZOOM, clampZoom, fitZoom } from '../src/ui/imageviewer.js';
 import type { TagName } from '../src/editor/tags.js';
 
 const argv = System.programArgs;
@@ -469,7 +470,8 @@ function runGuiTests(app: Gtk.Application): void {
         setText('![hilang](gambar/tidak-ada.png)');
         waitImages();
         eq(images()[0].items[0].entry?.status, 'error', 'status muat');
-        const label = images()[0].content.get_children()[0];
+        // Setiap item dibungkus EventBox untuk menangkap kliknya.
+        const label = (images()[0].content.get_children()[0] as Gtk.Bin).get_child();
         ok(label instanceof Gtk.Label && label.label.includes('hilang'), 'label error tidak tampil');
     });
     test('gambar di baris tabel dan blok kode diabaikan', () => {
@@ -493,6 +495,170 @@ function runGuiTests(app: Gtk.Application): void {
     test('menghapus sintaks gambar menghapus widgetnya', () => {
         setText('teks saja');
         eq(images().length, 0, 'jumlah blok gambar');
+    });
+    section('Zoom gambar');
+    const makePixbuf = (width: number, height: number) => {
+        const pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, false, 8, width, height);
+        pixbuf.fill(0x4183c4ff);
+        return pixbuf;
+    };
+    makePixbuf(50, 50).savev(GLib.build_filenamev([imgDir, 'kecil.png']), 'png', [], []);
+    const settleV = () => { for (let i = 0; i < 30; i++) { pump(); GLib.usleep(10000); } };
+    const openViewer = (pixbuf: GdkPixbuf.Pixbuf, title = 'uji') => {
+        const viewer = new ImageViewer(w.win, pixbuf, title);
+        viewer.show();
+        settleV();
+        return viewer;
+    };
+    const message = () => w.statusBar.left.label;
+    const cursorLineNow = () => buf.get_iter_at_mark(buf.get_insert()).get_line();
+    const originalOnView = ed.onViewImage;
+    let viewed: { pixbuf: GdkPixbuf.Pixbuf; title: string } | null = null;
+    ed.onViewImage = (pixbuf, title) => { viewed = { pixbuf, title }; };
+
+    test('imageAt memberi gambar ukuran penuh, bukan yang diperkecil untuk tampilan', () => {
+        w.file = GLib.build_filenamev([tmp, 'dok.md']);
+        setText('![uji](gambar/uji.png)\n\nteks'); waitImages();
+        const found = ed.images.imageAt(0);
+        ok(found.ok, 'gambar tidak ditemukan');
+        eq([found.pixbuf.get_width(), found.pixbuf.get_height(), found.title], [300, 100, 'uji']);
+    });
+    test('judul penampil: teks alt, atau nama file jika alt kosong', () => {
+        setText('![](gambar/uji.png)'); waitImages();
+        const found = ed.images.imageAt(0);
+        ok(found.ok && found.title === 'uji.png', 'judul dari nama file');
+    });
+    test('imageAt menolak baris tanpa gambar dan gambar yang gagal dimuat', () => {
+        setText('![x](gambar/tidak-ada.png)\n\nteks'); waitImages();
+        const missing = ed.images.imageAt(0), none = ed.images.imageAt(2);
+        ok(!missing.ok && missing.reason === 'Gambar tidak bisa dimuat', 'gambar hilang');
+        ok(!none.ok && none.reason === 'Tidak ada gambar di baris ini', 'baris tanpa gambar');
+    });
+    test('klik sekali memindahkan kursor ke gambar; klik ganda memperbesarnya', () => {
+        setText('teks\n\n![uji](gambar/uji.png)'); waitImages(); cursorTo(0);
+        viewed = null;
+        ed.images.press(2, 0, false); pump();
+        eq(cursorLineNow(), 2, 'kursor setelah klik sekali');
+        eq(viewed, null, 'klik sekali tidak membuka penampil');
+        ed.images.press(2, 0, true);
+        ok(viewed !== null && (viewed as { pixbuf: GdkPixbuf.Pixbuf }).pixbuf.get_width() === 300, 'klik ganda tidak membuka penampil');
+    });
+    test('klik ganda memilih gambar yang tepat jika satu baris memuat beberapa gambar', () => {
+        setText('![a](gambar/uji.png) ![b](gambar/kecil.png)'); waitImages();
+        viewed = null;
+        ed.images.press(0, 1, true);
+        const v = viewed as unknown as { pixbuf: GdkPixbuf.Pixbuf; title: string };
+        eq([v.pixbuf.get_width(), v.title], [50, 'b']);
+    });
+    test('zoomImage memakai baris kursor; tanpa gambar menampilkan pesan', () => {
+        setText('teks\n\n![uji](gambar/uji.png)'); waitImages();
+        cursorTo(2); viewed = null; ed.zoomImage();
+        ok(viewed !== null, 'gambar di baris kursor tidak dibuka');
+        cursorTo(0); viewed = null; ed.zoomImage();
+        eq([viewed, message()], [null, 'Tidak ada gambar di baris ini']);
+    });
+    test('perintah menu Perbesar Gambar', () => {
+        cursorTo(2); viewed = null;
+        action('zoom-image');
+        ok(viewed !== null, 'aksi tidak membuka penampil');
+    });
+    ed.onViewImage = originalOnView;
+
+    test('penampil: gambar kecil dibuka 100%, gambar besar dipas ke jendela', () => {
+        const small = openViewer(makePixbuf(100, 80));
+        eq(small.zoom, 1, 'gambar kecil tidak diperbesar');
+        const big = openViewer(makePixbuf(3000, 2000));
+        ok(big.zoom < 0.5 && big.zoom > MIN_ZOOM, `zoom awal gambar besar ${big.zoom}`);
+        ok(big.area.get_size_request()[0] <= big.window.get_allocated_width(), 'gambar lebih lebar dari jendela');
+        small.close(); big.close();
+    });
+    test('zoom masuk/keluar mengalikan 1,25 dan dibatasi 5%–800%', () => {
+        const v = openViewer(makePixbuf(100, 80));
+        v.zoomIn(); eq(Math.round(v.zoom * 1000) / 1000, 1.25, 'zoom masuk');
+        v.zoomOut(); v.zoomOut(); eq(Math.round(v.zoom * 1000) / 1000, 0.8, 'zoom keluar');
+        for (let i = 0; i < 40; i++) v.zoomIn();
+        eq(v.zoom, MAX_ZOOM, 'batas atas');
+        for (let i = 0; i < 80; i++) v.zoomOut();
+        eq(v.zoom, MIN_ZOOM, 'batas bawah');
+        v.actual(); eq(v.zoom, 1, 'ukuran asli');
+        v.close();
+    });
+    test('ukuran area gambar mengikuti zoom', () => {
+        const v = openViewer(makePixbuf(400, 200));
+        v.actual(); eq(v.area.get_size_request(), [400, 200], '100%');
+        v.zoomIn(); eq(v.area.get_size_request(), [500, 250], '125%');
+        v.close();
+    });
+    test('Pas memperbesar gambar kecil, 0 mengembalikan 100%', () => {
+        const v = openViewer(makePixbuf(100, 80));
+        v.fit(); settleV();
+        ok(v.zoom > 1, `pas layar gambar kecil ${v.zoom}`);
+        v.handleKey(Gdk.KEY_0); eq(v.zoom, 1, 'ukuran asli');
+        v.close();
+    });
+    test('tombol: + − 0 F Esc; tombol lain tidak ditangani', () => {
+        const v = openViewer(makePixbuf(100, 80));
+        ok(v.handleKey(Gdk.KEY_plus) && Math.abs(v.zoom - 1.25) < 1e-9, '+');
+        ok(v.handleKey(Gdk.KEY_minus) && Math.abs(v.zoom - 1) < 1e-9, '−');
+        ok(v.handleKey(Gdk.KEY_f), 'F'); settleV(); ok(v.zoom > 1, 'F memperbesar gambar kecil');
+        ok(v.handleKey(Gdk.KEY_0) && v.zoom === 1, '0');
+        ok(!v.handleKey(Gdk.KEY_a), 'tombol lain');
+        ok(v.handleKey(Gdk.KEY_Escape) && v.closed, 'Esc menutup');
+    });
+    test('zoom di titik penunjuk: titik gambar di bawah penunjuk tidak bergeser', () => {
+        const v = openViewer(makePixbuf(2000, 1500));
+        v.actual(); settleV();
+        const scroller = v['scroller'];
+        scroller.get_hadjustment().set_value(0); scroller.get_vadjustment().set_value(0);
+        // Roda ke atas di titik (400, 300) pada gambar yang tergulir ke (0, 0).
+        const wheel = { get_coords: () => [true, 400, 300], get_scroll_direction: () => [true, Gdk.ScrollDirection.UP], get_scroll_deltas: () => [false, 0, 0] };
+        v['onScroll'](wheel as unknown as Gdk.Event, true); settleV();
+        // Titik gambar (400, 300) kini di 500 × 375; agar tetap di (400, 300) layar, gulir (100, 75).
+        const [h, vv] = [scroller.get_hadjustment().get_value(), scroller.get_vadjustment().get_value()];
+        ok(Math.abs(h - 100) < 1.5 && Math.abs(vv - 75) < 1.5, `gulir (${h}, ${vv}), seharusnya (100, 75)`);
+        v.close();
+    });
+    test('drag menggeser gambar', () => {
+        const v = openViewer(makePixbuf(2000, 1500));
+        v.actual(); settleV();
+        const scroller = v['scroller'];
+        scroller.get_hadjustment().set_value(0); scroller.get_vadjustment().set_value(0);
+        const at = (x: number, y: number, type = Gdk.EventType.BUTTON_PRESS) => ({
+            get_button: () => [true, 1], get_event_type: () => type, get_root_coords: () => [true, x, y],
+        }) as unknown as Gdk.Event;
+        v['onPress'](at(500, 500));
+        v['onMotion'](at(450, 470));   // digeser ke kiri-atas = melihat bagian kanan-bawah
+        eq([scroller.get_hadjustment().get_value(), scroller.get_vadjustment().get_value()], [50, 30], 'gulir');
+        v['endDrag'](); ok(!v['onMotion'](at(0, 0)), 'setelah lepas tombol, gerak tidak menggeser');
+        v.close();
+    });
+    test('klik ganda di penampil: bergantian pas layar dan 100%', () => {
+        const v = openViewer(makePixbuf(3000, 2000));
+        const dbl = { get_button: () => [true, 1], get_event_type: () => Gdk.EventType.DOUBLE_BUTTON_PRESS, get_root_coords: () => [true, 0, 0] } as unknown as Gdk.Event;
+        const fitted = v.zoom;
+        v['onPress'](dbl); eq(v.zoom, 1, 'ke 100%');
+        v['onPress'](dbl); settleV();
+        ok(Math.abs(v.zoom - fitted) < 0.02, `kembali ke pas layar (${v.zoom} vs ${fitted})`);
+        v.close();
+    });
+    test('fungsi bantu zoom', () => {
+        eq([clampZoom(100), clampZoom(0), clampZoom(2)], [MAX_ZOOM, MIN_ZOOM, 2], 'clampZoom');
+        eq(fitZoom(1000, 500, 500, 500), 0.5, 'fitZoom mengikuti sisi yang lebih sempit');
+    });
+    test('menggambar dengan zoom besar tidak memicu peringatan GTK/cairo', () => {
+        const warnings: string[] = [];
+        const flags = GLib.LogLevelFlags.LEVEL_WARNING | GLib.LogLevelFlags.LEVEL_CRITICAL;
+        const handlers = ['Gtk', 'Gdk', 'GLib-GObject'].map(domain =>
+            [domain, GLib.log_set_handler(domain, flags, (_d, _l, m) => { warnings.push(`${domain}: ${m}`); })] as const);
+        try {
+            const v = openViewer(makePixbuf(3000, 2000));
+            for (let i = 0; i < 10; i++) { v.zoomIn(); settleV(); }
+            v.zoomOut(); settleV();
+            v.close(); settleV();
+        } finally {
+            for (const [domain, id] of handlers) GLib.log_remove_handler(domain, id);
+        }
+        eq(warnings, [], 'peringatan');
     });
     w.file = null;
 
@@ -971,17 +1137,52 @@ function runGuiTests(app: Gtk.Application): void {
 
     if (opt('mouse')) {
         section('Klik mouse sungguhan (XTest)');
-        test('klik di seluruh area teks', () => {
-            setText(WELCOME);
-            const tw = ed.view.get_window(Gtk.TextWindowType.TEXT)!;
-            for (let y = 20; y < tw.get_height(); y += 23) {
-                for (const x of [20, 250, 600]) {
-                    Gdk.test_simulate_button(tw, x, y, 1, 0 as Gdk.ModifierType, Gdk.EventType.BUTTON_PRESS);
-                    Gdk.test_simulate_button(tw, x, y, 1, 0 as Gdk.ModifierType, Gdk.EventType.BUTTON_RELEASE);
-                    pump();
-                }
-            }
-        });
+        const tw = ed.view.get_window(Gtk.TextWindowType.TEXT)!;
+        const xtest = (window: Gdk.Window, x: number, y: number) => {
+            Gdk.test_simulate_button(window, x, y, 1, 0 as Gdk.ModifierType, Gdk.EventType.BUTTON_PRESS);
+            Gdk.test_simulate_button(window, x, y, 1, 0 as Gdk.ModifierType, Gdk.EventType.BUTTON_RELEASE);
+            for (let k = 0; k < 8; k++) { pump(); GLib.usleep(15000); }
+        };
+
+        // Pemeriksaan awal: di sebagian lingkungan (diuji di sini: XFCE/X11) gerak pointer XTest
+        // sampai, tetapi tombol mouse tidak pernah diterima GTK. Tes klik di bawah ini tidak ada
+        // artinya jika klik tidak sampai, jadi dilewati dengan keterangan, bukan lulus palsu.
+        setText('baris satu\n\nbaris dua'); cursorTo(0);
+        w.win.present_with_time(Gdk.CURRENT_TIME);
+        for (let k = 0; k < 20; k++) { pump(); GLib.usleep(15000); }
+        let delivered = 0;
+        const probe = ed.view.connect('button-press-event', () => { delivered++; return false; });
+        xtest(tw, 200, 140);
+        ed.view.disconnect(probe);
+
+        if (!delivered) {
+            print(`  ${DIM}- dilewati: XTest tidak mengirim tombol mouse ke jendela di lingkungan ini${RESET}`);
+        } else {
+            test('klik ganda pada gambar di editor membuka penampil', () => {
+                w.file = GLib.build_filenamev([tmp, 'dok.md']);
+                setText('teks\n\n![uji](gambar/uji.png)\n\nakhir'); waitImages(); cursorTo(0);
+                for (let i = 0; i < 30; i++) { pump(); GLib.usleep(10000); }
+                let opened = false;
+                const keep = ed.onViewImage;
+                ed.onViewImage = () => { opened = true; };
+                // Titik 60 px di bawah tepi atas gambar (tingginya 100): tetap di dalam gambar walau klik
+                // pertama menggesernya ke bawah karena sintaks gambar muncul. Posisinya diambil dari
+                // widget gambarnya, bukan dari rumus, supaya tidak bergantung pada margin editor.
+                const widgetWindow = ed.view.get_window(Gtk.TextWindowType.WIDGET)!;
+                const picture = ed.images.blocks[0].content.get_children()[0];
+                const [, px, py] = picture.translate_coordinates(ed.view, 40, 60);
+                xtest(widgetWindow, px, py);
+                xtest(widgetWindow, px, py);
+                ed.onViewImage = keep;
+                w.file = null;
+                ok(opened, 'klik ganda dengan mouse tidak membuka penampil');
+            });
+            test('klik di seluruh area teks tidak membuat editor error', () => {
+                setText(WELCOME);
+                for (let y = 20; y < tw.get_height(); y += 23)
+                    for (const x of [20, 250, 600]) xtest(tw, x, y);
+            });
+        }
     }
 
     const shot = optVal('screenshot');
