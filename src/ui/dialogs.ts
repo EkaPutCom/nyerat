@@ -170,8 +170,9 @@ export function promptDialog(parent: Gtk.Window | null, options: { title: string
 
 export function confirmDialog(parent: Gtk.Window | null, message: string, detail?: string): boolean {
     const dialog = new Gtk.MessageDialog({
-        transient_for: parent, modal: true, message_type: Gtk.MessageType.QUESTION, text: message, secondary_text: detail,
+        transient_for: parent, modal: true, message_type: Gtk.MessageType.QUESTION, text: message,
     });
+    if (detail) dialog.secondary_text = detail;
     dialog.add_button('Batal', Gtk.ResponseType.CANCEL);
     dialog.add_button('Hapus', Gtk.ResponseType.OK);
     const response = dialog.run();
