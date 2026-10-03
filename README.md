@@ -46,10 +46,27 @@ gjs -m dist/nyerat.js ~/catatan
 | Perintah | Fungsi |
 | --- | --- |
 | `npm run build` | Periksa tipe (`tsc --noEmit`), lalu bundel dengan Vite ke `dist/` |
-| `npm run watch` | Build ulang otomatis setiap file disimpan (tutup dan buka lagi aplikasinya untuk melihat perubahan) |
+| `npm run dev` | Mode pengembangan: build ulang, periksa tipe, dan buka ulang aplikasi setiap file disimpan |
+| `npm run watch` | Hanya build ulang otomatis setiap file disimpan, tanpa membuka aplikasi dan tanpa pemeriksaan tipe |
 | `npm run typecheck` | Hanya periksa tipe |
 | `npm start` | Build, lalu jalankan aplikasi |
 | `npm test` | Build, lalu jalankan semua tes |
+
+### Mode pengembangan
+
+```bash
+npm run dev
+```
+
+Setiap ada file di `src/` atau `tests/` yang disimpan, `npm run dev` mem-build ulang lalu menutup dan membuka lagi aplikasinya. GJS tidak bisa memuat ulang kode yang sedang berjalan (tidak ada HMR seperti di browser), jadi membuka ulang aplikasi adalah cara untuk melihat perubahan. Bersamaan dengan itu, `tsc --watch` memeriksa tipe dan melaporkan kesalahannya di terminal yang sama dengan label `[tipe]`.
+
+- Jika build gagal (misalnya ada kesalahan sintaks), aplikasi yang lama tetap berjalan sampai kesalahannya diperbaiki.
+- Kesalahan tipe hanya dilaporkan, tidak menghentikan build. Vite tetap bisa mem-build kode yang tipenya salah, jadi aplikasi tetap dibuka ulang. Perhatikan baris `[tipe]` di terminal.
+- Argumen setelah `--` diteruskan ke aplikasi, misalnya `npm run dev -- catatan.md` atau `npm run dev -- ~/catatan`.
+- **Perubahan di editor yang belum disimpan hilang** setiap kali aplikasi dibuka ulang.
+- `Ctrl+C` menghentikan semuanya (build, pemeriksaan tipe, dan aplikasi).
+
+Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `build()` milik Vite dalam mode watch, lalu membuka ulang aplikasi setiap event `END`, kecuali jika putaran build itu gagal.
 
 ## Fitur
 
@@ -155,6 +172,7 @@ File ini juga dipakai oleh tes otomatis, jadi jika menambah format baru, tambahk
 package.json              script npm dan dependensi pengembangan
 tsconfig.json             pengaturan pemeriksaan tipe TypeScript
 vite.config.ts            pengaturan build Vite
+scripts/dev.mjs           npm run dev: build ulang + buka ulang aplikasi + cek tipe
 dist/                     hasil build (tidak masuk git)
 src/
 ├── main.ts               titik masuk: hanya memanggil main() dari app.ts

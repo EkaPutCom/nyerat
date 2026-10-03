@@ -8,6 +8,7 @@
   "author": "Eka Putra <eka@ekaput.com>",
   "scripts": {
     "build": "tsc --noEmit && vite build",
+    "dev": "node scripts/dev.mjs",
     "watch": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "start": "npm run build && gjs -m dist/nyerat.js",
