@@ -236,6 +236,27 @@ export function cardMeta(text: string): CardMeta {
     return { title: title || text.trim(), tags, due };
 }
 
+// Pecah teks kartu menjadi judul, tag, dan tenggat (tanggal dengan jam bila ada) untuk
+// formulir sunting; composeCard menyatukannya kembali.
+export interface CardParts {
+    title: string;
+    tags: string[];
+    due: string;
+}
+
+const DUE_FULL = /\s*@\{(\d{4}-\d{2}-\d{2}(?:[ T]\d{1,2}:\d{2})?)\}/;
+export const DUE_INPUT = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{1,2}:\d{2})?$/;
+
+export function splitCard(text: string): CardParts {
+    return { title: cardMeta(text).title, tags: cardMeta(text).tags, due: DUE_FULL.exec(text)?.[1] ?? '' };
+}
+
+export function composeCard({ title, tags, due }: CardParts): string {
+    const tagText = tags.map(t => t.replace(/^#+/, '')).filter(Boolean).map(t => `#${t}`);
+    const dueText = due.trim() ? `@{${due.trim()}}` : '';
+    return [title.trim(), ...tagText, dueText].filter(Boolean).join(' ');
+}
+
 export type DueStatus = 'overdue' | 'today' | 'soon' | 'later';
 
 const DAY = 24 * 60 * 60 * 1000;

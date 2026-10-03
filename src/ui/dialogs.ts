@@ -5,6 +5,7 @@
 import Gtk from 'gi://Gtk?version=3.0';
 import Gdk from 'gi://Gdk?version=3.0';
 import { APP_NAME, APP_VERSION } from '../config.js';
+import { composeCard, DUE_INPUT, splitCard } from '../markdown/kanban.js';
 
 type FilterSetup = [label: string, setup: (filter: Gtk.FileFilter) => void];
 
@@ -98,6 +99,11 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft): Card
     dialog.set_default_response(Gtk.ResponseType.OK);
 
     const title = new Gtk.Entry({ text: card.text, activates_default: true, hexpand: true });
+    const parts = splitCard(card.text);
+    title.text = parts.title;
+    const tags = new Gtk.Entry({ text: parts.tags.join(' '), activates_default: true, hexpand: true, placeholder_text: 'tag1 tag2' });
+    const due = new Gtk.Entry({ text: parts.due, activates_default: true, hexpand: true, placeholder_text: 'YYYY-MM-DD' });
+    due.connect('changed', () => due.get_style_context().remove_class('error'));
     const notes = new Gtk.TextView({ wrap_mode: Gtk.WrapMode.WORD_CHAR, left_margin: 6, right_margin: 6, top_margin: 6, bottom_margin: 6 });
     notes.buffer.set_text(card.notes.join('\n'), -1);
     // Ctrl+Enter menyimpan dari kolom catatan (Enter biasa membuat baris baru).
@@ -119,14 +125,24 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft): Card
     box.margin = 12;
     box.pack_start(new Gtk.Label({ label: 'Judul', xalign: 0 }), false, false, 0);
     box.pack_start(title, false, false, 0);
+    box.pack_start(new Gtk.Label({ label: 'Tag (pisahkan dengan spasi)', xalign: 0 }), false, false, 0);
+    box.pack_start(tags, false, false, 0);
+    box.pack_start(new Gtk.Label({ label: 'Tenggat', xalign: 0 }), false, false, 0);
+    box.pack_start(due, false, false, 0);
     box.pack_start(new Gtk.Label({ label: 'Catatan', xalign: 0 }), false, false, 0);
     box.pack_start(frame, true, true, 0);
     box.show_all();
 
-    const response = dialog.run();
+    // Tenggat harus kosong atau berformat tanggal; selain itu dialog tetap terbuka.
+    let response = dialog.run();
+    while (response === Gtk.ResponseType.OK && due.text.trim() && !DUE_INPUT.test(due.text.trim())) {
+        due.get_style_context().add_class('error');
+        due.grab_focus();
+        response = dialog.run();
+    }
     const [start, end] = notes.buffer.get_bounds();
     const result: CardDraft = {
-        text: title.text.trim(),
+        text: composeCard({ title: title.text, tags: tags.text.split(/[\s,]+/), due: due.text }),
         notes: notes.buffer.get_text(start, end, true).replace(/\s+$/, '').split('\n').filter((l, i, all) => all.length > 1 || l !== ''),
     };
     dialog.destroy();
