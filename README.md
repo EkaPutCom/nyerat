@@ -66,6 +66,8 @@ gjs -m dist/nyerat.js ~/catatan
 | `npm test` | Build, lalu jalankan semua tes unit, GUI, dan mouse kanban di Xvfb |
 | `npm run test:ui` | Build, lalu jalankan rangkaian tes yang sama di desktop X11 |
 | `npm run bench` | Build, lalu ukur performa modul Markdown dan editor (setText, penyorotan, mengetik) di Xvfb; opsi: `--size=`, `--runs=`, `--budget=`, `--no-gui` |
+| `npm run bench:save` | Jalankan benchmark dan simpan hasilnya ke `bench/<tanggal-waktu>.json` |
+| `npm run bench:compare` | Jalankan benchmark dan tampilkan selisih terhadap [`bench/baseline.json`](bench/baseline.json) (hijau = lebih cepat, merah = lebih lambat, abu-abu = selisih < 25%, derau pengukuran) |
 | `npm run docs` | Potret aplikasi sungguhan (jendela akan terbuka sebentar), lalu perbarui PNG dan GIF di `docs/assets/` untuk landing page |
 
 ### Mode pengembangan

@@ -1,0 +1,24 @@
+{
+  "tanggal": "2026-10-03T17:01:59.767Z",
+  "size": 100,
+  "runs": 3,
+  "hasil": {
+    "Modul Markdown / markdownToHtml": 9.49099999666214,
+    "Modul Markdown / parseInline (per baris)": 6.523999996483326,
+    "Modul Markdown / findTables": 0.33899999409914017,
+    "Modul Markdown / parseTable + renderTable": 3.3589999973773956,
+    "Modul Markdown / parseBoard + serializeBoard": 0.12600000202655792,
+    "Editor GUI 25 blok / setText + sorot + layout": 112.8449999988079,
+    "Editor GUI 25 blok / highlight() ulang": 32.17400000244379,
+    "Editor GUI 25 blok / ketik 20 karakter": 1146.3480000048876,
+    "Editor GUI 25 blok / pindah kursor 20 baris": 781.3730000033975,
+    "Editor GUI 50 blok / setText + sorot + layout": 265.8430000022054,
+    "Editor GUI 50 blok / highlight() ulang": 75.55000000447035,
+    "Editor GUI 50 blok / ketik 20 karakter": 2413.622999995947,
+    "Editor GUI 50 blok / pindah kursor 20 baris": 1209.3119999989867,
+    "Editor GUI 100 blok / setText + sorot + layout": 504.93600000441074,
+    "Editor GUI 100 blok / highlight() ulang": 164.95199999958277,
+    "Editor GUI 100 blok / ketik 20 karakter": 5711.744000002742,
+    "Editor GUI 100 blok / pindah kursor 20 baris": 2361.954999998212
+  }
+}
