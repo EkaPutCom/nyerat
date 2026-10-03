@@ -10,6 +10,7 @@ export interface Settings {
     folder: string | null;   // folder yang terakhir dibuka
     typewriter: boolean;
     focus: boolean;
+    autosave: boolean;
     width: number;
     height: number;
     welcomed: boolean;
@@ -22,6 +23,7 @@ export const DEFAULTS: Settings = {
     folder: null,
     typewriter: false,
     focus: false,
+    autosave: true,      // simpan otomatis dokumen yang sudah punya file
     width: 1100,
     height: 760,
     welcomed: false,     // dokumen contoh sudah pernah ditampilkan

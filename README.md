@@ -136,7 +136,8 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 **Lainnya**
 - Cari teks, undo/redo, hitungan kata dan karakter, posisi kursor
 - Ekspor ke HTML dengan CSS disertakan. Gambar dan tautan tetap memakai URL/path aslinya; diagram Mermaid/DBML memerlukan internet untuk memuat Mermaid dari CDN
-- Peringatan sebelum menutup, membuat dokumen baru, atau membuka file lain jika ada perubahan yang belum disimpan
+- **Auto save** (menu ☰ → *Auto Save*, aktif bawaan): dokumen yang sudah punya file disimpan otomatis 1 detik setelah berhenti mengetik, dan disimpan tanpa bertanya saat menutup, membuat dokumen baru, atau membuka file lain. Dokumen yang belum pernah disimpan tetap butuh Ctrl+S
+- Peringatan sebelum menutup, membuat dokumen baru, atau membuka file lain jika ada perubahan yang belum disimpan (saat auto save mati atau dokumen belum punya file)
 
 ## Shortcut
 
@@ -529,7 +530,7 @@ Contoh menambah format baru, misalnya `^superskrip^`:
 
 ## Pengaturan
 
-Disimpan di `$XDG_CONFIG_HOME/nyerat/settings.json` (bawaan `~/.config/nyerat/settings.json`): mode gelap, sidebar dan tab yang terakhir dipilih, folder yang terakhir dibuka, mode fokus, mode typewriter, ukuran jendela, dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
+Disimpan di `$XDG_CONFIG_HOME/nyerat/settings.json` (bawaan `~/.config/nyerat/settings.json`): mode gelap, sidebar dan tab yang terakhir dipilih, folder yang terakhir dibuka, mode fokus, mode typewriter, auto save, ukuran jendela, dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
 
 Nilai bawaan: sidebar terbuka pada tab Outline, fokus/typewriter mati, ukuran jendela 1100 × 760 piksel, dan mode gelap mengikuti tema sistem (`dark: null`). Setelah mode gelap dipilih lewat menu, pilihan itu disimpan. Ukuran awal jendela dibatasi ke area kerja monitor. Mode source dan pilihan tampilan papan/teks tidak disimpan antar proses.
 

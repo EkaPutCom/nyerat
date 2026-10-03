@@ -78,3 +78,16 @@ Fixture `long` juga menguji 20.000 baris (~1,3 MB) tanpa grid tabel. Pengukuran 
 setelah perubahan parsing masih menemui callback GJS yang terblokir saat GC dan
 tidak menyimpan baseline parsial. Hasil tersebut belum membuktikan latensi GUI
 yang nyaman pada dokumen sebesar ini.
+
+## Auto save (2026-10-04)
+
+Skenario baru `auto save (tulis file)` mengukur `MainWindow.autosave()`: menulis seluruh
+dokumen ke disk setelah satu ketukan. Handler `changed` hanya mencatat waktu; timer tidak
+dibuat ulang per ketukan, sehingga `ketik per karakter` tidak berubah berarti. Hasil
+(Xvfb, 10 pengulangan): fixture `mixed` median 4,0/4,9/5,6 ms (7/15/30 KB), p95 sampai
+38 ms; fixture `long` median 3,5/3,6/3,9 ms (16/32/64 KB), p95 sampai 24 ms. Lonjakan
+p95 berasal dari penulisan file yang sinkron di thread utama dan terjadi sekali per
+jeda mengetik, bukan per ketukan. Skenario lain dalam `bench:compare` tetap dalam
+rentang derau (mis. `hapus teks besar` 7 KB berfluktuasi 11–14 ms antar-run). Baseline
+belum diperbarui; skenario baru belum punya pembanding. Dokumen ≥1 MB belum diukur.
+

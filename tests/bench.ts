@@ -274,6 +274,17 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
             await idle();
         }
     }));
+    // Auto save menulis seluruh dokumen sekali tiap jeda mengetik; ketukannya sendiri hanya mencatat waktu.
+    const saveDir = GLib.dir_make_tmp('nyerat-bench-XXXXXX');
+    w.file = GLib.build_filenamev([saveDir, 'dok.md']);
+    w.settings.autosave = true;
+    report('auto save (tulis file)', await operation(() => edit(() => buf.insert_at_cursor('x', -1)), async () => {
+        if (!w.autosave() || buf.get_modified()) throw new Error('Auto save tidak menyimpan dokumen.');
+    }), true);
+    w.settings.autosave = false;
+    GLib.unlink(w.file);
+    GLib.rmdir(saveDir);
+    w.file = null;
     ed.onHighlighted = onHighlighted;
 
     buf.set_modified(false);

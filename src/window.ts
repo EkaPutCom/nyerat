@@ -33,6 +33,8 @@ import { KanbanBoard } from './ui/kanban.js';
 import { countCards, isKanban, newBoard, parseBoard, serializeBoard, type Board } from './markdown/kanban.js';
 
 const UNTITLED = 'Tanpa Judul';
+// Jeda tanpa ketikan sebelum auto save menulis ke disk.
+const AUTOSAVE_DELAY_MS = 1000;
 
 const errorMessage = (e: unknown): string => e instanceof Error ? e.message : String(e);
 
@@ -48,7 +50,7 @@ function fitToScreen(width: number, height: number): [number, number] {
 const MODE_LABELS: Record<Mode, string> = { source: 'Source', focus: 'Fokus', typewriter: 'Typewriter' };
 
 // Pilihan tampilan yang bisa diubah dari menu.
-export type Option = 'sidebar' | 'dark' | Mode;
+export type Option = 'sidebar' | 'dark' | 'autosave' | Mode;
 
 export class MainWindow {
     readonly app: Gtk.Application;
@@ -68,6 +70,8 @@ export class MainWindow {
     private textOverride = false;     // pengguna memilih tampilan teks untuk papan kanban ini
     private boardText = '';           // teks yang terakhir ditulis/dibaca papan; untuk mengenali perubahan dari luar (undo)
     private reloadQueued = false;
+    private autosaveTimer = 0;        // id timeout auto save, 0 = tidak ada
+    private lastChange = 0;           // waktu (µs, monotonic) perubahan teks terakhir
     dark: boolean;
 
     // path: file atau folder yang dibuka saat jendela muncul.
@@ -110,7 +114,10 @@ export class MainWindow {
         };
         this.editor.buffer.connect('modified-changed', () => this.updateTitle());
         // Teks berubah selagi papan tampil dan bukan dari papan sendiri (undo/redo): baca ulang.
-        this.editor.buffer.connect('changed', () => this.queueBoardReload());
+        this.editor.buffer.connect('changed', () => {
+            this.queueBoardReload();
+            this.queueAutosave();
+        });
 
         // Tata letak
         const [width, height] = fitToScreen(settings.width, settings.height);
@@ -251,11 +258,56 @@ export class MainWindow {
     setOption(key: Option, value: boolean): void {
         if (key === 'sidebar') this.sidebar.setVisible(value);
         else if (key === 'dark') this.setDark(value);
-        else this.editor.setMode(key, value);
+        else if (key !== 'autosave') this.editor.setMode(key, value);
         if (key !== 'source') {
             this.settings[key] = value;
             saveSettings(this.settings);
         }
+        if (key === 'autosave' && value) this.queueAutosave();
+    }
+
+    // ---------- Auto save ----------
+
+    // Dipanggil di setiap perubahan teks, jadi dibuat murah: hanya mencatat waktu. Timer tidak
+    // dibuat ulang per ketukan; saat berbunyi, ia menunda diri lagi jika masih ada ketikan baru.
+    private queueAutosave(): void {
+        if (!this.settings.autosave || !this.file) return;
+        this.lastChange = GLib.get_monotonic_time();
+        if (this.autosaveTimer) return;
+        this.autosaveTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, AUTOSAVE_DELAY_MS, () => this.autosaveTick());
+    }
+
+    private autosaveTick(): boolean {
+        const waited = (GLib.get_monotonic_time() - this.lastChange) / 1000;
+        if (waited < AUTOSAVE_DELAY_MS) {
+            this.autosaveTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.ceil(AUTOSAVE_DELAY_MS - waited), () => this.autosaveTick());
+            return GLib.SOURCE_REMOVE;
+        }
+        this.autosaveTimer = 0;
+        this.autosave();
+        return GLib.SOURCE_REMOVE;
+    }
+
+    // Simpan diam-diam tanpa dialog atau toast. true = tidak ada perubahan yang tertinggal.
+    autosave(): boolean {
+        this.cancelAutosave();
+        if (!this.editor.buffer.get_modified()) return true;
+        if (!this.settings.autosave || !this.file) return false;
+        try {
+            writeTextFile(this.file, this.editor.getText());
+        } catch (e) {
+            // Bukan dialog: auto save terus mencoba, dan dialog berulang mengganggu mengetik.
+            this.statusBar.toast(`Auto save gagal: ${errorMessage(e)}`);
+            return false;
+        }
+        this.editor.buffer.set_modified(false);
+        return true;
+    }
+
+    private cancelAutosave(): void {
+        if (!this.autosaveTimer) return;
+        GLib.source_remove(this.autosaveTimer);
+        this.autosaveTimer = 0;
     }
 
     // ---------- Dokumen ----------
@@ -279,7 +331,7 @@ export class MainWindow {
 
     // Jika ada perubahan, tanya dulu. true = boleh lanjut membuang dokumen ini.
     confirmDiscard(): boolean {
-        if (!this.editor.buffer.get_modified()) return true;
+        if (this.autosave()) return true;
         const answer = askSaveChanges(this.win, this.documentName);
         if (answer === 'save') return this.save();
         return answer === 'discard';
@@ -368,6 +420,7 @@ export class MainWindow {
         if (!this.file) return this.saveAs();
         if (!this.write(this.file, this.editor.getText())) return false;
         this.editor.buffer.set_modified(false);
+        this.cancelAutosave();
         this.statusBar.toast('Tersimpan');
         return true;
     }

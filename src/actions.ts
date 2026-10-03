@@ -103,4 +103,5 @@ export function registerActions(app: Gtk.Application, w: MainWindow): void {
     toggle('focus', ['F8'], s.focus);
     toggle('typewriter', ['F9'], s.typewriter);
     toggle('dark', ['<Control><Shift>d'], w.dark);
+    toggle('autosave', [], s.autosave);
 }

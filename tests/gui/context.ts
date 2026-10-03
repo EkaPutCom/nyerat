@@ -33,7 +33,8 @@ export interface GuiContext {
 }
 
 export function createContext(app: Gtk.Application): GuiContext {
-    const settings = { ...DEFAULTS, welcomed: true, dark: false };
+    // Auto save mati: banyak tes membuka file sungguhan (dokumen contoh, README) lalu mengeditnya.
+    const settings = { ...DEFAULTS, welcomed: true, dark: false, autosave: false };
     const w = new MainWindow(app, settings, null);
     const ed = w.editor;
     const buf = ed.buffer;
