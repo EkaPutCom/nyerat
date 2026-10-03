@@ -6,6 +6,8 @@ import { readTextFile, writeTextFile } from './files.js';
 export interface Settings {
     dark: boolean | null;
     sidebar: boolean;
+    sidebarPage: 'files' | 'outline';
+    folder: string | null;   // folder yang terakhir dibuka
     typewriter: boolean;
     focus: boolean;
     width: number;
@@ -16,6 +18,8 @@ export interface Settings {
 export const DEFAULTS: Settings = {
     dark: null,          // null = ikuti tema sistem
     sidebar: true,
+    sidebarPage: 'outline',
+    folder: null,
     typewriter: false,
     focus: false,
     width: 1100,

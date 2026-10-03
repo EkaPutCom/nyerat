@@ -1,4 +1,4 @@
-// Sidebar outline: daftar heading dokumen. Klik heading untuk melompat ke sana.
+// Tab Outline di sidebar: daftar heading dokumen. Klik heading untuk melompat ke sana.
 
 import Gtk from 'gi://Gtk?version=3.0';
 import GLib from 'gi://GLib';
@@ -7,7 +7,7 @@ import type { Heading } from '../editor/highlighter.js';
 
 export class Outline {
     readonly list: Gtk.ListBox;
-    readonly widget: Gtk.Revealer;
+    readonly widget: Gtk.Box;
     onJump: (line: number) => void = () => {};  // heading diklik
 
     private headings: Heading[] = [];
@@ -22,25 +22,15 @@ export class Outline {
         placeholder.show();
         this.list.set_placeholder(placeholder);
 
-        const title = new Gtk.Label({ label: 'OUTLINE', xalign: 0, margin_start: 16, margin_top: 14, margin_bottom: 8 });
+        const title = new Gtk.Label({ label: 'OUTLINE', xalign: 0, margin_start: 16, margin_top: 4, margin_bottom: 8 });
         title.get_style_context().add_class('side-title');
         const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vexpand: true });
         scroll.add(this.list);
 
-        const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: 230 });
-        box.get_style_context().add_class('sidebar');
-        box.pack_start(title, false, false, 0);
-        box.pack_start(scroll, true, true, 0);
-        const wrap = new Gtk.Box();
-        wrap.pack_start(box, true, true, 0);
-        wrap.pack_start(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL }), false, false, 0);
-
-        this.widget = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_RIGHT, transition_duration: 150 });
-        this.widget.add(wrap);
-    }
-
-    setVisible(visible: boolean): void {
-        this.widget.set_reveal_child(visible);
+        this.widget = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
+        this.widget.pack_start(title, false, false, 0);
+        this.widget.pack_start(scroll, true, true, 0);
+        this.widget.show_all();
     }
 
     // headings dari editor/highlighter.ts

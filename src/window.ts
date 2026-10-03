@@ -2,10 +2,11 @@
 // dan menangani dokumen (buka, simpan, ekspor).
 //
 //   ┌ HeaderBar ─────────────────────────────────────┐
-//   │ Outline │ FindBar                              │
-//   │         │ MarkdownView                         │
-//   │         │ StatusBar                            │
-//   └─────────┴──────────────────────────────────────┘
+//   │ Sidebar   │ FindBar                            │
+//   │ ┌Berkas┬Outline┐ MarkdownView                  │
+//   │ FileTree  │                                    │
+//   │ / Outline │ StatusBar                          │
+//   └───────────┴────────────────────────────────────┘
 
 import Gtk from 'gi://Gtk?version=3.0';
 import Gdk from 'gi://Gdk?version=3.0';
@@ -19,6 +20,8 @@ import { markdownToHtml } from './markdown/html.js';
 import { WELCOME } from './welcome.js';
 import { MarkdownView, type Mode } from './editor/view.js';
 import { Outline } from './ui/outline.js';
+import { FileTree, isDirectory } from './ui/filetree.js';
+import { Sidebar } from './ui/sidebar.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
 import { createHeaderBar } from './ui/headerbar.js';
@@ -49,6 +52,8 @@ export class MainWindow {
     readonly settings: Settings;
     readonly editor: MarkdownView;
     readonly outline: Outline;
+    readonly fileTree: FileTree;
+    readonly sidebar: Sidebar;
     readonly findBar: FindBar;
     readonly statusBar: StatusBar;
     readonly header: Gtk.HeaderBar;
@@ -57,6 +62,7 @@ export class MainWindow {
     file: string | null = null;   // path dokumen, null = belum pernah disimpan
     dark: boolean;
 
+    // path: file atau folder yang dibuka saat jendela muncul.
     constructor(app: Gtk.Application, settings: Settings, path: string | null = null) {
         this.app = app;
         this.settings = settings;
@@ -65,6 +71,8 @@ export class MainWindow {
         // Komponen
         this.editor = new MarkdownView();
         this.outline = new Outline();
+        this.fileTree = new FileTree();
+        this.sidebar = new Sidebar(this.fileTree.widget, this.outline.widget);
         this.findBar = new FindBar(this.editor.buffer, this.editor.view);
         this.statusBar = new StatusBar();
         this.header = createHeaderBar();
@@ -84,6 +92,11 @@ export class MainWindow {
         this.editor.onMessage = msg => this.statusBar.toast(msg);
         this.editor.getBaseDir = () => this.file ? GLib.path_get_dirname(this.file) : GLib.get_home_dir();
         this.outline.onJump = line => this.editor.jumpToLine(line);
+        this.fileTree.onOpenFile = file => this.openFile(file);
+        this.sidebar.onPageChanged = page => {
+            this.settings.sidebarPage = page;
+            saveSettings(this.settings);
+        };
         this.editor.buffer.connect('modified-changed', () => this.updateTitle());
 
         // Tata letak
@@ -96,7 +109,7 @@ export class MainWindow {
         column.pack_start(this.editor.widget, true, true, 0);
         column.pack_start(this.statusBar.widget, false, false, 0);
         const main = new Gtk.Box();
-        main.pack_start(this.outline.widget, false, false, 0);
+        main.pack_start(this.sidebar.widget, false, false, 0);
         main.pack_start(column, true, true, 0);
         this.win.add(main);
         this.win.connect('delete-event', () => !this.onClose());
@@ -104,8 +117,11 @@ export class MainWindow {
         registerActions(app, this);
         this.setDark(this.dark);
 
-        // Isi awal
-        if (path) {
+        // Isi awal: folder dari argumen, atau folder terakhir; lalu file.
+        this.sidebar.setPage(settings.sidebarPage);
+        if (path && isDirectory(path)) this.openFolder(path);
+        else if (settings.folder && isDirectory(settings.folder)) this.openFolder(settings.folder, false);
+        if (path && !isDirectory(path)) {
             this.load(path);
         } else if (!settings.welcomed) {
             this.editor.setText(WELCOME);
@@ -115,7 +131,7 @@ export class MainWindow {
         }
         this.updateTitle();
         this.win.show_all();
-        this.outline.setVisible(settings.sidebar);
+        this.sidebar.setVisible(settings.sidebar);
         this.editor.view.grab_focus();
     }
 
@@ -128,7 +144,7 @@ export class MainWindow {
 
     // Ubah pilihan tampilan lalu terapkan. Semua kecuali mode source disimpan ke pengaturan.
     setOption(key: Option, value: boolean): void {
-        if (key === 'sidebar') this.outline.setVisible(value);
+        if (key === 'sidebar') this.sidebar.setVisible(value);
         else if (key === 'dark') this.setDark(value);
         else this.editor.setMode(key, value);
         if (key !== 'source') {
@@ -169,21 +185,58 @@ export class MainWindow {
         this.file = null;
         this.editor.setText('');
         this.updateTitle();
+        this.fileTree.reveal(null);
     }
 
+    // Buka file di editor. Jika path ternyata folder (misalnya dipilih lewat dialog
+    // Buka File, atau diberikan dari baris perintah), folder itu dibuka di tab Berkas.
     load(path: string): boolean {
         const absolute = Gio.File.new_for_path(path).get_path() ?? path;
+        if (isDirectory(absolute)) {
+            this.openFolder(absolute);
+            return true;
+        }
         try {
             const text = fileExists(absolute) ? readTextFile(absolute) : '';  // file baru jika belum ada
             // this.file diisi sebelum setText(): path gambar relatif dihitung dari foldernya.
             this.file = absolute;
             this.editor.setText(text);
             this.updateTitle();
+            this.fileTree.reveal(absolute);
             return true;
         } catch (e) {
             showError(this.win, `Gagal membuka file:\n${errorMessage(e)}`);
             return false;
         }
+    }
+
+    // Buka file yang dipilih di pohon berkas.
+    openFile(path: string): void {
+        if (path === this.file) return;
+        if (!this.confirmDiscard()) {
+            this.fileTree.reveal(this.file);  // kembalikan sorotan ke file yang masih terbuka
+            return;
+        }
+        this.load(path);
+    }
+
+    chooseFolder(): void {
+        const path = chooseFile(this.win, { title: 'Buka Folder', selectFolder: true, folder: this.fileTree.root });
+        if (path) this.openFolder(path);
+    }
+
+    // Tampilkan folder di tab Berkas dan ingat untuk dibuka lagi lain kali.
+    // show = false saat memulihkan folder terakhir, supaya sidebar yang sengaja
+    // ditutup tidak tiba-tiba muncul.
+    openFolder(path: string, show = true): void {
+        const absolute = Gio.File.new_for_path(path).get_path() ?? path;
+        this.fileTree.setRoot(absolute);
+        this.fileTree.reveal(this.file);
+        this.settings.folder = absolute;
+        saveSettings(this.settings);
+        if (!show) return;
+        this.sidebar.setPage('files');
+        if (!this.sidebar.visible) this.app.lookup_action('sidebar')?.change_state(GLib.Variant.new_boolean(true));
     }
 
     open(): void {
@@ -214,12 +267,18 @@ export class MainWindow {
         let path = chooseFile(this.win, {
             title: 'Simpan Markdown', save: true, filters: ['markdown', 'all'],
             name: this.file ? this.documentName : `${this.suggestName()}.md`,
+            // Dokumen baru disimpan di folder yang sedang dibuka.
+            folder: this.file ? null : this.fileTree.root,
         });
         if (!path) return false;
         if (!/\.[^/]+$/.test(GLib.path_get_basename(path))) path += '.md';
         this.file = path;
         this.updateTitle();
-        return this.save();
+        if (!this.save()) return false;
+        // Tampilkan file baru di pohon tanpa menunggu pemantau disk.
+        this.fileTree.refresh(GLib.path_get_dirname(path));
+        this.fileTree.reveal(path);
+        return true;
     }
 
     exportHtml(): void {

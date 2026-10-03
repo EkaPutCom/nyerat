@@ -32,6 +32,8 @@ const buildCss = (p: Palette): string => `
     .editor text selection { background-color: ${p.sel}; color: ${p.fg}; }
     .sidebar, .sidebar list, .sidebar row, .sidebar viewport { background-color: ${p.sideBg}; color: ${p.sideFg}; }
     .sidebar row { padding: 5px 0; }
+    .sidebar treeview { background-color: ${p.sideBg}; color: ${p.sideFg}; padding: 2px 0; }
+    .sidebar treeview.view:selected, .sidebar treeview.view:selected:focus { background-color: alpha(${p.accent}, 0.22); background-image: none; color: ${p.fg}; }
     .sidebar row:hover { background-color: alpha(${p.accent}, 0.12); }
     .side-title { font-size: 11px; font-weight: bold; letter-spacing: 1px; color: ${p.faint}; }
     .image-note { color: ${p.faint}; font-style: italic; font-size: 14px; }

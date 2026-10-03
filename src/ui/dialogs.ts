@@ -19,16 +19,17 @@ export type FilterName = keyof typeof FILTERS;
 export interface ChooseFileOptions {
     title: string;
     save?: boolean;
+    selectFolder?: boolean;     // pilih folder, bukan file
     filters?: FilterName[];
     name?: string | null;       // nama file usulan (dialog simpan)
     folder?: string | null;     // folder awal
 }
 
 // Mengembalikan path yang dipilih, atau null jika dibatalkan.
-export function chooseFile(parent: Gtk.Window, { title, save = false, filters = [], name = null, folder = null }: ChooseFileOptions): string | null {
+export function chooseFile(parent: Gtk.Window, { title, save = false, selectFolder = false, filters = [], name = null, folder = null }: ChooseFileOptions): string | null {
     const dialog = new Gtk.FileChooserNative({
         title, transient_for: parent,
-        action: save ? Gtk.FileChooserAction.SAVE : Gtk.FileChooserAction.OPEN,
+        action: selectFolder ? Gtk.FileChooserAction.SELECT_FOLDER : save ? Gtk.FileChooserAction.SAVE : Gtk.FileChooserAction.OPEN,
     });
     if (save) dialog.set_do_overwrite_confirmation(true);
     for (const key of filters) {

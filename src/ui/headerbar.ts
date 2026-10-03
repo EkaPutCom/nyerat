@@ -5,7 +5,7 @@ import Gtk from 'gi://Gtk?version=3.0';
 import Gio from 'gi://Gio';
 
 const MENU = [
-    [['Simpan Sebagai…', 'app.save-as'], ['Ekspor HTML…', 'app.export-html']],
+    [['Buka Folder…', 'app.open-folder'], ['Simpan Sebagai…', 'app.save-as'], ['Ekspor HTML…', 'app.export-html']],
     [['Cari', 'app.find'], ['Sisipkan Gambar…', 'app.image'], ['Sisipkan Tabel', 'app.table'],
         ['Sisipkan Blok Kode', 'app.codeblock']],
     [['Mode Source', 'app.source'], ['Mode Fokus', 'app.focus'], ['Mode Typewriter', 'app.typewriter'],
@@ -23,8 +23,11 @@ function iconButton(icon: string, action: string, tooltip: string, toggle = fals
 
 export function createHeaderBar(): Gtk.HeaderBar {
     const bar = new Gtk.HeaderBar({ show_close_button: true });
-    bar.pack_start(iconButton('format-justify-left-symbolic', 'app.sidebar', 'Outline (Ctrl+\\)', true));
-    bar.pack_start(iconButton('document-open-symbolic', 'app.open', 'Buka (Ctrl+O)'));
+    bar.pack_start(iconButton('format-justify-left-symbolic', 'app.sidebar', 'Sidebar (Ctrl+\\)', true));
+    // Ikon dokumen, bukan document-open-symbolic: di beberapa tema ikon (misalnya
+    // elementary-xfce) document-open berupa folder, sehingga tertukar dengan Buka Folder.
+    bar.pack_start(iconButton('text-x-generic-symbolic', 'app.open', 'Buka File (Ctrl+O)'));
+    bar.pack_start(iconButton('folder-open-symbolic', 'app.open-folder', 'Buka Folder (Ctrl+Shift+O)'));
     bar.pack_start(iconButton('document-new-symbolic', 'app.new', 'Baru (Ctrl+N)'));
 
     const menu = new Gio.Menu();

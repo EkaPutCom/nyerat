@@ -35,6 +35,7 @@ export function registerActions(app: Gtk.Application, w: MainWindow): void {
     // File
     action('new', ['<Control>n'], () => w.newDocument());
     action('open', ['<Control>o'], () => w.open());
+    action('open-folder', ['<Control><Shift>o'], () => w.chooseFolder());
     action('save', ['<Control>s'], () => w.save());
     action('save-as', ['<Control><Shift>s'], () => w.saveAs());
     action('export-html', ['<Control><Shift>e'], () => w.exportHtml());

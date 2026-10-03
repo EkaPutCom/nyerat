@@ -37,6 +37,12 @@ Setelah di-build, aplikasi bisa dijalankan langsung tanpa npm, termasuk untuk me
 gjs -m dist/nyerat.js catatan.md
 ```
 
+Atau membuka sebuah folder, yang isinya tampil di tab Berkas:
+
+```bash
+gjs -m dist/nyerat.js ~/catatan
+```
+
 | Perintah | Fungsi |
 | --- | --- |
 | `npm run build` | Periksa tipe (`tsc --noEmit`), lalu bundel dengan Vite ke `dist/` |
@@ -57,7 +63,9 @@ gjs -m dist/nyerat.js catatan.md
 - Tab / Shift+Tab mengatur indentasi item daftar
 
 **Tampilan**
-- Sidebar outline berisi daftar heading; klik untuk melompat
+- Sidebar dengan dua tab:
+  - **Berkas**: pohon folder yang dibuka (lewat tombol folder di header bar, `Ctrl+Shift+O`, atau dengan memilih folder di dialog Buka File), berisi subfolder dan file Markdown (`.md`, `.markdown`, `.mdown`, `.mkd`). Klik file untuk membukanya; file yang sedang dibuka ikut disorot. File/folder tersembunyi dan `node_modules` tidak ditampilkan. Pohon diperbarui otomatis saat ada file yang ditambah atau dihapus di disk, dan folder terakhir dibuka lagi saat aplikasi dijalankan
+  - **Outline**: daftar heading dokumen; klik untuk melompat
 - Mode fokus: paragraf selain yang sedang disunting diredupkan
 - Mode typewriter: baris aktif selalu di tengah layar
 - Mode source: semua sintaks Markdown ditampilkan
@@ -74,6 +82,7 @@ gjs -m dist/nyerat.js catatan.md
 | Shortcut | Fungsi |
 | --- | --- |
 | Ctrl+N / Ctrl+O | Dokumen baru / buka file |
+| Ctrl+Shift+O | Buka folder |
 | Ctrl+S / Ctrl+Shift+S | Simpan / simpan sebagai |
 | Ctrl+Shift+E | Ekspor HTML |
 | Ctrl+F | Cari |
@@ -92,7 +101,7 @@ gjs -m dist/nyerat.js catatan.md
 | Ctrl+0 | Kembalikan ke paragraf |
 | Ctrl+Shift+Q | Kutipan |
 | Ctrl+Shift+] / Ctrl+Shift+[ | Daftar biasa / daftar bernomor |
-| Ctrl+\ atau Ctrl+Shift+1 | Tampilkan/sembunyikan outline |
+| Ctrl+\ atau Ctrl+Shift+1 | Tampilkan/sembunyikan sidebar |
 | Ctrl+/ | Mode source |
 | F8 | Mode fokus |
 | F9 | Mode typewriter |
@@ -108,6 +117,7 @@ Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `di
 
 - **Konversi** Markdown → HTML dan pengurai format inline, tanpa GUI
 - **Editor**: membuka jendela sungguhan, lalu memeriksa sintaks yang disembunyikan/ditampilkan, Enter dan Tab di daftar, shortcut format, undo, klik kotak tugas, serta simpan dan buka file
+- **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan
 - **Dokumen contoh lengkap**: membuka `tests/samples/semua-format.md`, lalu memeriksa tag setiap format, kasus-kasus sulit, dan hasil ekspor HTML-nya
 - **Ketahanan**: kursor disapu ke semua baris, mengetik di tiap baris, dan dokumen dihapus sedikit demi sedikit untuk mencari crash
 
@@ -173,7 +183,9 @@ src/
 │
 └── ui/                   komponen antarmuka
     ├── headerbar.ts      tombol dan menu ☰
-    ├── outline.ts        sidebar daftar heading
+    ├── sidebar.ts        sidebar bertab: Berkas dan Outline
+    ├── filetree.ts       tab Berkas: pohon folder, dipantau dengan Gio.FileMonitor
+    ├── outline.ts        tab Outline: daftar heading
     ├── findbar.ts        bilah pencarian
     ├── statusbar.ts      hitungan kata, posisi kursor, pesan singkat
     ├── dialogs.ts        pilih file, konfirmasi simpan, error, tentang
@@ -217,7 +229,7 @@ Kode dibagi menjadi lapisan. Setiap lapisan hanya boleh memakai lapisan di bawah
 
 - **`markdown/`** tidak meng-import GTK sama sekali. Isinya hanya fungsi string → data, jadi paling mudah dipelajari dan diuji.
 - **`editor/`** tidak tahu apa-apa soal file, menu, atau sidebar. `MarkdownView` hanya memberi kabar lewat callback (`onHighlighted`, `onCursorMoved`, `onMessage`).
-- **`ui/`** berisi komponen yang berdiri sendiri. `Outline` tidak kenal editor; ia hanya menerima daftar heading dan memanggil `onJump(baris)` saat diklik.
+- **`ui/`** berisi komponen yang berdiri sendiri. `Outline` tidak kenal editor; ia hanya menerima daftar heading dan memanggil `onJump(baris)` saat diklik. Begitu juga `FileTree`: ia hanya menampilkan folder dan memanggil `onOpenFile(path)`; yang memutuskan cara membuka file (termasuk bertanya dulu jika ada perubahan belum disimpan) adalah jendela.
 - **`window.ts`** adalah satu-satunya tempat komponen saling dihubungkan. Contoh: setelah penyorotan, editor memanggil `onHighlighted`, lalu jendela meneruskan heading ke `Outline` dan teks ke `StatusBar`.
 
 ### Alur kerja editor
@@ -293,7 +305,7 @@ Contoh menambah format baru, misalnya `^superskrip^`:
 
 ## Pengaturan
 
-Disimpan di `~/.config/nyerat/settings.json`: mode gelap, sidebar, mode fokus, mode typewriter, dan ukuran jendela.
+Disimpan di `~/.config/nyerat/settings.json`: mode gelap, sidebar dan tab yang terakhir dipilih, folder yang terakhir dibuka, mode fokus, mode typewriter, dan ukuran jendela.
 
 ## Keterbatasan
 
