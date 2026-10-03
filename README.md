@@ -9,7 +9,7 @@ Tidak ada panel pratinjau terpisah: teks langsung tampil terformat. Sintaks Mark
 - Linux dengan desktop X11 atau Wayland
 - GJS (diuji dengan versi 1.80)
 - GTK 3 dan GtkSourceView 4 (biasanya sudah terpasang di desktop GNOME)
-- WebKitGTK 4.1 dengan binding GObject Introspection (`gir1.2-webkit2-4.1` di Debian/Ubuntu), **hanya untuk diagram Mermaid**; tanpanya aplikasi tetap berjalan dan diagram menampilkan pesan galat
+- WebKitGTK 4.1 dengan binding GObject Introspection (`gir1.2-webkit2-4.1` di Debian/Ubuntu), **hanya untuk diagram Mermaid dan DBML**; tanpanya aplikasi tetap berjalan dan diagram menampilkan pesan galat
 - Node.js 20.19+ atau 22.12+ (syarat Vite), **hanya untuk build** (diuji dengan Node.js 24). Aplikasinya sendiri dijalankan GJS, bukan Node.js.
 
 Di Ubuntu/Debian:
@@ -79,6 +79,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 - Di dalam tabel: `Tab` / `Shift+Tab` pindah antar sel (di sel terakhir, `Tab` menambah baris), `Enter` pindah ke baris berikutnya (di baris kosong terakhir, `Enter` keluar dari tabel). Menu ☰ → **Edit Tabel** untuk tambah/hapus baris dan kolom, rata kiri/tengah/kanan, dan merapikan kolom
 - Isi blok kode diwarnai sesuai bahasanya (```` ```js ````, ```` ```python ````, ```` ```rust ````, dan ratusan bahasa lain dari GtkSourceView), dengan skema warna yang mengikuti mode terang/gelap
 - **Diagram Mermaid.** Blok ```` ```mermaid ```` dirender sebagai diagram (flowchart, sequence, class, state, ER, gantt, pie, dan jenis lain yang didukung Mermaid). Saat kursor di luar blok hanya diagramnya yang terlihat; saat kursor masuk, kodenya muncul dan diagram menjadi pratinjau di bawahnya yang ikut berubah selagi mengetik. Kode yang salah tidak disembunyikan, pesan galatnya muncul di bawah blok. Klik ganda memperbesar diagram, dan warnanya mengikuti mode terang/gelap. Diagram dirender secara lokal (tanpa internet); ekspor HTML memuat Mermaid dari CDN sehingga diagram di file hasil ekspor butuh internet
+- **Diagram DBML (dbdiagram).** Blok ```` ```dbml ```` (bahasa skema dbdiagram.io) digambar sebagai diagram ER dengan perilaku yang sama seperti Mermaid. Yang didukung: `Table` (alias, `pk`, `unique`, `note`, `ref:` di dalam kolom, `indexes`), `Ref` satu baris maupun blok dengan relasi `>` `<` `-` `<>`, dan `Enum`/`TableGroup`/`Project`/`Note` yang dilewati. Kolom di sisi "banyak" suatu relasi otomatis bertanda FK. Galat sintaks muncul seketika beserta nomor barisnya. Ekspor HTML menulisnya sebagai diagram ER Mermaid
 - Daftar tugas `- [ ]` bisa dicentang dengan mengklik kotaknya
 - Tautan dibuka dengan **Ctrl+klik** (path relatif dihitung dari folder file)
 - Gambar `![alt](url)` ditampilkan langsung di bawah barisnya, dari file lokal (path relatif dihitung dari folder dokumen) maupun dari internet. Klik gambar untuk memunculkan sintaksnya; **klik ganda** (atau menu ☰ → *Perbesar Gambar* untuk gambar di baris kursor) membuka penampil dengan zoom: roda mouse memperbesar di titik penunjuk, `+`/`−`, `0` untuk 100%, `F` atau tombol *Pas* untuk pas layar, geser dengan drag, `Esc` menutup
@@ -147,6 +148,7 @@ Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `di
 - **Tabel**: aturan pengenalan tabel (pemisah satu strip, tanpa pipa di tepi, berhenti di blok lain), pemecahan sel, perataan, merapikan kolom (termasuk lebar CJK dan emoji), operasi baris/kolom, konversi format inline ke markup Pango, lebar kolom; lalu di editor: grid yang muncul dan hilang mengikuti kursor, letak grid di antara paragraf, klik sel, Tab/Shift+Tab/Enter, semua perintah menu, satu perintah = satu langkah undo, mode source, serta tabel beremoji yang tidak membuat GTK gagal menggambar
 - **Kanban**: model (mengenali papan, membaca dan menulis dengan hasil yang stabil, operasi kartu dan daftar, tag dan tanggal); di editor: dokumen dibuka sebagai papan, menambah/mencentang/menyunting/memindahkan lewat menu, seret kartu (jatuh di posisi yang ditunjuk, kartu bayangan dan penanda tujuan dibersihkan, tempat asal tidak mengubah apa pun), gulir otomatis di tepi, undo/redo satu langkah per perubahan, beralih ke tampilan teks dan kembali, aksi pengeditan teks ditolak saat papan tampil, dan simpan
 - **Diagram Mermaid**: blok dirender menjadi gambar, kode disembunyikan di luar blok dan tampil dengan pratinjau di dalamnya, galat sintaks ditampilkan tanpa menyembunyikan kode, render ulang saat kode diubah, widget dipakai ulang saat baris bergeser, blok kosong/tidak ditutup/bukan mermaid diabaikan, mode source, dan tema gelap (warna latar gambar); serta ekspor HTML-nya
+- **Diagram DBML**: penerjemah DBML → Mermaid (tabel, kolom, ref, alias, skema, galat berikut nomor barisnya), blok dbml dirender dan galatnya tampil tanpa menyembunyikan kode, serta ekspor HTML-nya
 - **Zoom gambar**: gambar ukuran penuh dari `imageAt()`, klik sekali vs ganda (dengan event GDK tiruan) dan gambar yang tepat jika satu baris memuat beberapa, perintah menu; di penampil: zoom awal, kelipatan 1,25 dan batas 5%–800%, tombol, titik zoom di penunjuk, geser dengan drag, klik ganda, dan tidak ada peringatan GTK/cairo saat menggambar pada zoom besar
 - **Warna blok kode**: alias nama bahasa, warna kata kunci/string/komentar, blok tanpa bahasa atau bahasa tak dikenal, pewarnaan ulang saat mengetik, emoji sebelum blok, skema terang/gelap, dan mode fokus yang tetap meredupkan blok kode
 - **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan
@@ -204,6 +206,7 @@ src/
 │   ├── table.ts          tabel: mengenali blok, memecah sel, rapikan, tambah/hapus baris dan kolom
 │   ├── kanban.ts         papan kanban: membaca/menulis Markdown, operasi kartu dan daftar, tag dan tanggal
 │   ├── pango.ts          isi sel tabel (Markdown inline) → markup Pango untuk Gtk.Label
+│   ├── dbml.ts           penerjemah DBML (dbdiagram.io) → diagram ER Mermaid
 │   └── html.ts           markdownToHtml(): untuk Ekspor HTML
 │
 ├── editor/               mesin editor ala Typora
@@ -216,7 +219,7 @@ src/
 │   ├── clicks.ts         klik kotak tugas, membaca URL tautan
 │   ├── images.ts         menampilkan gambar di bawah barisnya, dan menerima klik/klik ganda
 │   ├── tablelayer.ts     merender tabel sebagai grid yang muncul/hilang mengikuti kursor
-│   ├── mermaid.ts        menampilkan blok ```mermaid sebagai diagram (pola yang sama dengan tabel)
+│   ├── mermaid.ts        menampilkan blok ```mermaid dan ```dbml sebagai diagram (pola yang sama dengan tabel)
 │   ├── mermaidrender.ts  merender kode Mermaid menjadi pixbuf lewat WebKitGTK tak terlihat
 │   ├── tableedit.ts      Tab/Enter di tabel dan perintah menu Edit Tabel
 │   ├── codehighlight.ts  mewarnai isi blok kode sesuai bahasanya
@@ -353,6 +356,7 @@ Mermaid hanya berjalan di browser (butuh DOM dan pengukuran teks), jadi tidak bi
 2. WebKitGTK dimuat dengan `import()` dan WebView baru dibuat saat diagram pertama dibutuhkan, jadi dokumen tanpa diagram tidak membayar biayanya (dan aplikasi tetap jalan tanpa WebKitGTK). Diagram dirender satu per satu, hasilnya disimpan di cache per (tema, kode).
 3. **Lapisan (`mermaid.ts`)** meniru `TableLayer`: gambar ditempel di ruang kosong di bawah baris penutup blok (`pixels_below_lines`). Saat kursor di luar blok, semua barisnya dikecilkan dengan tag `mermaidhide`; saat di dalam, kode tampil dan diagram menjadi pratinjau di bawahnya. Tag-nya terpisah dari `tablehide` karena tiap lapisan menghapus tag-nya di seluruh dokumen saat sinkron.
 4. Render ditunda 400 ms setelah kode berubah; diagram lama tetap tampil selama dirender ulang. Blok yang gagal dirender (galat sintaks) tidak pernah disembunyikan.
+5. **DBML** memakai jalur yang sama: `markdown/dbml.ts` (`dbmlToMermaid()`) mengurai DBML dan menulisnya sebagai `erDiagram`, lalu hasilnya dirender seperti kode Mermaid biasa. Galat DBML dilempar sebagai `DbmlError` (berisi nomor baris) dan ditampilkan seketika oleh lapisan tanpa melewati WebKit.
 
 ### Cara kerja papan kanban (`markdown/kanban.ts`, `ui/kanban.ts`)
 

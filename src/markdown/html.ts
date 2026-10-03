@@ -8,6 +8,7 @@
 
 import { RE, ESCAPE_OR_CODE, startsTable } from './syntax.js';
 import { parseTable, tableEnd } from './table.js';
+import { dbmlToMermaid } from './dbml.js';
 
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const slug = (s: string): string => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
@@ -126,6 +127,10 @@ function blocksHtml(lines: string[]): string {
             }
             // Diagram Mermaid digambar oleh skrip di <head> saat halaman dibuka (lihat markdownToHtml).
             if (lang.split(/\s+/)[0].toLowerCase() === 'mermaid') { out.push(`<pre class="mermaid">${esc(code.join('\n'))}</pre>`); continue; }
+            // DBML diterjemahkan ke diagram ER Mermaid; yang salah sintaks tampil sebagai blok kode biasa.
+            if (lang.split(/\s+/)[0].toLowerCase() === 'dbml') {
+                try { out.push(`<pre class="mermaid">${esc(dbmlToMermaid(code.join('\n')))}</pre>`); continue; } catch { /* jatuh ke blok kode */ }
+            }
             out.push(`<pre><code${lang ? ` class="language-${esc(lang)}"` : ''}>${esc(code.join('\n'))}</code></pre>`);
             continue;
         }

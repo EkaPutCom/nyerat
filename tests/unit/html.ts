@@ -21,6 +21,12 @@ export function htmlTests(): void {
         contains(h, '<pre class="mermaid">graph TD\n  A--&gt;B</pre>');
         contains(h, 'mermaid.esm.min.mjs');
     });
+    test('blok dbml menjadi diagram ER Mermaid; dbml yang salah tetap blok kode', () => {
+        const h = markdownToHtml('```dbml\nTable a { id int [pk] }\n```', 't');
+        contains(h, '<pre class="mermaid">erDiagram');
+        contains(h, 'mermaid.esm.min.mjs');
+        contains(body('```dbml\nTable a {\n```'), '<pre><code class="language-dbml">');
+    });
     test('dokumen tanpa mermaid tidak memuat skrip Mermaid', () => {
         eq(markdownToHtml('```js\nx\n```', 't').includes('mermaid.esm'), false, 'skrip termuat');
     });

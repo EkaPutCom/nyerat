@@ -23,6 +23,7 @@ import { tableTests } from './unit/table.js';
 import { kanbanModelTests } from './unit/kanban.js';
 import { codeLanguageTests } from './unit/codelang.js';
 import { htmlTests } from './unit/html.js';
+import { dbmlTests } from './unit/dbml.js';
 import { syntaxHidingTests } from './gui/syntax.js';
 import { listTests } from './gui/lists.js';
 import { formatTests } from './gui/format.js';
@@ -47,6 +48,7 @@ function runUnitTests(): void {
     kanbanModelTests();
     codeLanguageTests();
     htmlTests();
+    dbmlTests();
 }
 
 function runGuiTests(app: Gtk.Application): void {

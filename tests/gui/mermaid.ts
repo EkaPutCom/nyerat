@@ -134,5 +134,32 @@ export function mermaidTests(c: GuiContext): void {
         eq(diagrams().length, 0, 'jumlah diagram');
         ok(!hasGap(0), 'ruang kosong tertinggal');
     });
+
+    section('Diagram DBML');
+    const DBML = '```dbml\nTable users {\n  id int [pk]\n}\nTable posts {\n  id int [pk]\n  user_id int [ref: > users.id]\n}\n```';
+    test('blok dbml dirender menjadi diagram', () => {
+        setText(`${DBML}\n\nakhir`);
+        cursorTo(11);
+        waitMermaid();
+        eq(diagrams().length, 1, 'jumlah diagram');
+        const b = diagrams()[0];
+        eq([b.kind, b.status], ['dbml', 'ok'], `jenis dan status (${b.error})`);
+        ok(b.pixbuf!.get_width() > 40, 'gambar terlalu kecil');
+        ok(hiddenAt(1), 'kode seharusnya tersembunyi saat kursor di luar blok');
+    });
+    test('galat DBML ditampilkan seketika dan kodenya tidak disembunyikan', () => {
+        setText('```dbml\nTable a {\n  id int\n```\n\nteks');
+        cursorTo(5);
+        const b = diagrams()[0];
+        eq(b.status, 'error', 'status');
+        ok((b.error ?? '').includes('baris'), 'pesan galat tanpa nomor baris');
+        for (let l = 0; l <= 3; l++) ok(!hiddenAt(l), `baris ${l} disembunyikan padahal galat`);
+    });
+    test('dbml yang diperbaiki dirender; blok dbml kosong diabaikan', () => {
+        setText('```dbml\nTable a { id int }\n```\n\n```dbml\n\n```');
+        cursorTo(4);
+        waitMermaid();
+        eq(diagrams().map(b => b.status), ['ok'], 'status');
+    });
     buf.set_modified(false);
 }

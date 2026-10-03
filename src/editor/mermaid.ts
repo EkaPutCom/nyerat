@@ -1,4 +1,6 @@
-// Menampilkan blok ```mermaid sebagai diagram, seperti Typora.
+// Menampilkan blok ```mermaid dan ```dbml sebagai diagram, seperti Typora.
+// Blok DBML (bahasa skema dbdiagram.io) diterjemahkan dulu menjadi diagram ER Mermaid
+// oleh markdown/dbml.ts, lalu dirender dengan jalur yang sama.
 //
 // Caranya sama dengan tabel (tablelayer.ts) dan gambar (images.ts): widget ditempel di
 // atas ruang kosong yang disediakan di dalam teks, sehingga isi dokumen tidak berubah.
@@ -20,20 +22,28 @@ import GLib from 'gi://GLib';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import type { CodeBlock } from './highlighter.js';
 import { mermaidRenderer, type DiagramTheme } from './mermaidrender.js';
+import { dbmlToMermaid } from '../markdown/dbml.js';
 
 const GAP = 12;             // jarak di atas dan bawah diagram
 const NOTE_HEIGHT = 24;     // tinggi pesan "Merender…" / galat
 const MAX_HEIGHT = 640;     // tinggi maksimum diagram yang ditampilkan
 const DEBOUNCE_MS = 400;    // jeda setelah kode berubah sebelum dirender
 
-export const isMermaid = (block: CodeBlock): boolean =>
-    block.lang.toLowerCase() === 'mermaid' && block.closed && block.text.trim() !== '';
+export type Kind = 'mermaid' | 'dbml';
+
+// Jenis diagram sebuah blok kode, atau null jika bukan diagram (atau kosong/belum ditutup).
+export const diagramKind = (block: CodeBlock): Kind | null => {
+    if (!block.closed || block.text.trim() === '') return null;
+    const lang = block.lang.toLowerCase();
+    return lang === 'mermaid' ? 'mermaid' : lang === 'dbml' ? 'dbml' : null;
+};
 
 type Status = 'loading' | 'ok' | 'error';
 
 export interface Block {
     start: number;           // baris pembatas pembuka
     end: number;             // baris pembatas penutup
+    kind: Kind;
     code: string;
     status: Status;
     busy: boolean;           // ada permintaan render yang belum selesai
@@ -108,12 +118,14 @@ export class MermaidLayer {
         const unused = [...this.blocks];
         const next: Block[] = [];
         const toRender: [Block, boolean][] = [];
-        for (const found of codeBlocks.filter(isMermaid)) {
+        for (const found of codeBlocks) {
+            const kind = diagramKind(found);
+            if (!kind) continue;
             // Blok yang kodenya sama dipakai ulang walaupun barisnya bergeser; blok yang
             // kodenya baru diubah (sedang diketik) dikenali dari baris awalnya.
-            let k = unused.findIndex(b => b.code === found.text);
+            let k = unused.findIndex(b => b.kind === kind && b.code === found.text);
             const edited = k < 0;
-            if (edited) k = unused.findIndex(b => b.start === found.startLine);
+            if (edited) k = unused.findIndex(b => b.kind === kind && b.start === found.startLine);
             if (k >= 0) {
                 const block = unused.splice(k, 1)[0];
                 block.start = found.startLine;
@@ -152,9 +164,23 @@ export class MermaidLayer {
         const code = block.code;
         const theme = this.theme;
         const renderer = mermaidRenderer();
+        let source = code;
+        if (block.kind === 'dbml') {
+            try {
+                source = dbmlToMermaid(code);
+            } catch (e) {
+                // Galat DBML dilaporkan seketika, tanpa menunggu jeda ketik.
+                block.busy = false;
+                block.status = 'error';
+                block.error = e instanceof Error ? e.message : String(e);
+                this.render(block);
+                this.sync();
+                return;
+            }
+        }
         const run = () => {
             block.timer = 0;
-            renderer.render(code, theme, result => {
+            renderer.render(source, theme, result => {
                 // Hasil lama (kode atau tema sudah berganti, atau blok dibuang) diabaikan.
                 if (block.code !== code || this.theme !== theme || !this.blocks.includes(block)) return;
                 block.busy = false;
@@ -170,7 +196,7 @@ export class MermaidLayer {
                 this.sync();
             });
         };
-        const hit = renderer.cached(code, theme);
+        const hit = renderer.cached(source, theme);
         if (hit || !delay) {
             run();
         } else {
@@ -234,7 +260,7 @@ export class MermaidLayer {
         widget.add(content);
         widget.get_style_context().add_class('image-block');
         const block: Block = {
-            start: found.startLine, end: found.endLine, code: found.text, status: 'loading', busy: false, pixbuf: null, error: null,
+            start: found.startLine, end: found.endLine, kind: diagramKind(found)!, code: found.text, status: 'loading', busy: false, pixbuf: null, error: null,
             widget, content, height: NOTE_HEIGHT, collapsed: false, timer: 0, x: -1, y: -1,
         };
         widget.connect('button-press-event', (_w, ev) => this.onPress(block, ev as unknown as Gdk.Event));
@@ -258,7 +284,7 @@ export class MermaidLayer {
     }
 
     zoom(block: Block): void {
-        if (block.pixbuf) this.onZoom(block.pixbuf, 'Diagram Mermaid');
+        if (block.pixbuf) this.onZoom(block.pixbuf, block.kind === 'dbml' ? 'Diagram DBML' : 'Diagram Mermaid');
     }
 
     // Bangun ulang isi widget sesuai status dan lebar kolom saat ini.

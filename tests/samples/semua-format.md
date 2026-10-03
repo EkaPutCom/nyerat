@@ -233,13 +233,26 @@ Bahasa lain: こんにちは **世界**, Ελληνικά *κείμενο*, ال
 
 Simbol: → ← ↑ ↓ • © ® ™ ½ ≠ ≤ ≥ ∞
 
-## 14. Diagram Mermaid
+## 14. Diagram Mermaid dan DBML
 
 ```mermaid
 graph TD
     A[Mulai] --> B{Sudah siap?}
     B -->|ya| C[Kerjakan]
     B -->|belum| A
+```
+
+```dbml
+Table users {
+  id integer [pk, increment]
+  email varchar(255) [unique, not null]
+}
+
+Table posts {
+  id integer [pk]
+  user_id integer [not null, ref: > users.id]
+  title varchar(200)
+}
 ```
 
 ## 15. Kasus sulit
