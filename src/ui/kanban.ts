@@ -40,7 +40,7 @@ export type PressEvent = PointerEvent & Pick<Gdk.Event, 'get_button'>;
 
 // Dialog bisa diganti (misalnya di tes) karena dialog asli menahan program sampai ditutup.
 export interface BoardDialogs {
-    editCard(parent: Gtk.Window | null, card: CardDraft): CardDraft | null;
+    editCard(parent: Gtk.Window | null, card: CardDraft, title?: string): CardDraft | null;
     prompt(parent: Gtk.Window | null, options: { title: string; label: string; value?: string }): string | null;
     confirm(parent: Gtk.Window | null, message: string, detail?: string): boolean;
 }
@@ -50,7 +50,7 @@ export interface ColumnView {
     scroller: Gtk.ScrolledWindow;
     cardsBox: Gtk.Box;
     cards: Gtk.EventBox[];
-    footer: Gtk.Stack;
+    footer: Gtk.Button;
 }
 
 interface PressState {
@@ -73,7 +73,7 @@ interface DragState {
     timer: number;
 }
 
-type Adding = { kind: 'card'; column: number } | { kind: 'list' } | null;
+type Adding = { kind: 'list' } | null;
 
 export class KanbanBoard {
     readonly widget: Gtk.ScrolledWindow;
@@ -109,7 +109,6 @@ export class KanbanBoard {
     // Ganti papan (misalnya dokumen dibuka atau undo) tanpa memanggil onChange.
     setBoard(board: Board): void {
         this.board = board;
-        if (this.adding?.kind === 'card' && this.adding.column >= board.columns.length) this.adding = null;
         this.render();
     }
 
@@ -285,19 +284,12 @@ export class KanbanBoard {
         return { box, entry };
     }
 
-    private buildAddCard(c: number): Gtk.Stack {
-        const stack = new Gtk.Stack();
+    private buildAddCard(c: number): Gtk.Button {
         const button = new Gtk.Button({ label: '+ Tambah kartu', relief: Gtk.ReliefStyle.NONE, halign: Gtk.Align.FILL });
         (button.get_child() as Gtk.Label).xalign = 0;
         button.get_style_context().add_class('kanban-add');
         button.connect('clicked', () => this.showAddCard(c));
-        const { box, entry } = this.entryRow('Judul kartu…', text => this.commit(addCard(this.board, c, text)), () => this.hideAdd());
-        entry.set_name(`kanban-entry-${c}`);
-        stack.add_named(button, 'button');
-        stack.add_named(box, 'entry');
-        stack.show_all();   // Gtk.Stack hanya mau menampilkan anak yang sudah visible
-        stack.visible_child_name = this.adding?.kind === 'card' && this.adding.column === c ? 'entry' : 'button';
-        return stack;
+        return button;
     }
 
     private buildAddList(): Gtk.Box {
@@ -316,9 +308,13 @@ export class KanbanBoard {
         return box;
     }
 
+    // Kartu baru diisi lewat dialog yang sama dengan sunting kartu.
     showAddCard(column: number): void {
-        this.adding = { kind: 'card', column };
-        this.queueRender();
+        const draft = this.dialogs.editCard(this.parent, { text: '', notes: [] }, 'Tambah Kartu');
+        if (!draft?.text) return;
+        const index = this.board.columns[column]?.cards.length ?? 0;
+        const added = addCard(this.board, column, draft.text);
+        this.commit(updateCard(added, { column, index }, { notes: draft.notes }));
     }
 
     showAddList(): void {
@@ -331,18 +327,9 @@ export class KanbanBoard {
         this.queueRender();
     }
 
-    // Kolom isian yang sedang terbuka diberi fokus (setelah digambar ulang pun tetap terbuka,
-    // supaya beberapa kartu bisa ditambahkan beruntun).
+    // Isian nama daftar yang sedang terbuka diberi fokus setelah digambar ulang.
     private focusAddEntry(): void {
-        if (!this.adding) return;
-        const name = this.adding.kind === 'list' ? 'kanban-entry-list' : `kanban-entry-${this.adding.column}`;
-        const entry = this.findByName(this.row, name);
-        entry?.grab_focus();
-        if (this.adding.kind === 'card') {
-            const scroller = this.columns[this.adding.column]?.scroller;
-            const adj = scroller?.get_vadjustment();
-            adj?.set_value(adj.get_upper());
-        }
+        if (this.adding?.kind === 'list') this.findByName(this.row, 'kanban-entry-list')?.grab_focus();
     }
 
     private findByName(root: Gtk.Widget, name: string): Gtk.Widget | null {

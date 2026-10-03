@@ -1067,19 +1067,21 @@ function runGuiTests(app: Gtk.Application): void {
         ok(!w.boardMode, 'dokumen biasa tampil sebagai papan');
         openBoard();
     });
-    test('menambah kartu lewat isian menulis ke teks dokumen dan isian tetap terbuka', () => {
+    test('menambah kartu lewat dialog menulis ke teks dokumen', () => {
         openBoard();
+        const titles: (string | undefined)[] = [];
+        stubDialogs({ editCard: (_p, _c, title) => { titles.push(title); return { text: 'Kartu uji #baru', notes: ['catatan'] }; } });
         kb.showAddCard(1); settleK();
-        const entry = kbEntry('kanban-entry-1')!;
-        ok(entry.get_child_visible() && entry.get_mapped(), 'isian tampil setelah klik Tambah kartu');
-        entry.set_text('Kartu uji #baru'); entry.activate(); settleK();
+        eq(titles, ['Tambah Kartu'], 'judul dialog');
         eq(kb.cardTexts(1), ['Desain logo', 'Kartu uji #baru'], 'model');
-        ok(text().includes('- [ ] Desain logo\n- [ ] Kartu uji #baru\n'), 'teks dokumen');
+        ok(text().includes('- [ ] Desain logo\n- [ ] Kartu uji #baru\n  catatan\n'), 'teks dokumen');
         ok(buf.get_modified(), 'dokumen belum ditandai berubah');
-        ok(kbEntry('kanban-entry-1')?.get_visible(), 'isian tertutup setelah menambah');
-        kbEntry('kanban-entry-1')!.set_text('   '); kbEntry('kanban-entry-1')!.activate(); settleK();
+        stubDialogs({ editCard: () => ({ text: '', notes: [] }) });
+        kb.showAddCard(1); settleK();
         eq(kb.cardTexts(1).length, 2, 'kartu kosong ditolak');
-        kb.hideAdd();
+        stubDialogs({ editCard: () => null });
+        kb.showAddCard(1); settleK();
+        eq(kb.cardTexts(1).length, 2, 'dibatalkan');
     });
     test('menambah daftar lewat isian', () => {
         openBoard();
@@ -1308,7 +1310,7 @@ function runGuiTests(app: Gtk.Application): void {
             const at = inCard(source, target, 10, 4);
             kb.onCardMotion(ptr(at[0], at[1], 500, 100)); settleK();
             kb.onCardRelease(ptr(at[0], at[1], 500, 100)); settleK();
-            kb.showAddCard(0); settleK(); kb.hideAdd(); settleK();
+            kb.showAddList(); settleK(); kb.hideAdd(); settleK();
             w.setDark(true); settleK(); w.setDark(false); settleK();
         } finally {
             for (const [domain, id] of handlers) GLib.log_remove_handler(domain, id);

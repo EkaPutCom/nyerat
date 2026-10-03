@@ -92,8 +92,8 @@ export interface CardDraft {
 
 // Dialog sunting kartu: judul (satu baris) dan catatan (banyak baris).
 // Mengembalikan isi baru, atau null jika dibatalkan.
-export function editCardDialog(parent: Gtk.Window | null, card: CardDraft): CardDraft | null {
-    const dialog = new Gtk.Dialog({ title: 'Sunting Kartu', transient_for: parent, modal: true, default_width: 440 });
+export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, heading = 'Sunting Kartu'): CardDraft | null {
+    const dialog = new Gtk.Dialog({ title: heading, transient_for: parent, modal: true, default_width: 440 });
     dialog.add_button('Batal', Gtk.ResponseType.CANCEL);
     dialog.add_button('Simpan', Gtk.ResponseType.OK);
     dialog.set_default_response(Gtk.ResponseType.OK);
