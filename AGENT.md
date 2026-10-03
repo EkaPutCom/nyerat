@@ -19,6 +19,7 @@ Bahasa: komentar kode, pesan commit, teks antarmuka, nama tes, dan dokumentasi d
 | `npm run dev` | Build ulang dan buka ulang aplikasi tiap file disimpan |
 | `npm test` | Build lalu semua tes (unit + GUI + mouse) di display Xvfb terpisah |
 | `npm run test:ui` | Build lalu semua tes ditampilkan di desktop X11; pointer akan bergerak |
+| `npm run bench` | Build lalu ukur performa (Markdown + editor GUI) di Xvfb; `gjs -m dist/bench.js --no-gui` hanya modul Markdown |
 | `gjs -m dist/run-tests.js --no-gui` | Tes tanpa jendela (setelah build) |
 
 - `dist/` adalah hasil build dan tidak masuk git. **Tes selalu berjalan dari `dist/`**, jadi build ulang sebelum menjalankan `gjs -m dist/run-tests.js ...`.

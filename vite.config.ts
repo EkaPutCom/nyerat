@@ -28,6 +28,7 @@ export default defineConfig({
                 nyerat: 'src/main.ts',
                 'run-tests': 'tests/run-tests.ts',
                 capture: 'scripts/capture.ts',
+                bench: 'tests/bench.ts',
             },
             formats: ['es'],
             fileName: (_format, name) => `${name}.js`,

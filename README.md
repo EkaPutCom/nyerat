@@ -65,6 +65,7 @@ gjs -m dist/nyerat.js ~/catatan
 | `npm start` | Build, lalu jalankan aplikasi |
 | `npm test` | Build, lalu jalankan semua tes unit, GUI, dan mouse kanban di Xvfb |
 | `npm run test:ui` | Build, lalu jalankan rangkaian tes yang sama di desktop X11 |
+| `npm run bench` | Build, lalu ukur performa modul Markdown dan editor (setText, penyorotan, mengetik) di Xvfb; opsi: `--size=`, `--runs=`, `--budget=`, `--no-gui` |
 | `npm run docs` | Potret aplikasi sungguhan (jendela akan terbuka sebentar), lalu perbarui PNG dan GIF di `docs/assets/` untuk landing page |
 
 ### Mode pengembangan
