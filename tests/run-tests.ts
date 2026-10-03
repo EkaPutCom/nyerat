@@ -1071,6 +1071,7 @@ function runGuiTests(app: Gtk.Application): void {
         openBoard();
         kb.showAddCard(1); settleK();
         const entry = kbEntry('kanban-entry-1')!;
+        ok(entry.get_child_visible() && entry.get_mapped(), 'isian tampil setelah klik Tambah kartu');
         entry.set_text('Kartu uji #baru'); entry.activate(); settleK();
         eq(kb.cardTexts(1), ['Desain logo', 'Kartu uji #baru'], 'model');
         ok(text().includes('- [ ] Desain logo\n- [ ] Kartu uji #baru\n'), 'teks dokumen');
@@ -1084,6 +1085,7 @@ function runGuiTests(app: Gtk.Application): void {
         openBoard();
         kb.showAddList(); settleK();
         const entry = kbEntry('kanban-entry-list')!;
+        ok(entry.get_child_visible() && entry.get_mapped(), 'isian tampil setelah klik Tambah daftar');
         entry.set_text('Review'); entry.activate(); settleK();
         eq(kbTitles(), ['Rencana', 'Dikerjakan', 'Selesai', 'Review']);
         ok(text().includes('## Review'), 'teks dokumen');

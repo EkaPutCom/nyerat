@@ -295,6 +295,7 @@ export class KanbanBoard {
         entry.set_name(`kanban-entry-${c}`);
         stack.add_named(button, 'button');
         stack.add_named(box, 'entry');
+        stack.show_all();   // Gtk.Stack hanya mau menampilkan anak yang sudah visible
         stack.visible_child_name = this.adding?.kind === 'card' && this.adding.column === c ? 'entry' : 'button';
         return stack;
     }
@@ -309,6 +310,7 @@ export class KanbanBoard {
         const stack = new Gtk.Stack();
         stack.add_named(button, 'button');
         stack.add_named(entryBox, 'entry');
+        stack.show_all();
         stack.visible_child_name = this.adding?.kind === 'list' ? 'entry' : 'button';
         box.pack_start(stack, false, false, 0);
         return box;
@@ -316,17 +318,17 @@ export class KanbanBoard {
 
     showAddCard(column: number): void {
         this.adding = { kind: 'card', column };
-        this.render();
+        this.queueRender();
     }
 
     showAddList(): void {
         this.adding = { kind: 'list' };
-        this.render();
+        this.queueRender();
     }
 
     hideAdd(): void {
         this.adding = null;
-        this.render();
+        this.queueRender();
     }
 
     // Kolom isian yang sedang terbuka diberi fokus (setelah digambar ulang pun tetap terbuka,
