@@ -70,6 +70,21 @@ gjs -m dist/nyerat.js ~/catatan
 | `npm run bench:compare` | Jalankan benchmark dan tampilkan selisih terhadap [`bench/baseline.json`](bench/baseline.json) (hijau = lebih cepat, merah = lebih lambat, abu-abu = selisih < 25%, derau pengukuran) |
 | `npm run docs` | Potret aplikasi sungguhan (jendela akan terbuka sebentar), lalu perbarui PNG dan GIF di `docs/assets/` untuk landing page |
 
+Benchmark memakai 10 pengulangan setelah pemanasan. Hasil menampilkan median, p95,
+dan maksimum dalam milidetik; `--save=...` menyimpan sampel mentah, commit, serta versi
+GJS/GLib/GTK dan lingkungan. `--compare=...` hanya membandingkan format, ukuran,
+pengulangan, mode, dan lingkungan yang setara. Baseline format lama perlu dibuat ulang.
+
+Skenario GUI mencakup membuka teks, penyorotan ulang, mengetik (total 20 karakter dan
+latensi per karakter), perpindahan kursor, paste besar dengan emoji dan baris panjang,
+hapus, undo, serta redo. Setiap suntingan diverifikasi melalui callback penyorotan.
+`--budget=...` berlaku pada median operasi GUI; untuk mengetik, budget berlaku per
+karakter. Kegagalan pengukuran mengembalikan kode 1 dan mencegah penyimpanan hasil
+parsial; hasil lengkap yang melampaui budget tetap dapat disimpan untuk diagnosis.
+Ukuran GUI dapat diatur dengan `--sizes=25,50,100`; `--size` mengatur ukuran modul
+Markdown. Rendering gambar/diagram asinkron dan interaksi papan kanban belum diukur;
+kanban saat ini mencakup parsing dan serialisasi model.
+
 ### Mode pengembangan
 
 ```bash
