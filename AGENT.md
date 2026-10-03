@@ -17,11 +17,12 @@ Bahasa: komentar kode, pesan commit, teks antarmuka, nama tes, dan dokumentasi d
 | `npm run build` | Cek tipe, lalu bundel ke `dist/` |
 | `npm start` | Build lalu jalankan aplikasi |
 | `npm run dev` | Build ulang dan buka ulang aplikasi tiap file disimpan |
-| `npm test` | Build lalu semua tes (unit + GUI) |
+| `npm test` | Build lalu semua tes (unit + GUI + mouse) di display Xvfb terpisah |
+| `npm run test:ui` | Build lalu semua tes ditampilkan di desktop X11; pointer akan bergerak |
 | `gjs -m dist/run-tests.js --no-gui` | Tes tanpa jendela (setelah build) |
 
 - `dist/` adalah hasil build dan tidak masuk git. **Tes selalu berjalan dari `dist/`**, jadi build ulang sebelum menjalankan `gjs -m dist/run-tests.js ...`.
-- Tes GUI membuka jendela sungguhan dan butuh sesi desktop (X11/Wayland). Tanpa display, pakai `--no-gui`.
+- `npm test` membutuhkan `xvfb-run`, `Xvfb`, dan `xauth`; tes GUI dan mouse memakai display virtual sehingga tidak butuh sesi desktop dan tidak menggerakkan pointer pengguna. Runner GJS langsung masih bisa memakai sesi desktop; tanpa display, pakai `--no-gui`.
 - Sebelum menyatakan pekerjaan selesai, jalankan `npm test` (atau minimal `npm run typecheck` + `--no-gui` jika tidak ada display) dan laporkan hasilnya apa adanya.
 
 ## Struktur dan aturan lapisan
@@ -75,6 +76,8 @@ Detail dan alasannya ada di README, bagian "Hal teknis yang perlu diketahui".
 
 - Tes memakai folder pengaturan sementara (`XDG_CONFIG_HOME`), jadi `~/.config/nyerat/settings.json` pengguna tidak tersentuh. Jangan menulis ke home pengguna dari tes.
 - `--mouse` menggerakkan pointer sungguhan lewat XTest; jalankan hanya jika diminta.
+- `npm test` otomatis menyertakan tes mouse kanban di Xvfb. `npm run docs` tetap memakai display desktop seperti sebelumnya.
+- `npm run test:ui` menampilkan seluruh tes termasuk drag mouse di desktop; jalankan hanya jika pengguna meminta mode tes yang ditampilkan.
 - Jangan mengedit `dist/` atau `node_modules/` secara manual.
 
 ## Git

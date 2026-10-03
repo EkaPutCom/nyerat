@@ -1,6 +1,7 @@
 // Tes otomatis Nyerat. Dibundel Vite menjadi dist/run-tests.js.
 //
-//   npm test                                         build, lalu semua tes
+//   npm test                                         build, lalu semua tes termasuk mouse di Xvfb
+//   npm run test:ui                                 build, lalu semua tes termasuk mouse di desktop
 //   gjs -m dist/run-tests.js --no-gui                hanya tes konversi Markdown → HTML
 //   gjs -m dist/run-tests.js --mouse                 tambah klik mouse sungguhan (pointer akan bergerak)
 //   gjs -m dist/run-tests.js --screenshot=a.png      simpan tangkapan layar jendela editor
@@ -34,6 +35,7 @@ import { codeColorTests } from './gui/codecolor.js';
 import { mermaidTests } from './gui/mermaid.js';
 import { tableGridTests } from './gui/table.js';
 import { kanbanBoardTests } from './gui/kanban.js';
+import { kanbanMouseTests } from './gui/kanban-mouse.js';
 import { folderTests } from './gui/folder.js';
 import { sampleTests } from './gui/sample.js';
 import { windowSizeTests } from './gui/window.js';
@@ -66,6 +68,9 @@ function runGuiTests(app: Gtk.Application): void {
     tableGridTests(c);
     mermaidTests(c);
     kanbanBoardTests(c);
+    // Tes folder membuat jendela lain dan mengganti aksi aplikasi. Periksa undo/redo
+    // mouse selagi aksi masih terhubung ke jendela konteks ini.
+    if (opt('with-kanban-mouse')) kanbanMouseTests(c);
     folderTests(c);
     sampleTests(c);
     windowSizeTests(c);
@@ -90,8 +95,14 @@ function runGuiTests(app: Gtk.Application): void {
 
 runUnitTests();
 
+if (opt('with-kanban-mouse') && opt('no-gui')) {
+    recordFailure();
+    print(`${RED}Opsi tes mouse tidak bisa digabung dengan --no-gui.${RESET}`);
+}
+
 if (!opt('no-gui')) {
     if (!Gdk.Display.get_default() && !GLib.getenv('DISPLAY') && !GLib.getenv('WAYLAND_DISPLAY')) {
+        if (opt('with-kanban-mouse')) recordFailure();
         print(`\n${DIM}Tes GUI dilewati: tidak ada display.${RESET}`);
     } else {
         const app = new Gtk.Application({ application_id: 'id.eka.Nyerat.Test', flags: Gio.ApplicationFlags.NON_UNIQUE });

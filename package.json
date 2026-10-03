@@ -12,7 +12,8 @@
     "watch": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "start": "npm run build && gjs -m dist/nyerat.js",
-    "test": "npm run build && gjs -m dist/run-tests.js",
+    "test": "npm run build && xvfb-run -a -s '-screen 0 1280x800x24' env GDK_BACKEND=x11 gjs -m dist/run-tests.js --with-kanban-mouse",
+    "test:ui": "npm run build && env GDK_BACKEND=x11 gjs -m dist/run-tests.js --with-kanban-mouse",
     "docs": "npm run build && XDG_CONFIG_HOME=$(mktemp -d) gjs -m dist/capture.js"
   },
   "devDependencies": {

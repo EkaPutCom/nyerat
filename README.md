@@ -140,9 +140,22 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 
 ## Tes
 
+Pasang dependensi display virtual sekali (Debian/Ubuntu):
+
 ```bash
-npm test
+sudo apt install xvfb xauth
 ```
+
+Ada dua mode untuk menjalankan seluruh tes, termasuk lima tes mouse kanban:
+
+```bash
+npm test          # tanpa menampilkan jendela, memakai Xvfb
+npm run test:ui   # tampilkan jendela dan drag kartu di desktop
+```
+
+`npm test` menjalankan seluruh tes unit, GUI, dan lima tes input mouse kanban di display **Xvfb terpisah**. Tidak membutuhkan sesi desktop; pointer desktop tidak bergerak. Jika Xvfb belum terpasang, perintah gagal dan tes mouse tidak diam-diam dilewati. `npm run docs` tetap memakai jalur capture desktop seperti sebelumnya.
+
+`npm run test:ui` menjalankan rangkaian tes yang sama pada desktop **X11 lokal** (atau XWayland yang menyediakan `DISPLAY` lokal), sehingga jendela tes terlihat. Mode ini tidak membutuhkan Xvfb. Pointer desktop akan bergerak selama tes drag; biarkan mouse dan keyboard sampai selesai. Pointer dikembalikan ke posisi semula setelah bagian tes mouse.
 
 Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `dist/run-tests.js`, lalu dijalankan GJS. Script keluar dengan kode `1` jika ada yang gagal. Isinya:
 
@@ -164,10 +177,17 @@ Opsi tambahan, dijalankan setelah `npm run build`:
 gjs -m dist/run-tests.js --mouse
 ```
 
+Tes seret kartu lewat input mouse dari server X11 (tekan → gerak bertahap → lepas) termasuk dalam kedua mode: `npm test` dan `npm run test:ui`.
+
+`npm test` memakai Xvfb dengan ekstensi XTest; `npm run test:ui` memakai display desktop. Seluruh kode tes dan helper ditulis dalam **TypeScript**, dibundel Vite dan dijalankan GJS; tidak ada dependensi Python atau `xdotool`. Helper memakai Gio untuk terhubung ke socket X11 dan membaca autentikasi dari `XAUTHORITY` (atau `~/.Xauthority`). Posisi pointer dikembalikan sesudah tes mouse, dan tombol kiri dilepas bila pengujian gagal. Pengaturan dan dokumen uji memakai folder sementara.
+
+Lima skenario memeriksa perpindahan antar daftar beserta catatan/emoji, urutan dalam satu daftar, tujuan kosong, jatuh di posisi asal, serta klik tanpa drag. Pengujian juga memeriksa event tekan/gerak/lepas yang diterima GTK, pembersihan bayangan dan penanda tujuan, Markdown, satu langkah undo/redo, serta hasil simpan. Input dikirim langsung lewat permintaan **FakeInput** dalam [protokol XTest](https://xorg.freedesktop.org/archive/X11R7.6/doc/xextproto/xtest.html), bukan memanggil handler kartu atau membuat objek event tiruan. Inputnya tetap otomatis; ini tidak membuktikan pengujian manual dengan perangkat mouse fisik atau sesi Wayland. Jika input tidak diterima GTK, tes **gagal** (kode keluar `1`), bukan dilewati atau dianggap lulus.
+
 | Opsi | Fungsi |
 | --- | --- |
 | `--no-gui` | Hanya tes konversi, tanpa membuka jendela |
 | `--mouse` | Tambah klik mouse sungguhan lewat XTest (pointer akan bergerak sendiri). Dilewati dengan keterangan jika lingkungan Anda tidak meneruskan tombol mouse XTest ke GTK (terjadi di XFCE/X11 yang dipakai mengembangkan ini); gerak pointer saja tidak dihitung sebagai tes |
+| `--with-kanban-mouse` | Tambahkan lima tes input mouse kanban ke seluruh tes unit dan GUI; dipakai oleh `npm test` di Xvfb dan `npm run test:ui` di desktop. Tidak bisa digabung dengan `--no-gui` |
 | `--screenshot=file.png` | Simpan tangkapan layar jendela editor |
 
 Tes memakai folder pengaturan sementara, jadi pengaturan Anda tidak tersentuh.
@@ -241,6 +261,8 @@ src/
     └── theme.ts          palet warna, font, CSS terang/gelap
 tests/
 ├── run-tests.ts          tes otomatis
+├── gui/kanban-mouse.ts   lima tes seret/klik lewat input mouse X11
+├── gui/mouse-input.ts    klien X11/XTest TypeScript melalui Gio
 └── samples/
     ├── semua-format.md   dokumen berisi semua format, untuk tes dan pemeriksaan manual
     ├── papan-kanban.md   contoh papan kanban untuk dicoba
@@ -451,7 +473,7 @@ Disimpan di `~/.config/nyerat/settings.json`: mode gelap, sidebar dan tab yang t
 ## Keterbatasan
 
 - Gambar yang diubah di disk tidak dimuat ulang sampai aplikasi dibuka lagi (ada cache per URI); GIF animasi hanya menampilkan frame pertama, termasuk di penampil zoom
-- **Seret kartu dengan mouse sungguhan belum pernah dicoba oleh pengembangnya.** Lingkungan tempat ini dikembangkan tidak meneruskan tombol mouse sintetis ke GTK, jadi logika menyeret hanya teruji dengan event penunjuk tiruan. Bila ada yang janggal saat menyeret, itu bagian yang paling perlu dicurigai
+- **Seret kartu telah diuji lewat input mouse X11/XTest.** `npm test` dan `npm run test:ui` memeriksa lima skenario melalui event yang benar-benar diterima GTK, termasuk perubahan Markdown, undo/redo, dan simpan. Jalur input ini berhasil di lingkungan pengembangan, sementara helper klik lama `Gdk.test_simulate_button` tidak meneruskan tombol dengan andal. Pengujian manual dengan mouse fisik dan sesi Wayland masih belum terverifikasi
 - Papan: hanya item daftar di tingkat atas yang menjadi kartu (daftar bersarang dipertahankan sebagai catatan kartu); baris biasa di antara dua kartu dipindahkan ke akhir daftar saat disimpan. Belum ada arsip, pemilih tanggal, atau penyuntingan label lewat antarmuka (tulis `#tag` dan `@{YYYY-MM-DD}` di judul kartu), dan memindahkan kartu dengan keyboard hanya lewat menu klik kanan
 - Di tampilan teks, frontmatter papan tampil seperti Markdown biasa (garis `---` dan teks)
 - Klik pertama pada gambar membuka sintaksnya, sehingga gambar bergeser sekitar satu baris ke bawah. Klik ganda yang jatuh di strip tipis tepi atas gambar karenanya bisa meleset ke teks di atasnya
