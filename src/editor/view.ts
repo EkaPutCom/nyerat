@@ -9,6 +9,7 @@
 //   images.ts       gambar ditampilkan di bawah barisnya
 //   codehighlight.ts  isi blok kode diwarnai sesuai bahasanya
 //   tablelayer.ts   tabel dirender sebagai grid, tableedit.ts menyuntingnya
+//   mermaid.ts      blok ```mermaid dirender sebagai diagram (mermaidrender.ts)
 //
 // Widget ini tidak tahu apa-apa soal file, menu, atau sidebar. Ia memberi kabar
 // lewat callback yang dipasang oleh jendela (window.ts):
@@ -33,6 +34,7 @@ import { toggleTaskAt, linkAt } from './clicks.js';
 import { ImageLayer } from './images.js';
 import { CodeHighlighter } from './codehighlight.js';
 import { TableLayer } from './tablelayer.js';
+import { MermaidLayer } from './mermaid.js';
 import { cellStart, type TableRange } from '../markdown/table.js';
 import { enterInTable, tabInTable, runTableCommand, type TableCommand } from './tableedit.js';
 import { cpLength } from './offsets.js';
@@ -56,6 +58,7 @@ export class MarkdownView {
     readonly images: ImageLayer;
     readonly code: CodeHighlighter;
     readonly tableLayer: TableLayer;
+    readonly mermaid: MermaidLayer;
 
     markers: Marker[] = [];
     headings: Heading[] = [];
@@ -104,6 +107,16 @@ export class MarkdownView {
             const text = this.lines[line] ?? '';
             const it = this.buffer.get_iter_at_line(line);
             it.forward_chars(cpLength(text.slice(0, cellStart(text, col))));
+            this.buffer.place_cursor(it);
+            this.view.grab_focus();
+        };
+
+        this.mermaid = new MermaidLayer(this.view, this.tags.mermaidhide);
+        this.mermaid.onZoom = (pixbuf, title) => this.onViewImage(pixbuf, title);
+        // Klik diagram → kursor ke baris kode terakhir, sehingga kodenya terbuka.
+        this.mermaid.onActivate = line => {
+            const it = this.buffer.get_iter_at_line(line);
+            it.forward_to_line_end();
             this.buffer.place_cursor(it);
             this.view.grab_focus();
         };
@@ -191,6 +204,7 @@ export class MarkdownView {
         paintTags(this.tags, palette);
         this.code.setScheme(palette.codeScheme);
         this.tableLayer.setPalette(palette);
+        this.mermaid.setTheme({ dark: palette.dark, bg: palette.bg, fg: palette.fg, accent: palette.accent, node: palette.codeBg });
         this.highlight();  // warnai ulang blok kode dengan skema baru
     }
 
@@ -200,6 +214,7 @@ export class MarkdownView {
         if (name === 'source') {
             this.images.setEnabled(!enabled);
             this.tableLayer.setEnabled(!enabled);
+            this.mermaid.setEnabled(!enabled);
         }
         this.queueCursorUpdate(true);
     }
@@ -228,6 +243,7 @@ export class MarkdownView {
             setTagMargins(this.tags, m);
             this.images.setMaxWidth(width - 2 * m);
             this.tableLayer.setMaxWidth(width - 2 * m);
+            this.mermaid.setMaxWidth(width - 2 * m);
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -259,6 +275,7 @@ export class MarkdownView {
         this.tables = result.tables;
         this.tableLayer.update(result.tables, result.lines);
         this.code.apply(result.codeBlocks);
+        this.mermaid.update(result.codeBlocks);
         this.images.update(result.images);
         this.onHighlighted(result);
         this.updateCursor(true);
@@ -289,6 +306,7 @@ export class MarkdownView {
             concealMarkers(buf, this.tags.hidden, this.markers, l0, l1, !this.modes.source);
             dimOutsideParagraph(buf, this.tags.dim, this.lines, l0, l1, this.modes.focus);
             this.tableLayer.setCursor(l0, l1);
+            this.mermaid.setCursor(l0, l1);
             if (this.modes.typewriter)
                 this.view.scroll_to_mark(buf.get_insert(), 0, true, 0, 0.5);
         }

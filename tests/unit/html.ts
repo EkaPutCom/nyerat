@@ -1,6 +1,7 @@
 // Tes konversi Markdown → HTML.
 
 import { section, test, eq, contains } from '../framework.js';
+import { markdownToHtml } from '../../src/markdown/html.js';
 import { body } from './helpers.js';
 
 export function htmlTests(): void {
@@ -15,6 +16,14 @@ export function htmlTests(): void {
     });
     test('HTML di blok kode di-escape', () => eq(body('```html\n<b>&</b>\n```'),
         '<pre><code class="language-html">&lt;b&gt;&amp;&lt;/b&gt;</code></pre>'));
+    test('blok mermaid menjadi <pre class="mermaid"> dan memuat skrip Mermaid', () => {
+        const h = markdownToHtml('```mermaid\ngraph TD\n  A-->B\n```', 't');
+        contains(h, '<pre class="mermaid">graph TD\n  A--&gt;B</pre>');
+        contains(h, 'mermaid.esm.min.mjs');
+    });
+    test('dokumen tanpa mermaid tidak memuat skrip Mermaid', () => {
+        eq(markdownToHtml('```js\nx\n```', 't').includes('mermaid.esm'), false, 'skrip termuat');
+    });
     test('tabel', () => {
         const h = body('| A | B |\n|:--|--:|\n| 1 | 2 |');
         contains(h, '<th style="text-align:left">A</th>');

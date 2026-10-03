@@ -33,6 +33,13 @@ function halo(nama) {
 | Ctrl+/   | Mode source |
 | F8       | Mode fokus |
 
+\`\`\`mermaid
+graph LR
+    A[Tulis] --> B{Bagus?}
+    B -->|ya| C[Simpan]
+    B -->|belum| A
+\`\`\`
+
 ---
 
 Buka menu ☰ untuk ekspor HTML, mode gelap, dan lainnya.

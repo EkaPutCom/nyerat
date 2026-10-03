@@ -38,6 +38,9 @@ export interface CodeBlock {
     lang: string;     // teks setelah ``` (misalnya "js"); '' jika tidak ada
     start: number;    // offset (code point) awal isi blok di buffer
     text: string;     // isi blok tanpa baris pembatas
+    startLine: number;  // baris pembatas pembuka
+    endLine: number;    // baris pembatas penutup (baris terakhir dokumen jika tidak ditutup)
+    closed: boolean;
 }
 
 export interface HighlightResult {
@@ -91,7 +94,10 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
     const codeBlocks: CodeBlock[] = [];
     // Blok kode selesai di baris lastLine (eksklusif): catat isinya.
     const closeBlock = (f: NonNullable<typeof fence>, lastLine: number) =>
-        codeBlocks.push({ lang: f.lang, start: toCp(f.b), text: lines.slice(f.line + 1, lastLine).join('\n') });
+        codeBlocks.push({
+            lang: f.lang, start: toCp(f.b), text: lines.slice(f.line + 1, lastLine).join('\n'),
+            startLine: f.line, endLine: Math.min(lastLine, lines.length - 1), closed: lastLine < lines.length,
+        });
     for (let i = 0; i < lines.length; off += lines[i].length + 1, i++) {
         const line = lines[i];
         const lineEnd = off + line.length;

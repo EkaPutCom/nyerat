@@ -11,6 +11,7 @@ export interface Palette {
     quoteBg: string; markBg: string; sel: string; sideBg: string; sideFg: string;
     codeScheme: string;  // skema warna GtkSourceView untuk isi blok kode
     columnBg: string;    // latar daftar di papan kanban
+    dark: boolean;
 }
 
 export const PALETTES: Record<'light' | 'dark', Palette> = {
@@ -20,6 +21,7 @@ export const PALETTES: Record<'light' | 'dark', Palette> = {
         quoteBg: '#f7f7f9', markBg: '#fff3a3', sel: '#b3d4fc', sideBg: '#f7f7f7', sideFg: '#555555',
         codeScheme: 'tango',
         columnBg: '#e9ebef',
+        dark: false,
     },
     dark: {
         bg: '#1f2023', fg: '#d4d4d4', heading: '#f0f0f0', faint: '#5f6368', dim: '#46494e',
@@ -27,6 +29,7 @@ export const PALETTES: Record<'light' | 'dark', Palette> = {
         quoteBg: '#26282c', markBg: '#6b5a12', sel: '#264f78', sideBg: '#18191b', sideFg: '#a0a4a8',
         codeScheme: 'cobalt',
         columnBg: '#2b2d31',
+        dark: true,
     },
 };
 

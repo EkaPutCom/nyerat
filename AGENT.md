@@ -60,6 +60,7 @@ Detail dan alasannya ada di README, bagian "Hal teknis yang perlu diketahui".
 - **Teks buffer adalah sumber kebenaran** untuk papan kanban. Perubahan dari papan lewat `commit()` → `serializeBoard()` → `MarkdownView.replaceText()` agar jadi satu langkah undo.
 - **Penyorotan ditunda** dengan `GLib.idle_add(PRIORITY_HIGH_IDLE)` (`queueHighlight`, `queueCursorUpdate`). Jangan memanggil `highlight()` langsung dari handler yang bisa terpicu beruntun.
 - **Lebar jendela:** ScrolledWindow editor memakai `hscrollbar_policy: EXTERNAL`, bukan `NEVER`, supaya jendela bisa mengecil.
+- **Diagram Mermaid** dirender WebKitGTK tak terlihat (`editor/mermaidrender.ts`), memuat `dist/mermaid.min.js` yang disalin dari `node_modules` oleh plugin di `vite.config.ts`. Lapisannya (`editor/mermaid.ts`) memakai tag `mermaidhide` sendiri; jangan dipakai bersama `tablehide` karena tiap lapisan menghapus tag-nya di seluruh buffer. Tes pertama yang merender butuh beberapa detik (WebKit dijalankan).
 - GJS tidak punya HMR; perubahan baru terlihat setelah aplikasi dibuka ulang (`npm run dev` melakukannya otomatis).
 
 ## Menambah atau mengubah fitur

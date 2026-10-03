@@ -124,6 +124,8 @@ function blocksHtml(lines: string[]): string {
                 if (c && c[2][0] === ch && c[2].length >= n && !c[3].trim()) { i++; break; }
                 code.push(lines[i]);
             }
+            // Diagram Mermaid digambar oleh skrip di <head> saat halaman dibuka (lihat markdownToHtml).
+            if (lang.split(/\s+/)[0].toLowerCase() === 'mermaid') { out.push(`<pre class="mermaid">${esc(code.join('\n'))}</pre>`); continue; }
             out.push(`<pre><code${lang ? ` class="language-${esc(lang)}"` : ''}>${esc(code.join('\n'))}</code></pre>`);
             continue;
         }
@@ -169,6 +171,12 @@ function blocksHtml(lines: string[]): string {
 
 export function markdownToHtml(src: string, title: string): string {
     const body = blocksHtml(src.replace(/\r\n?/g, '\n').split('\n'));
+    // Mermaid dimuat dari CDN hanya jika dokumennya punya diagram, jadi dokumen biasa tetap mandiri.
+    const mermaid = body.includes('<pre class="mermaid">') ? `<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+mermaid.initialize({ startOnLoad: true, theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default' });
+</script>
+` : '';
     return `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -183,6 +191,7 @@ a { color: #4183c4; text-decoration: none; } a:hover { text-decoration: underlin
 code { font-family: "DejaVu Sans Mono", monospace; font-size: .9em; background: #f3f4f4; padding: 2px 4px; border-radius: 3px; color: #c7254e; }
 pre { background: #f6f8fa; padding: 12px 16px; border-radius: 6px; overflow: auto; }
 pre code { background: none; padding: 0; color: inherit; }
+pre.mermaid { background: none; text-align: center; }
 blockquote { margin: 1em 0; padding: 0 1em; color: #6a737d; border-left: 4px solid #dfe2e5; }
 table { border-collapse: collapse; margin: 1em 0; } th, td { border: 1px solid #dfe2e5; padding: 6px 13px; }
 tr:nth-child(2n) { background: #f8f8f8; }
@@ -190,7 +199,7 @@ hr { border: 0; border-top: 2px solid #eee; margin: 2em 0; }
 img { max-width: 100%; } mark { background: #fff3a3; }
 li.task { list-style: none; } li.task input { margin: 0 .3em 0 -1.3em; }
 </style>
-</head>
+${mermaid}</head>
 <body>
 ${body}
 </body>

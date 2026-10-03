@@ -19,7 +19,7 @@ export function sampleTests(c: GuiContext): void {
         ok(w.load(samplePath), 'load() gagal');
         pump();
         const names = ed.headings.map(h => h.text);
-        for (const h of ['Uji Semua Format Markdown', 'Heading 6', 'Heading dengan tanda penutup', '14. Kasus sulit'])
+        for (const h of ['Uji Semua Format Markdown', 'Heading 6', 'Heading dengan tanda penutup', '15. Kasus sulit'])
             ok(names.includes(h), `heading "${h}" tidak ada`);
         ok(!names.some(n => n.includes('Tujuh pagar') || n.includes('Tanpa spasi')), 'teks yang bukan heading masuk outline');
     });
@@ -53,7 +53,7 @@ export function sampleTests(c: GuiContext): void {
     test('ekspor HTML dokumen contoh lengkap', () => {
         const h = markdownToHtml(readTextFile(samplePath), 't');
         for (const tag of ['<h6', '<strong><em>', '<del>', '<mark>', '<code>', '<a href=', '<img ', '<ol start="7">',
-            'type="checkbox"', '<blockquote>\n<p>Tingkat dua', '<pre><code class="language-bash">', '<table>', '<hr>', '<br>'])
+            'type="checkbox"', '<blockquote>\n<p>Tingkat dua', '<pre><code class="language-bash">', '<pre class="mermaid">', '<table>', '<hr>', '<br>'])
             contains(h, tag);
         eq((h.match(/<table>/g) || []).length, 3, 'jumlah tabel');
         contains(h, '>a | b</td>');  // \\| di dalam sel menjadi |

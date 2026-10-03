@@ -50,6 +50,9 @@ const TAG_DEFS = {
     // Baris tabel yang sudah dirender sebagai grid: dikecilkan jadi ~1 px dan tanpa spasi
     // antarparagraf; ruang untuk grid-nya disediakan tablelayer.ts.
     tablehide: { size: TINY, letter_spacing: 0, pixels_above_lines: 0, pixels_below_lines: 0, strikethrough: false, underline: Pango.Underline.NONE },
+    // Blok ```mermaid yang sudah dirender sebagai diagram (lihat mermaid.ts). Tag terpisah
+    // dari tablehide karena tiap lapisan menghapus tag-nya di seluruh dokumen saat sinkron.
+    mermaidhide: { size: TINY, letter_spacing: 0, pixels_above_lines: 0, pixels_below_lines: 0, strikethrough: false, underline: Pango.Underline.NONE },
     dim: {},
     // Bukan `invisible`: teks tak terlihat di GtkTextView GTK 3 bisa memicu crash
     // "Byte index is off the end of the line". Marker cukup dibuat sangat kecil
@@ -61,7 +64,7 @@ export type TagName = keyof typeof TAG_DEFS;
 export type Tags = Record<TagName, Gtk.TextTag>;
 
 // Tag yang dihapus lalu dipasang ulang oleh highlighter.ts.
-export const SYNTAX_TAGS = (Object.keys(TAG_DEFS) as TagName[]).filter(n => n !== 'dim' && n !== 'hidden' && n !== 'tablehide');
+export const SYNTAX_TAGS = (Object.keys(TAG_DEFS) as TagName[]).filter(n => n !== 'dim' && n !== 'hidden' && n !== 'tablehide' && n !== 'mermaidhide');
 
 // Membuat semua tag di buffer. Hasil: { namaTag: Gtk.TextTag }.
 export function createTags(buffer: Gtk.TextBuffer): Tags {
@@ -98,6 +101,8 @@ export function paintTags(t: Tags, p: Palette): void {
     t.dim.foreground = p.dim;
     t.hidden.foreground = p.bg;
     t.tablehide.foreground = p.bg;
+    t.mermaidhide.foreground = p.bg;
+    t.mermaidhide.paragraph_background = p.bg;  // menutupi latar blok kode di baris-baris yang disembunyikan
 }
 
 // Margin tag bersifat absolut, jadi perlu diperbarui saat margin editor berubah.

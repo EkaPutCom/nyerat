@@ -233,7 +233,16 @@ Bahasa lain: こんにちは **世界**, Ελληνικά *κείμενο*, ال
 
 Simbol: → ← ↑ ↓ • © ® ™ ½ ≠ ≤ ≥ ∞
 
-## 14. Kasus sulit
+## 14. Diagram Mermaid
+
+```mermaid
+graph TD
+    A[Mulai] --> B{Sudah siap?}
+    B -->|ya| C[Kerjakan]
+    B -->|belum| A
+```
+
+## 15. Kasus sulit
 
 Nama variabel snake_case_seperti_ini tidak jadi miring.
 

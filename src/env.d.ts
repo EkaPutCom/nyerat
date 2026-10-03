@@ -12,3 +12,4 @@ import '@girs/gdk-3.0/ambient';
 import '@girs/gtksource-4/ambient';
 import '@girs/pango-1.0/ambient';
 import '@girs/gdkpixbuf-2.0/ambient';
+import '@girs/webkit2-4.1/ambient';

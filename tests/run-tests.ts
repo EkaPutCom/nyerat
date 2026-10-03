@@ -30,6 +30,7 @@ import { fileTests } from './gui/file.js';
 import { imageTests } from './gui/image.js';
 import { imageZoomTests } from './gui/imagezoom.js';
 import { codeColorTests } from './gui/codecolor.js';
+import { mermaidTests } from './gui/mermaid.js';
 import { tableGridTests } from './gui/table.js';
 import { kanbanBoardTests } from './gui/kanban.js';
 import { folderTests } from './gui/folder.js';
@@ -61,6 +62,7 @@ function runGuiTests(app: Gtk.Application): void {
     imageZoomTests(c);
     codeColorTests(c);
     tableGridTests(c);
+    mermaidTests(c);
     kanbanBoardTests(c);
     folderTests(c);
     sampleTests(c);

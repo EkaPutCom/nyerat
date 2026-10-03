@@ -2,9 +2,20 @@
 // modul digabung menjadi file ESM yang dijalankan GJS. Dev server dan HMR tidak
 // dipakai karena ini aplikasi GTK, bukan halaman web.
 
-import { defineConfig } from 'vite';
+import { copyFileSync } from 'node:fs';
+import { defineConfig, type Plugin } from 'vite';
+
+// Mermaid dijalankan di WebKitGTK (lihat src/editor/mermaid.ts), jadi yang dibutuhkan
+// adalah file skrip browsernya, bukan modul yang dibundel ke dalam kode GJS.
+const copyMermaid = (): Plugin => ({
+    name: 'copy-mermaid',
+    writeBundle(options) {
+        copyFileSync('node_modules/mermaid/dist/mermaid.min.js', `${options.dir ?? 'dist'}/mermaid.min.js`);
+    },
+});
 
 export default defineConfig({
+    plugins: [copyMermaid()],
     build: {
         outDir: 'dist',
         emptyOutDir: true,

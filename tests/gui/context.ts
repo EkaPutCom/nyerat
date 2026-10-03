@@ -28,6 +28,8 @@ export interface GuiContext {
     samplePath: string;
     images: () => MainWindow['editor']['images']['blocks'];
     waitImages: () => void;
+    diagrams: () => MainWindow['editor']['mermaid']['blocks'];
+    waitMermaid: () => void;
 }
 
 export function createContext(app: Gtk.Application): GuiContext {
@@ -84,5 +86,15 @@ export function createContext(app: Gtk.Application): GuiContext {
         pump();
     };
 
-    return { app, w, ed, buf, pump, text, setText, cursorTo, offsetIn, hidden, tagAt, key, action, clickAt, imgDir, samplePath, images, waitImages };
+    const diagrams = () => ed.mermaid.blocks;
+    // Tunggu sampai semua diagram selesai dirender (pertama kali bisa beberapa detik: WebKit dijalankan).
+    const waitMermaid = () => {
+        for (let i = 0; i < 3000 && diagrams().some(b => b.busy || b.timer); i++) {
+            pump();
+            GLib.usleep(10000);
+        }
+        pump();
+    };
+
+    return { app, w, ed, buf, pump, text, setText, cursorTo, offsetIn, hidden, tagAt, key, action, clickAt, imgDir, samplePath, images, waitImages, diagrams, waitMermaid };
 }
