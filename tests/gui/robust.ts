@@ -4,11 +4,13 @@ import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=3.0';
 import Gdk from 'gi://Gdk?version=3.0';
 import { WELCOME } from '../../src/welcome.js';
-import { section, test, ok, tmp, opt, DIM, RESET } from '../framework.js';
+import { readTextFile } from '../../src/files.js';
+import { tagRanges } from '../../src/editor/tagsync.js';
+import { section, test, ok, eq, tmp, opt, DIM, RESET } from '../framework.js';
 import type { GuiContext } from './context.js';
 
 export function robustnessTests(c: GuiContext): void {
-    const { w, ed, buf, pump, setText, cursorTo, action, waitImages } = c;
+    const { w, ed, buf, pump, text, setText, cursorTo, action, waitImages, samplePath } = c;
 
     section('Ketahanan (mencari crash)');
     test('kursor menyapu setiap baris dokumen contoh', () => {
@@ -28,6 +30,55 @@ export function robustnessTests(c: GuiContext): void {
             s.backward_chars(7);
             buf.delete(s, e);
             pump();
+        }
+    });
+    // Penyorotan hanya memasang ulang baris yang berubah (editor/tagsync.ts). Setelah suntingan
+    // apa pun, tag di buffer harus sama persis dengan hasil menyorot dokumen itu dari awal.
+    test('penyorotan bertahap sama dengan penyorotan dari awal', () => {
+        // Tag mermaidhide dan jarak gambar bergantung pada render/pemuatan asinkron, jadi tidak dibandingkan.
+        const snapshot = () => {
+            const out: Record<string, string> = {};
+            buf.get_tag_table().foreach(tag => {
+                const name = tag.name ?? '';
+                if (name === 'mermaidhide' || name.startsWith('image-gap') || name.startsWith('mermaid-gap')) return;
+                const r = tagRanges(buf, tag);
+                if (r.length) out[name] = JSON.stringify(r);
+            });
+            return out;
+        };
+        const compare = (what: string) => {
+            const cursor = buf.get_iter_at_mark(buf.get_insert()).get_offset();
+            const incremental = snapshot();
+            ed.setText(text());
+            buf.place_cursor(buf.get_iter_at_offset(cursor));
+            pump();
+            const fresh = snapshot();
+            for (const name of new Set([...Object.keys(incremental), ...Object.keys(fresh)]))
+                eq(incremental[name], fresh[name], `tag ${name} setelah ${what}`);
+        };
+
+        // Pembangkit acak sederhana dengan benih tetap, supaya kegagalan bisa diulang.
+        let seed = 7;
+        const rand = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+        const pieces = ['x', '\n', '**', '`', '```\n', '| a |', '# ', '- [ ] ', '> ', '🎉', '~~', '\n\n', '![g](a.png)'];
+        setText(readTextFile(samplePath));
+        for (let round = 0; round < 8; round++) {
+            // Beberapa suntingan sebelum penyorotan berjalan, supaya rentang kotor digabung.
+            for (let k = 0; k < 1 + rand(4); k++) {
+                const n = buf.get_char_count();
+                const at = buf.get_iter_at_offset(rand(n + 1));
+                if (rand(3) === 0 && n > 0) {
+                    const end = at.copy();
+                    end.forward_chars(1 + rand(30));
+                    buf.delete(at, end);
+                } else {
+                    buf.insert(at, pieces[rand(pieces.length)], -1);
+                }
+            }
+            buf.place_cursor(buf.get_iter_at_offset(rand(buf.get_char_count() + 1)));
+            pump();
+            if (round % 3 === 2) { buf.undo(); pump(); }
+            compare(`suntingan ke-${round + 1}`);
         }
     });
     test('mode fokus dan typewriter aktif bersamaan', () => {

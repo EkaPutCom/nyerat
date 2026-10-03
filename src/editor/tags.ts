@@ -66,7 +66,7 @@ const TAG_DEFS = {
 export type TagName = keyof typeof TAG_DEFS;
 export type Tags = Record<TagName, Gtk.TextTag>;
 
-// Tag yang dihapus lalu dipasang ulang oleh highlighter.ts.
+// Tag yang dipasang oleh highlighter.ts.
 export const SYNTAX_TAGS = (Object.keys(TAG_DEFS) as TagName[]).filter(n => n !== 'dim' && n !== 'hidden' && n !== 'tablehide' && n !== 'mermaidhide');
 
 // Membuat semua tag di buffer. Hasil: { namaTag: Gtk.TextTag }.

@@ -26,7 +26,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import type GdkPixbuf from 'gi://GdkPixbuf';
 
-import { createTags, paintTags, setTagMargins } from './tags.js';
+import { createTags, paintTags, setTagMargins, SYNTAX_TAGS } from './tags.js';
+import { LineTagger } from './tagsync.js';
 import { highlight } from './highlighter.js';
 import { concealMarkers, dimOutsideParagraph } from './decorations.js';
 import { continueBlock, indentListItem, isInCodeBlock } from './lists.js';
@@ -64,6 +65,7 @@ export class MarkdownView {
     headings: Heading[] = [];
     lines: string[] = [];
     tables: TableRange[] = [];
+    starts: number[] = [];
     modes: Record<Mode, boolean> = { source: false, focus: false, typewriter: false };
 
     onHighlighted: (result: HighlightResult) => void = () => {};
@@ -79,6 +81,13 @@ export class MarkdownView {
     private cursorQueued = 0;
     private destroyed = false;
     private cursorForce = false;
+    private syntaxTagger: LineTagger;
+    private hiddenTagger: LineTagger;
+    // Rentang teks yang disunting sejak penyorotan terakhir. Memakai mark supaya ikut
+    // bergeser jika ada suntingan lain sebelum penyorotan berjalan.
+    private dirty = false;
+    private dirtyStart: Gtk.TextMark;
+    private dirtyEnd: Gtk.TextMark;
 
     constructor() {
         this.buffer = new GtkSource.Buffer();
@@ -91,6 +100,10 @@ export class MarkdownView {
         });
         this.view.get_style_context().add_class('editor');
         this.tags = createTags(this.buffer);
+        this.syntaxTagger = new LineTagger(this.buffer, SYNTAX_TAGS.map(n => this.tags[n]));
+        this.hiddenTagger = new LineTagger(this.buffer, [this.tags.hidden]);
+        this.dirtyStart = this.buffer.create_mark(null, this.buffer.get_start_iter(), true);
+        this.dirtyEnd = this.buffer.create_mark(null, this.buffer.get_start_iter(), false);
 
         // Tag warna kode dibuat belakangan, jadi prioritasnya otomatis di atas 'codeblock'.
         // 'dim' (mode fokus) dan 'hidden' harus tetap paling atas.
@@ -138,6 +151,12 @@ export class MarkdownView {
         this.widget = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.EXTERNAL, hexpand: true, vexpand: true });
         this.widget.add(this.view);
 
+        this.buffer.connect_after('insert-text', (_b, end, text) => {
+            const start = end.copy();
+            start.backward_chars(cpLength(text));
+            this.markDirty(start, end);
+        });
+        this.buffer.connect_after('delete-range', (_b, start) => this.markDirty(start, start));
         this.buffer.connect('changed', () => this.queueHighlight());
         this.buffer.connect('mark-set', (_b, _i, mark) => {
             if (mark === this.buffer.get_insert() || mark === this.buffer.get_selection_bound()) this.queueCursorUpdate();
@@ -267,12 +286,31 @@ export class MarkdownView {
         });
     }
 
+    // Catat rentang yang disunting; dipakai highlight() untuk menentukan baris mana yang
+    // tag-nya tidak bisa dipercaya lagi.
+    private markDirty(start: Gtk.TextIter, end: Gtk.TextIter): void {
+        const buf = this.buffer;
+        if (!this.dirty || start.compare(buf.get_iter_at_mark(this.dirtyStart)) < 0) buf.move_mark(this.dirtyStart, start);
+        if (!this.dirty || end.compare(buf.get_iter_at_mark(this.dirtyEnd)) > 0) buf.move_mark(this.dirtyEnd, end);
+        this.dirty = true;
+    }
+
     highlight(): void {
-        const result = highlight(this.buffer, this.tags);
+        if (this.dirty) {
+            const buf = this.buffer;
+            const first = buf.get_iter_at_mark(this.dirtyStart).get_line();
+            const last = buf.get_iter_at_mark(this.dirtyEnd).get_line();
+            this.dirty = false;
+            const count = buf.get_line_count();
+            this.syntaxTagger.edited(first, last, count);
+            this.hiddenTagger.edited(first, last, count);
+        }
+        const result = highlight(this.buffer, this.tags, this.syntaxTagger);
         this.markers = result.markers;
         this.lines = result.lines;
         this.headings = result.headings;
         this.tables = result.tables;
+        this.starts = result.starts;
         this.tableLayer.update(result.tables, result.lines);
         this.code.apply(result.codeBlocks);
         this.mermaid.update(result.codeBlocks);
@@ -295,6 +333,12 @@ export class MarkdownView {
     updateCursor(force = false): void {
         const buf = this.buffer;
         const ins = buf.get_iter_at_mark(buf.get_insert());
+        // Teks sudah berubah tetapi belum disorot: markers dan nomor baris masih milik teks
+        // lama. highlight() yang sudah antre akan memanggil updateCursor(true).
+        if (this.dirty) {
+            this.onCursorMoved(ins.get_line(), ins.get_line_offset());
+            return;
+        }
         const sel = buf.get_iter_at_mark(buf.get_selection_bound());
         const l0 = Math.min(ins.get_line(), sel.get_line());
         const l1 = Math.max(ins.get_line(), sel.get_line());
@@ -303,7 +347,7 @@ export class MarkdownView {
         const key = `${l0}:${l1}`;
         if (force || key !== this.cursorKey) {
             this.cursorKey = key;
-            concealMarkers(buf, this.tags.hidden, this.markers, l0, l1, !this.modes.source);
+            concealMarkers(this.hiddenTagger, this.tags.hidden, this.markers, this.starts, l0, l1, !this.modes.source);
             dimOutsideParagraph(buf, this.tags.dim, this.lines, l0, l1, this.modes.focus);
             this.tableLayer.setCursor(l0, l1);
             this.mermaid.setCursor(l0, l1);

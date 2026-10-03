@@ -21,6 +21,7 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import type { ImageRef } from './highlighter.js';
+import { setTagGroup, type Range } from './tagsync.js';
 
 const MAX_HEIGHT = 480;  // tinggi maksimum gambar, dalam piksel
 const GAP = 12;          // jarak di atas dan bawah gambar
@@ -291,18 +292,19 @@ export class ImageLayer {
     }
 
     private applyGaps(): void {
-        const [start, end] = this.buffer.get_bounds();
-        for (const tag of this.gapTags.values()) this.buffer.remove_tag(tag, start, end);
-        if (!this.enabled) return;
-        for (const block of this.blocks) {
+        const gaps = new Map<Gtk.TextTag, Range[]>();
+        for (const block of this.enabled ? this.blocks : []) {
             if (block.line >= this.buffer.get_line_count()) continue;
             const s = this.buffer.get_iter_at_line(block.line);
             const e = s.copy();
             if (!e.ends_line()) e.forward_to_line_end();
             // Tag paragraf harus menempel di karakter pertama baris.
             if (s.equal(e)) continue;
-            this.buffer.apply_tag(this.gapTag(block.height + 2 * GAP), s, e);
+            const gap = this.gapTag(block.height + 2 * GAP);
+            if (!gaps.has(gap)) gaps.set(gap, []);
+            gaps.get(gap)!.push([s.get_offset(), e.get_offset()]);
         }
+        setTagGroup(this.buffer, this.gapTags.values(), gaps);
     }
 
     // ---------- Posisi widget ----------

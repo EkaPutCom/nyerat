@@ -17,6 +17,7 @@ import Gtk from 'gi://Gtk?version=3.0';
 import GtkSource from 'gi://GtkSource?version=4';
 import Pango from 'gi://Pango';
 import type { CodeBlock } from './highlighter.js';
+import { setTagGroup, type Range } from './tagsync.js';
 
 const CACHE_LIMIT = 300;  // jumlah blok yang disimpan; cache dikosongkan jika lebih
 
@@ -94,16 +95,17 @@ export class CodeHighlighter {
 
     // Warnai semua blok kode. Dipanggil setelah highlighter.ts selesai.
     apply(blocks: CodeBlock[]): void {
-        const [start, end] = this.buffer.get_bounds();
-        for (const tag of this.styleTags.values()) this.buffer.remove_tag(tag, start, end);
+        const wanted = new Map<Gtk.TextTag, Range[]>();
         for (const block of blocks) {
             const language = resolveLanguage(block.lang);
             if (!language || !block.text) continue;
             for (const [a, b, key] of this.segments(language, block.text)) {
-                this.buffer.apply_tag(this.styleTag(key),
-                    this.buffer.get_iter_at_offset(block.start + a), this.buffer.get_iter_at_offset(block.start + b));
+                const tag = this.styleTag(key);
+                if (!wanted.has(tag)) wanted.set(tag, []);
+                wanted.get(tag)!.push([block.start + a, block.start + b]);
             }
         }
+        setTagGroup(this.buffer, this.styleTags.values(), wanted);
     }
 
     private segments(language: GtkSource.Language, code: string): Segment[] {

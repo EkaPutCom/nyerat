@@ -264,6 +264,7 @@ src/
 │   ├── mermaidrender.ts  merender kode Mermaid menjadi pixbuf lewat WebKitGTK tak terlihat
 │   ├── tableedit.ts      Tab/Enter di tabel dan perintah menu Edit Tabel
 │   ├── codehighlight.ts  mewarnai isi blok kode sesuai bahasanya
+│   ├── tagsync.ts        memasang tag dengan selisih (hanya rentang/baris yang berubah)
 │   └── offsets.ts        konversi posisi UTF-16 ↔ code point
 │
 └── ui/                   komponen antarmuka
@@ -359,8 +360,14 @@ Keduanya ditunda dengan `GLib.idle_add(PRIORITY_HIGH_IDLE)`. Beberapa perubahan 
 ### Cara kerja efek "ala Typora"
 
 1. **`highlighter.ts`** membaca dokumen baris per baris. Untuk setiap sintaks, ia memasang tag gaya pada isinya (misalnya `bold` pada "tebal" di `**tebal**`) dan mencatat posisi penandanya (`**`) sebagai **marker**.
-2. Setiap marker menyimpan rentang baris tempat ia "aktif": `[awal, akhir, barisPertama, barisTerakhir]`. Untuk format inline, rentangnya hanya barisnya sendiri. Untuk pembatas ```` ``` ````, rentangnya seluruh blok kode, jadi pembatas muncul selama kursor ada di dalam blok.
+2. Setiap marker menyimpan rentang baris tempat ia "aktif": `[awal, akhir, barisPertama, barisTerakhir, baris]`. Untuk format inline, rentangnya hanya barisnya sendiri. Untuk pembatas ```` ``` ````, rentangnya seluruh blok kode, jadi pembatas muncul selama kursor ada di dalam blok.
 3. **`decorations.ts`** memasang tag `hidden` pada semua marker yang rentang barisnya tidak memuat kursor. Begitu kursor pindah baris, hanya langkah ini yang diulang; penyorotan penuh tidak perlu dijalankan lagi.
+
+**Tag dipasang dengan selisih (`editor/tagsync.ts`).** Menghapus tag di seluruh buffer lalu memasangnya lagi membuat GTK menata ulang seluruh dokumen (tag heading, `hidden`, dan jarak tabel/gambar mengubah ukuran baris), dan itu yang paling mahal di dokumen panjang. Karena itu:
+
+- Tag sintaks dan `hidden` dipasang lewat `LineTagger`, yang mengingat tag terakhir di tiap baris. `MarkdownView` mencatat rentang yang disunting (sinyal `insert-text`/`delete-range`, disimpan sebagai dua `GtkTextMark`), jadi saat menyorot ulang hanya baris yang disunting atau yang tag-nya berbeda yang disentuh. Baris lain cukup dibiarkan: tag ikut bergeser bersama teksnya.
+- Tag yang rentangnya sedikit (`dim`, `tablehide`, `mermaidhide`, jarak tabel/gambar/diagram, warna blok kode) dipasang dengan `setTagRanges()`: rentang yang sudah terpasang dibaca dari buffer, lalu hanya selisihnya yang dihapus atau ditambahkan.
+- Tes "penyorotan bertahap sama dengan penyorotan dari awal" (`tests/gui/robust.ts`) menyunting dokumen contoh secara acak dan memastikan hasilnya sama dengan menyorot dari awal.
 
 `parseInline()` di `markdown/inline.ts` memakai teknik **masking**: setelah suatu bagian dikenali (misalnya kode inline), karakternya diganti `\0` agar tidak dikenali lagi oleh pola berikutnya. Itu sebabnya `` `**bukan tebal**` `` tetap tampil sebagai kode.
 
@@ -518,4 +525,4 @@ Nilai bawaan: sidebar terbuka pada tab Outline, fokus/typewriter mati, ukuran je
 - Merapikan tabel (`Ctrl+Shift+T` dan semua perintah di menu Edit Tabel) membuang sel yang berlebih dibanding baris judul, sesuai aturan GFM
 - Tabel yang kursornya di dalamnya tampil mentah; jika seluruh dokumen hanya berisi satu tabel dan kursor ada di dalamnya, grid baru tampil setelah kursor keluar
 - Garis pemisah tampil sebagai teks `---` pudar di tengah, bukan garis
-- Penyorotan memproses ulang seluruh dokumen setiap kali teks berubah, sehingga dokumen yang sangat panjang (puluhan ribu baris) bisa terasa lambat
+- Penyorotan masih membaca dan mengurai ulang seluruh dokumen setiap kali teks berubah (hanya pemasangan tag yang bertahap), sehingga dokumen yang sangat panjang (puluhan ribu baris) bisa terasa lambat

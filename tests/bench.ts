@@ -80,6 +80,26 @@ function measure(fn: () => void, runs = RUNS): number[] {
     return t.sort((a, b) => a - b);
 }
 
+async function measureAsync(fn: () => Promise<void>, runs = RUNS): Promise<number[]> {
+    await fn();
+    const t: number[] = [];
+    for (let i = 0; i < runs; i++) {
+        System.gc();  // selesaikan GC yang tertunda di luar waktu yang diukur (lihat idle())
+        const s = now();
+        await fn();
+        t.push(now() - s);
+    }
+    return t.sort((a, b) => a - b);
+}
+
+// Tunggu sampai main loop menganggur: semua penyorotan, tata letak, dan gambar ulang yang
+// antre (prioritasnya lebih tinggi dari LOW) sudah selesai. Kendali benar-benar kembali ke
+// GLib, tidak memutar ctx.iteration() dari dalam JS: bila GC GJS sedang berjalan bertahap,
+// callback yang dipanggil dari putaran bersarang seperti itu diblokir dan penyorotan mati diam-diam.
+const idle = (): Promise<void> => new Promise(resolve => {
+    GLib.idle_add(GLib.PRIORITY_LOW, () => { resolve(); return GLib.SOURCE_REMOVE; });
+});
+
 function report(name: string, t: number[], budget = false): void {
     const med = t[Math.floor(t.length / 2)];
     const over = budget && BUDGET !== null && med > BUDGET;
@@ -114,31 +134,29 @@ function runModelBench(): void {
 
 // Jendela tidak di-destroy: proses anak langsung keluar, dan destroy memicu peringatan GC dari GJS.
 const windows: MainWindow[] = [];
-function runGuiBench(app: Gtk.Application, n: number): void {
+async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
     const w = new MainWindow(app, { ...DEFAULTS, welcomed: true, dark: false }, null);
     windows.push(w);
     const ed = w.editor;
     const buf = ed.buffer;
-    const ctx = GLib.MainContext.default();
-    const pump = () => { for (let i = 0; i < 500 && ctx.pending(); i++) ctx.iteration(false); };
-    pump();
+    await idle();
 
     const text = doc(n);
     group = `Editor GUI ${n} blok`;
     print(`\nEditor GUI (${n} blok, ${(text.length / 1024).toFixed(0)} KB)`);
-    report('setText + sorot + layout', measure(() => { ed.setText(text); pump(); }), true);
+    report('setText + sorot + layout', await measureAsync(async () => { ed.setText(text); await idle(); }), true);
     const sorot = measure(() => ed.highlight());
     report('highlight() ulang', sorot, true);
     // Mengetik di tengah dokumen: tiap karakter memicu penyorotan ulang.
     buf.place_cursor(buf.get_iter_at_line(Math.floor(buf.get_line_count() / 2)));
-    const ketik = measure(() => {
-        for (let i = 0; i < 20; i++) { buf.insert_at_cursor('x', -1); pump(); }
+    const ketik = await measureAsync(async () => {
+        for (let i = 0; i < 20; i++) { buf.insert_at_cursor('x', -1); await idle(); }
     });
     report('ketik 20 karakter', ketik, true);
-    report('pindah kursor 20 baris', measure(() => {
+    report('pindah kursor 20 baris', await measureAsync(async () => {
         for (let i = 0; i < 20; i++) {
             buf.place_cursor(buf.get_iter_at_line(Math.min(i * 7, buf.get_line_count() - 1)));
-            pump();
+            await idle();
         }
     }));
     // Tiap ketukan memicu minimal satu penyorotan; lebih cepat dari itu berarti penyorotan mati.
@@ -157,17 +175,16 @@ function runGuiInProcess(): void {
     const app = new Gtk.Application({ application_id: 'id.eka.Nyerat.Bench', flags: Gio.ApplicationFlags.NON_UNIQUE });
     app.connect('activate', () => {
         app.hold();
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        void (async () => {
             try {
-                for (const n of GUI_SIZES) runGuiBench(app, n);
+                for (const n of GUI_SIZES) await runGuiBench(app, n);
             } catch (e) {
                 overBudget = true;
                 print(`${RED}Bench GUI berhenti: ${errorMessage(e)}${RESET}\n${e instanceof Error ? e.stack : ''}`);
             }
             app.release();
             app.quit();
-            return GLib.SOURCE_REMOVE;
-        });
+        })();
     });
     app.run([System.programInvocationName]);
 }

@@ -2,25 +2,29 @@
 // lalu memasang tag gaya. Juga mengumpulkan:
 //
 //   markers   rentang sintaks yang boleh disembunyikan, beserta baris tempat
-//             sintaks itu "aktif": [awal, akhir, barisPertama, barisTerakhir]
-//             (offset dalam code point). Untuk blok kode, rentang barisnya
-//             adalah seluruh blok, jadi pembatas ``` muncul selama kursor ada
-//             di dalam blok.
+//             sintaks itu "aktif": [awal, akhir, barisPertama, barisTerakhir, baris]
+//             (offset dalam code point; baris = tempat marker itu berada). Untuk
+//             blok kode, rentang barisnya adalah seluruh blok, jadi pembatas ```
+//             muncul selama kursor ada di dalam blok.
 //   headings  daftar heading untuk outline: { level, text, line }
 //   lines     isi dokumen per baris
 //   images    gambar yang perlu ditampilkan: { line, url, alt }
 //   codeBlocks isi blok kode beserta bahasanya, untuk diwarnai (lihat codehighlight.ts)
 //   tables    rentang baris setiap tabel, untuk dirender sebagai grid (lihat tablelayer.ts)
+//   starts    offset (code point) awal setiap baris
+//
+// Tag dipasang lewat LineTagger (tagsync.ts), jadi hanya baris yang berubah yang disentuh.
 
 import type Gtk from 'gi://Gtk?version=3.0';
 import { RE, isTableSeparator } from '../markdown/syntax.js';
 import { findTables, type TableRange } from '../markdown/table.js';
 import { parseInline } from '../markdown/inline.js';
 import { makeCpMap } from './offsets.js';
-import { SYNTAX_TAGS, type TagName, type Tags } from './tags.js';
+import { type TagName, type Tags } from './tags.js';
+import type { LineSpan, LineTagger } from './tagsync.js';
 
-// Sintaks yang boleh disembunyikan: [awal, akhir, barisPertama, barisTerakhir].
-export type Marker = [start: number, end: number, firstLine: number, lastLine: number];
+// Sintaks yang boleh disembunyikan: [awal, akhir, barisPertama, barisTerakhir, baris].
+export type Marker = [start: number, end: number, firstLine: number, lastLine: number, line: number];
 
 export interface Heading {
     level: number;
@@ -51,21 +55,26 @@ export interface HighlightResult {
     images: ImageRef[];
     codeBlocks: CodeBlock[];
     tables: TableRange[];
+    starts: number[];
 }
 
-export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
+export function highlight(buffer: Gtk.TextBuffer, tags: Tags, tagger: LineTagger): HighlightResult {
     const [start, end] = buffer.get_bounds();
     const text = buffer.get_text(start, end, true);
-    for (const name of SYNTAX_TAGS) buffer.remove_tag(tags[name], start, end);
 
     // Semua posisi di bawah ini dalam UTF-16 (string JS); dikonversi saat menyentuh buffer.
     const toCp = makeCpMap(text);
-    const iter = (off: number) => buffer.get_iter_at_offset(toCp(off));
-    const apply = (name: TagName, a: number, b: number) => { if (b > a) buffer.apply_tag(tags[name], iter(a), iter(b)); };
-    const markers: Marker[] = [];
-    const hide = (a: number, b: number, l0: number, l1: number) => { if (b > a) markers.push([toCp(a), toCp(b), l0, l1]); };
-    const headings: Heading[] = [];
     const lines = text.split('\n');
+    const spans: LineSpan[][] = lines.map(() => []);
+    const starts: number[] = [];
+    // Setiap tag dipasang di baris yang sedang diproses (`row`, mulai offset `rowStart`).
+    let row = 0, rowStart = 0;
+    const apply = (name: TagName, a: number, b: number) => {
+        if (b > a) spans[row].push([tags[name], toCp(a) - rowStart, toCp(b) - rowStart]);
+    };
+    const markers: Marker[] = [];
+    const hide = (a: number, b: number, l0: number, l1: number, line = l0) => { if (b > a) markers.push([toCp(a), toCp(b), l0, l1, line]); };
+    const headings: Heading[] = [];
 
     const images: ImageRef[] = [];
 
@@ -101,6 +110,9 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
     for (let i = 0; i < lines.length; off += lines[i].length + 1, i++) {
         const line = lines[i];
         const lineEnd = off + line.length;
+        row = i;
+        rowStart = toCp(off);
+        starts.push(rowStart);
         const nl = i < lines.length - 1 ? 1 : 0;
         let m: RegExpExecArray | null;
 
@@ -111,7 +123,7 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
             if (m && m[2][0] === fence.ch && m[2].length >= fence.len && !m[3].trim()) {
                 apply('fence', off, lineEnd);
                 hide(fence.a, fence.b, fence.line, i);
-                hide(off, lineEnd + nl, fence.line, i);
+                hide(off, lineEnd + nl, fence.line, i, i);
                 closeBlock(fence, i);
                 fence = null;
             }
@@ -174,5 +186,6 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
         closeBlock(fence, lines.length);  // blok yang belum ditutup berlanjut sampai akhir dokumen
     }
 
-    return { text, lines, markers, headings, images, codeBlocks, tables };
+    tagger.apply(spans, starts);
+    return { text, lines, markers, headings, images, codeBlocks, tables, starts };
 }

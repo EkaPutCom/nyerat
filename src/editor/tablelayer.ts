@@ -19,6 +19,7 @@ import { TABLE_CELL_PAD_X, TABLE_CELL_PAD_Y } from '../config.js';
 import { parseTable, type TableRange } from '../markdown/table.js';
 import { cellMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from '../ui/theme.js';
+import { setTagGroup, setTagRanges, type Range } from './tagsync.js';
 
 const BORDER = 1;       // tebal garis sel (sama dengan CSS di ui/theme.ts)
 const GAP = 12;         // jarak di atas dan bawah grid
@@ -162,24 +163,26 @@ export class TableLayer {
 
     // Samakan teks, ruang kosong, dan widget dengan keadaan sekarang.
     private sync(): void {
-        const [start, end] = this.buffer.get_bounds();
-        this.buffer.remove_tag(this.hideTag, start, end);
-        for (const tag of this.gapTags.values()) this.buffer.remove_tag(tag, start, end);
-
+        const hide: Range[] = [];
+        const gaps = new Map<Gtk.TextTag, Range[]>();
         for (const block of this.blocks) {
             block.collapsed = this.isCollapsed(block);
             if (block.collapsed && !block.widget) this.build(block);
             block.widget?.set_visible(block.collapsed);
             if (!block.collapsed) continue;
 
-            const first = this.buffer.get_iter_at_line(block.start);
-            const afterLast = this.buffer.get_iter_at_line(block.end);
-            afterLast.forward_to_line_end();
-            this.buffer.apply_tag(this.hideTag, first, afterLast);
-
+            const first = this.buffer.get_iter_at_line(block.start).get_offset();
             const lastLine = this.buffer.get_iter_at_line(block.end);
-            this.buffer.apply_tag(this.gapTag(block.height + 2 * GAP), lastLine, afterLast);
+            const afterLast = lastLine.copy();
+            afterLast.forward_to_line_end();
+            hide.push([first, afterLast.get_offset()]);
+
+            const gap = this.gapTag(block.height + 2 * GAP);
+            if (!gaps.has(gap)) gaps.set(gap, []);
+            gaps.get(gap)!.push([lastLine.get_offset(), afterLast.get_offset()]);
         }
+        setTagRanges(this.buffer, this.hideTag, hide);
+        setTagGroup(this.buffer, this.gapTags.values(), gaps);
         this.signature = this.stateSignature();
         this.queueRelayout();
     }

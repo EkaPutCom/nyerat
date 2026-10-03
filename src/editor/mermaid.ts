@@ -23,6 +23,7 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import type { CodeBlock } from './highlighter.js';
 import { mermaidRenderer, type DiagramTheme } from './mermaidrender.js';
 import { dbmlToMermaid } from '../markdown/dbml.js';
+import { setTagGroup, setTagRanges, type Range } from './tagsync.js';
 
 const GAP = 12;             // jarak di atas dan bawah diagram
 const NOTE_HEIGHT = 24;     // tinggi pesan "Merender…" / galat
@@ -223,10 +224,8 @@ export class MermaidLayer {
 
     // Samakan teks, ruang kosong, dan widget dengan keadaan sekarang.
     private sync(): void {
-        const [start, end] = this.buffer.get_bounds();
-        this.buffer.remove_tag(this.hideTag, start, end);
-        for (const tag of this.gapTags.values()) this.buffer.remove_tag(tag, start, end);
-
+        const hide: Range[] = [];
+        const gaps = new Map<Gtk.TextTag, Range[]>();
         for (const block of this.blocks) {
             block.collapsed = this.isCollapsed(block);
             block.widget.set_visible(this.enabled);
@@ -234,10 +233,14 @@ export class MermaidLayer {
 
             const afterLast = this.buffer.get_iter_at_line(block.end);
             afterLast.forward_to_line_end();
-            if (block.collapsed)
-                this.buffer.apply_tag(this.hideTag, this.buffer.get_iter_at_line(block.start), afterLast);
-            this.buffer.apply_tag(this.gapTag(block.height + 2 * GAP), this.buffer.get_iter_at_line(block.end), afterLast);
+            const end = afterLast.get_offset();
+            if (block.collapsed) hide.push([this.buffer.get_iter_at_line(block.start).get_offset(), end]);
+            const gap = this.gapTag(block.height + 2 * GAP);
+            if (!gaps.has(gap)) gaps.set(gap, []);
+            gaps.get(gap)!.push([this.buffer.get_iter_at_line(block.end).get_offset(), end]);
         }
+        setTagRanges(this.buffer, this.hideTag, hide);
+        setTagGroup(this.buffer, this.gapTags.values(), gaps);
         this.signature = this.stateSignature();
         this.queueRelayout();
     }
