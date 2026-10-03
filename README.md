@@ -4,6 +4,8 @@ Editor Markdown ala [Typora](https://typora.io) untuk desktop Linux, dibuat deng
 
 Tidak ada panel pratinjau terpisah: teks langsung tampil terformat. Sintaks Markdown seperti `#`, `**`, `` ` `` dan `[](url)` disembunyikan, lalu muncul lagi saat kursor berada di baris tersebut.
 
+Landing page-nya ada di [`docs/`](docs/index.html) (HTML statis; aktifkan GitHub Pages dari folder `/docs` pada branch `main` untuk menayangkannya). Tangkapan layar dibuat oleh [`scripts/capture.ts`](scripts/capture.ts).
+
 ## Kebutuhan
 
 - Linux dengan desktop X11 atau Wayland
@@ -52,6 +54,7 @@ gjs -m dist/nyerat.js ~/catatan
 | `npm run typecheck` | Hanya periksa tipe |
 | `npm start` | Build, lalu jalankan aplikasi |
 | `npm test` | Build, lalu jalankan semua tes |
+| `npm run docs` | Potret aplikasi sungguhan (jendela akan terbuka sebentar), lalu perbarui PNG dan GIF di `docs/assets/` untuk landing page |
 
 ### Mode pengembangan
 

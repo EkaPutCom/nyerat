@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nyerat — Editor Markdown ala Typora untuk Linux</title>
+<meta name="description" content="Nyerat adalah editor Markdown ala Typora untuk desktop Linux. Tanpa panel pratinjau: tulisan langsung tampil terformat. Dibuat dengan GTK 3, GJS, dan TypeScript.">
+<meta property="og:title" content="Nyerat — Editor Markdown ala Typora untuk Linux">
+<meta property="og:description" content="Tulis Markdown, lihat hasilnya seketika di tempat yang sama. Kanban, tabel, diagram Mermaid dan DBML, mode gelap.">
+<meta property="og:image" content="assets/editor-terang.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #fbfbfa;
+  --bg-alt: #f2f3f1;
+  --text: #1f2328;
+  --muted: #5d6670;
+  --line: #dfe2de;
+  --accent: #2f6fdb;
+  --accent-text: #fff;
+  --card: #fff;
+  --code-bg: #eceeea;
+  --shadow: 0 18px 50px -18px rgba(20, 30, 50, .35), 0 2px 6px rgba(20, 30, 50, .08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16181b; --bg-alt: #1c1f23; --text: #e8eaec; --muted: #9aa3ad; --line: #2c3036;
+    --accent: #6ea2ff; --accent-text: #0c1424; --card: #1f2227; --code-bg: #262a30;
+    --shadow: 0 18px 50px -18px rgba(0, 0, 0, .8), 0 2px 6px rgba(0, 0, 0, .4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #16181b; --bg-alt: #1c1f23; --text: #e8eaec; --muted: #9aa3ad; --line: #2c3036;
+  --accent: #6ea2ff; --accent-text: #0c1424; --card: #1f2227; --code-bg: #262a30;
+  --shadow: 0 18px 50px -18px rgba(0, 0, 0, .8), 0 2px 6px rgba(0, 0, 0, .4);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 17px/1.65 system-ui, -apple-system, "Segoe UI", "Noto Sans", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); }
+img { max-width: 100%; height: auto; display: block; }
+code, kbd, pre { font-family: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", Menlo, monospace; }
+code { background: var(--code-bg); padding: .1em .38em; border-radius: 5px; font-size: .88em; }
+kbd {
+  background: var(--card); border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 6px; padding: .05em .45em; font-size: .85em; white-space: nowrap;
+}
+.wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+.narrow { width: min(760px, 100% - 32px); margin-inline: auto; }
+
+/* Navigasi */
+header.nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+header.nav .wrap { display: flex; align-items: center; gap: 22px; height: 60px; }
+.brand { font-weight: 700; font-size: 1.2rem; letter-spacing: -.01em; color: var(--text); text-decoration: none; display: flex; align-items: center; gap: 10px; }
+.brand svg { width: 26px; height: 26px; }
+.nav nav { margin-left: auto; display: flex; gap: 22px; align-items: center; }
+.nav nav a { color: var(--muted); text-decoration: none; font-size: .95rem; }
+.nav nav a:hover { color: var(--text); }
+.btn {
+  display: inline-flex; align-items: center; gap: 9px; padding: .7em 1.25em; border-radius: 10px;
+  background: var(--accent); color: var(--accent-text) !important; font-weight: 600; text-decoration: none;
+  border: 1px solid transparent; transition: transform .12s, filter .12s;
+}
+.btn:hover { transform: translateY(-1px); filter: brightness(1.07); }
+.btn { max-width: 100%; overflow-wrap: anywhere; }
+@media (max-width: 420px) { .btn { padding: .65em 1em; font-size: .95rem; } }
+.btn.ghost { background: transparent; color: var(--text) !important; border-color: var(--line); }
+.btn.small { padding: .4em .9em; font-size: .9rem; }
+.btn svg { width: 20px; height: 20px; fill: currentColor; }
+
+/* Hero */
+.hero { padding: 72px 0 40px; text-align: center; }
+.pill { display: inline-block; font-size: .85rem; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .2em .9em; margin-bottom: 22px; background: var(--card); }
+h1 { font-size: clamp(2.3rem, 6vw, 4rem); line-height: 1.08; letter-spacing: -.03em; margin: 0 0 20px; }
+h1 em { font-style: normal; color: var(--accent); }
+.lead { font-size: clamp(1.05rem, 2.2vw, 1.3rem); color: var(--muted); max-width: 680px; margin: 0 auto 32px; }
+.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hero .shot { margin-top: 56px; }
+
+.shot img { border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--line); background: var(--card); }
+.shot figcaption { color: var(--muted); font-size: .92rem; margin-top: 12px; text-align: center; }
+figure { margin: 0; }
+
+/* Seksi */
+section { padding: 84px 0; }
+section.alt { background: var(--bg-alt); border-block: 1px solid var(--line); }
+.eyebrow { color: var(--accent); font-weight: 700; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 10px; }
+h2 { font-size: clamp(1.7rem, 4vw, 2.5rem); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 14px; }
+h3 { font-size: 1.15rem; margin: 0 0 6px; }
+.sub { color: var(--muted); max-width: 640px; margin: 0 0 40px; }
+.center { text-align: center; }
+.center .sub { margin-inline: auto; }
+
+/* Grid fitur */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; }
+.card p { margin: 0; color: var(--muted); font-size: .97rem; }
+.ico { width: 40px; height: 40px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); display: grid; place-items: center; font-size: 1.25rem; margin-bottom: 14px; }
+
+/* Baris fitur: teks + gambar */
+.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 56px; align-items: center; }
+.row.flip { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+.row.flip .text { order: 2; }
+.row ul { padding-left: 1.2em; color: var(--muted); }
+.row li { margin: .3em 0; }
+.row + .row { margin-top: 110px; }
+@media (max-width: 860px) {
+  .row, .row.flip { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .row.flip .text { order: 0; }
+  .row + .row { margin-top: 72px; }
+  section { padding: 60px 0; }
+  .nav nav a.hide-sm { display: none; }
+}
+
+/* Galeri tema */
+.duo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; }
+@media (max-width: 760px) { .duo { grid-template-columns: minmax(0, 1fr); } }
+
+/* Pasang */
+pre { background: #14161a; color: #e6e9ee; border-radius: 12px; padding: 18px 20px; overflow-x: auto; font-size: .92rem; line-height: 1.6; margin: 14px 0; }
+pre .c { color: #7d8794; }
+.steps { counter-reset: s; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+.step { position: relative; padding-left: 52px; }
+.step::before {
+  counter-increment: s; content: counter(s); position: absolute; left: 0; top: 0;
+  width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: var(--accent-text);
+  display: grid; place-items: center; font-weight: 700;
+}
+.step h3 { margin-top: 3px; }
+.note { color: var(--muted); font-size: .93rem; }
+
+/* Tabel shortcut */
+table { border-collapse: collapse; width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); font-size: .95rem; }
+tr:last-child td { border-bottom: 0; }
+th { background: var(--bg-alt); }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 760px) { .cols { grid-template-columns: minmax(0, 1fr); } th, td { padding: 9px 11px; } }
+
+/* CTA akhir & footer */
+.final { text-align: center; padding: 96px 0; }
+.final .sub { margin-inline: auto; }
+.final h2 { font-size: clamp(1.9rem, 4.5vw, 2.9rem); }
+footer { border-top: 1px solid var(--line); padding: 30px 0; color: var(--muted); font-size: .92rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between; }
+footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+      Nyerat
+    </a>
+    <nav>
+      <a class="hide-sm" href="#fitur">Fitur</a>
+      <a class="hide-sm" href="#demo">Demo</a>
+      <a class="hide-sm" href="#pasang">Pasang</a>
+      <a class="btn small" href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ========== HERO ========== -->
+<div class="hero">
+  <div class="wrap">
+    <span class="pill">Sumber terbuka · Lisensi MIT · Untuk desktop Linux</span>
+    <h1>Menulis Markdown,<br><em>tanpa pratinjau terpisah.</em></h1>
+    <p class="lead">Nyerat adalah editor Markdown ala Typora untuk Linux. Sintaks seperti <code>#</code>, <code>**</code>, dan <code>[](url)</code> menghilang saat Anda berpindah baris, jadi yang terlihat adalah tulisannya, bukan tanda bacanya.</p>
+    <figure class="shot">
+      <img src="assets/editor-terang.png" width="1332" height="867" alt="Jendela Nyerat berisi catatan rapat dengan heading, teks tebal, daftar tugas, blok kode, dan sidebar outline">
+    </figure>
+  </div>
+</div>
+
+<!-- ========== FITUR RINGKAS ========== -->
+<section id="fitur">
+  <div class="wrap">
+    <div class="center">
+      <p class="eyebrow">Fitur</p>
+      <h2>Editor yang tidak mengganggu</h2>
+      <p class="sub">Semua yang dibutuhkan untuk menulis catatan, dokumentasi, dan rencana kerja, dalam satu jendela GTK yang ringan.</p>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="ico">✎</div><h3>Penulisan ala Typora</h3><p>Heading, tebal, miring, coret, stabilo, kode inline, tautan, dan gambar langsung terformat. Sintaksnya muncul lagi saat kursor ada di baris itu.</p></div>
+      <div class="card"><div class="ico">▦</div><h3>Papan kanban</h3><p>File Markdown dengan <code>kanban: true</code> dibuka sebagai papan ala Trello. Setiap perubahan ditulis kembali sebagai teks Markdown biasa.</p></div>
+      <div class="card"><div class="ico">⊞</div><h3>Tabel sebagai grid</h3><p>Tabel digambar dengan garis sel dan rata kolom. <kbd>Tab</kbd> pindah antar sel, dan menu Edit Tabel menambah atau menghapus baris dan kolom.</p></div>
+      <div class="card"><div class="ico">◇</div><h3>Diagram Mermaid dan DBML</h3><p>Flowchart, sequence, class, ER, gantt, dan skema dbdiagram.io dirender langsung di dokumen, ikut berubah selagi Anda mengetik.</p></div>
+      <div class="card"><div class="ico">{ }</div><h3>Blok kode berwarna</h3><p>Ratusan bahasa diwarnai lewat GtkSourceView, dengan skema warna yang mengikuti mode terang atau gelap.</p></div>
+      <div class="card"><div class="ico">◐</div><h3>Mode gelap</h3><p>Otomatis mengikuti tema sistem saat pertama dibuka, dan bisa diganti kapan saja dari menu.</p></div>
+      <div class="card"><div class="ico">▤</div><h3>Sidebar berkas dan outline</h3><p>Buka sebuah folder dan telusuri file Markdown-nya, atau lompat antar heading lewat outline dokumen.</p></div>
+      <div class="card"><div class="ico">◎</div><h3>Mode fokus dan typewriter</h3><p>Redupkan semua paragraf selain yang sedang disunting, atau jaga baris aktif tetap di tengah layar.</p></div>
+      <div class="card"><div class="ico">⇪</div><h3>Ekspor HTML</h3><p>Simpan dokumen sebagai satu file HTML mandiri, CSS-nya sudah disertakan. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== DEMO GIF ========== -->
+<section class="alt" id="demo">
+  <div class="wrap">
+    <div class="row">
+      <div class="text">
+        <p class="eyebrow">Tulis</p>
+        <h2>Ketik Markdown, langsung jadi.</h2>
+        <p class="sub" style="margin-bottom:18px">Tidak ada panel di sebelah kanan dan tidak perlu menekan tombol pratinjau. Tulisan Anda sudah berbentuk akhirnya sejak huruf pertama.</p>
+        <ul>
+          <li>Enter melanjutkan daftar, daftar bernomor, dan kutipan</li>
+          <li>Daftar tugas bisa dicentang dengan klik</li>
+          <li>Tab dan Shift+Tab mengatur indentasi daftar</li>
+        </ul>
+      </div>
+      <figure class="shot"><img src="assets/mengetik.gif" width="900" height="586" loading="lazy" alt="Animasi mengetik Markdown: heading, teks tebal dan miring, serta daftar tugas langsung tampil terformat"><figcaption>Mengetik <code>**sayur**</code> dan <code>`telur`</code> langsung terformat</figcaption></figure>
+    </div>
+
+    <div class="row flip">
+      <div class="text">
+        <p class="eyebrow">Fokus ke isi</p>
+        <h2>Sintaks muncul hanya saat dibutuhkan.</h2>
+        <p class="sub" style="margin-bottom:0">Pindahkan kursor ke baris mana pun, dan tanda <code>**</code>, <code>==</code>, atau <code>[]()</code> muncul untuk disunting. Pindah lagi, dan baris itu kembali bersih.</p>
+      </div>
+      <figure class="shot"><img src="assets/sintaks.gif" width="900" height="586" loading="lazy" alt="Animasi kursor berpindah antar baris; sintaks Markdown muncul di baris aktif dan tersembunyi di baris lain"><figcaption>Sintaks hanya terlihat di baris tempat kursor berada</figcaption></figure>
+    </div>
+
+    <div class="row">
+      <div class="text">
+        <p class="eyebrow">Diagram</p>
+        <h2>Diagram yang ikut berubah selagi Anda mengetik.</h2>
+        <p class="sub" style="margin-bottom:18px">Blok <code>```mermaid</code> dan <code>```dbml</code> digambar sebagai diagram. Masuk ke blok untuk menyunting kodenya, dan pratinjau di bawahnya diperbarui seketika.</p>
+        <ul>
+          <li>Flowchart, sequence, class, state, ER, gantt, pie, dan lainnya</li>
+          <li>DBML (dbdiagram.io) digambar sebagai diagram ER</li>
+          <li>Dirender lokal, tidak perlu internet</li>
+          <li>Galat sintaks muncul di bawah blok, lengkap dengan nomor barisnya</li>
+        </ul>
+      </div>
+      <figure class="shot"><img src="assets/diagram.gif" width="900" height="586" loading="lazy" alt="Animasi diagram Mermaid yang bertambah kotaknya setiap baris kode baru diketik"><figcaption>Menambah baris kode, diagram ikut tumbuh</figcaption></figure>
+    </div>
+
+    <div class="row flip">
+      <div class="text">
+        <p class="eyebrow">Kanban</p>
+        <h2>Papan kerja yang tetap berupa teks.</h2>
+        <p class="sub" style="margin-bottom:18px">Heading <code>##</code> menjadi daftar dan item <code>- [ ]</code> menjadi kartu. Papan disimpan sebagai file Markdown biasa yang bisa dibaca, di-diff, dan di-commit ke Git.</p>
+        <ul>
+          <li>Seret kartu antar daftar, atau pindahkan lewat menu klik kanan</li>
+          <li><code>#tag</code> menjadi label berwarna, <code>@{2026-10-20}</code> menjadi tanggal tenggat</li>
+          <li>Undo dan redo tetap berfungsi untuk perubahan di papan</li>
+        </ul>
+      </div>
+      <figure class="shot"><img src="assets/kanban.gif" width="900" height="586" loading="lazy" alt="Animasi kartu kanban berpindah antar daftar Rencana, Dikerjakan, Review, dan Selesai"><figcaption>Kartu berpindah dari Rencana ke Dikerjakan hingga Review</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ========== GALERI ========== -->
+<section id="galeri">
+  <div class="wrap">
+    <div class="center">
+      <p class="eyebrow">Galeri</p>
+      <h2>Terang maupun gelap</h2>
+      <p class="sub">Semua tangkapan layar di halaman ini diambil dari aplikasi Nyerat yang berjalan sungguhan.</p>
+    </div>
+    <div class="duo">
+      <figure class="shot"><img src="assets/editor-terang.png" width="1332" height="867" loading="lazy" alt="Editor Nyerat dalam mode terang"><figcaption>Editor, mode terang</figcaption></figure>
+      <figure class="shot"><img src="assets/editor-gelap.png" width="1332" height="867" loading="lazy" alt="Editor Nyerat dalam mode gelap"><figcaption>Editor, mode gelap</figcaption></figure>
+      <figure class="shot"><img src="assets/tabel.png" width="1332" height="867" loading="lazy" alt="Tabel anggaran proyek dirender sebagai grid dengan rata kolom kiri, tengah, dan kanan"><figcaption>Tabel sebagai grid, dengan rata kolom</figcaption></figure>
+      <figure class="shot"><img src="assets/kode.png" width="1332" height="867" loading="lazy" alt="Blok kode Python, Rust, dan Bash dengan pewarnaan sintaks"><figcaption>Blok kode berwarna sesuai bahasa</figcaption></figure>
+      <figure class="shot"><img src="assets/diagram.png" width="1332" height="867" loading="lazy" alt="Diagram flowchart dan sequence Mermaid di dalam dokumen"><figcaption>Diagram Mermaid</figcaption></figure>
+      <figure class="shot"><img src="assets/dbml.png" width="1332" height="867" loading="lazy" alt="Skema DBML digambar sebagai diagram ER dengan tabel pengguna dan catatan"><figcaption>Skema DBML menjadi diagram ER</figcaption></figure>
+      <figure class="shot"><img src="assets/kanban.png" width="1332" height="867" loading="lazy" alt="Papan kanban mode terang dengan empat daftar dan kartu berlabel"><figcaption>Papan kanban, mode terang</figcaption></figure>
+      <figure class="shot"><img src="assets/kanban-gelap.png" width="1332" height="867" loading="lazy" alt="Papan kanban dalam mode gelap"><figcaption>Papan kanban, mode gelap</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ========== PASANG ========== -->
+<section class="alt" id="pasang">
+  <div class="narrow">
+    <p class="eyebrow">Pasang</p>
+    <h2>Jalan dalam tiga langkah</h2>
+    <p class="sub">Nyerat dijalankan oleh GJS, bukan Node.js. Node.js hanya dibutuhkan untuk membangun kodenya sekali.</p>
+    <div class="steps">
+      <div class="step">
+        <h3>Pasang kebutuhan sistem</h3>
+        <p class="note">Di Ubuntu atau Debian. WebKitGTK hanya dipakai untuk diagram Mermaid dan DBML; tanpanya aplikasi tetap berjalan.</p>
+<pre><span class="c"># GJS, GTK 3, dan GtkSourceView</span>
+sudo apt install gjs gir1.2-gtk-3.0 gir1.2-gtksource-4
+
+<span class="c"># opsional: untuk diagram</span>
+sudo apt install gir1.2-webkit2-4.1</pre>
+      </div>
+      <div class="step">
+        <h3>Ambil kodenya</h3>
+        <p class="note">Perlu Node.js 20.19+ atau 22.12+ untuk build.</p>
+<pre>git clone https://github.com/EkaPutCom/nyerat.git
+cd nyerat
+npm install</pre>
+      </div>
+      <div class="step">
+        <h3>Build dan jalankan</h3>
+<pre>npm start
+
+<span class="c"># atau buka file/folder tertentu setelah di-build</span>
+gjs -m dist/nyerat.js catatan.md
+gjs -m dist/nyerat.js ~/catatan</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SHORTCUT ========== -->
+<section id="shortcut">
+  <div class="wrap">
+    <div class="center">
+      <p class="eyebrow">Shortcut</p>
+      <h2>Tangan tetap di keyboard</h2>
+      <p class="sub">Daftar lengkap ada di README di GitHub. Ini yang paling sering dipakai.</p>
+    </div>
+    <div class="cols">
+      <table>
+        <tr><th>Shortcut</th><th>Fungsi</th></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd> / <kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Dokumen baru / buka file</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Buka folder</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Simpan</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td>Ekspor HTML</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Cari</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd></td><td>Kanban: papan ↔ teks</td></tr>
+      </table>
+      <table>
+        <tr><th>Shortcut</th><th>Fungsi</th></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td>Tebal</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td><td>Miring</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd></td><td>Coret</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></td><td>Stabilo</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>`</kbd></td><td>Kode inline</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+klik</td><td>Buka tautan</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ========== CTA ========== -->
+<section class="alt final">
+  <div class="narrow">
+    <h2>Coba Nyerat hari ini</h2>
+    <p class="sub" style="margin-bottom:0">Gratis dan terbuka. Kode, dokumentasi, dan laporan masalah ada di <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>.</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Nyerat · dibuat oleh Eka Putra · Lisensi MIT</span>
+    <span>Dibuat dengan GTK 3, GtkSourceView 4, GJS, dan TypeScript.</span>
+  </div>
+</footer>
+
+</body>
+</html>

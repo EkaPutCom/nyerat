@@ -12,5 +12,5 @@
     "noUnusedLocals": true,
     "noImplicitOverride": true
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests", "scripts/capture.ts", "scripts/gifenc.d.ts"]
 }

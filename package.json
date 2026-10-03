@@ -12,7 +12,8 @@
     "watch": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "start": "npm run build && gjs -m dist/nyerat.js",
-    "test": "npm run build && gjs -m dist/run-tests.js"
+    "test": "npm run build && gjs -m dist/run-tests.js",
+    "docs": "npm run build && XDG_CONFIG_HOME=$(mktemp -d) gjs -m dist/capture.js"
   },
   "devDependencies": {
     "@girs/gdk-3.0": "^5.5.0",
@@ -25,6 +26,7 @@
     "@girs/gtksource-4": "^5.5.0",
     "@girs/pango-1.0": "^5.5.0",
     "@girs/webkit2-4.1": "^5.5.0",
+    "gifenc": "^1.0.3",
     "mermaid": "^12.1.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.2"
