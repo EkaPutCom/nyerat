@@ -9,6 +9,7 @@
 //   headings  daftar heading untuk outline: { level, text, line }
 //   lines     isi dokumen per baris
 //   images    gambar yang perlu ditampilkan: { line, url, alt }
+//   codeBlocks isi blok kode beserta bahasanya, untuk diwarnai (lihat codehighlight.ts)
 
 import type Gtk from 'gi://Gtk?version=3.0';
 import { RE, startsTable, isTableSeparator } from '../markdown/syntax.js';
@@ -31,12 +32,19 @@ export interface ImageRef {
     alt: string;
 }
 
+export interface CodeBlock {
+    lang: string;     // teks setelah ``` (misalnya "js"); '' jika tidak ada
+    start: number;    // offset (code point) awal isi blok di buffer
+    text: string;     // isi blok tanpa baris pembatas
+}
+
 export interface HighlightResult {
     text: string;
     lines: string[];
     markers: Marker[];
     headings: Heading[];
     images: ImageRef[];
+    codeBlocks: CodeBlock[];
 }
 
 export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
@@ -70,7 +78,11 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
     };
 
     let off = 0, inTable = false;
-    let fence: { line: number; ch: string; len: number; a: number; b: number } | null = null;
+    let fence: { line: number; ch: string; len: number; a: number; b: number; lang: string } | null = null;
+    const codeBlocks: CodeBlock[] = [];
+    // Blok kode selesai di baris lastLine (eksklusif): catat isinya.
+    const closeBlock = (f: NonNullable<typeof fence>, lastLine: number) =>
+        codeBlocks.push({ lang: f.lang, start: toCp(f.b), text: lines.slice(f.line + 1, lastLine).join('\n') });
     for (let i = 0; i < lines.length; off += lines[i].length + 1, i++) {
         const line = lines[i];
         const lineEnd = off + line.length;
@@ -85,12 +97,13 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
                 apply('fence', off, lineEnd);
                 hide(fence.a, fence.b, fence.line, i);
                 hide(off, lineEnd + nl, fence.line, i);
+                closeBlock(fence, i);
                 fence = null;
             }
             continue;
         }
         if ((m = RE.fence.exec(line)) && !(m[2][0] === '`' && m[3].includes('`'))) {
-            fence = { line: i, ch: m[2][0], len: m[2].length, a: off, b: lineEnd + nl };
+            fence = { line: i, ch: m[2][0], len: m[2].length, a: off, b: lineEnd + nl, lang: m[3].trim().split(/\s+/)[0] ?? '' };
             inTable = false;
             apply('codeblock', off, lineEnd + nl);
             apply('fence', off, lineEnd);
@@ -141,7 +154,10 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags): HighlightResult {
         }
         inline(off + p, rest, i);
     }
-    if (fence) hide(fence.a, fence.b, fence.line, lines.length - 1);
+    if (fence) {
+        hide(fence.a, fence.b, fence.line, lines.length - 1);
+        closeBlock(fence, lines.length);  // blok yang belum ditutup berlanjut sampai akhir dokumen
+    }
 
-    return { text, lines, markers, headings, images };
+    return { text, lines, markers, headings, images, codeBlocks };
 }

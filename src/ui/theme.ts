@@ -9,6 +9,7 @@ export interface Palette {
     bg: string; fg: string; heading: string; faint: string; dim: string;
     accent: string; codeBg: string; codeFg: string; quoteFg: string;
     quoteBg: string; markBg: string; sel: string; sideBg: string; sideFg: string;
+    codeScheme: string;  // skema warna GtkSourceView untuk isi blok kode
 }
 
 export const PALETTES: Record<'light' | 'dark', Palette> = {
@@ -16,11 +17,13 @@ export const PALETTES: Record<'light' | 'dark', Palette> = {
         bg: '#ffffff', fg: '#333333', heading: '#1f2328', faint: '#b4b9bf', dim: '#cdd1d5',
         accent: '#4183c4', codeBg: '#f3f4f4', codeFg: '#c7254e', quoteFg: '#6a737d',
         quoteBg: '#f7f7f9', markBg: '#fff3a3', sel: '#b3d4fc', sideBg: '#f7f7f7', sideFg: '#555555',
+        codeScheme: 'tango',
     },
     dark: {
         bg: '#1f2023', fg: '#d4d4d4', heading: '#f0f0f0', faint: '#5f6368', dim: '#46494e',
         accent: '#6cb6ff', codeBg: '#2b2d31', codeFg: '#f78c6c', quoteFg: '#9aa0a6',
         quoteBg: '#26282c', markBg: '#6b5a12', sel: '#264f78', sideBg: '#18191b', sideFg: '#a0a4a8',
+        codeScheme: 'cobalt',
     },
 };
 

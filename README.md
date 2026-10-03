@@ -56,6 +56,7 @@ gjs -m dist/nyerat.js ~/catatan
 **Penulisan ala Typora**
 - Heading, **tebal**, *miring*, ~~coret~~, ==stabilo==, `kode inline`, tautan, dan gambar langsung tampil terformat
 - Blok kode, kutipan, tabel, dan garis pemisah diberi gaya; baris pembatas ```` ``` ```` disembunyikan di luar blok
+- Isi blok kode diwarnai sesuai bahasanya (```` ```js ````, ```` ```python ````, ```` ```rust ````, dan ratusan bahasa lain dari GtkSourceView), dengan skema warna yang mengikuti mode terang/gelap
 - Daftar tugas `- [ ]` bisa dicentang dengan mengklik kotaknya
 - Tautan dibuka dengan **Ctrl+klik** (path relatif dihitung dari folder file)
 - Gambar `![alt](url)` ditampilkan langsung di bawah barisnya, dari file lokal (path relatif dihitung dari folder dokumen) maupun dari internet. Klik gambar untuk memunculkan sintaksnya
@@ -117,6 +118,7 @@ Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `di
 
 - **Konversi** Markdown → HTML dan pengurai format inline, tanpa GUI
 - **Editor**: membuka jendela sungguhan, lalu memeriksa sintaks yang disembunyikan/ditampilkan, Enter dan Tab di daftar, shortcut format, undo, klik kotak tugas, serta simpan dan buka file
+- **Warna blok kode**: alias nama bahasa, warna kata kunci/string/komentar, blok tanpa bahasa atau bahasa tak dikenal, pewarnaan ulang saat mengetik, emoji sebelum blok, skema terang/gelap, dan mode fokus yang tetap meredupkan blok kode
 - **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan
 - **Dokumen contoh lengkap**: membuka `tests/samples/semua-format.md`, lalu memeriksa tag setiap format, kasus-kasus sulit, dan hasil ekspor HTML-nya
 - **Ketahanan**: kursor disapu ke semua baris, mengetik di tiap baris, dan dokumen dihapus sedikit demi sedikit untuk mencari crash
@@ -179,6 +181,7 @@ src/
 │   ├── lists.ts          Enter dan Tab di daftar dan kutipan
 │   ├── clicks.ts         klik kotak tugas, membaca URL tautan
 │   ├── images.ts         menampilkan gambar di bawah barisnya
+│   ├── codehighlight.ts  mewarnai isi blok kode sesuai bahasanya
 │   └── offsets.ts        konversi posisi UTF-16 ↔ code point
 │
 └── ui/                   komponen antarmuka
@@ -240,6 +243,7 @@ Ada dua siklus utama di `editor/view.ts`:
 Teks berubah ───► queueHighlight() ───► highlight()
                                           ├─ highlighter.ts   pasang tag gaya,
                                           │                   kumpulkan marker + heading
+                                          ├─ codehighlight.ts warnai isi blok kode
                                           ├─ images.ts        tampilkan gambar yang ditemukan
                                           ├─ onHighlighted()  → outline, status bar
                                           └─ updateCursor(true)
@@ -280,6 +284,18 @@ Gambar tidak dimasukkan ke buffer teks. Jika memakai `GtkTextChildAnchor`, setia
 
 Seperti format lain, seluruh `![alt](url)` didaftarkan sebagai marker, jadi sintaksnya tersembunyi kecuali di baris aktif.
 
+### Cara kerja warna blok kode (`editor/codehighlight.ts`)
+
+Nyerat tidak punya pewarna kode sendiri. Pekerjaannya diserahkan ke GtkSourceView, yang sudah punya definisi untuk ratusan bahasa dan beberapa skema warna:
+
+1. `highlighter.ts` mencatat setiap blok kode: bahasanya (teks setelah ```` ``` ````), posisi awal isinya, dan isinya.
+2. Nama bahasa diterjemahkan ke id GtkSourceView lewat `resolveLanguage()`. Alias yang lazim ditangani langsung (`javascript` → `js`, `py` → `python3`, `bash` → `sh`); nama lain dicoba sebagai id, lalu sebagai ekstensi file (`rs` → `rust`, `kt` → `kotlin`).
+3. Isi blok disalin ke `GtkSource.Buffer` tersembunyi (satu per bahasa), lalu `ensure_highlight()` menyorotinya saat itu juga.
+4. Tag hasil sorotan dibaca rentang demi rentang. Warna, tebal, miring, garis bawah, dan coret disalin menjadi tag `syntax:…` di buffer editor. Latar belakang tidak disalin, supaya blok kode tetap memakai latar dari tema aplikasi.
+5. Hasilnya disimpan di cache per (skema, bahasa, isi blok). Mengetik di luar blok kode, atau di blok lain, tidak membuat blok ini disorot ulang.
+
+Skema warnanya `tango` untuk mode terang dan `cobalt` untuk mode gelap (diatur di `codeScheme` pada `ui/theme.ts`). Karena tag warna kode dibuat belakangan, prioritasnya otomatis di atas `codeblock`. Setiap kali tag warna baru dibuat, `dim` (mode fokus) dan `hidden` dinaikkan lagi ke paling atas, supaya keduanya tetap menang atas warna kode.
+
 ### Urutan membaca kode
 
 Untuk mempelajari kodenya, urutan berikut bergerak dari yang paling sederhana:
@@ -288,7 +304,7 @@ Untuk mempelajari kodenya, urutan berikut bergerak dari yang paling sederhana:
 2. `src/editor/tags.ts` → `highlighter.ts` → `decorations.ts`: inti efek Typora
 3. `src/editor/view.ts`: bagaimana semuanya digerakkan oleh sinyal GTK
 4. `src/editor/editing.ts`, `lists.ts`, `clicks.ts`: interaksi pengguna
-5. `src/editor/images.ts`: menempelkan widget di atas teks
+5. `src/editor/images.ts` dan `codehighlight.ts`: gambar dan warna kode
 6. `src/ui/*`: komponen antarmuka
 7. `src/window.ts` dan `src/actions.ts`: bagaimana semuanya disatukan
 8. `tests/run-tests.ts`: contoh pemakaian setiap bagian
@@ -311,7 +327,7 @@ Disimpan di `~/.config/nyerat/settings.json`: mode gelap, sidebar dan tab yang t
 
 - Gambar yang diubah di disk tidak dimuat ulang sampai aplikasi dibuka lagi (ada cache per URI); GIF animasi hanya menampilkan frame pertama
 - Gambar di dalam tabel tidak ditampilkan, dan gambar di dalam daftar atau kutipan tidak ikut menjorok
-- Kode di dalam blok kode belum diwarnai sesuai bahasanya
+- Warna blok kode belum ikut ke hasil Ekspor HTML; di HTML blok kode hanya diberi kelas `language-…`
 - Tabel masih berupa teks monospace, belum jadi grid yang bisa diedit
 - Garis pemisah tampil sebagai teks `---` pudar di tengah, bukan garis
 - Kutipan bersarang (`>>`) tidak ditampilkan lebih menjorok dari kutipan biasa

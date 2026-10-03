@@ -7,6 +7,7 @@
 //   lists.ts        Enter dan Tab
 //   clicks.ts       klik kotak tugas dan Ctrl+klik tautan
 //   images.ts       gambar ditampilkan di bawah barisnya
+//   codehighlight.ts  isi blok kode diwarnai sesuai bahasanya
 //
 // Widget ini tidak tahu apa-apa soal file, menu, atau sidebar. Ia memberi kabar
 // lewat callback yang dipasang oleh jendela (window.ts):
@@ -27,6 +28,7 @@ import { concealMarkers, dimOutsideParagraph } from './decorations.js';
 import { continueBlock, indentListItem, isInCodeBlock } from './lists.js';
 import { toggleTaskAt, linkAt } from './clicks.js';
 import { ImageLayer } from './images.js';
+import { CodeHighlighter } from './codehighlight.js';
 import type { Tags } from './tags.js';
 import type { HighlightResult, Heading, Marker } from './highlighter.js';
 import type { Palette } from '../ui/theme.js';
@@ -45,6 +47,7 @@ export class MarkdownView {
     readonly widget: Gtk.ScrolledWindow;
     readonly tags: Tags;
     readonly images: ImageLayer;
+    readonly code: CodeHighlighter;
 
     markers: Marker[] = [];
     headings: Heading[] = [];
@@ -74,6 +77,15 @@ export class MarkdownView {
         });
         this.view.get_style_context().add_class('editor');
         this.tags = createTags(this.buffer);
+
+        // Tag warna kode dibuat belakangan, jadi prioritasnya otomatis di atas 'codeblock'.
+        // 'dim' (mode fokus) dan 'hidden' harus tetap paling atas.
+        this.code = new CodeHighlighter(this.buffer);
+        this.code.onTagAdded = () => {
+            const top = this.buffer.get_tag_table().get_size() - 1;
+            this.tags.dim.set_priority(top);
+            this.tags.hidden.set_priority(top);
+        };
 
         this.images = new ImageLayer(this.view);
         this.images.getBaseDir = () => this.getBaseDir();
@@ -124,6 +136,8 @@ export class MarkdownView {
 
     setPalette(palette: Palette): void {
         paintTags(this.tags, palette);
+        this.code.setScheme(palette.codeScheme);
+        this.highlight();  // warnai ulang blok kode dengan skema baru
     }
 
     // name: 'source' | 'focus' | 'typewriter'
@@ -184,6 +198,7 @@ export class MarkdownView {
         this.markers = result.markers;
         this.lines = result.lines;
         this.headings = result.headings;
+        this.code.apply(result.codeBlocks);
         this.images.update(result.images);
         this.onHighlighted(result);
         this.updateCursor(true);
