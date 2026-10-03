@@ -6,6 +6,8 @@
 //   gjs -m dist/bench.js --runs=10       jumlah pengulangan tiap ukuran, bawaan 10
 //   gjs -m dist/bench.js --budget=ms     gagal (kode keluar 1) bila median operasi GUI melebihi ms
 //   gjs -m dist/bench.js --sizes=100,400 ukuran dokumen untuk bagian GUI (bawaan: size/4, size/2, size)
+//   gjs -m dist/bench.js --fixture=long  dokumen panjang, 10 baris per blok tanpa grid tabel
+//   gjs -m dist/bench.js --timeout=120 batas waktu tiap proses GUI (detik)
 //   gjs -m dist/bench.js --save=f.json   simpan hasil ke f.json (untuk dibandingkan nanti)
 //   gjs -m dist/bench.js --compare=f.json  tampilkan selisih terhadap hasil tersimpan
 //
@@ -29,9 +31,12 @@ import { parseInline } from '../src/markdown/inline.js';
 import { findTables, parseTable, renderTable } from '../src/markdown/table.js';
 import { parseBoard, serializeBoard } from '../src/markdown/kanban.js';
 
+const FIXTURE = optVal('fixture') ?? 'mixed';
+if (!['mixed', 'long'].includes(FIXTURE)) { printerr('--fixture harus mixed atau long.'); System.exit(1); }
 const SIZE = Number(optVal('size') ?? 100);
 const RUNS = Number(optVal('runs') ?? 10);
 const GUI_SIZES = (optVal('sizes') ?? [...new Set([SIZE / 4, SIZE / 2, SIZE].map(n => Math.max(1, Math.round(n))))].join(',')).split(',').map(Number);
+const TIMEOUT = Number(optVal('timeout') ?? 120);
 const BUDGET = optVal('budget') !== undefined ? Number(optVal('budget')) : null;
 
 function fail(message: string): never {
@@ -39,7 +44,7 @@ function fail(message: string): never {
     System.exit(1);
     throw new Error(message);
 }
-for (const [name, value] of [['size', SIZE], ['runs', RUNS], ...GUI_SIZES.map(n => ['sizes', n])] as [string, number][]) {
+for (const [name, value] of [['size', SIZE], ['runs', RUNS], ['timeout', TIMEOUT], ...GUI_SIZES.map(n => ['sizes', n])] as [string, number][]) {
     if (!Number.isSafeInteger(value) || value <= 0) fail(`--${name} harus bilangan bulat positif.`);
 }
 if (BUDGET !== null && (!Number.isFinite(BUDGET) || BUDGET <= 0)) fail('--budget harus angka positif.');
@@ -50,7 +55,7 @@ let invalid = false;
 
 interface Stats { median: number; p95: number; max: number; samples: number[] }
 interface Saved {
-    versi: number; tanggal: string; size: number; runs: number; sizes: number[]; mode: 'model' | 'gui';
+    versi: number; tanggal: string; size: number; runs: number; sizes: number[]; fixture?: string; mode: 'model' | 'gui';
     lingkungan: { gjs: number; glib: string; gtk: string; host: string; backend: string; commit: string };
     hasil: Record<string, number>; statistik: Record<string, Stats>;
 }
@@ -79,7 +84,7 @@ try {
     if (status === 0) environment.commit = new TextDecoder().decode(stdout!).trim();
 } catch { /* Git bukan syarat menjalankan benchmark. */ }
 // Commit boleh berbeda: tujuan baseline memang membandingkan perubahan kode.
-if (baseline && (baseline.versi !== 2 || baseline.size !== SIZE || baseline.runs !== RUNS || baseline.mode !== (opt('no-gui') ? 'model' : 'gui') ||
+if (baseline && (baseline.versi !== 2 || baseline.size !== SIZE || (baseline.fixture ?? 'mixed') !== FIXTURE || baseline.runs !== RUNS || baseline.mode !== (opt('no-gui') ? 'model' : 'gui') ||
     (JSON.stringify(baseline.sizes) !== JSON.stringify(GUI_SIZES) && !opt('child')) ||
     !baseline.lingkungan || ['gjs', 'glib', 'gtk', 'host', 'backend'].some(k =>
         baseline!.lingkungan[k as keyof Saved['lingkungan']] !== environment[k as keyof typeof environment]))) {
@@ -112,7 +117,9 @@ const KANBAN = (cards: number): string =>
     `---\nkanban: true\n---\n\n` + ['Rencana', 'Dikerjakan', 'Selesai'].map(c =>
         `## ${c}\n\n` + Array.from({ length: cards }, (_, i) => `- [ ] Kartu ${i} #tag @due(2026-01-01)\n`).join('') + '\n').join('');
 
-const doc = (n: number): string => BLOCK.repeat(n);
+const doc = (n: number): string => FIXTURE === 'mixed' ? BLOCK.repeat(n) : Array.from({ length: n }, (_, i) =>
+    (i % 50 === 0 ? `## Bagian ${i}\n` : `Catatan ${i}\n`) +
+    Array.from({ length: 8 }, (_, j) => `Paragraf ${i}.${j} dengan catatan yang berbeda dan cukup panjang untuk dokumen nyata.\n`).join('') + '\n').join('');
 
 const now = (): number => GLib.get_monotonic_time() / 1000;
 
@@ -301,7 +308,7 @@ function runGuiInChildren(): void {
     const dir = GLib.dir_make_tmp('nyerat-bench-XXXXXX');
     for (const n of GUI_SIZES) {
         const out = GLib.build_filenamev([dir, `${n}.json`]);
-        const argv = ['gjs', '-m', script, '--child', `--sizes=${n}`, `--size=${SIZE}`, `--runs=${RUNS}`, `--save=${out}`];
+        const argv = ['timeout', '--kill-after=5s', `${TIMEOUT}s`, 'gjs', '-m', script, '--child', `--sizes=${n}`, `--size=${SIZE}`, `--runs=${RUNS}`, `--fixture=${FIXTURE}`, `--save=${out}`];
         if (BUDGET !== null) argv.push(`--budget=${BUDGET}`);
         if (COMPARE && baseline) argv.push(`--compare=${COMPARE}`);
         const [, stdout, stderr, status] = GLib.spawn_sync(null, argv, null, GLib.SpawnFlags.SEARCH_PATH, null);
@@ -339,7 +346,7 @@ if (!opt('no-gui')) {
 const SAVE = optVal('save');
 if (SAVE && invalid) print(`${RED}Hasil tidak disimpan karena ada pengukuran tidak valid.${RESET}`);
 else if (SAVE) {
-    const saved: Saved = { versi: 2, tanggal: new Date().toISOString(), size: SIZE, runs: RUNS, sizes: GUI_SIZES, mode: opt('no-gui') ? 'model' : 'gui', lingkungan: environment, hasil: results, statistik: statistics };
+    const saved: Saved = { versi: 2, tanggal: new Date().toISOString(), size: SIZE, runs: RUNS, sizes: GUI_SIZES, fixture: FIXTURE, mode: opt('no-gui') ? 'model' : 'gui', lingkungan: environment, hasil: results, statistik: statistics };
     GLib.mkdir_with_parents(GLib.path_get_dirname(SAVE), 0o755);
     writeTextFile(SAVE, JSON.stringify(saved, null, 2) + '\n');
     if (!CHILD) print(`\n${DIM}Hasil disimpan: ${SAVE}${RESET}`);

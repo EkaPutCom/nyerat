@@ -28,9 +28,19 @@ export interface InlineResult {
 // rentang "marker" (sintaks yang disembunyikan saat kursor di baris lain).
 export function parseInline(s: string): InlineResult {
     const tags: InlineResult['tags'] = [], marks: InlineResult['marks'] = [], images: InlineImage[] = [];
-    const m = s.split('');
-    const mask = (a: number, b: number) => { for (let i = a; i < b; i++) m[i] = '\0'; };
-    const cur = () => m.join('');
+    // Baris tanpa sintaks tidak perlu salinan karakter. Setelah masking, rangkai
+    // ulang string hanya jika ada bagian baru yang ditutup oleh tahap sebelumnya.
+    let m: string[] | null = null;
+    let current = s, changed = false;
+    const mask = (a: number, b: number) => {
+        m ??= s.split('');
+        for (let i = a; i < b; i++) m[i] = '\0';
+        changed = true;
+    };
+    const cur = () => {
+        if (changed) { current = m!.join(''); changed = false; }
+        return current;
+    };
     const mark = (a: number, b: number) => { if (b > a) { marks.push([a, b]); tags.push(['marker', a, b]); } };
     let r: RegExpExecArray | null, t: string;
 

@@ -110,9 +110,10 @@ export class TableLayer {
     }
 
     // tables dari highlighter.ts; lines = isi dokumen per baris.
-    update(tables: TableRange[], lines: string[]): void {
+    update(tables: TableRange[], lines: string[], force = false): void {
         this.lines = lines;
         // Pakai ulang blok yang isinya sama walaupun barisnya bergeser.
+        let changed = force, moved = false;
         const unused = [...this.blocks];
         const next: Block[] = [];
         for (const t of tables) {
@@ -120,15 +121,24 @@ export class TableLayer {
             const k = unused.findIndex(b => b.key === key);
             if (k >= 0) {
                 const block = unused.splice(k, 1)[0];
+                moved ||= block.start !== t.start || block.end !== t.end;
                 block.start = t.start;
                 block.end = t.end;
                 next.push(block);
             } else {
+                changed = true;
                 next.push({ start: t.start, end: t.end, key, widget: null, height: 0, collapsed: false, x: -1, y: -1 });
             }
         }
+        changed ||= unused.length > 0;
         for (const block of unused) this.destroyWidget(block);
         this.blocks = next;
+        if (!changed && this.blocks.every(b => b.collapsed === this.isCollapsed(b))) {
+            // Rentang tag ikut bergeser di GTK; cukup pindahkan widgetnya.
+            this.signature = this.stateSignature();
+            if (moved) this.queueRelayout();
+            return;
+        }
         this.signature = '';
         this.sync();
     }
@@ -227,9 +237,10 @@ export class TableLayer {
                 const style = box.get_style_context();
                 style.add_class('md-table-cell');
                 if (r === 0) style.add_class('md-table-head');
-                const line = block.start + (r === 0 ? 0 : r + 1);   // baris pemisah dilewati
+                // Hitung baris saat klik karena grid dipakai ulang setelah teks bergeser.
+                // Baris pemisah dilewati saat memilih baris isi.
                 box.connect('button-press-event', () => {
-                    this.onActivate(line, c);
+                    this.onActivate(block.start + (r === 0 ? 0 : r + 1), c);
                     return true;
                 });
                 grid.attach(box, c, r, 1, 1);

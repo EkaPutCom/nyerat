@@ -28,7 +28,7 @@ import type GdkPixbuf from 'gi://GdkPixbuf';
 
 import { createTags, paintTags, setTagMargins, SYNTAX_TAGS } from './tags.js';
 import { LineTagger } from './tagsync.js';
-import { highlight } from './highlighter.js';
+import { highlight, HighlightCache } from './highlighter.js';
 import { concealMarkers, dimOutsideParagraph } from './decorations.js';
 import { continueBlock, indentListItem, isInCodeBlock } from './lists.js';
 import { toggleTaskAt, linkAt } from './clicks.js';
@@ -77,7 +77,9 @@ export class MarkdownView {
     private margin = -1;
     private width = -1;
     private cursorKey = '';
-    private highlightQueued = false;
+    private highlightQueued = 0;
+    private resetHighlight = false;
+    private highlightCache = new HighlightCache();
     private cursorQueued = 0;
     private destroyed = false;
     private cursorForce = false;
@@ -170,6 +172,8 @@ export class MarkdownView {
         this.view.connect('button-press-event', (_w, ev) => this.onClick(ev as unknown as Gdk.Event));
         this.view.connect('destroy', () => {
             this.destroyed = true;
+            if (this.highlightQueued) GLib.source_remove(this.highlightQueued);
+            this.highlightQueued = 0;
             if (this.cursorQueued) GLib.source_remove(this.cursorQueued);
             this.cursorQueued = 0;
         });
@@ -185,6 +189,7 @@ export class MarkdownView {
     // Ganti seluruh isi tanpa masuk riwayat undo (dipakai saat membuka file).
     setText(text: string): void {
         const buf = this.buffer;
+        this.resetHighlight = true;
         buf.begin_not_undoable_action();
         buf.set_text(text, -1);
         buf.end_not_undoable_action();
@@ -277,10 +282,9 @@ export class MarkdownView {
     // sehingga tidak berkedip.
 
     queueHighlight(): void {
-        if (this.highlightQueued) return;
-        this.highlightQueued = true;
-        GLib.idle_add(GLib.PRIORITY_HIGH_IDLE, () => {
-            this.highlightQueued = false;
+        if (this.destroyed || this.highlightQueued) return;
+        this.highlightQueued = GLib.idle_add(GLib.PRIORITY_HIGH_IDLE, () => {
+            this.highlightQueued = 0;
             this.highlight();
             return GLib.SOURCE_REMOVE;
         });
@@ -296,23 +300,32 @@ export class MarkdownView {
     }
 
     highlight(): void {
+        if (this.destroyed) return;
+        // setText() sorot langsung: batalkan callback yang dibuat sinyal changed.
+        if (this.highlightQueued) GLib.source_remove(this.highlightQueued);
+        this.highlightQueued = 0;
+        const reset = this.resetHighlight;
+        this.resetHighlight = false;
+        let edited: [number, number] | null = null;
         if (this.dirty) {
             const buf = this.buffer;
             const first = buf.get_iter_at_mark(this.dirtyStart).get_line();
             const last = buf.get_iter_at_mark(this.dirtyEnd).get_line();
+            edited = [first, last];
             this.dirty = false;
             const count = buf.get_line_count();
             this.syntaxTagger.edited(first, last, count);
             this.hiddenTagger.edited(first, last, count);
         }
-        const result = highlight(this.buffer, this.tags, this.syntaxTagger);
+        const result = highlight(this.buffer, this.tags, this.syntaxTagger, this.highlightCache, reset ? undefined : edited);
         this.markers = result.markers;
         this.lines = result.lines;
         this.headings = result.headings;
         this.tables = result.tables;
         this.starts = result.starts;
-        this.tableLayer.update(result.tables, result.lines);
-        this.code.apply(result.codeBlocks);
+        const touches = (first: number, last: number) => edited !== null && last >= edited[0] && first <= edited[1];
+        this.tableLayer.update(result.tables, result.lines, reset || result.tables.some(t => touches(t.start, t.end)));
+        this.code.apply(result.codeBlocks, reset || result.codeBlocks.some(b => touches(b.startLine, b.endLine)));
         this.mermaid.update(result.codeBlocks);
         this.images.update(result.images);
         this.onHighlighted(result);

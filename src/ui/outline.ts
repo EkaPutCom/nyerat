@@ -36,13 +36,23 @@ export class Outline {
     // headings dari editor/highlighter.ts
     update(headings: Heading[]): void {
         // Daftar dibangun ulang hanya jika heading benar-benar berubah.
-        const signature = JSON.stringify(headings);
+        const signature = JSON.stringify(headings.map(({ level, text }) => [level, text]));
+        // Pergeseran baris mengubah tujuan klik, bukan tampilan label.
+        const previous = this.headings;
+        this.headings = headings;
         if (signature === this.signature) return;
         this.signature = signature;
-        this.headings = headings;
 
-        for (const child of this.list.get_children()) child.destroy();
-        for (const h of headings) {
+        // Pertahankan awalan/akhiran yang sama: mengedit satu heading tidak
+        // membangun ulang seluruh sidebar dan memicu layout ratusan label.
+        const same = (a: Heading, b: Heading) => a.level === b.level && a.text === b.text;
+        let first = 0, oldEnd = previous.length, newEnd = headings.length;
+        while (first < oldEnd && first < newEnd && same(previous[first], headings[first])) first++;
+        while (oldEnd > first && newEnd > first && same(previous[oldEnd - 1], headings[newEnd - 1])) { oldEnd--; newEnd--; }
+        const rows = this.list.get_children();
+        for (let i = first; i < oldEnd; i++) rows[i].destroy();
+        for (let i = first; i < newEnd; i++) {
+            const h = headings[i];
             const text = h.text || '(kosong)';
             const label = new Gtk.Label({
                 label: text, xalign: 0, ellipsize: Pango.EllipsizeMode.END,
@@ -52,7 +62,7 @@ export class Outline {
             const row = new Gtk.ListBoxRow();
             row.add(label);
             row.show_all();
-            this.list.add(row);
+            this.list.insert(row, i);
         }
     }
 }

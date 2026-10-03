@@ -5,7 +5,9 @@ import Gtk from 'gi://Gtk?version=3.0';
 import Gdk from 'gi://Gdk?version=3.0';
 import { WELCOME } from '../../src/welcome.js';
 import { readTextFile } from '../../src/files.js';
-import { tagRanges } from '../../src/editor/tagsync.js';
+import { highlight } from '../../src/editor/highlighter.js';
+import { createTags, SYNTAX_TAGS } from '../../src/editor/tags.js';
+import { LineTagger, tagRanges } from '../../src/editor/tagsync.js';
 import { section, test, ok, eq, tmp, opt, DIM, RESET } from '../framework.js';
 import type { GuiContext } from './context.js';
 
@@ -80,6 +82,72 @@ export function robustnessTests(c: GuiContext): void {
             if (round % 3 === 2) { buf.undo(); pump(); }
             compare(`suntingan ke-${round + 1}`);
         }
+    });
+    test('cache baris sama dengan parser baru setelah konteks blok dan Unicode berubah', () => {
+        const reference = new Gtk.TextBuffer();
+        const tags = createTags(reference);
+        const check = () => {
+            reference.set_text(text(), -1);
+            const fresh = highlight(reference, tags, new LineTagger(reference, SYNTAX_TAGS.map(n => tags[n])));
+            eq(ed.markers, fresh.markers, 'marker cache');
+            eq(ed.headings, fresh.headings, 'heading cache');
+            eq(ed.tables, fresh.tables, 'tabel cache');
+            eq(ed.starts, fresh.starts, 'offset Unicode cache');
+            for (const name of SYNTAX_TAGS)
+                eq(tagRanges(buf, ed.tags[name]), tagRanges(reference, tags[name]), `tag cache ${name}`);
+        };
+        setText('😀 awal\n# Judul\n**tebal**\n\nA | B\n-- | --\nsatu | dua\n\n```js\nconst x = 1;\n```\nakhir');
+        check();
+        const insert = (line: number, value: string) => {
+            buf.insert(buf.get_iter_at_line(line), value, -1); pump(); check();
+        };
+        insert(0, '🎉\n');
+        insert(3, '```\n');  // format inline/tabel berubah menjadi isi blok kode
+        insert(7, '```\n');  // tabel muncul lagi setelah penutup
+        insert(0, 'paragraf baru\n');
+        buf.undo(); pump(); check();
+        buf.redo(); pump(); check();
+        const end = buf.get_iter_at_line(5);
+        buf.delete(buf.get_iter_at_line(0), end); pump(); check();
+        setText('**tebal**'); check();  // newline terakhir memengaruhi rentang tag
+        buf.insert_at_cursor('\n', -1); pump(); check();
+    });
+    test('setText menyelesaikan satu penyorotan tanpa callback ganda', () => {
+        let calls = 0;
+        const original = ed.onHighlighted;
+        ed.onHighlighted = result => { calls++; original(result); };
+        try {
+            setText('# Baru\n\ncatatan');
+            eq(calls, 1, 'jumlah callback setelah setText');
+            buf.insert_at_cursor('x', -1); pump();
+            eq(calls, 2, 'suntingan berikutnya tetap disorot');
+        } finally { ed.onHighlighted = original; }
+    });
+    test('mengedit satu heading mempertahankan baris outline lainnya', () => {
+        setText('# Satu\n\n## Dua\n\n# Tiga');
+        const first = w.outline.list.get_row_at_index(0)!;
+        const last = w.outline.list.get_row_at_index(2)!;
+        cursorTo(2, -1);
+        buf.insert_at_cursor(' baru', -1); pump();
+        ok(w.outline.list.get_row_at_index(0) === first, 'heading pertama dibangun ulang');
+        ok(w.outline.list.get_row_at_index(2) === last, 'heading terakhir dibangun ulang');
+        cursorTo(2);
+        buf.insert_at_cursor('x', -1); pump();  // heading kedua menjadi paragraf
+        eq(w.outline.list.get_children().length, 2, 'satu heading dihapus');
+        ok(w.outline.list.get_row_at_index(1) === last, 'akhiran tidak dipertahankan');
+        w.outline.list.emit('row-activated', last); pump();
+        eq(buf.get_iter_at_mark(buf.get_insert()).get_line(), 4, 'tujuan klik setelah heading dihapus');
+        buf.undo(); pump();
+        eq(w.outline.list.get_children().length, 3, 'undo mengembalikan heading');
+    });
+    test('outline memakai ulang label saat heading hanya bergeser baris', () => {
+        setText('awal\n\n# Judul');
+        const row = w.outline.list.get_row_at_index(0)!;
+        buf.insert(buf.get_start_iter(), 'baris baru\n', -1); pump();
+        ok(w.outline.list.get_children()[0] === row, 'baris outline tidak dipakai ulang');
+        w.outline.list.emit('row-activated', row);
+        pump();
+        eq(buf.get_iter_at_mark(buf.get_insert()).get_line(), 3, 'tujuan klik heading bergeser');
     });
     test('mode fokus dan typewriter aktif bersamaan', () => {
         setText(WELCOME);

@@ -18,6 +18,7 @@ import System from 'system';
 import { DIM, GREEN, RED, RESET, errorMessage, opt, optVal, recordFailure, setRoot, summary } from './framework.js';
 import { WELCOME } from '../src/welcome.js';
 import { createContext } from './gui/context.js';
+import { incrementalTests } from './unit/incremental.js';
 import { inlineTests } from './unit/inline.js';
 import { settingsTests } from './unit/settings.js';
 import { tableTests } from './unit/table.js';
@@ -45,6 +46,7 @@ setRoot(import.meta.url);
 
 function runUnitTests(): void {
     inlineTests();
+    incrementalTests();
     settingsTests();
     tableTests();
     kanbanModelTests();

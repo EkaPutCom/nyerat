@@ -1,6 +1,6 @@
 // Tes parseInline.
 
-import { makeCpMap } from '../../src/editor/offsets.js';
+import { makeCpMap, cpLength } from '../../src/editor/offsets.js';
 import { parseInline } from '../../src/markdown/inline.js';
 import { section, test, eq, ok } from '../framework.js';
 
@@ -31,6 +31,17 @@ export function inlineTests(): void {
     });
     test('snake_case tidak jadi miring', () => {
         ok(!parseInline('nama_variabel_ini').tags.some(([n]) => n === 'italic'), 'jadi miring');
+    });
+    test('masking bertahap menjaga kode, tautan, dan penekanan yang bercampur', () => {
+        const r = parseInline('`**kode**` [**judul**](https://a_b.test) <https://c_d.test> https://e_f.test **tebal** *miring* ~~hapus~~ ==sorot==');
+        const count = (name: string) => r.tags.filter(([n]) => n === name).length;
+        eq([count('code'), count('link'), count('bold'), count('italic'), count('strike'), count('mark')], [1, 3, 2, 1, 1, 1]);
+        ok(!r.tags.some(([n, a, b]) => n === 'bold' && a < 10 && b < 10), 'isi kode ikut tebal');
+    });
+    test('baris panjang tanpa sintaks dan hitungan Unicode tetap benar', () => {
+        eq(parseInline('catatan biasa '.repeat(10000)), { tags: [], marks: [], images: [] });
+        eq(cpLength('abc🎉é'), 6, 'jumlah code point');
+        eq(cpLength('x'.repeat(10000)), 10000, 'teks tanpa surrogate');
     });
     test('makeCpMap menghitung emoji sebagai satu karakter', () => {
         const map = makeCpMap('🎉ab');

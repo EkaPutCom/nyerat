@@ -103,14 +103,28 @@ export class LineTagger {
         for (let i = 0; i < spans.length; i++) {
             const want = spans[i];
             const prev = this.applied[i];
-            if (prev && sameSpans(prev, want)) continue;
+            if (prev && (prev === want || sameSpans(prev, want))) continue;
             if (!prev) {
                 // Baris tak dikenal yang berurutan dibersihkan sekaligus (mis. setelah setText).
                 let j = i;
                 while (j + 1 < spans.length && !this.applied[j + 1]) j++;
                 const s = at(i), e = at(j + 1);
                 for (const tag of this.allTags) buf.remove_tag(tag, s, e);
-                for (let k = i; k <= j; k++) this.applied[k] = [];
+                // Saat membuka/paste dokumen, gabungkan rentang tag yang bertemu
+                // supaya GTK tidak menerima ribuan operasi untuk blok kode panjang.
+                const ranges = new Map<Gtk.TextTag, Range[]>();
+                for (let k = i; k <= j; k++) {
+                    for (const [tag, a, b] of spans[k]) {
+                        if (!ranges.has(tag)) ranges.set(tag, []);
+                        ranges.get(tag)!.push([starts[k] + a, starts[k] + b]);
+                    }
+                    this.applied[k] = spans[k];
+                }
+                for (const [tag, wanted] of ranges)
+                    for (const [a, b] of normalize(wanted))
+                        buf.apply_tag(tag, buf.get_iter_at_offset(a), buf.get_iter_at_offset(b));
+                i = j;
+                continue;
             } else {
                 const s = at(i), e = at(i + 1);
                 for (const tag of new Set(prev.map(p => p[0]))) buf.remove_tag(tag, s, e);

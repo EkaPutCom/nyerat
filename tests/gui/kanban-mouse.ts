@@ -46,6 +46,8 @@ export function kanbanMouseTests(c: GuiContext): void {
         const start = point(source, 12);
         const target = destination();
         let presses = 0, motions = 0, releases = 0;
+        let sourceDestroyed = false;
+        const destroyId = source.connect('destroy', () => { sourceDestroyed = true; });
         // Sinyal umum terbit sebelum handler kartu mengonsumsi sinyal khususnya.
         const id = source.connect('event', (_widget, event) => {
             const kind = (event as unknown as Gdk.Event).get_event_type();
@@ -82,7 +84,9 @@ export function kanbanMouseTests(c: GuiContext): void {
             eq(parseBoard(text()), kb.getBoard(), 'Markdown sesuai papan');
         } finally {
             if (held) { input.up(); held = false; settle(); }
-            source.disconnect(id);
+            // Papan boleh membangun ulang kartu setelah drop; wrapper yang sudah
+            // di-destroy tidak boleh dipakai lagi hanya untuk melepas sinyal tes.
+            if (!sourceDestroyed) { source.disconnect(id); source.disconnect(destroyId); }
         }
     };
     try {

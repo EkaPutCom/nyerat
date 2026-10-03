@@ -21,4 +21,9 @@ export function makeCpMap(text: string): (offset: number) => number {
 export const cpToU16 = (s: string, cp: number): number => Array.from(s).slice(0, cp).join('').length;
 
 // Panjang string dalam code point (satuan yang dipakai GtkTextBuffer).
-export const cpLength = (s: string): number => Array.from(s).length;
+export function cpLength(s: string): number {
+    if (!/[\uD800-\uDFFF]/.test(s)) return s.length;
+    let count = 0;
+    for (const _char of s) count++;
+    return count;
+}

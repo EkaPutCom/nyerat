@@ -70,10 +70,12 @@ gjs -m dist/nyerat.js ~/catatan
 | `npm run bench:compare` | Jalankan benchmark dan tampilkan selisih terhadap [`bench/baseline.json`](bench/baseline.json) (hijau = lebih cepat, merah = lebih lambat, abu-abu = selisih < 25%, derau pengukuran) |
 | `npm run docs` | Potret aplikasi sungguhan (jendela akan terbuka sebentar), lalu perbarui PNG dan GIF di `docs/assets/` untuk landing page |
 
+Hasil optimasi dan batas cakupannya dicatat di [laporan performa](bench/PERFORMANCE.md).
+
 Benchmark memakai 10 pengulangan setelah pemanasan. Hasil menampilkan median, p95,
 dan maksimum dalam milidetik; `--save=...` menyimpan sampel mentah, commit, serta versi
 GJS/GLib/GTK dan lingkungan. `--compare=...` hanya membandingkan format, ukuran,
-pengulangan, mode, dan lingkungan yang setara. Baseline format lama perlu dibuat ulang.
+pengulangan, jenis dokumen, mode, dan lingkungan yang setara. Baseline format lama perlu dibuat ulang.
 
 Skenario GUI mencakup membuka teks, penyorotan ulang, mengetik (total 20 karakter dan
 latensi per karakter), perpindahan kursor, paste besar dengan emoji dan baris panjang,
@@ -81,8 +83,11 @@ hapus, undo, serta redo. Setiap suntingan diverifikasi melalui callback penyorot
 `--budget=...` berlaku pada median operasi GUI; untuk mengetik, budget berlaku per
 karakter. Kegagalan pengukuran mengembalikan kode 1 dan mencegah penyimpanan hasil
 parsial; hasil lengkap yang melampaui budget tetap dapat disimpan untuk diagnosis.
+Tiap proses GUI dibatasi 120 detik (`--timeout=...`), menggunakan `timeout` dari
+GNU coreutils, agar callback yang terblokir GC tidak membuat runner menunggu tanpa batas.
 Ukuran GUI dapat diatur dengan `--sizes=25,50,100`; `--size` mengatur ukuran modul
-Markdown. Rendering gambar/diagram asinkron dan interaksi papan kanban belum diukur;
+Markdown. `--fixture=long --size=2000 --sizes=2000` menguji dokumen 20.000 baris
+tanpa grid tabel; jenis dokumen bawaan adalah `mixed`. Rendering gambar/diagram asinkron dan interaksi papan kanban belum diukur;
 kanban saat ini mencakup parsing dan serialisasi model.
 
 ### Mode pengembangan
@@ -374,17 +379,21 @@ Keduanya ditunda dengan `GLib.idle_add(PRIORITY_HIGH_IDLE)`. Beberapa perubahan 
 
 ### Cara kerja efek "ala Typora"
 
-1. **`highlighter.ts`** membaca dokumen baris per baris. Untuk setiap sintaks, ia memasang tag gaya pada isinya (misalnya `bold` pada "tebal" di `**tebal**`) dan mencatat posisi penandanya (`**`) sebagai **marker**.
+1. **`highlighter.ts`** membaca seluruh dokumen saat pertama dibuka, lalu hanya rentang suntingan saat teks berubah. Untuk setiap sintaks, ia memasang tag gaya pada isinya (misalnya `bold` pada "tebal" di `**tebal**`) dan mencatat posisi penandanya (`**`) sebagai **marker**.
 2. Setiap marker menyimpan rentang baris tempat ia "aktif": `[awal, akhir, barisPertama, barisTerakhir, baris]`. Untuk format inline, rentangnya hanya barisnya sendiri. Untuk pembatas ```` ``` ````, rentangnya seluruh blok kode, jadi pembatas muncul selama kursor ada di dalam blok.
 3. **`decorations.ts`** memasang tag `hidden` pada semua marker yang rentang barisnya tidak memuat kursor. Begitu kursor pindah baris, hanya langkah ini yang diulang; penyorotan penuh tidak perlu dijalankan lagi.
 
 **Tag dipasang dengan selisih (`editor/tagsync.ts`).** Menghapus tag di seluruh buffer lalu memasangnya lagi membuat GTK menata ulang seluruh dokumen (tag heading, `hidden`, dan jarak tabel/gambar mengubah ukuran baris), dan itu yang paling mahal di dokumen panjang. Karena itu:
 
+- Penyorotan membaca hanya baris buffer yang berubah, lalu mengurai rentang di antara batas konteks kode/tabel yang aman. Hasil di luar rentang itu dipakai ulang dengan offset yang disesuaikan. Suntingan di dalam kode/tabel mengurai ulang blok terkait; pembatas kode baru dapat memperpanjang parsing hingga akhir dokumen. Snapshot menyimpan hasil dokumen saat ini; cache token tambahan dibatasi 10.000 entri dan 4 Mi unit UTF-16, tanpa menyimpan baris di atas 4.096 unit.
+- Jumlah kata/karakter diperbarui dari rentang suntingan. Teks lengkap baru digabung saat diminta, sehingga status bar tidak membaca dan menghitung ulang seluruh dokumen.
 - Tag sintaks dan `hidden` dipasang lewat `LineTagger`, yang mengingat tag terakhir di tiap baris. `MarkdownView` mencatat rentang yang disunting (sinyal `insert-text`/`delete-range`, disimpan sebagai dua `GtkTextMark`), jadi saat menyorot ulang hanya baris yang disunting atau yang tag-nya berbeda yang disentuh. Baris lain cukup dibiarkan: tag ikut bergeser bersama teksnya.
+- Saat membuka atau menempel banyak baris, rentang tag yang bersebelahan digabung sebelum dipasang, sehingga GTK menerima lebih sedikit operasi. Penyorotan langsung dari `setText()` membatalkan callback penyorotan yang masih antre.
+- Tabel dan warna blok kode yang tidak berubah mempertahankan tag yang sudah bergeser bersama teks di GTK. Outline mempertahankan label saat hanya nomor baris heading berubah; tujuan klik tetap diperbarui.
 - Tag yang rentangnya sedikit (`dim`, `tablehide`, `mermaidhide`, jarak tabel/gambar/diagram, warna blok kode) dipasang dengan `setTagRanges()`: rentang yang sudah terpasang dibaca dari buffer, lalu hanya selisihnya yang dihapus atau ditambahkan.
 - Tes "penyorotan bertahap sama dengan penyorotan dari awal" (`tests/gui/robust.ts`) menyunting dokumen contoh secara acak dan memastikan hasilnya sama dengan menyorot dari awal.
 
-`parseInline()` di `markdown/inline.ts` memakai teknik **masking**: setelah suatu bagian dikenali (misalnya kode inline), karakternya diganti `\0` agar tidak dikenali lagi oleh pola berikutnya. Itu sebabnya `` `**bukan tebal**` `` tetap tampil sebagai kode.
+`parseInline()` di `markdown/inline.ts` membuat salinan karakter hanya ketika masking diperlukan, dan memakai ulang string hasil masking selama tidak ada perubahan. Ia memakai teknik **masking**: setelah suatu bagian dikenali (misalnya kode inline), karakternya diganti `\0` agar tidak dikenali lagi oleh pola berikutnya. Itu sebabnya `` `**bukan tebal**` `` tetap tampil sebagai kode.
 
 ### Hal teknis yang perlu diketahui
 
@@ -540,4 +549,4 @@ Nilai bawaan: sidebar terbuka pada tab Outline, fokus/typewriter mati, ukuran je
 - Merapikan tabel (`Ctrl+Shift+T` dan semua perintah di menu Edit Tabel) membuang sel yang berlebih dibanding baris judul, sesuai aturan GFM
 - Tabel yang kursornya di dalamnya tampil mentah; jika seluruh dokumen hanya berisi satu tabel dan kursor ada di dalamnya, grid baru tampil setelah kursor keluar
 - Garis pemisah tampil sebagai teks `---` pudar di tengah, bukan garis
-- Penyorotan masih membaca dan mengurai ulang seluruh dokumen setiap kali teks berubah (hanya pemasangan tag yang bertahap), sehingga dokumen yang sangat panjang (puluhan ribu baris) bisa terasa lambat
+- Parsing suntingan sudah bertahap, tetapi penyesuaian array offset/metadata dan pemeriksaan tag masih sebanding dengan jumlah baris. Membuka dokumen atau mengubah konteks fence sampai akhir tetap dapat mengurai seluruh dokumen; kenyamanan GUI pada puluhan ribu baris belum terverifikasi karena benchmark ekstrem masih menemui callback GJS yang terblokir saat GC.

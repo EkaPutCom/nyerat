@@ -90,9 +90,9 @@ export class MainWindow {
         this.editor.modes.typewriter = settings.typewriter;
 
         // Komponen tidak saling kenal; jendela inilah yang menghubungkan mereka.
-        this.editor.onHighlighted = ({ text, headings }) => {
+        this.editor.onHighlighted = ({ headings, words, characters }) => {
             this.outline.update(headings);
-            if (!this.boardMode) this.statusBar.setCounts(text);
+            if (!this.boardMode) this.statusBar.setDocumentCounts(words, characters);
         };
         this.board.onChange = board => this.writeBoard(board);
         this.editor.onCursorMoved = (line, column) => {

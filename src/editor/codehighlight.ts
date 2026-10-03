@@ -73,6 +73,7 @@ export class CodeHighlighter {
     // prioritas tag yang harus tetap di atas (misalnya 'dim' dan 'hidden').
     onTagAdded: () => void = () => {};
 
+    private applied: CodeBlock[] | null = null;
     private scheme: GtkSource.StyleScheme | null = null;
     private scratch = new Map<string, GtkSource.Buffer>();   // id bahasa → buffer tersembunyi
     private cache = new Map<string, Segment[]>();
@@ -86,6 +87,7 @@ export class CodeHighlighter {
         if (scheme === this.scheme) return;
         this.scheme = scheme;
         for (const scratch of this.scratch.values()) scratch.set_style_scheme(scheme);
+        this.applied = null;
         this.cache.clear();
         // Tag lama memakai warna skema lama; buang dari buffer.
         const table = this.buffer.get_tag_table();
@@ -94,7 +96,15 @@ export class CodeHighlighter {
     }
 
     // Warnai semua blok kode. Dipanggil setelah highlighter.ts selesai.
-    apply(blocks: CodeBlock[]): void {
+    apply(blocks: CodeBlock[], force = true): void {
+        // GTK mempertahankan tag saat teks di luar blok berubah. Hindari membaca
+        // semua rentang tag lagi jika isi blok tetap sama, meski offset bergeser.
+        if (!force && this.applied && blocks.length === this.applied.length && blocks.every((b, i) => {
+            const old = this.applied![i];
+            return b.lang === old.lang && b.text === old.text;
+        })) return;
+        this.applied = blocks;
+
         const wanted = new Map<Gtk.TextTag, Range[]>();
         for (const block of blocks) {
             const language = resolveLanguage(block.lang);

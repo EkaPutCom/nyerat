@@ -4,6 +4,7 @@
 
 import Gtk from 'gi://Gtk?version=3.0';
 import GLib from 'gi://GLib';
+import { cpLength } from '../editor/offsets.js';
 
 export class StatusBar {
     readonly left: Gtk.Label;
@@ -27,7 +28,11 @@ export class StatusBar {
     setCounts(text: string): void {
         // Simbol Markdown tidak dihitung sebagai kata.
         const words = (text.match(/[^\s#>*_`~=|-]+/g) || []).length;
-        this.counts = `${words} kata   ${Array.from(text).length} karakter`;
+        this.setDocumentCounts(words, cpLength(text));
+    }
+
+    setDocumentCounts(words: number, characters: number): void {
+        this.counts = `${words} kata   ${characters} karakter`;
         this.render();
     }
 

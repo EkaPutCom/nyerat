@@ -1,6 +1,7 @@
 // Tes GUI: Tabel (grid dan penyuntingan).
 
 import GLib from 'gi://GLib';
+import Gtk from 'gi://Gtk?version=3.0';
 import Gdk from 'gi://Gdk?version=3.0';
 import { cellIndexAt } from '../../src/markdown/table.js';
 import { section, test, eq, ok } from '../framework.js';
@@ -55,6 +56,18 @@ export function tableGridTests(c: GuiContext): void {
         ok(!tBlock().collapsed, 'tabel tidak terbuka');
         cursorTo(0); ed.tableLayer.onActivate(2, 0); pump();
         eq([curLine(), curCol()], [2, 0], 'sel judul kolom 1');
+    });
+    test('grid yang dipakai ulang mengarahkan klik ke baris baru setelah teks bergeser', () => {
+        setText(DOC); cursorTo(0); settleT();
+        const widget = tBlock().widget!;
+        buf.insert(buf.get_start_iter(), 'tambahan\n', -1); pump(); settleT();
+        ok(tBlock().widget === widget, 'grid dibangun ulang saat hanya baris bergeser');
+        const grid = widget.get_child() as Gtk.Grid;
+        const cell = grid.get_child_at(0, 0) as Gtk.EventBox;
+        const event = Gdk.Event.new(Gdk.EventType.BUTTON_PRESS);
+        cell.emit('button-press-event', event as unknown as Gdk.EventButton);
+        pump();
+        eq(curLine(), 3, 'klik judul memakai baris tabel yang sudah bergeser');
     });
     test('Tab pindah ke sel berikutnya, lalu ke baris berikutnya', () => {
         setText(DOC); cursorTo(4, 2);

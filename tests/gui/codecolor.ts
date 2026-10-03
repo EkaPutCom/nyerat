@@ -39,6 +39,20 @@ export function codeColorTests(c: GuiContext): void {
         ok(syntaxTags(off).length > 0 && syntaxTags(off + 5).length > 0, '"return" tidak diwarnai utuh');
         ok(syntaxTags(off - 1).length === 0, 'warna bergeser ke sebelum "return"');
     });
+    test('cache warna tetap benar setelah blok bergeser dan dokumen dimuat ulang', () => {
+        const doc = 'awal\n\n```js\nconst s = "halo";\n```';
+        setText(doc);
+        buf.insert(buf.get_start_iter(), '😀 tambahan\n', -1); pump();
+        ok(syntaxTags(offsetIn(text(), 'const')).length > 0, 'warna hilang setelah blok bergeser');
+        ok(syntaxTags(0).length === 0, 'teks tambahan ikut diwarnai');
+        setText(doc);
+        ok(syntaxTags(offsetIn(text(), 'const')).length > 0, 'warna hilang setelah setText');
+        cursorTo(3);
+        buf.insert_at_cursor('/*', -1); pump();
+        ok(colorAt(offsetIn(text(), 'halo')) !== null, 'warna komentar hilang');
+        buf.undo(); pump();
+        ok(syntaxTags(offsetIn(text(), 'const')).length > 0, 'undo tidak memulihkan warna');
+    });
     test('mode gelap memakai skema warna lain', () => {
         setText('```js\nconst s = "halo";\n```');
         const off = offsetIn(text(), '"halo"') + 1;
