@@ -27,6 +27,15 @@ Bahasa: komentar kode, pesan commit, teks antarmuka, nama tes, dan dokumentasi d
 - `npm test` membutuhkan `xvfb-run`, `Xvfb`, dan `xauth`; tes GUI dan mouse memakai display virtual sehingga tidak butuh sesi desktop dan tidak menggerakkan pointer pengguna. Runner GJS langsung masih bisa memakai sesi desktop; tanpa display, pakai `--no-gui`.
 - Sebelum menyatakan pekerjaan selesai, jalankan `npm test` (atau minimal `npm run typecheck` + `--no-gui` jika tidak ada display) dan laporkan hasilnya apa adanya.
 
+## Pemeriksaan performa wajib
+
+- **Selalu cek dampak performa setiap perubahan sebelum menyatakan pekerjaan selesai.** Tes kebenaran saja belum cukup untuk perubahan kode aplikasi.
+- Untuk perubahan kode aplikasi, jalankan `npm run bench:compare` dan benchmark skenario yang terdampak. Bandingkan sebelum/sesudah dengan ukuran dokumen, jumlah pengulangan, jenis fixture, dan lingkungan yang setara; laporkan median, p95, maksimum, serta regresi yang ditemukan.
+- Perubahan editor, penyorotan, atau tata letak harus diperiksa pada dokumen biasa dan dokumen panjang. Gunakan fixture `long` untuk puluhan ribu baris, serta dokumen dengan banyak tabel/blok kode bila terkait. Periksa membuka teks, mengetik, perpindahan kursor, paste, hapus, undo, dan redo sesuai cakupan perubahan.
+- Telusuri regresi yang berarti sebelum menyatakan performa membaik. Jika benchmark macet, callback GJS terblokir saat GC, atau pengukuran tidak lengkap, laporkan sebagai pemeriksaan gagal/belum terverifikasi; jangan gunakan hasil parsial sebagai baseline atau bukti aplikasi sudah nyaman.
+- Perbarui `bench/baseline.json` hanya dari hasil lengkap yang valid setelah perubahan disengaja dievaluasi, dan catat hasil serta keterbatasannya di `bench/PERFORMANCE.md`. Jangan mengganti baseline hanya untuk menyembunyikan regresi.
+- Untuk perubahan dokumentasi saja, tetap cek bahwa kode runtime tidak berubah dan nyatakan bahwa benchmark tidak dijalankan karena tidak ada dampak runtime. Jika lingkungan menghalangi benchmark yang diperlukan, laporkan alasan dan cakupan yang belum diperiksa.
+
 ## Struktur dan aturan lapisan
 
 ```
