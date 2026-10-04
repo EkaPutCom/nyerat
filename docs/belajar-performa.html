@@ -128,7 +128,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: .88rem; }
 @media (max-width: 560px) { .cmp { grid-template-columns: 1fr; } .cmp .lbl { margin-top: 6px; } }
 
 /* timeline chart */
-.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart { width: 100%; display: block; overflow: visible; }
 .chart text { fill: var(--text-2); font-size: 11px; }
 .chart .axis { stroke: var(--line); }
 .chart .grid { stroke: var(--line); stroke-dasharray: 2 3; }
@@ -182,6 +182,17 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .minimap i.view { outline: 1px solid var(--text); outline-offset: -1px; }
 .note { font-size: .8rem; color: var(--text-3); }
 .track-label { font-size: .8rem; color: var(--text-2); margin: 10px 0 2px; }
+@media (max-width: 600px) {
+  table.data.cards thead { display: none; }
+  table.data.cards, table.data.cards tbody, table.data.cards tr, table.data.cards td { display: block; width: 100%; }
+  table.data.cards tr { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+  table.data.cards td { border: 0; padding: 2px 0; white-space: normal; }
+  table.data.cards td:first-child { font-weight: 650; }
+  table.data.cards td:not(:first-child)::before { content: attr(data-k) ": "; color: var(--text-3); font-size: .8rem; }
+  .sim { padding: 12px; }
+  .controls label { flex: 1 1 100%; display: grid; grid-template-columns: 7.5em 1fr auto; }
+  .controls input[type=range] { width: 100%; min-width: 0; }
+}
 footer { color: var(--text-3); font-size: .82rem; padding: 30px 0 60px; }
 .timeline-steps { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
 .timeline-steps li { display: grid; grid-template-columns: 86px 1fr; gap: 10px; font-size: .9rem; }
@@ -700,17 +711,17 @@ cellSizes: Map&lt;markupSel, [w, h]&gt;      // ≤1.024 sel</code></pre>
   <div class="chapnum">Ringkasan</div>
   <h2>Pola yang bisa dibawa ke kode lain</h2>
   <div class="scroll-x">
-  <table class="data">
+  <table class="data cards">
     <thead><tr><th>Pola</th><th>Struktur data</th><th>Biaya per suntingan</th><th>Di Nyerat</th></tr></thead>
     <tbody>
-      <tr><td>Ingat keadaan terakhir, terapkan selisih</td><td><code>(LineSpan[] | null)[]</code></td><td>O(N) → O(baris berubah)</td><td><code>LineTagger</code>, <code>setTagRanges</code></td></tr>
-      <tr><td>Batasi jangkauan efek</td><td><code>checkpoints: number[]</code> + pencarian biner</td><td>O(N) → O(segmen)</td><td><code>HighlightCache.update</code></td></tr>
-      <tr><td>Cache berkunci isi, offset relatif</td><td><code>Map&lt;string, CachedLine&gt;</code> dua generasi</td><td>urai ulang → lookup</td><td><code>HighlightCache</code></td></tr>
-      <tr><td>Hanya yang mungkin berubah</td><td><code>active[]</code>, <code>recheck[]</code></td><td>N array → 2–3 baris</td><td><code>MarkerConcealer</code></td></tr>
-      <tr><td>Salin sekali, geser di tempat</td><td><code>new Array(n)</code> + mutasi</td><td>3–4 salinan → 1</td><td><code>splice</code>, <code>spliceByLine</code></td></tr>
-      <tr><td>Pecah kerja panjang</td><td><code>deferFrom</code> + idle ≤8 ms</td><td>jeda 162 → 71 ms</td><td><code>LineTagger.fill</code></td></tr>
-      <tr><td>Malas: buat saat terlihat</td><td><code>widget: Widget | null</code> + cache ukuran berbatas</td><td>1.000 build → 1</td><td><code>TableLayer</code></td></tr>
-      <tr><td>I/O di luar thread utama</td><td>timer tunggal + <code>lastEdit</code></td><td>fsync → antre</td><td><code>autosave()</code></td></tr>
+      <tr><td data-k="Pola">Ingat keadaan terakhir, terapkan selisih</td><td data-k="Struktur data"><code>(LineSpan[] | null)[]</code></td><td data-k="Biaya per suntingan">O(N) → O(baris berubah)</td><td data-k="Di Nyerat"><code>LineTagger</code>, <code>setTagRanges</code></td></tr>
+      <tr><td data-k="Pola">Batasi jangkauan efek</td><td data-k="Struktur data"><code>checkpoints: number[]</code> + pencarian biner</td><td data-k="Biaya per suntingan">O(N) → O(segmen)</td><td data-k="Di Nyerat"><code>HighlightCache.update</code></td></tr>
+      <tr><td data-k="Pola">Cache berkunci isi, offset relatif</td><td data-k="Struktur data"><code>Map&lt;string, CachedLine&gt;</code> dua generasi</td><td data-k="Biaya per suntingan">urai ulang → lookup</td><td data-k="Di Nyerat"><code>HighlightCache</code></td></tr>
+      <tr><td data-k="Pola">Hanya yang mungkin berubah</td><td data-k="Struktur data"><code>active[]</code>, <code>recheck[]</code></td><td data-k="Biaya per suntingan">N array → 2–3 baris</td><td data-k="Di Nyerat"><code>MarkerConcealer</code></td></tr>
+      <tr><td data-k="Pola">Salin sekali, geser di tempat</td><td data-k="Struktur data"><code>new Array(n)</code> + mutasi</td><td data-k="Biaya per suntingan">3–4 salinan → 1</td><td data-k="Di Nyerat"><code>splice</code>, <code>spliceByLine</code></td></tr>
+      <tr><td data-k="Pola">Pecah kerja panjang</td><td data-k="Struktur data"><code>deferFrom</code> + idle ≤8 ms</td><td data-k="Biaya per suntingan">jeda 162 → 71 ms</td><td data-k="Di Nyerat"><code>LineTagger.fill</code></td></tr>
+      <tr><td data-k="Pola">Malas: buat saat terlihat</td><td data-k="Struktur data"><code>widget: Widget | null</code> + cache ukuran berbatas</td><td data-k="Biaya per suntingan">1.000 build → 1</td><td data-k="Di Nyerat"><code>TableLayer</code></td></tr>
+      <tr><td data-k="Pola">I/O di luar thread utama</td><td data-k="Struktur data">timer tunggal + <code>lastEdit</code></td><td data-k="Biaya per suntingan">fsync → antre</td><td data-k="Di Nyerat"><code>autosave()</code></td></tr>
     </tbody>
   </table>
   </div>
@@ -794,12 +805,47 @@ document.querySelectorAll('.cmp[data-rows]').forEach(box => {
   }
 });
 
+/* ---------- ukuran SVG mengikuti lebar sebenarnya, supaya teks 11px tetap 11px ---------- */
+function fit(svg, H) {
+  const W = Math.max(280, Math.round(svg.parentNode.clientWidth || 900));
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.setAttribute('height', H);
+  return W;
+}
+
 /* ---------- grafik perjalanan (skala log) ---------- */
 function logChart(svg, data, opts) {
   svg.innerHTML = '';
-  const W = 900, H = 300, L = 60, R = 16, T = 26, B = 58;
+  const narrow = (svg.parentNode.clientWidth || 900) < 600;
   const lo = opts.lo, hi = opts.hi;
-  const y = v => T + (H - T - B) * (1 - (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo)));
+  const frac = v => (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo));
+  const tipOf = d => '<b>' + d.c + '</b>: ' + d.t + '<br>' + (d.label || ms(d.v)) + (d.n ? '<br><span style="color:var(--text-2)">' + d.n + '</span>' : '');
+  if (narrow) {
+    // Layar sempit: batang horizontal, satu baris per commit.
+    const row = 40, T = 22, H = T + row * data.length + 6;
+    const W = fit(svg, H), L = 104, R = 70;
+    const x = v => L + (W - L - R) * frac(v);
+    for (let p = Math.log10(lo); p <= Math.log10(hi) + 1e-9; p++) {
+      const v = Math.pow(10, p);
+      el('line', { x1: x(v), x2: x(v), y1: T - 4, y2: H - 4, class: 'grid' }, svg);
+      el('text', { x: x(v), y: T - 9, 'text-anchor': 'middle' }, svg).textContent = fmt(v, 0);
+    }
+    el('text', { x: W - 2, y: T - 9, 'text-anchor': 'end' }, svg).textContent = 'ms';
+    data.forEach((d, i) => {
+      const g = el('g', {}, svg), y0 = T + row * i, bh = 12, by = y0 + 13;
+      el('text', { x: 0, y: y0 + 16, class: 'mono' }, g).textContent = d.c;
+      el('text', { x: 0, y: y0 + 31 }, g).textContent = d.t;
+      const x1 = Math.max(L + 4, x(d.v)), r = 4;
+      el('path', { d: `M${L},${by} H${x1 - r} Q${x1},${by} ${x1},${by + r} V${by + bh - r} Q${x1},${by + bh} ${x1 - r},${by + bh} H${L} Z`, fill: d.hl ? css('--after') : css('--neutral') }, g);
+      el('text', { x: x1 + 6, y: by + 10, class: 'valtxt' }, g).textContent = d.label || fmt(d.v);
+      el('rect', { x: 0, y: y0, width: W, height: row, fill: 'transparent' }, g);
+      attachTip(g, tipOf(d));
+    });
+    return;
+  }
+  const H = 300, L = 60, R = 16, T = 26, B = 58;
+  const W = fit(svg, H);
+  const y = v => T + (H - T - B) * (1 - frac(v));
   for (let p = Math.log10(lo); p <= Math.log10(hi) + 1e-9; p++) {
     const v = Math.pow(10, p);
     el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: 'grid' }, svg);
@@ -816,7 +862,7 @@ function logChart(svg, data, opts) {
     el('text', { x: cx, y: top - 7, 'text-anchor': 'middle', class: 'valtxt' }, g).textContent = d.label || fmt(d.v);
     el('text', { x: cx, y: base + 18, 'text-anchor': 'middle', class: 'mono' }, g).textContent = d.c;
     el('text', { x: cx, y: base + 34, 'text-anchor': 'middle' }, g).textContent = d.t;
-    attachTip(g, '<b>' + d.c + '</b>: ' + d.t + '<br>' + (d.label || ms(d.v)) + (d.n ? '<br><span style="color:var(--text-2)">' + d.n + '</span>' : ''));
+    attachTip(g, tipOf(d));
   });
 }
 const typeData = [
@@ -840,6 +886,8 @@ function drawCharts() {
   logChart($('#chart-cursor'), cursorData, { lo: 10, hi: 10000 });
 }
 drawCharts();
+let resizeT = 0;
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(drawCharts, 100); });
 
 /* ---------- ilustrasi LineTagger.edited ---------- */
 function cells(box, items) {
@@ -1050,9 +1098,12 @@ class IncParser {
   const nIn = $('#s2-n'), btn = $('#s2-run');
   const out = () => $('#s2-n-out').textContent = (+nIn.value).toLocaleString('id-ID') + ' baris';
   nIn.addEventListener('input', out); out();
+  let last2 = null;
+  addEventListener('resize', () => last2 && plot(...last2));
   function plot(full, inc) {
     const svg = $('#s2-chart'); svg.innerHTML = '';
-    const W = 900, H = 180, L = 56, R = 10, T = 12, B = 26;
+    last2 = [full, inc];
+    const H = 180, L = 56, R = 10, T = 12, B = 26, W = fit(svg, H);
     const max = Math.max(...full, ...inc) * 1.1;
     const y = v => T + (H - T - B) * (1 - v / max);
     const x = i => L + (W - L - R) * i / (full.length - 1);
@@ -1116,9 +1167,12 @@ class IncParser {
   const out = () => $('#s3-n-out').textContent = (+nIn.value).toLocaleString('id-ID') + ' baris';
   nIn.addEventListener('input', out); out();
   let sink = 0;
+  let last3 = null;
+  addEventListener('resize', () => last3 && plot(...last3));
   function plot(a, b) {
     const svg = $('#s3-chart'); svg.innerHTML = '';
-    const W = 900, H = 220, L = 56, R = 10, T = 12, B = 26;
+    last3 = [a, b];
+    const H = 220, L = 56, R = 10, T = 12, B = 26, W = fit(svg, H);
     const all = a.concat(b);
     const max = Math.max(pct(all, .995) * 1.15, 0.05);
     const y = v => T + (H - T - B) * (1 - Math.min(v, max) / max);
@@ -1128,7 +1182,7 @@ class IncParser {
       el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: k ? 'grid' : 'axis' }, svg);
       el('text', { x: L - 6, y: y(v) + 4, 'text-anchor': 'end' }, svg).textContent = fmt(v, v < 1 ? 2 : 1) + ' ms';
     }
-    el('text', { x: W - R, y: H - 6, 'text-anchor': 'end' }, svg).textContent = 'ketukan ke-1 … ke-' + a.length + ' (nilai di atas skala dipotong di tepi atas)';
+    el('text', { x: W - R, y: H - 6, 'text-anchor': 'end' }, svg).textContent = 'ketukan ke-1 … ke-' + a.length + (W > 600 ? ' (nilai di atas skala dipotong di tepi atas)' : '');
     const surf = css('--surface');
     for (const [arr, color, name] of [[a, css('--before'), 'Lama'], [b, css('--after'), 'Baru']]) {
       arr.forEach((v, i) => {
@@ -1224,7 +1278,7 @@ class IncParser {
   }
   function draw(svg, tasks, ks, end, color, upTo) {
     svg.innerHTML = '';
-    const W = 900, L = 4, R = 4, top = 10, h = 30;
+    const L = 4, R = 4, top = 10, h = 30, W = fit(svg, 78);
     const x = v => L + (W - L - R) * v / end;
     el('rect', { x: L, y: top, width: W - L - R, height: h, rx: 4, fill: css('--surface-2') }, svg);
     for (const t of tasks) {
@@ -1261,6 +1315,7 @@ class IncParser {
     $('#s4-new-k').textContent = 'ketukan terlama menunggu ' + ms(wn) + ' · total ' + ms(newTasks[newTasks.length - 1].b);
   }
   nIn.addEventListener('input', () => { cancelAnimationFrame(anim); render(); });
+  addEventListener('resize', () => { cancelAnimationFrame(anim); render(); });
   playBtn.addEventListener('click', () => {
     cancelAnimationFrame(anim);
     const { end } = schedule(+nIn.value);
