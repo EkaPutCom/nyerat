@@ -11,11 +11,12 @@
 // Gambar digambar dengan cairo pada skala zoom, bukan dibuatkan salinan yang
 // diperbesar, jadi zoom 800% pada foto besar tidak menghabiskan memori.
 
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
 import cairo from 'cairo';
+import { onKeyPress, pack } from '../gtkutil.js';
 
 export const MIN_ZOOM = 0.05;
 export const MAX_ZOOM = 8;
@@ -43,36 +44,55 @@ export class ImageViewer {
     private mode: Mode = 'fit-cap';
     private readonly scroller: Gtk.ScrolledWindow;
     private readonly percent: Gtk.Label;
-    private drag: { x: number; y: number; h: number; v: number } | null = null;
+    private drag: { h: number; v: number } | null = null;
+    private pointer: [number, number] | null = null;   // posisi penunjuk di atas gambar
 
     constructor(parent: Gtk.Window | null, private readonly pixbuf: GdkPixbuf.Pixbuf, title: string) {
         const width = pixbuf.get_width(), height = pixbuf.get_height();
 
         this.window = new Gtk.Window({
-            transient_for: parent, modal: true, window_position: Gtk.WindowPosition.CENTER_ON_PARENT,
+            transient_for: parent, modal: true, title,
             ...this.initialSize(parent, width, height),
         });
-        const header = new Gtk.HeaderBar({ show_close_button: true, title, subtitle: `${width} × ${height} px` });
+        const header = new Gtk.HeaderBar({ show_title_buttons: true });
+        const titles = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER });
+        for (const [text, css] of [[title, 'title'], [`${width} × ${height} px`, 'subtitle']]) {
+            const label = new Gtk.Label({ label: text, ellipsize: 3 });
+            label.add_css_class(css);
+            titles.append(label);
+        }
+        header.set_title_widget(titles);
         this.window.set_titlebar(header);
 
         // Tidak bisa difokuskan: tombol ditangani di tingkat jendela, dan fokus hanya menambah garis putus-putus di sekitar gambar.
         this.area = new Gtk.DrawingArea({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, can_focus: false });
-        this.area.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK
-            | Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.SCROLL_MASK);
-        this.area.connect('draw', (_area, cr) => this.draw(cr));
-        this.area.connect('button-press-event', (_area, ev) => this.onPress(ev as unknown as Gdk.Event));
-        this.area.connect('motion-notify-event', (_area, ev) => this.onMotion(ev as unknown as Gdk.Event));
-        this.area.connect('button-release-event', () => this.endDrag());
-        // Gulir di atas gambar: zoom di titik penunjuk.
-        this.area.connect('scroll-event', (_area, ev) => this.onScroll(ev as unknown as Gdk.Event, true));
+        this.area.set_draw_func((_area, cr) => this.draw(cr));
+        const motion = new Gtk.EventControllerMotion();
+        motion.connect('motion', (_m, x, y) => { this.pointer = [x, y]; });
+        motion.connect('leave', () => { this.pointer = null; });
+        this.area.add_controller(motion);
+        const click = new Gtk.GestureClick({ button: 1 });
+        click.connect('pressed', (_g, count) => { if (count === 2) this.doubleClick(); });
+        this.area.add_controller(click);
 
         this.scroller = new Gtk.ScrolledWindow({ hexpand: true, vexpand: true, can_focus: false });
-        this.scroller.add(this.area);
-        this.scroller.get_style_context().add_class('image-viewer');
-        this.scroller.add_events(Gdk.EventMask.SCROLL_MASK);
-        // Gulir di margin sekitar gambar: zoom di tengah.
-        this.scroller.connect('scroll-event', (_s, ev) => this.onScroll(ev as unknown as Gdk.Event, false));
-        this.scroller.connect('size-allocate', () => this.refit());
+        this.scroller.set_child(this.area);
+        this.scroller.add_css_class('image-viewer');
+        // Roda mouse: zoom di titik penunjuk jika di atas gambar, kalau tidak di tengah. Fase
+        // CAPTURE supaya ScrolledWindow tidak menggulirnya.
+        const scroll = new Gtk.EventControllerScroll({ flags: Gtk.EventControllerScrollFlags.VERTICAL, propagation_phase: Gtk.PropagationPhase.CAPTURE });
+        scroll.connect('scroll', (c, _dx, dy) => this.scrollZoom(dy, c.get_unit() === Gdk.ScrollUnit.WHEEL, this.pointer));
+        this.scroller.add_controller(scroll);
+        // Drag di ScrolledWindow (yang tidak ikut bergeser), bukan di gambar: pergeserannya
+        // tidak terpengaruh gulir yang sedang dilakukannya.
+        const drag = new Gtk.GestureDrag({ button: 1 });
+        drag.connect('drag-begin', () => this.beginDrag());
+        drag.connect('drag-update', (_g, dx, dy) => this.dragBy(dx, dy));
+        drag.connect('drag-end', () => this.endDrag());
+        this.scroller.add_controller(drag);
+        // Ukuran area tampilan berubah (page_size adjustment) → sesuaikan zoom pas layar.
+        this.scroller.get_hadjustment().connect('notify::page-size', () => this.refit());
+        this.scroller.get_vadjustment().connect('notify::page-size', () => this.refit());
 
         this.percent = new Gtk.Label({ width_chars: 5 });
         const button = (label: string, tooltip: string, run: () => void) => {
@@ -80,26 +100,27 @@ export class ImageViewer {
             b.connect('clicked', run);
             return b;
         };
-        const bar = new Gtk.Box({ spacing: 6, margin: 6, halign: Gtk.Align.CENTER });
-        bar.pack_start(button('−', 'Perkecil (−)', () => this.zoomOut()), false, false, 0);
-        bar.pack_start(this.percent, false, false, 0);
-        bar.pack_start(button('+', 'Perbesar (+)', () => this.zoomIn()), false, false, 0);
-        bar.pack_start(button('Pas', 'Pas layar (F)', () => this.fit()), false, false, 8);
-        bar.pack_start(button('100%', 'Ukuran asli (0)', () => this.actual()), false, false, 0);
+        const bar = new Gtk.Box({ spacing: 6, margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6, halign: Gtk.Align.CENTER });
+        bar.append(button('−', 'Perkecil (−)', () => this.zoomOut()));
+        bar.append(this.percent);
+        bar.append(button('+', 'Perbesar (+)', () => this.zoomIn()));
+        bar.append(button('Pas', 'Pas layar (F)', () => this.fit()));
+        bar.append(button('100%', 'Ukuran asli (0)', () => this.actual()));
 
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-        box.pack_start(this.scroller, true, true, 0);
-        box.pack_start(bar, false, false, 0);
-        this.window.add(box);
+        pack(box, this.scroller, true);
+        box.append(bar);
+        this.window.set_child(box);
 
-        this.window.connect('key-press-event', (_w, ev) => this.handleKey((ev as unknown as Gdk.Event).get_keyval()[1]));
-        this.window.connect('destroy', () => { this.closed = true; });
+        onKeyPress(this.window, keyval => this.handleKey(keyval));
+        // Jendela dihancurkan (GTK 4 tidak memancarkan "destroy" selama objeknya dipegang JavaScript).
+        this.window.connect('unrealize', () => { this.closed = true; });
         this.applyZoom(1);
     }
 
     // Gambar kecil: seukuran gambar; gambar besar: hampir memenuhi jendela induk.
     private initialSize(parent: Gtk.Window | null, width: number, height: number): { default_width: number; default_height: number } {
-        const [pw, ph] = parent?.get_size() ?? [1000, 700];
+        const [pw, ph] = parent ? [parent.get_width(), parent.get_height()] : [1000, 700];
         return {
             default_width: Math.max(480, Math.min(width + 40, Math.floor(pw * 0.9))),
             default_height: Math.max(360, Math.min(height + 140, Math.floor(ph * 0.9))),
@@ -107,7 +128,7 @@ export class ImageViewer {
     }
 
     show(): void {
-        this.window.show_all();
+        this.window.present();
     }
 
     close(): void {
@@ -199,7 +220,7 @@ export class ImageViewer {
 
     // ---------- Gambar dan masukan ----------
 
-    private draw(cr: cairo.Context): boolean {
+    private draw(cr: cairo.Context): void {
         cr.scale(this.zoom, this.zoom);
         Gdk.cairo_set_source_pixbuf(cr, this.pixbuf, 0, 0);
         // Diperbesar banyak: tampilkan piksel apa adanya, bukan dikaburkan.
@@ -208,7 +229,6 @@ export class ImageViewer {
         source.setFilter(this.zoom >= 3 ? cairo.Filter.NEAREST : cairo.Filter.GOOD);
         cr.paint();
         cr.$dispose();
-        return false;
     }
 
     // true = tombol sudah ditangani.
@@ -223,45 +243,36 @@ export class ImageViewer {
         }
     }
 
-    // overImage: peristiwa berasal dari area gambar, jadi koordinatnya bisa dipakai sebagai titik zoom.
-    private onScroll(ev: Gdk.Event, overImage: boolean): boolean {
-        const [, x, y] = ev.get_coords();
-        const focus = overImage ? this.focusAtPoint(x, y) : undefined;
-        const direction = ev.get_scroll_direction()[1];
-        if (direction === Gdk.ScrollDirection.UP) this.zoomIn(focus);
-        else if (direction === Gdk.ScrollDirection.DOWN) this.zoomOut(focus);
-        else if (direction === Gdk.ScrollDirection.SMOOTH) {
-            const dy = ev.get_scroll_deltas()[2];
-            if (dy === 0) return true;
-            this.mode = 'manual';
-            this.applyZoom(this.zoom * Math.pow(1.1, -dy), focus);
-        } else return false;
+    // Roda mouse sebesar dy (ke atas negatif). wheel = langkah roda biasa (zoom per ZOOM_STEP);
+    // selain itu gulir halus touchpad. point = posisi penunjuk di atas gambar, atau null (zoom di tengah).
+    scrollZoom(dy: number, wheel: boolean, point: [number, number] | null): boolean {
+        if (dy === 0) return true;
+        const focus = point ? this.focusAtPoint(point[0], point[1]) : undefined;
+        this.mode = 'manual';
+        this.applyZoom(this.zoom * (wheel ? Math.pow(ZOOM_STEP, -dy) : Math.pow(1.1, -dy)), focus);
         return true;
     }
 
-    private onPress(ev: Gdk.Event): boolean {
-        if (ev.get_button()[1] !== 1) return false;
-        if (ev.get_event_type() === Gdk.EventType.DOUBLE_BUTTON_PRESS) {
-            // Klik ganda: bergantian antara pas layar dan ukuran asli.
-            if (this.mode !== 'manual' && Math.abs(this.zoom - 1) > 1e-6) this.actual();
-            else this.fit();
-            this.endDrag();
-            return true;
-        }
-        const [, x, y] = ev.get_root_coords();
-        this.drag = { x, y, h: this.scroller.get_hadjustment().get_value(), v: this.scroller.get_vadjustment().get_value() };
-        return true;
+    // Klik ganda: bergantian antara pas layar dan ukuran asli.
+    doubleClick(): void {
+        if (this.mode !== 'manual' && Math.abs(this.zoom - 1) > 1e-6) this.actual();
+        else this.fit();
+        this.endDrag();
     }
 
-    private onMotion(ev: Gdk.Event): boolean {
+    beginDrag(): void {
+        this.drag = { h: this.scroller.get_hadjustment().get_value(), v: this.scroller.get_vadjustment().get_value() };
+    }
+
+    // (dx, dy): pergeseran penunjuk sejak beginDrag(). false = tidak sedang drag.
+    dragBy(dx: number, dy: number): boolean {
         if (!this.drag) return false;
-        const [, x, y] = ev.get_root_coords();
-        this.scroller.get_hadjustment().set_value(this.drag.h - (x - this.drag.x));
-        this.scroller.get_vadjustment().set_value(this.drag.v - (y - this.drag.y));
+        this.scroller.get_hadjustment().set_value(this.drag.h - dx);
+        this.scroller.get_vadjustment().set_value(this.drag.v - dy);
         return true;
     }
 
-    private endDrag(): boolean {
+    endDrag(): boolean {
         this.drag = null;
         return true;
     }

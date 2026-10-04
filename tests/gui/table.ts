@@ -1,11 +1,13 @@
 // Tes GUI: Tabel (grid dan penyuntingan).
 
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import { cellIndexAt } from '../../src/markdown/table.js';
 import { section, test, eq, ok } from '../framework.js';
 import type { GuiContext } from './context.js';
+import { iterAtLine } from '../../src/gtkutil.js';
+import { emitClick } from '../widgets.js';
 
 export function tableGridTests(c: GuiContext): void {
     const { w, ed, buf, pump, text, setText, cursorTo, key, action } = c;
@@ -15,7 +17,7 @@ export function tableGridTests(c: GuiContext): void {
     const DOC = 'atas\n\n| Nama | Nilai |\n| :--- | ---: |\n| satu | 1 |\n| dua | 2 |\n\nbawah';
     const settleT = () => { for (let i = 0; i < 30; i++) { pump(); GLib.usleep(10000); } };
     const tBlock = () => ed.tableLayer.blocks[0];
-    const tableTag = (line: number) => buf.get_iter_at_line(line).has_tag(ed.tags.tablehide);
+    const tableTag = (line: number) => iterAtLine(buf, line).has_tag(ed.tags.tablehide);
     const lineAt = (n: number) => text().split('\n')[n];
     const curLine = () => buf.get_iter_at_mark(buf.get_insert()).get_line();
     const curCol = () => cellIndexAt(lineAt(curLine()), buf.get_iter_at_mark(buf.get_insert()).get_line_offset());
@@ -31,8 +33,8 @@ export function tableGridTests(c: GuiContext): void {
     });
     test('isi dokumen tidak berubah karena grid', () => eq(text(), DOC));
     test('grid berada di antara paragraf di atas dan di bawahnya', () => {
-        const [prevY, prevH] = ed.view.get_line_yrange(buf.get_iter_at_line(1));
-        const [nextY] = ed.view.get_line_yrange(buf.get_iter_at_line(6));
+        const [prevY, prevH] = ed.view.get_line_yrange(iterAtLine(buf, 1));
+        const [nextY] = ed.view.get_line_yrange(iterAtLine(buf, 6));
         const b = tBlock();
         ok(b.height > 0, 'tinggi grid 0');
         ok(b.y >= prevY + prevH, `grid (y=${b.y}) menimpa paragraf di atasnya (bawah=${prevY + prevH})`);
@@ -62,10 +64,7 @@ export function tableGridTests(c: GuiContext): void {
         const widget = tBlock().widget!;
         buf.insert(buf.get_start_iter(), 'tambahan\n', -1); pump(); settleT();
         ok(tBlock().widget === widget, 'grid dibangun ulang saat hanya baris bergeser');
-        const grid = widget.get_child() as Gtk.Grid;
-        const cell = grid.get_child_at(0, 0) as Gtk.EventBox;
-        const event = Gdk.Event.new(Gdk.EventType.BUTTON_PRESS);
-        cell.emit('button-press-event', event as unknown as Gdk.EventButton);
+        emitClick(tBlock().grid!.get_child_at(0, 0)!);
         pump();
         eq(curLine(), 3, 'klik judul memakai baris tabel yang sudah bergeser');
     });
@@ -87,7 +86,7 @@ export function tableGridTests(c: GuiContext): void {
             touched.length = 0;
             cursorTo(blocks[1].end);
             eq(touched.length, 0, 'perpindahan dalam tabel memasang ulang tag');
-            buf.select_range(buf.get_iter_at_line(blocks[0].start), buf.get_iter_at_line(blocks[2].end));
+            buf.select_range(iterAtLine(buf, blocks[0].start), iterAtLine(buf, blocks[2].end));
             pump(); settleT();
             eq(blocks.map(b => b.collapsed), [false, false, false]);
             ok(blocks.every(b => !tableTag(b.start)), 'seleksi lintas tabel masih menyembunyikan teks');
@@ -107,12 +106,12 @@ export function tableGridTests(c: GuiContext): void {
         eq(last.widget, null, 'grid di luar layar dibuat sebelum diperlukan');
         ok(ed.tableLayer.blocks.filter(b => b.widget).length < 10, 'terlalu banyak grid dibuat saat membuka');
         const height = ed.view.get_vadjustment()!.upper;
-        ed.view.scroll_to_iter(buf.get_iter_at_line(last.end), 0, true, 0, 0.5);
+        ed.view.scroll_to_iter(iterAtLine(buf, last.end), 0, true, 0, 0.5);
         settleT();
         ok(last.widget?.get_visible(), 'grid akhir tidak tampil setelah digulir');
-        eq((last.widget!.get_child() as Gtk.Grid).get_preferred_height()[1], last.height, 'tinggi cadangan berbeda dari grid sebenarnya');
+        eq(last.widget!.measure(Gtk.Orientation.VERTICAL, -1)[1], last.height, 'tinggi cadangan berbeda dari grid sebenarnya');
         ok(!first.widget?.get_visible(), 'grid awal tidak disembunyikan setelah digulir');
-        const [lineY, lineHeight] = ed.view.get_line_yrange(buf.get_iter_at_line(last.end));
+        const [lineY, lineHeight] = ed.view.get_line_yrange(iterAtLine(buf, last.end));
         eq(last.y, lineY + lineHeight - last.height - 12, 'posisi grid akhir salah');
         eq(ed.view.get_vadjustment()!.upper, height, 'menyembunyikan grid mengubah tinggi dokumen');
         ed.view.scroll_to_iter(buf.get_start_iter(), 0, true, 0, 0);
@@ -127,13 +126,13 @@ export function tableGridTests(c: GuiContext): void {
         const last = ed.tableLayer.blocks[29];
         eq(last.widget, null, 'tabel berbeda di luar layar sudah dibuat');
         const height = ed.view.get_vadjustment()!.upper;
-        ed.view.scroll_to_iter(buf.get_iter_at_line(last.end), 0, true, 0, 0.5); settleT();
+        ed.view.scroll_to_iter(iterAtLine(buf, last.end), 0, true, 0, 0.5); settleT();
         ok(last.widget?.get_visible(), 'grid akhir tidak muncul');
-        eq((last.widget!.get_child() as Gtk.Grid).get_preferred_height()[1], last.height, 'tinggi pengukur salah');
+        eq(last.widget!.measure(Gtk.Orientation.VERTICAL, -1)[1], last.height, 'tinggi pengukur salah');
         eq(ed.view.get_vadjustment()!.upper, height, 'membuat grid menggeser tinggi dokumen');
         w.setDark(true); settleT();
         ok(last.widget?.get_visible(), 'grid hilang saat tema berubah');
-        eq((last.widget!.get_child() as Gtk.Grid).get_preferred_height()[1], last.height, 'tinggi tema gelap salah');
+        eq(last.widget!.measure(Gtk.Orientation.VERTICAL, -1)[1], last.height, 'tinggi tema gelap salah');
         w.setDark(false); settleT();
     });
     test('Tab pindah ke sel berikutnya, lalu ke baris berikutnya', () => {
@@ -170,7 +169,7 @@ export function tableGridTests(c: GuiContext): void {
     });
     test('Enter di luar tabel tidak ditangani tabel', () => {
         setText('teks\n\n| a |\n| - |\n| 1 |'); cursorTo(0, 4);
-        ok(!ed.onKey({ get_keyval: () => [true, Gdk.KEY_Return], get_state: () => [true, 0 as Gdk.ModifierType] }), 'Enter di paragraf biasa ditangani');
+        ok(!ed.onKey(Gdk.KEY_Return, 0), 'Enter di paragraf biasa ditangani');
     });
     test('tabel hanya judul: Tab di sel terakhir menambah baris isi', () => {
         setText('| a | b |\n| --- | --- |\n\nx'); cursorTo(0, 6);

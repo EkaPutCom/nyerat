@@ -1,10 +1,11 @@
 // Tes GUI: Gambar.
 
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import { section, test, eq, ok, tmp } from '../framework.js';
 import type { GuiContext } from './context.js';
+import { iterAtLine } from '../../src/gtkutil.js';
 
 export function imageTests(c: GuiContext): void {
     const { w, ed, buf, pump, text, setText, cursorTo, hidden, action, imgDir, images, waitImages } = c;
@@ -15,7 +16,7 @@ export function imageTests(c: GuiContext): void {
     const pb = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, false, 8, 300, 100);
     pb.fill(0x4183c4ff);
     pb.savev(GLib.build_filenamev([imgDir, 'uji.png']), 'png', [], []);
-    const hasGap = (line: number) => buf.get_iter_at_line(line).get_tags().some(t => t.name?.startsWith('image-gap-'));
+    const hasGap = (line: number) => iterAtLine(buf, line).get_tags().some(t => t.name?.startsWith('image-gap-'));
 
     test('gambar lokal dimuat dan ditampilkan di bawah barisnya', () => {
         w.file = GLib.build_filenamev([tmp, 'dok.md']);
@@ -26,7 +27,7 @@ export function imageTests(c: GuiContext): void {
         eq(block.items[0].entry?.status, 'ok', 'status muat');
         ok(block.box.get_visible(), 'widget gambar tidak terlihat');
         ok(hasGap(2), 'ruang di bawah baris gambar tidak disediakan');
-        const [lineY] = ed.view.get_line_yrange(buf.get_iter_at_line(2));
+        const [lineY] = ed.view.get_line_yrange(iterAtLine(buf, 2));
         ok(block.y > lineY, `gambar (y=${block.y}) tidak di bawah barisnya (y=${lineY})`);
     });
     test('isi dokumen tidak berubah karena gambar', () => {
@@ -51,8 +52,7 @@ export function imageTests(c: GuiContext): void {
         setText('![hilang](gambar/tidak-ada.png)');
         waitImages();
         eq(images()[0].items[0].entry?.status, 'error', 'status muat');
-        // Setiap item dibungkus EventBox untuk menangkap kliknya.
-        const label = (images()[0].content.get_children()[0] as Gtk.Bin).get_child();
+        const label = images()[0].content.get_first_child();
         ok(label instanceof Gtk.Label && label.label.includes('hilang'), 'label error tidak tampil');
     });
     test('gambar di baris tabel dan blok kode diabaikan', () => {

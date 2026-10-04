@@ -1,8 +1,8 @@
 // Bilah pencarian (Ctrl+F) memakai GtkSource.SearchContext, yang juga menyorot
 // semua hasil di editor.
 
-import Gtk from 'gi://Gtk?version=3.0';
-import GtkSource from 'gi://GtkSource?version=4';
+import Gtk from 'gi://Gtk?version=4.0';
+import GtkSource from 'gi://GtkSource?version=5';
 
 export class FindBar {
     buffer: GtkSource.Buffer;
@@ -28,18 +28,18 @@ export class FindBar {
         this.entry.connect('previous-match', () => this.findPrevious());
         this.entry.connect('stop-search', () => this.close());
 
-        const prev = Gtk.Button.new_from_icon_name('go-up-symbolic', Gtk.IconSize.BUTTON);
+        const prev = Gtk.Button.new_from_icon_name('go-up-symbolic');
         prev.connect('clicked', () => this.findPrevious());
-        const next = Gtk.Button.new_from_icon_name('go-down-symbolic', Gtk.IconSize.BUTTON);
+        const next = Gtk.Button.new_from_icon_name('go-down-symbolic');
         next.connect('clicked', () => this.findNext());
 
         const box = new Gtk.Box({ spacing: 6 });
-        box.pack_start(this.entry, false, false, 0);
-        box.pack_start(prev, false, false, 0);
-        box.pack_start(next, false, false, 0);
+        box.append(this.entry);
+        box.append(prev);
+        box.append(next);
 
         this.widget = new Gtk.SearchBar({ show_close_button: true });
-        this.widget.add(box);
+        this.widget.set_child(box);
         this.widget.connect_entry(this.entry);
         // Sorotan hasil hilang saat bilah ditutup.
         this.widget.connect('notify::search-mode-enabled', () => {

@@ -4,7 +4,7 @@
 // yang memengaruhi ukuran (font, spasi baris) GTK lalu menata ulang seluruh dokumen, dan
 // itu yang paling mahal saat mengetik atau memindah kursor di dokumen panjang.
 
-import type Gtk from 'gi://Gtk?version=3.0';
+import type Gtk from 'gi://Gtk?version=4.0';
 
 // Rentang [awal, akhir) dalam offset code point.
 export type Range = [start: number, end: number];

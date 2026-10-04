@@ -17,13 +17,14 @@
 //
 // Tag dipasang lewat LineTagger (tagsync.ts), jadi hanya baris yang berubah yang disentuh.
 
-import type Gtk from 'gi://Gtk?version=3.0';
+import type Gtk from 'gi://Gtk?version=4.0';
 import { RE, isTableSeparator } from '../markdown/syntax.js';
 import { findTables, type TableRange } from '../markdown/table.js';
 import { parseInline } from '../markdown/inline.js';
 import { makeCpMap, cpLength } from './offsets.js';
 import { type TagName, type Tags } from './tags.js';
 import type { LineSpan, LineTagger } from './tagsync.js';
+import { iterAtLine } from '../gtkutil.js';
 
 // Sintaks yang boleh disembunyikan: [awal, akhir, barisPertama, barisTerakhir, baris].
 export type Marker = [start: number, end: number, firstLine: number, lastLine: number, line: number];
@@ -140,8 +141,8 @@ export class HighlightCache {
         const [first, last] = edited;
         const shift = buffer.get_line_count() - old.lines.length;
         const afterOldEdit = last + 1 - shift;
-        const from = buffer.get_iter_at_line(first);
-        const to = last + 1 < buffer.get_line_count() ? buffer.get_iter_at_line(last + 1) : buffer.get_end_iter();
+        const from = iterAtLine(buffer, first);
+        const to = last + 1 < buffer.get_line_count() ? iterAtLine(buffer, last + 1) : buffer.get_end_iter();
         const raw = buffer.get_text(from, to, true);
         const changed = (last + 1 < buffer.get_line_count() ? raw.slice(0, -1) : raw).split('\n');
         if (afterOldEdit < first || changed.length !== last - first + 1)

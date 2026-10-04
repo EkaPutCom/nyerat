@@ -6,7 +6,7 @@
 //   1. Di bawah baris yang memuat gambar disediakan ruang kosong dengan tag
 //      ber-`pixels_below_lines` setinggi gambarnya.
 //   2. Widget gambar ditempelkan di atas ruang kosong itu dengan
-//      add_child_in_window(). Posisinya dalam koordinat buffer, jadi ikut
+//      add_overlay(). Posisinya dalam koordinat buffer, jadi ikut
 //      bergulir bersama teks.
 //   3. Setiap kali tata letak berubah (teks diedit, jendela diubah ukurannya,
 //      gambar selesai dimuat), posisi widget dihitung ulang dari
@@ -15,13 +15,14 @@
 // Gambar dimuat secara async dan disimpan di cache per URI, jadi mengetik tidak
 // memuat ulang gambar yang sama.
 
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import type { ImageRef } from './highlighter.js';
 import { setTagGroup, type Range } from './tagsync.js';
+import { OverlaySlots } from './overlays.js';
+import { iterAtLine, onClick, removeChildren } from '../gtkutil.js';
 
 const MAX_HEIGHT = 480;  // tinggi maksimum gambar, dalam piksel
 const GAP = 12;          // jarak di atas dan bawah gambar
@@ -51,7 +52,6 @@ interface BlockItem {
 }
 
 // Bagian dari Gdk.Event yang dipakai penanganan klik (memudahkan tes membuat event tiruan).
-export type ClickEvent = Pick<Gdk.Event, 'get_button' | 'get_event_type'>;
 
 // Hasil mencari gambar untuk diperbesar (imageAt).
 export type ImageLookup =
@@ -63,7 +63,7 @@ export interface Block {
     line: number;
     key: string;           // daftar URI + alt, untuk mencocokkan blok yang sama
     items: BlockItem[];
-    box: Gtk.EventBox;
+    box: Gtk.Box;          // slot overlay (lihat overlays.ts)
     content: Gtk.Box;
     height: number;
     x: number;
@@ -117,16 +117,23 @@ export class ImageLayer {
     private relayoutQueued = false;
     private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
+    private readonly slots: OverlaySlots;
 
     constructor(view: Gtk.TextView) {
         this.view = view;
         this.buffer = view.buffer;
-        view.connect('destroy', () => { this.destroyed = true; });
+        this.slots = new OverlaySlots(view);
 
-        // Tata letak berubah → posisi widget perlu dihitung ulang.
-        view.connect('size-allocate', () => this.queueRelayout());
+        // Tata letak berubah (tinggi dokumen atau ukuran jendela, terlihat dari adjustment
+        // vertikal) → posisi widget perlu dihitung ulang.
         view.connect('notify::vadjustment', () => this.watchAdjustment());
         this.watchAdjustment();
+    }
+
+    // Editor ditutup: hentikan pekerjaan tertunda (lihat MarkdownView.destroy()).
+    destroy(): void {
+        this.destroyed = true;
+        for (const block of this.blocks) block.destroyed = true;
     }
 
     private watchAdjustment(): void {
@@ -134,14 +141,6 @@ export class ImageLayer {
         if (!adj || adj === this.adjustment) return;
         this.adjustment = adj;
         adj.connect('changed', () => this.queueRelayout());
-    }
-
-    // Tombol mouse ditekan pada gambar ke-`index` di baris `line`. Hanya tombol kiri yang
-    // ditangani; klik ganda datang sebagai peristiwa DOUBLE_BUTTON_PRESS dari GDK.
-    onItemPress(line: number, index: number, event: ClickEvent): boolean {
-        if (event.get_button()[1] !== 1) return false;
-        this.press(line, index, event.get_event_type() === Gdk.EventType.DOUBLE_BUTTON_PRESS);
-        return true;
     }
 
     // Gambar di baris `line` diklik. Satu klik: kursor ke barisnya (sintaksnya muncul);
@@ -214,9 +213,9 @@ export class ImageLayer {
 
     private createBlock(line: number, key: string, items: { uri: string; alt: string }[]): Block {
         const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: SPACING });
-        const box = new Gtk.EventBox({ visible_window: false });
-        box.add(content);
-        box.get_style_context().add_class('image-block');
+        content.add_css_class('image-block');
+        const box = this.slots.acquire();
+        box.append(content);
         const block: Block = { line, key, items: [], box, content, height: 0, x: -1, y: -1, destroyed: false };
 
         for (const { uri, alt } of items) {
@@ -231,20 +230,18 @@ export class ImageLayer {
             });
         }
         this.render(block);
-        this.view.add_child_in_window(box, Gtk.TextWindowType.TEXT, 0, 0);
-        box.show_all();
         box.set_visible(this.enabled);
         return block;
     }
 
     private destroyBlock(block: Block): void {
         block.destroyed = true;
-        block.box.destroy();
+        this.slots.release(block.box);
     }
 
     // Bangun ulang isi blok sesuai status pemuatan dan lebar kolom saat ini.
     private render(block: Block): void {
-        for (const child of block.content.get_children()) child.destroy();
+        removeChildren(block.content);
         let height = 0;
         for (const item of block.items) {
             let widget: Gtk.Widget;
@@ -254,7 +251,9 @@ export class ImageLayer {
                 const w = Math.max(1, Math.round(pb.get_width() * scale));
                 const h = Math.max(1, Math.round(pb.get_height() * scale));
                 const scaled = (scale < 1 ? pb.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR) : null) ?? pb;
-                widget = Gtk.Image.new_from_pixbuf(scaled);
+                // Gtk.Image di GTK 4 berukuran ikon; Picture tampil seukuran gambarnya.
+                widget = Gtk.Picture.new_for_pixbuf(scaled);
+                (widget as Gtk.Picture).set_can_shrink(false);
                 widget.set_tooltip_text(`${item.alt || item.uri}\nKlik ganda untuk memperbesar`);
                 height += h;
             } else {
@@ -264,20 +263,21 @@ export class ImageLayer {
                 // Tanpa wrap: widget di dalam TextView hanya diberi lebar minimum,
                 // sehingga label yang dibungkus akan terpotong per kata.
                 widget = new Gtk.Label({ label: text, xalign: 0 });
-                widget.get_style_context().add_class('image-note');
+                widget.add_css_class('image-note');
                 if (item.entry?.error) widget.set_tooltip_text(item.entry.error);
                 height += 24;
             }
             // Setiap gambar punya penerima kliknya sendiri, supaya klik ganda tahu gambar mana
             // yang dimaksud jika satu baris memuat beberapa gambar.
-            const clickable = new Gtk.EventBox({ visible_window: false, halign: Gtk.Align.START });
-            clickable.add(widget);
+            widget.set_halign(Gtk.Align.START);
             const index = block.items.indexOf(item);
-            clickable.connect('button-press-event', (_w, ev) => this.onItemPress(block.line, index, ev as unknown as Gdk.Event));
-            block.content.add(clickable);
+            onClick(widget, count => {
+                this.press(block.line, index, count === 2);
+                return true;
+            });
+            block.content.append(widget);
         }
         height += SPACING * Math.max(0, block.items.length - 1);
-        block.content.show_all();
         block.height = height;
     }
 
@@ -297,7 +297,7 @@ export class ImageLayer {
         const gaps = new Map<Gtk.TextTag, Range[]>();
         for (const block of this.enabled ? this.blocks : []) {
             if (block.line >= this.buffer.get_line_count()) continue;
-            const s = this.buffer.get_iter_at_line(block.line);
+            const s = iterAtLine(this.buffer, block.line);
             const e = s.copy();
             if (!e.ends_line()) e.forward_to_line_end();
             // Tag paragraf harus menempel di karakter pertama baris.
@@ -326,13 +326,13 @@ export class ImageLayer {
         const x = this.view.get_left_margin();
         for (const block of this.blocks) {
             if (block.destroyed || block.line >= this.buffer.get_line_count()) continue;
-            const [lineY, lineHeight] = this.view.get_line_yrange(this.buffer.get_iter_at_line(block.line));
+            const [lineY, lineHeight] = this.view.get_line_yrange(iterAtLine(this.buffer, block.line));
             const y = lineY + lineHeight - block.height - GAP;
             // Hanya pindahkan jika berubah, supaya tidak memicu resize berulang.
             if (x === block.x && y === block.y) continue;
             block.x = x;
             block.y = y;
-            this.view.move_child(block.box, x, y);
+            this.view.move_overlay(block.box, x, y);
         }
     }
 }

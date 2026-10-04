@@ -10,14 +10,15 @@
 
 
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import System from 'system';
 
 import { DIM, GREEN, RED, RESET, errorMessage, opt, optVal, recordFailure, setRoot, summary } from './framework.js';
 import { WELCOME } from '../src/welcome.js';
 import { createContext } from './gui/context.js';
+import { widgetPixbuf } from './widgets.js';
 import { incrementalTests } from './unit/incremental.js';
 import { inlineTests } from './unit/inline.js';
 import { settingsTests } from './unit/settings.js';
@@ -104,8 +105,7 @@ function runGuiTests(app: Gtk.Application): void {
         cursorTo(0);
         ed.view.scroll_to_iter(buf.get_start_iter(), 0, false, 0, 0);
         for (let i = 0; i < 20; i++) { pump(); GLib.usleep(20000); }
-        const gw = w.win.get_window()!;
-        Gdk.pixbuf_get_from_window(gw, 0, 0, gw.get_width(), gw.get_height())?.savev(shot, 'png', [], []);
+        widgetPixbuf(w.win)?.savev(shot, 'png', [], []);
         print(`\n${DIM}Tangkapan layar: ${shot}${RESET}`);
     }
 

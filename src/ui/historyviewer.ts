@@ -2,12 +2,13 @@
 // tab Isi (file lengkap pada commit itu). Hanya baca; jendela tidak modal supaya dokumen
 // tetap bisa dibandingkan sambil mengedit.
 
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import GLib from 'gi://GLib';
 import { commitContent, commitDiff, commitFile, workingDiff, type TextResult } from '../git.js';
 import { parseDiff, type Commit } from '../gitlog.js';
 import { replaceAllText } from '../editor/view.js';
+import { iterAtLine, onKeyPress, pack } from '../gtkutil.js';
 
 const DIFF_COLORS = {
     light: { add: '#dafbe1', del: '#ffebe9', hunk: '#0969da' },
@@ -29,23 +30,22 @@ export class HistoryViewer {
     constructor(parent: Gtk.Window | null, file: string, readonly commit: Commit | null, dark: boolean) {
         this.window = new Gtk.Window({
             transient_for: parent, default_width: 860, default_height: 620,
-            window_position: Gtk.WindowPosition.CENTER_ON_PARENT,
         });
         const title = commit ? commit.subject || '(tanpa pesan)' : 'Perubahan belum di-commit';
         const detail = commit
             ? `${commit.short} · ${commit.author} · ${GLib.DateTime.new_from_unix_local(commit.time).format('%d %b %Y %H:%M')}`
             : `${GLib.path_get_basename(file)} · dibandingkan dengan commit terakhir`;
         // Judul header dipakai StackSwitcher, jadi info commit ditaruh di atas isi.
-        const header = new Gtk.HeaderBar({ show_close_button: true });
+        const header = new Gtk.HeaderBar({ show_title_buttons: true });
         this.window.set_titlebar(header);
         this.window.set_title(title);
         const subject = new Gtk.Label({ label: title, xalign: 0, wrap: true });
         subject.set_markup(`<b>${GLib.markup_escape_text(title, -1)}</b>`);
         const meta = new Gtk.Label({ label: detail, xalign: 0 });
-        meta.get_style_context().add_class('dim-label');
-        const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, margin: 12, margin_bottom: 8 });
-        info.pack_start(subject, false, false, 0);
-        info.pack_start(meta, false, false, 0);
+        meta.add_css_class('dim-label');
+        const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, margin_top: 12, margin_start: 12, margin_end: 12, margin_bottom: 8 });
+        info.append(subject);
+        info.append(meta);
 
         this.diffView = this.createView();
         this.contentView = this.createView();
@@ -54,32 +54,33 @@ export class HistoryViewer {
         // Perubahan yang belum di-commit tidak punya "versi"; isi terbarunya sudah ada di editor.
         if (commit) {
             this.stack.add_titled(this.scrolled(this.contentView), 'content', 'Isi versi ini');
-            header.set_custom_title(new Gtk.StackSwitcher({ stack: this.stack }));
+            header.set_title_widget(new Gtk.StackSwitcher({ stack: this.stack }));
         }
         const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-        body.pack_start(info, false, false, 0);
-        body.pack_start(new Gtk.Separator(), false, false, 0);
-        body.pack_start(this.stack, true, true, 0);
+        body.append(info);
+        body.append(new Gtk.Separator());
+        pack(body, this.stack, true);
 
         this.messageEntry = new Gtk.Entry({ placeholder_text: 'Pesan commit', hexpand: true });
         this.commitButton = new Gtk.Button({ label: 'Commit file ini' });
-        this.commitButton.get_style_context().add_class('suggested-action');
-        this.status = new Gtk.Label({ xalign: 0, wrap: true, no_show_all: true, margin_start: 12, margin_end: 12, margin_bottom: 8 });
+        this.commitButton.add_css_class('suggested-action');
+        this.status = new Gtk.Label({ xalign: 0, wrap: true, visible: false, margin_start: 12, margin_end: 12, margin_bottom: 8 });
         if (!commit) {
-            const bar = new Gtk.Box({ spacing: 8, margin: 10 });
-            bar.pack_start(this.messageEntry, true, true, 0);
-            bar.pack_start(this.commitButton, false, false, 0);
-            body.pack_start(new Gtk.Separator(), false, false, 0);
-            body.pack_start(bar, false, false, 0);
-            body.pack_start(this.status, false, false, 0);
+            const bar = new Gtk.Box({ spacing: 8, margin_top: 10, margin_bottom: 10, margin_start: 10, margin_end: 10 });
+            pack(bar, this.messageEntry, true);
+            bar.append(this.commitButton);
+            body.append(new Gtk.Separator());
+            body.append(bar);
+            body.append(this.status);
             this.commitButton.connect('clicked', () => this.doCommit(file));
             this.messageEntry.connect('activate', () => this.doCommit(file));
         }
-        this.window.add(body);
+        this.window.set_child(body);
 
-        this.window.connect('destroy', () => { this.closed = true; });
-        this.window.connect('key-press-event', (_w, event) => {
-            if (event.keyval !== Gdk.KEY_Escape) return false;
+        // Jendela dihancurkan (GTK 4 tidak memancarkan "destroy" selama objeknya dipegang JavaScript).
+        this.window.connect('unrealize', () => { this.closed = true; });
+        onKeyPress(this.window, keyval => {
+            if (keyval !== Gdk.KEY_Escape) return false;
             this.window.destroy();
             return true;
         });
@@ -111,11 +112,11 @@ export class HistoryViewer {
 
     private showStatus(text: string): void {
         this.status.set_text(text);
-        this.status.show();
+        this.status.set_visible(true);
     }
 
     show(): void {
-        this.window.show_all();
+        this.window.present();
     }
 
     private setPlaceholder(message: string): void {
@@ -129,13 +130,13 @@ export class HistoryViewer {
             wrap_mode: Gtk.WrapMode.WORD_CHAR,
             left_margin: 14, right_margin: 14, top_margin: 10, bottom_margin: 10,
         });
-        view.get_style_context().add_class('history-text');
+        view.add_css_class('history-text');
         return view;
     }
 
     private scrolled(view: Gtk.TextView): Gtk.ScrolledWindow {
         const scroll = new Gtk.ScrolledWindow();
-        scroll.add(view);
+        scroll.set_child(view);
         return scroll;
     }
 
@@ -164,7 +165,7 @@ export class HistoryViewer {
         replaceAllText(this.diffView, () => buffer.set_text(lines.map(l => l.text).join('\n'), -1));
         lines.forEach((line, i) => {
             if (line.kind === 'context') return;
-            const start = buffer.get_iter_at_line(i);
+            const start = iterAtLine(buffer, i);
             const end = start.copy();
             end.forward_to_line_end();
             buffer.apply_tag_by_name(line.kind, start, end);

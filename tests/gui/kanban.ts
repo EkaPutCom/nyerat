@@ -1,11 +1,13 @@
 // Tes GUI: Kanban (papan).
 
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import { readTextFile } from '../../src/files.js';
 import { addCard, isKanban, parseBoard } from '../../src/markdown/kanban.js';
 import { KanbanBoard } from '../../src/ui/kanban.js';
+import { findEntry, type MenuEntry } from '../../src/ui/menu.js';
+import { childrenOf } from '../../src/gtkutil.js';
+import { descendants } from '../widgets.js';
 import { section, test, eq, ok, tmp } from '../framework.js';
 import { BOARD } from '../fixtures.js';
 import type { GuiContext } from './context.js';
@@ -18,18 +20,15 @@ export function kanbanBoardTests(c: GuiContext): void {
     GLib.file_set_contents(papan, BOARD);
     const kb = w.board;
     const settleK = () => { for (let i = 0; i < 25; i++) { pump(); GLib.usleep(8000); } };
-    const kbDescendants = (root: Gtk.Widget): Gtk.Widget[] =>
-        root instanceof Gtk.Container ? root.get_children().flatMap(c => [c, ...kbDescendants(c)]) : [];
+    const kbDescendants = descendants;
     const kbEntry = (name: string) => kbDescendants(kb.widget).find(c => c.get_name() === name) as Gtk.Entry | undefined;
     const kbCheck = (col: number, idx: number) => kbDescendants(kb.columns[col].cards[idx]).find(c => c instanceof Gtk.CheckButton) as Gtk.CheckButton;
-    const kbMenu = (menu: Gtk.Menu, label: string): Gtk.MenuItem => {
-        const item = menu.get_children().find(c => c instanceof Gtk.MenuItem && c.get_label() === label);
+    const kbMenu = (menu: MenuEntry[], label: string) => {
+        const item = findEntry(menu, label);
         if (!item) throw new Error(`item menu "${label}" tidak ada`);
-        return item as Gtk.MenuItem;
+        return { item, enabled: item.enabled !== false, activate: () => item.run!() };
     };
     const kbTitles = () => kb.getBoard().columns.map(c => c.title);
-    const ptr = (lx: number, ly: number, rx: number, ry: number) =>
-        ({ get_coords: () => [true, lx, ly], get_root_coords: () => [true, rx, ry], get_button: () => [true, 1] }) as unknown as Gdk.Event;
     // Titik di kartu `target` (offset dx, dy) dinyatakan dalam koordinat kartu `from`.
     const inCard = (from: Gtk.Widget, target: Gtk.Widget, dx: number, dy: number) => {
         const [, x, y] = target.translate_coordinates(from, dx, dy);
@@ -80,7 +79,7 @@ export function kanbanBoardTests(c: GuiContext): void {
         kb.showAddList(); settleK();
         const entry = kbEntry('kanban-entry-list')!;
         ok(entry.get_child_visible() && entry.get_mapped(), 'isian tampil setelah klik Tambah daftar');
-        entry.set_text('Review'); entry.activate(); settleK();
+        entry.set_text('Review'); entry.emit('activate'); settleK();
         eq(kbTitles(), ['Rencana', 'Dikerjakan', 'Selesai', 'Review']);
         ok(text().includes('## Review'), 'teks dokumen');
         kb.hideAdd();
@@ -90,17 +89,17 @@ export function kanbanBoardTests(c: GuiContext): void {
         kbCheck(0, 1).set_active(true); settleK();
         eq(kb.getBoard().columns[0].cards[1].done, true, 'model');
         ok(text().includes('- [x] Kirim undangan'), 'teks dokumen');
-        ok(kb.columns[0].cards[1].get_style_context().has_class('kanban-card-done'), 'gaya kartu selesai');
+        ok(kb.columns[0].cards[1].has_css_class('kanban-card-done'), 'gaya kartu selesai');
     });
     test('menu kartu: hapus, pindah ke daftar lain, naik/turun, tandai selesai', () => {
         openBoard();
         const menu = kb.cardMenu(0, 0);
-        ok(!kbMenu(menu, 'Naik').get_sensitive() && kbMenu(menu, 'Turun').get_sensitive(), 'Naik/Turun di kartu pertama');
+        ok(!kbMenu(menu, 'Naik').enabled && kbMenu(menu, 'Turun').enabled, 'Naik/Turun di kartu pertama');
         kbMenu(menu, 'Turun').activate(); settleK();
         eq(kb.cardTexts(0), ['Kirim undangan', 'Tulis laporan #penting @{2026-10-20}'], 'turun');
-        const submenu = kbMenu(kb.cardMenu(0, 0), 'Pindahkan ke').get_submenu() as Gtk.Menu;
-        eq(submenu.get_children().map(c => (c as Gtk.MenuItem).get_label()), ['Dikerjakan', 'Selesai'], 'tujuan tidak memuat daftar asal');
-        (submenu.get_children().find(c => (c as Gtk.MenuItem).get_label() === 'Selesai') as Gtk.MenuItem).activate(); settleK();
+        const submenu = kbMenu(kb.cardMenu(0, 0), 'Pindahkan ke').item.submenu!;
+        eq(submenu.map(e => e.label), ['Dikerjakan', 'Selesai'], 'tujuan tidak memuat daftar asal');
+        submenu.find(e => e.label === 'Selesai')!.run!(); settleK();
         eq([kb.cardTexts(0).length, kb.cardTexts(2).at(-1)], [1, 'Kirim undangan'], 'pindah ke akhir daftar tujuan');
         kbMenu(kb.cardMenu(2, 2), 'Tandai Selesai').activate(); settleK();
         eq(kb.getBoard().columns[2].cards[2].done, true, 'tandai selesai');
@@ -112,7 +111,7 @@ export function kanbanBoardTests(c: GuiContext): void {
         const calls = stubDialogs({ prompt: () => 'Backlog' });
         kbMenu(kb.columnMenu(0), 'Ganti Nama…').activate(); settleK();
         eq(kbTitles()[0], 'Backlog', 'ganti nama');
-        ok(!kbMenu(kb.columnMenu(0), 'Geser ke Kiri').get_sensitive(), 'daftar pertama tidak bisa ke kiri');
+        ok(!kbMenu(kb.columnMenu(0), 'Geser ke Kiri').enabled, 'daftar pertama tidak bisa ke kiri');
         kbMenu(kb.columnMenu(0), 'Geser ke Kanan').activate(); settleK();
         eq(kbTitles(), ['Dikerjakan', 'Backlog', 'Selesai'], 'geser');
         stubDialogs({ confirm: () => false });
@@ -137,10 +136,10 @@ export function kanbanBoardTests(c: GuiContext): void {
         openBoard();
         const calls = stubDialogs();
         const card = kb.columns[0].cards[0];
-        kb.onCardPress(0, 0, card, ptr(10, 10, 100, 100));
-        kb.onCardMotion(ptr(12, 11, 103, 102));
+        kb.onCardPress(0, 0, card, 10, 10);
+        kb.onCardMotion(12, 11);
         ok(!kb.dragging, 'gerak 3 piksel dianggap menyeret');
-        kb.onCardRelease(ptr(12, 11, 103, 102));
+        kb.onCardRelease();
         eq(calls, ['sunting']);
     });
     test('menyeret kartu ke daftar lain menjatuhkannya di posisi yang ditunjuk', () => {
@@ -148,18 +147,16 @@ export function kanbanBoardTests(c: GuiContext): void {
         const calls = stubDialogs();
         const moved = kb.cardTexts(0)[0];
         const source = kb.columns[0].cards[0], target = kb.columns[2].cards[0];
-        // Jendela bayangan dilacak langsung: jumlah semua toplevel tidak stabil karena dialog lama bisa ikut dibuang GC.
-        const before = new Set(Gtk.Window.list_toplevels());
-        kb.onCardPress(0, 0, source, ptr(10, 10, 100, 100));
+        kb.onCardPress(0, 0, source, 10, 10);
         const top = inCard(source, target, 10, 4);   // di paruh atas kartu pertama daftar tujuan
-        kb.onCardMotion(ptr(top[0], top[1], 500, 100));
+        kb.onCardMotion(top[0], top[1]);
         ok(kb.dragging, 'tidak mulai menyeret');
-        eq(kb.columns[2].cardsBox.get_children().length, 3, 'penanda tujuan muncul di daftar tujuan');
-        const ghosts = Gtk.Window.list_toplevels().filter(t => !before.has(t));
-        eq(ghosts.length, 1, 'kartu bayangan');
-        kb.onCardRelease(ptr(top[0], top[1], 500, 100)); settleK();
+        eq(childrenOf(kb.columns[2].cardsBox).length, 3, 'penanda tujuan muncul di daftar tujuan');
+        const ghost = kb['drag']!.ghost;
+        ok(ghost.get_parent(), 'kartu bayangan');
+        kb.onCardRelease(); settleK();
         ok(!kb.dragging, 'masih menyeret setelah dilepas');
-        ok(!Gtk.Window.list_toplevels().includes(ghosts[0]), 'kartu bayangan tidak dibersihkan');
+        ok(!ghost.get_parent(), 'kartu bayangan tidak dibersihkan');
         eq([kb.cardTexts(2)[0], kb.cardTexts(0).length, kb.cardTexts(2).length], [moved, 1, 3], 'kartu pindah ke atas daftar tujuan');
         ok(text().includes(`## Selesai\n\n- [ ] ${moved}\n`), 'teks dokumen');
         eq(calls, [], 'seret tidak membuka dialog sunting');
@@ -168,20 +165,21 @@ export function kanbanBoardTests(c: GuiContext): void {
         openBoard();
         const source = kb.columns[0].cards[0], second = kb.columns[0].cards[1];
         const first = kb.cardTexts(0)[0];
-        kb.onCardPress(0, 0, source, ptr(10, 10, 100, 100));
+        kb.onCardPress(0, 0, source, 10, 10);
         const low = inCard(source, second, 10, second.get_allocated_height() - 3);
-        kb.onCardMotion(ptr(low[0], low[1], 100, 300));
-        kb.onCardRelease(ptr(low[0], low[1], 100, 300)); settleK();
+        kb.onCardMotion(low[0], low[1]);
+        kb.onCardRelease(); settleK();
         eq(kb.cardTexts(0)[1], first, 'kartu pertama turun ke bawah kartu kedua');
     });
     test('menjatuhkan di tempat asal tidak mengubah apa pun', () => {
         openBoard();
         buf.set_modified(false);
         const source = kb.columns[1].cards[0];
-        kb.onCardPress(1, 0, source, ptr(10, 10, 100, 100));
+        kb.onCardPress(1, 0, source, 10, 10);
         const same = inCard(source, source, 10, 4);
-        kb.onCardMotion(ptr(same[0], same[1], 300, 100));   // 200 px di layar → menyeret
-        kb.onCardRelease(ptr(same[0], same[1], 300, 100)); settleK();
+        kb.onCardMotion(same[0] + 200, same[1]);   // 200 px ke kanan → menyeret
+        kb.onCardMotion(same[0], same[1]);         // lalu kembali ke tempat asal
+        kb.onCardRelease(); settleK();
         eq(text(), BOARD, 'teks');
         ok(!buf.get_modified(), 'dokumen ditandai berubah');
     });
@@ -189,28 +187,28 @@ export function kanbanBoardTests(c: GuiContext): void {
         openBoard();
         const source = kb.columns[0].cards[0], last = kb.columns[1].cards[0];
         const moved = kb.cardTexts(0)[0];
-        kb.onCardPress(0, 0, source, ptr(10, 10, 100, 100));
+        kb.onCardPress(0, 0, source, 10, 10);
         const below = inCard(source, last, 10, 400);
-        kb.onCardMotion(ptr(below[0], below[1], 400, 500));
-        kb.onCardRelease(ptr(below[0], below[1], 400, 500)); settleK();
+        kb.onCardMotion(below[0], below[1]);
+        kb.onCardRelease(); settleK();
         eq(kb.cardTexts(1).at(-1), moved);
     });
     test('menyeret dekat tepi kanan menggulir papan', () => {
         openBoard();
         kb.showAddList(); kb.hideAdd(); settleK();
-        const hadj = kb.widget.get_hadjustment();
-        if (hadj.get_upper() - hadj.get_page_size() < 50) { w.win.resize(700, 600); settleK(); }
+        const hadj = kb.scroller.get_hadjustment();
+        if (hadj.get_upper() - hadj.get_page_size() < 50) { w.win.set_default_size(700, 600); settleK(); }
         hadj.set_value(0);
         const source = kb.columns[0].cards[0];
-        kb.onCardPress(0, 0, source, ptr(10, 10, 100, 100));
-        kb.onCardMotion(ptr(20, 20, 300, 100));
+        kb.onCardPress(0, 0, source, 10, 10);
+        kb.onCardMotion(20, 20);
         const drag = kb['drag']!;
-        const edgeX = hadj.get_value() + kb.widget.get_allocated_width() - 10;   // 10 px dari tepi kanan
+        const edgeX = hadj.get_value() + kb.scroller.get_allocated_width() - 10;   // 10 px dari tepi kanan
         drag.pointer = [edgeX, drag.pointer[1]];
         kb.autoscroll();
         ok(hadj.get_value() > 0, `papan tidak tergulir (${hadj.get_value()})`);
-        kb.onCardRelease(ptr(20, 20, 300, 100)); settleK();
-        w.win.resize(1100, 700); settleK();
+        kb.onCardRelease(); settleK();
+        w.win.set_default_size(1100, 700); settleK();
     });
     test('undo dan redo mengembalikan papan dan teks, satu langkah per perubahan', () => {
         openBoard();
@@ -272,7 +270,7 @@ export function kanbanBoardTests(c: GuiContext): void {
         kb.today = () => '2026-10-20';
         eq([kb.formatDue('2026-10-25'), kb.formatDue('2027-01-02')], ['25 Okt', '2 Jan 2027']);
         openBoard();
-        const chip = (cls: string) => kbDescendants(kb.widget).some(c => c instanceof Gtk.Label && c.get_style_context().has_class(cls));
+        const chip = (cls: string) => kbDescendants(kb.widget).some(c => c instanceof Gtk.Label && c.has_css_class(cls));
         ok(!chip('kanban-due-overdue'), 'tanggal 20 Okt belum lewat pada 20 Okt');
         kb.today = () => '2026-10-21'; kb.render(); settleK();
         ok(chip('kanban-due-overdue'), 'tanggal 20 Okt harus lewat batas pada 21 Okt');
@@ -303,10 +301,10 @@ export function kanbanBoardTests(c: GuiContext): void {
         try {
             openBoard();
             const source = kb.columns[0].cards[0], target = kb.columns[2].cards[0];
-            kb.onCardPress(0, 0, source, ptr(10, 10, 100, 100));
+            kb.onCardPress(0, 0, source, 10, 10);
             const at = inCard(source, target, 10, 4);
-            kb.onCardMotion(ptr(at[0], at[1], 500, 100)); settleK();
-            kb.onCardRelease(ptr(at[0], at[1], 500, 100)); settleK();
+            kb.onCardMotion(at[0], at[1]); settleK();
+            kb.onCardRelease(); settleK();
             kb.showAddList(); settleK(); kb.hideAdd(); settleK();
             w.setDark(true); settleK(); w.setDark(false); settleK();
         } finally {

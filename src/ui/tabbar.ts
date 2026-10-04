@@ -2,7 +2,7 @@
 // pemakaian satu dokumen tidak berubah. Tab tidak tahu isi dokumen; jendela yang
 // menyuplai judul dan status "belum disimpan".
 
-import Gtk from 'gi://Gtk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 
 interface Tab {
     id: number;
@@ -26,14 +26,13 @@ export class TabBar {
         this.row = new Gtk.Box({ spacing: 2, margin_start: 6, margin_end: 6, margin_top: 4, margin_bottom: 4 });
         // Bar gulir bawaan tidak dipakai (tinggi bilah tab tetap); roda mouse tetap menggulir.
         this.scroller = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.EXTERNAL, vscrollbar_policy: Gtk.PolicyType.NEVER, hexpand: true });
-        this.scroller.add(this.row);
+        this.scroller.set_child(this.row);
         const wrap = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-        wrap.get_style_context().add_class('tabbar');
-        wrap.pack_start(this.scroller, false, false, 0);
-        wrap.pack_start(new Gtk.Separator(), false, false, 0);
+        wrap.add_css_class('tabbar');
+        wrap.append(this.scroller);
+        wrap.append(new Gtk.Separator());
         this.widget = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, transition_duration: 100 });
-        this.widget.add(wrap);
-        wrap.show_all();
+        this.widget.set_child(wrap);
     }
 
     get count(): number {
@@ -41,27 +40,26 @@ export class TabBar {
     }
 
     add(id: number, title: string): void {
-        const button = new Gtk.ToggleButton({ relief: Gtk.ReliefStyle.NONE, focus_on_click: false });
+        const button = new Gtk.ToggleButton({ has_frame: false, focus_on_click: false });
         const label = new Gtk.Label({ label: title, ellipsize: 3, max_width_chars: 22, xalign: 0 });
-        button.add(label);
+        button.set_child(label);
         button.connect('toggled', () => {
             if (this.syncing) return;
             // Mengklik tab yang sudah aktif tidak boleh mematikannya.
             if (id === this.active) button.set_active(true);
             else this.onSelect(id);
         });
-        const close = Gtk.Button.new_from_icon_name('window-close-symbolic', Gtk.IconSize.MENU);
-        close.set_relief(Gtk.ReliefStyle.NONE);
+        const close = Gtk.Button.new_from_icon_name('window-close-symbolic');
+        close.set_has_frame(false);
         close.set_focus_on_click(false);
         close.set_tooltip_text('Tutup tab (Ctrl+W)');
-        close.get_style_context().add_class('tab-close');
+        close.add_css_class('tab-close');
         close.connect('clicked', () => this.onClose(id));
         const box = new Gtk.Box();
-        box.get_style_context().add_class('tab');
-        box.pack_start(button, true, true, 0);
-        box.pack_start(close, false, false, 0);
-        box.show_all();
-        this.row.pack_start(box, false, false, 0);
+        box.add_css_class('tab');
+        box.append(button);
+        box.append(close);
+        this.row.append(box);
         this.tabs.push({ id, box, button, label });
         this.refresh();
     }
@@ -70,7 +68,7 @@ export class TabBar {
         const tab = this.tabs.find(t => t.id === id);
         if (!tab) return;
         this.tabs = this.tabs.filter(t => t !== tab);
-        tab.box.destroy();
+        this.row.remove(tab.box);
         this.refresh();
     }
 

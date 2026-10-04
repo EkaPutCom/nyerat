@@ -4,7 +4,7 @@
 // dua tag mengatur properti yang sama. Karena itu 'marker', 'dim', dan 'hidden'
 // ada di akhir.
 
-import Gtk from 'gi://Gtk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import Pango from 'gi://Pango';
 import { FONT_MONO } from '../config.js';
 import type { Palette } from '../ui/theme.js';

@@ -1,8 +1,9 @@
 // Perintah format yang mengubah isi buffer: tebal, tautan, heading, kutipan, dll.
 // Setiap perintah dibungkus begin/end_user_action supaya satu Ctrl+Z membatalkannya.
 
-import type Gtk from 'gi://Gtk?version=3.0';
+import type Gtk from 'gi://Gtk?version=4.0';
 import { cpLength } from './offsets.js';
+import { iterAtLine } from '../gtkutil.js';
 
 const cursorIter = (buffer: Gtk.TextBuffer) => buffer.get_iter_at_mark(buffer.get_insert());
 
@@ -30,14 +31,22 @@ export function wrapSelection(buffer: Gtk.TextBuffer, left: string, right = left
     buffer.begin_user_action();
     const [has, s, e] = buffer.get_selection_bounds();
     if (has) {
+        // Hanya penandanya yang disisipkan/dihapus, seleksinya tidak pernah kosong. Di X11,
+        // seleksi yang sempat kosong melepas clipboard PRIMARY, dan GTK 4 membatalkan seleksi
+        // baru begitu server mengonfirmasi pelepasan itu (Ctrl+B kedua lalu tidak melepas **).
         const txt = buffer.get_text(s, e, true);
-        const so = s.get_offset();
-        buffer.delete(s, e);
-        const out = txt.length >= left.length + right.length && txt.startsWith(left) && txt.endsWith(right)
-            ? txt.slice(left.length, txt.length - right.length)
-            : left + txt + right;
-        buffer.insert(buffer.get_iter_at_offset(so), out, -1);
-        buffer.select_range(buffer.get_iter_at_offset(so), buffer.get_iter_at_offset(so + cpLength(out)));
+        const so = s.get_offset(), eo = e.get_offset();
+        const l = cpLength(left), r = cpLength(right);
+        const at = (offset: number) => buffer.get_iter_at_offset(offset);
+        if (txt.length >= left.length + right.length && txt.startsWith(left) && txt.endsWith(right)) {
+            buffer.delete(at(eo - r), at(eo));
+            buffer.delete(at(so), at(so + l));
+            buffer.select_range(at(so), at(eo - l - r));
+        } else {
+            buffer.insert(at(eo), right, -1);
+            buffer.insert(at(so), left, -1);
+            buffer.select_range(at(so), at(eo + l + r));
+        }
     } else {
         buffer.insert_at_cursor(left + right, -1);
         const it = cursorIter(buffer);
@@ -85,11 +94,11 @@ export function insertBlock(buffer: Gtk.TextBuffer, before: string, after: strin
 export function togglePrefix(buffer: Gtk.TextBuffer, re: RegExp, prefix: string): void {
     const [l0, l1] = selectedLines(buffer);
     const all: string[] = [];
-    for (let n = l0; n <= l1; n++) all.push(lineText(buffer, buffer.get_iter_at_line(n))[0]);
+    for (let n = l0; n <= l1; n++) all.push(lineText(buffer, iterAtLine(buffer, n))[0]);
     const remove = all.every(l => re.test(l));
     buffer.begin_user_action();
     for (let n = l0; n <= l1; n++) {
-        const ls = buffer.get_iter_at_line(n);
+        const ls = iterAtLine(buffer, n);
         const line = lineText(buffer, ls)[0];
         if (remove) {
             const e = ls.copy();

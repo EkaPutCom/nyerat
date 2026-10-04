@@ -5,8 +5,7 @@
 // Menulis PNG dan GIF ke docs/assets/. Jendela sungguhan dibuka, jadi perlu sesi desktop.
 
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import Gio from 'gi://Gio';
@@ -17,6 +16,8 @@ import { MainWindow } from '../src/window.js';
 import { isKanban, moveCard, parseBoard } from '../src/markdown/kanban.js';
 import type { Provider } from '../src/agent/provider.js';
 import { listChats, saveChat } from '../src/agent/chatstore.js';
+import { iterAtLine } from '../src/gtkutil.js';
+import { widgetPixbuf } from '../tests/widgets.js';
 
 // Naskah contoh untuk tangkapan panel Asisten (provider palsu; tanpa jaringan dan tanpa API key).
 const BOOK = {
@@ -180,8 +181,7 @@ function main(app: Gtk.Application): void {
     };
     const grab = () => {
         settle();
-        const gw = w.win.get_window()!;
-        return Gdk.pixbuf_get_from_window(gw, 0, 0, gw.get_width(), gw.get_height())!;
+        return widgetPixbuf(w.win)!;
     };
     const shot = (name: string) => grab().savev(`${OUT}/${name}.png`, 'png', [], []);
 
@@ -246,13 +246,13 @@ function main(app: Gtk.Application): void {
         w.file = null;
         ed.setText(text);
         w.setBoardMode(isKanban(text));
-        const it = buf.get_iter_at_line(line);
+        const it = iterAtLine(buf, line);
         buf.place_cursor(it);
         ed.view.scroll_to_iter(buf.get_start_iter(), 0, false, 0, 0);
         settle(20);
     };
     const cursorTo = (line: number, col = 0) => {
-        const it = buf.get_iter_at_line(line);
+        const it = iterAtLine(buf, line);
         it.forward_chars(col);
         buf.place_cursor(it);
         settle(4);
@@ -320,7 +320,7 @@ function main(app: Gtk.Application): void {
     waitMermaid();
     frame('diagram', 3);
     for (const add of ['\n    B --> C[Ekspor]', '\n    C --> D[Bagikan]', '\n    D --> A']) {
-        const it = buf.get_iter_at_line(4);
+        const it = iterAtLine(buf, 4);
         it.forward_to_line_end();
         buf.insert(it, add, -1);
         waitMermaid();
@@ -471,9 +471,8 @@ function main(app: Gtk.Application): void {
     const viewer = child();
     if (viewer) {
         idle(500);
-        const vw = viewer.get_window()!;
-        Gdk.pixbuf_get_from_window(vw, 0, 0, vw.get_width(), vw.get_height())!.savev(`${OUT}/riwayat-diff.png`, 'png', [], []);
-        viewer.destroy();
+        widgetPixbuf(viewer)!.savev(`${OUT}/riwayat-diff.png`, 'png', [], []);
+        (viewer as Gtk.Window).destroy();
     }
 
     // ───────── Zoom gambar ─────────
@@ -485,9 +484,8 @@ function main(app: Gtk.Application): void {
     idle(800);
     const zoomWin = child();
     if (zoomWin) {
-        const zw = zoomWin.get_window()!;
-        Gdk.pixbuf_get_from_window(zw, 0, 0, zw.get_width(), zw.get_height())!.savev(`${OUT}/zoom-gambar.png`, 'png', [], []);
-        zoomWin.destroy();
+        widgetPixbuf(zoomWin)!.savev(`${OUT}/zoom-gambar.png`, 'png', [], []);
+        (zoomWin as Gtk.Window).destroy();
     }
 
     // ───────── Tab dokumen ─────────
@@ -533,13 +531,19 @@ function main(app: Gtk.Application): void {
         popover.popup();
         idle(500);
         const main = grab();
-        const pw = popover.get_window();
-        if (pw) {
-            const [, mx, my] = w.win.get_window()!.get_origin();
-            const [, px, py] = pw.get_origin();
-            const pop = Gdk.pixbuf_get_from_window(pw, 0, 0, pw.get_width(), pw.get_height())!;
-            const x = px - mx, y = py - my;
-            pop.composite(main, x, y, pop.get_width(), pop.get_height(), x, y, 1, 1, GdkPixbuf.InterpType.NEAREST, 255);
+        // Popover GTK 4 punya permukaan sendiri dan posisinya tidak bisa dibaca; letakkan seperti
+        // GTK menaruhnya: di bawah tombolnya, di tengah, dan tidak keluar dari jendela.
+        const pop = widgetPixbuf(popover);
+        const button = w.chat.historyButton;
+        const [, tx, ty] = button.translate_coordinates(w.win, 0, 0);
+        // Tangkapan jendela mencakup bingkai CSD; koordinat widget dimulai di dalamnya.
+        const [sx, sy] = w.win.get_surface_transform();
+        const bx = tx + sx, by = ty + sy;
+        if (pop) {
+            const x = Math.max(0, Math.min(main.get_width() - pop.get_width(), Math.round(bx + button.get_width() / 2 - pop.get_width() / 2)));
+            const y = Math.round(by + button.get_height());
+            const h = Math.min(pop.get_height(), main.get_height() - y);
+            pop.composite(main, x, y, pop.get_width(), h, x, y, 1, 1, GdkPixbuf.InterpType.NEAREST, 255);
         }
         main.savev(`${OUT}/riwayat-percakapan${dark ? '-gelap' : ''}.png`, 'png', [], []);
         popover.popdown();

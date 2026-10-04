@@ -1,11 +1,12 @@
 // Tab Riwayat di sidebar: commit git yang menyentuh file aktif, terbaru dulu.
 // Klik commit untuk melihat perubahan dan isinya (ui/historyviewer.ts, dibuka jendela).
 
-import Gtk from 'gi://Gtk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import { commitFiles, fileLog, repoChanges, workingState, type GitFailure } from '../git.js';
 import { relativeTime, type ChangeKind, type Commit, type FileChange } from '../gitlog.js';
+import { pack, removeChildren } from '../gtkutil.js';
 
 // Commit yang dimuat per permintaan; riwayat panjang dimuat bertahap.
 const PAGE_SIZE = 100;
@@ -50,25 +51,24 @@ export class History {
             const commit = this.commits[row.get_index()];
             if (commit) this.onOpen(commit);
         });
-        this.note = new Gtk.Label({ margin: 16, wrap: true, xalign: 0, max_width_chars: 24 });
-        this.note.get_style_context().add_class('dim-label');
-        this.note.show();
+        this.note = new Gtk.Label({ margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16, wrap: true, xalign: 0, max_width_chars: 24 });
+        this.note.add_css_class('dim-label');
         this.list.set_placeholder(this.note);
 
-        // Tanpa hexpand: GTK3 menghitung ekspansi dari semua keturunan, dan sidebar yang "mengembang" membuat
-        // Box utama membagi ruang sisa kepadanya (sidebar terpusat di slot yang lebar). Perataan cukup lewat pack_start.
+        // Judul mengembang di dalam header saja; sidebar tidak ikut mengembang karena lebarnya
+        // diatur width_request dan Box utama memberi sisa ruang ke kolom editor yang hexpand.
         const title = new Gtk.Label({ label: 'RIWAYAT', xalign: 0, margin_start: 16 });
-        title.get_style_context().add_class('side-title');
-        const refresh = Gtk.Button.new_from_icon_name('view-refresh-symbolic', Gtk.IconSize.MENU);
-        refresh.set_relief(Gtk.ReliefStyle.NONE);
+        title.add_css_class('side-title');
+        const refresh = Gtk.Button.new_from_icon_name('view-refresh-symbolic');
+        refresh.set_has_frame(false);
         refresh.set_tooltip_text('Muat ulang riwayat');
         refresh.connect('clicked', () => this.refresh());
         const header = new Gtk.Box({ margin_top: 4, margin_bottom: 8, margin_end: 6 });
-        header.pack_start(title, true, true, 0);
-        header.pack_start(refresh, false, false, 0);
+        pack(header, title, true);
+        header.append(refresh);
 
-        this.changes = new Gtk.Button({ no_show_all: true, margin_start: 8, margin_end: 8, margin_bottom: 8 });
-        this.changes.set_relief(Gtk.ReliefStyle.NONE);
+        this.changes = new Gtk.Button({ visible: false, margin_start: 8, margin_end: 8, margin_bottom: 8 });
+        this.changes.set_has_frame(false);
         this.changes.set_tooltip_text('Lihat perubahan terhadap commit terakhir');
         this.changes.connect('clicked', () => { if (this.file) this.onOpenChanges(this.file); });
 
@@ -81,36 +81,36 @@ export class History {
         const changedScroll = new Gtk.ScrolledWindow({
             hscrollbar_policy: Gtk.PolicyType.NEVER, propagate_natural_height: true, max_content_height: 240,
         });
-        changedScroll.add(this.changedList);
+        changedScroll.set_child(this.changedList);
         this.messageEntry = new Gtk.Entry({ placeholder_text: 'Pesan commit' });
         this.commitButton = new Gtk.Button({ label: 'Commit' });
-        this.commitButton.get_style_context().add_class('suggested-action');
-        this.commitStatus = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 24, no_show_all: true });
-        this.commitStatus.get_style_context().add_class('dim-label');
+        this.commitButton.add_css_class('suggested-action');
+        this.commitStatus = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 24, visible: false });
+        this.commitStatus.add_css_class('dim-label');
         this.commitButton.connect('clicked', () => this.commitSelected());
         this.messageEntry.connect('activate', () => this.commitSelected());
         this.commitBar = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: 8 });
-        this.commitBar.pack_start(this.messageEntry, false, false, 0);
-        this.commitBar.pack_start(this.commitButton, false, false, 0);
-        this.commitBar.pack_start(this.commitStatus, false, false, 0);
+        this.commitBar.append(this.messageEntry);
+        this.commitBar.append(this.commitButton);
+        this.commitBar.append(this.commitStatus);
         const changedContent = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-        changedContent.pack_start(changedScroll, false, false, 0);
-        changedContent.pack_start(this.commitBar, false, false, 0);
-        this.changedBox = new Gtk.Expander({ expanded: true, no_show_all: true, margin_start: 8, margin_end: 8, margin_bottom: 8 });
-        this.changedBox.add(changedContent);
+        changedContent.append(changedScroll);
+        changedContent.append(this.commitBar);
+        this.changedBox = new Gtk.Expander({ expanded: true, visible: false, margin_start: 8, margin_end: 8, margin_bottom: 8 });
+        this.changedBox.set_child(changedContent);
 
         const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vexpand: true });
-        scroll.add(this.list);
-        this.more = new Gtk.Button({ label: 'Muat lebih banyak', margin: 8, no_show_all: true });
+        scroll.set_child(this.list);
+        this.more = new Gtk.Button({ label: 'Muat lebih banyak', margin_top: 8, margin_bottom: 8, margin_start: 8, margin_end: 8, visible: false });
         this.more.connect('clicked', () => this.load(this.commits.length, false));
 
-        this.widget = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-        this.widget.pack_start(header, false, false, 0);
-        this.widget.pack_start(this.changes, false, false, 0);
-        this.widget.pack_start(this.changedBox, false, false, 0);
-        this.widget.pack_start(scroll, true, true, 0);
-        this.widget.pack_start(this.more, false, false, 0);
-        this.widget.show_all();
+        // hexpand false: judul di header mengembang, dan GTK 4 meneruskannya ke atas sampai sidebar.
+        this.widget = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: false });
+        this.widget.append(header);
+        this.widget.append(this.changes);
+        this.widget.append(this.changedBox);
+        pack(this.widget, scroll, true);
+        this.widget.append(this.more);
     }
 
     // Tampilkan riwayat file ini. Memanggil lagi dengan file yang sama tidak melakukan apa-apa
@@ -123,7 +123,7 @@ export class History {
         this.token++;
         // Muat ulang file yang sama tidak mengosongkan daftar dulu; daftar hanya diganti jika isinya berubah.
         if (!same) this.clear();
-        this.changes.hide();
+        this.changes.set_visible(false);
         if (!same) this.setChanged([]);
         if (!file) {
             this.note.set_text('Simpan dokumen ke berkas, lalu riwayat git-nya tampil di sini');
@@ -139,6 +139,11 @@ export class History {
         if (this.file !== undefined) this.setFile(this.file, true);
     }
 
+    // Jendela ditutup: hasil git yang masih ditunggu diabaikan.
+    destroy(): void {
+        this.token++;
+    }
+
     // Tombol perubahan hanya tampil jika isi file berbeda dari commit terakhir.
     private async loadChanges(): Promise<void> {
         const token = this.token, file = this.file;
@@ -147,9 +152,9 @@ export class History {
         const [state, repo] = await Promise.all([file ? workingState(file) : null, repoChanges(dir)]);
         if (token !== this.token) return;
         this.setChanged(repo.ok ? repo.changes : []);
-        if (!state || !state.ok || state.state === 'clean') return this.changes.hide();
+        if (!state || !state.ok || state.state === 'clean') return this.changes.set_visible(false);
         this.changes.set_label(state.state === 'untracked' ? '● File baru, belum di-commit' : '● Perubahan belum di-commit');
-        this.changes.show();
+        this.changes.set_visible(true);
     }
 
     // Daftar file berubah; tidak dibangun ulang jika sama, supaya posisi gulir tidak lompat saat muat ulang.
@@ -159,7 +164,7 @@ export class History {
         if (same) return;
         this.changed = changes;
         this.checks.clear();
-        for (const row of this.changedList.get_children()) row.destroy();
+        removeChildren(this.changedList);
         for (const path of [...this.unchecked]) if (!changes.some(c => c.path === path)) this.unchecked.delete(path);
         const dir = this.file ? GLib.path_get_dirname(this.file) : this.folder ?? '';
         for (const change of changes) {
@@ -172,24 +177,18 @@ export class History {
             });
             this.checks.set(change.path, check);
             const mark = new Gtk.Label({ label: KIND_MARK[change.kind], xalign: 0, width_chars: 1 });
-            mark.get_style_context().add_class('side-meta');
+            mark.add_css_class('side-meta');
             const name = new Gtk.Label({ label: rel, xalign: 0, ellipsize: Pango.EllipsizeMode.START });
             const box = new Gtk.Box({ spacing: 8, margin_start: 4, margin_end: 4, margin_top: 0, margin_bottom: 0 });
-            box.pack_start(check, false, false, 0);
-            box.pack_start(mark, false, false, 0);
-            box.pack_start(name, true, true, 0);
-            const row = new Gtk.ListBoxRow();
-            row.add(box);
-            row.set_tooltip_text(change.path);
-            row.show_all();
+            box.append(check);
+            box.append(mark);
+            pack(box, name, true);
+            const row = new Gtk.ListBoxRow({ child: box, tooltip_text: change.path });
             this.changedList.insert(row, -1);
         }
         this.changedBox.set_label(`Belum di-commit (${changes.length})`);
         this.updateCommitButton();
-        if (changes.length) {
-            this.changedBox.show();
-            this.changedBox.get_child()?.show_all();   // show_all pada widget no_show_all diabaikan, dan anaknya belum pernah ditampilkan
-        } else this.changedBox.hide();
+        this.changedBox.set_visible(changes.length > 0);
     }
 
     // File yang dicentang; urutannya mengikuti daftar.
@@ -205,7 +204,7 @@ export class History {
 
     private showCommitStatus(text: string): void {
         this.commitStatus.set_text(text);
-        this.commitStatus.show();
+        this.commitStatus.set_visible(true);
     }
 
     private async commitSelected(): Promise<void> {
@@ -219,14 +218,14 @@ export class History {
         this.updateCommitButton();
         if (!result.ok) return this.showCommitStatus(`Commit gagal: ${result.message}`);
         this.messageEntry.set_text('');
-        this.commitStatus.hide();
+        this.commitStatus.set_visible(false);
         this.onCommitted();
     }
 
     private clear(): void {
         this.commits = [];
-        this.more.hide();
-        for (const row of this.list.get_children()) row.destroy();
+        this.more.set_visible(false);
+        removeChildren(this.list);
     }
 
     private async load(skip: number, keep: boolean): Promise<void> {
@@ -262,14 +261,12 @@ export class History {
             label: `${commit.short} · ${commit.author} · ${relativeTime(commit.time, now)}`,
             xalign: 0, ellipsize: Pango.EllipsizeMode.END,
         });
-        meta.get_style_context().add_class('side-meta');
+        meta.add_css_class('side-meta');
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, margin_start: 16, margin_end: 12 });
-        box.pack_start(subject, false, false, 0);
-        box.pack_start(meta, false, false, 0);
-        const row = new Gtk.ListBoxRow();
-        row.add(box);
+        box.append(subject);
+        box.append(meta);
+        const row = new Gtk.ListBoxRow({ child: box });
         row.set_tooltip_text(`${commit.subject}\n${commit.author}\n${GLib.DateTime.new_from_unix_local(commit.time).format('%d %b %Y %H:%M')}`);
-        row.show_all();
         return row;
     }
 }

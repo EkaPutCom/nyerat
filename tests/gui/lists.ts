@@ -1,6 +1,6 @@
 // Tes GUI: Enter dan Tab di daftar.
 
-import Gdk from 'gi://Gdk?version=3.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import { section, test, eq, ok } from '../framework.js';
 import type { GuiContext } from './context.js';
 
@@ -30,7 +30,7 @@ export function listTests(c: GuiContext): void {
     });
     test('Enter di dalam blok kode tidak menambah bullet', () => {
         setText('```\n- a\n```'); cursorTo(1, -1);
-        ok(!ed.onKey({ get_keyval: () => [true, Gdk.KEY_Return], get_state: () => [true, 0 as Gdk.ModifierType] }), 'Enter ditangani sebagai daftar');
+        ok(!ed.onKey(Gdk.KEY_Return, 0), 'Enter ditangani sebagai daftar');
     });
     test('Tab dan Shift+Tab mengatur indentasi', () => {
         setText('- a'); cursorTo(0, -1);

@@ -5,12 +5,13 @@
 // penyorotan terakhir), jadi selalu sesuai dengan teks yang sedang tampil.
 // Logika tabelnya sendiri ada di markdown/table.ts.
 
-import type Gtk from 'gi://Gtk?version=3.0';
+import type Gtk from 'gi://Gtk?version=4.0';
 import { cpLength, cpToU16 } from './offsets.js';
 import {
     cellIndexAt, cellStart, deleteColumn, deleteRow, findTables, insertColumn, insertRow,
     parseTable, renderRow, renderTable, setAlign, splitRow, type Align, type TableRange,
 } from '../markdown/table.js';
+import { iterAtLine } from '../gtkutil.js';
 
 export type TableCommand =
     | 'row-below' | 'row-above' | 'col-right' | 'col-left' | 'delete-row' | 'delete-col'
@@ -55,15 +56,15 @@ function whereIsCursor(buffer: Gtk.TextBuffer): Where | null {
 function placeCursor(buffer: Gtk.TextBuffer, line: number, col: number): void {
     const [start, end] = buffer.get_bounds();
     const text = buffer.get_text(start, end, true).split('\n')[line] ?? '';
-    const iter = buffer.get_iter_at_line(line);
+    const iter = iterAtLine(buffer, line);
     iter.forward_chars(cpLength(text.slice(0, cellStart(text, col))));
     buffer.place_cursor(iter);
 }
 
 // Ganti baris start..end dengan newLines dalam satu langkah undo.
 function replaceLines(buffer: Gtk.TextBuffer, start: number, end: number, newLines: string[]): void {
-    const from = buffer.get_iter_at_line(start);
-    const to = buffer.get_iter_at_line(end);
+    const from = iterAtLine(buffer, start);
+    const to = iterAtLine(buffer, end);
     if (!to.ends_line()) to.forward_to_line_end();
     buffer.begin_user_action();
     buffer.delete(from, to);
@@ -73,7 +74,7 @@ function replaceLines(buffer: Gtk.TextBuffer, start: number, end: number, newLin
 
 // Tambah satu baris kosong di bawah baris terakhir tabel.
 function appendRow(buffer: Gtk.TextBuffer, table: TableRange, columns: number): void {
-    const end = buffer.get_iter_at_line(table.end);
+    const end = iterAtLine(buffer, table.end);
     if (!end.ends_line()) end.forward_to_line_end();
     buffer.begin_user_action();
     buffer.insert(end, `\n${renderRow(Array<string>(columns).fill(''))}`, -1);
@@ -118,9 +119,9 @@ export function enterInTable(buffer: Gtk.TextBuffer): boolean {
         if ((lines[table.end + 1] ?? null) !== null && lines[table.end + 1].trim() === '') {
             // Sudah ada baris kosong di bawah tabel: hapus saja seluruh baris kosongnya
             // (beserta pemisah baris), dan kursor pindah ke baris kosong yang ada.
-            const from = buffer.get_iter_at_line(table.end - 1);
+            const from = iterAtLine(buffer, table.end - 1);
             from.forward_to_line_end();
-            const to = buffer.get_iter_at_line(table.end);
+            const to = iterAtLine(buffer, table.end);
             to.forward_to_line_end();
             buffer.begin_user_action();
             buffer.delete(from, to);

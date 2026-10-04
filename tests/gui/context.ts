@@ -1,13 +1,14 @@
 // Jendela dan alat bantu bersama untuk semua tes GUI.
 
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
 
 import { DEFAULTS } from '../../src/settings.js';
 import { ROOT, tmp } from '../framework.js';
 import { MainWindow, type Option } from '../../src/window.js';
 import type { TagName } from '../../src/editor/tags.js';
+import { iterAtLine } from '../../src/gtkutil.js';
 
 export interface GuiContext {
     app: Gtk.Application;
@@ -43,7 +44,7 @@ export function createContext(app: Gtk.Application): GuiContext {
     const text = () => { const [s, e] = buf.get_bounds(); return buf.get_text(s, e, true); };
     const setText = (t: string) => { ed.setText(t); pump(); };
     const cursorTo = (line: number, col = 0) => {
-        const it = buf.get_iter_at_line(line);
+        const it = iterAtLine(buf, line);
         if (col < 0) it.forward_to_line_end(); else it.forward_chars(col);
         buf.place_cursor(it);
         pump();
@@ -57,18 +58,15 @@ export function createContext(app: Gtk.Application): GuiContext {
     const hidden = (off: number) => buf.get_iter_at_offset(off).has_tag(ed.tags.hidden);
     const tagAt = (off: number, name: TagName) => buf.get_iter_at_offset(off).has_tag(ed.tags[name]);
     const key = (keyval: number, state = 0 as Gdk.ModifierType) => {
-        const handled = ed.onKey({ get_keyval: () => [true, keyval], get_state: () => [true, state] });
+        const handled = ed.onKey(keyval, state);
         if (!handled) buf.insert_at_cursor(keyval === Gdk.KEY_Return ? '\n' : '', -1);
         pump();
     };
     const action = (name: string | Option) => { app.lookup_action(name)!.activate(null); pump(); };
     const clickAt = (off: number) => {
         const rect = ed.view.get_iter_location(buf.get_iter_at_offset(off));
-        const [x, y] = ed.view.buffer_to_window_coords(Gtk.TextWindowType.TEXT, rect.x + 2, rect.y + rect.height / 2);
-        const handled = ed.onClick({
-            get_button: () => [true, 1], get_event_type: () => Gdk.EventType.BUTTON_PRESS,
-            get_coords: () => [true, x, y], get_state: () => [true, 0 as Gdk.ModifierType],
-        });
+        const [x, y] = ed.view.buffer_to_window_coords(Gtk.TextWindowType.WIDGET, rect.x + 2, rect.y + rect.height / 2);
+        const handled = ed.onClick(1, x, y, 0);
         pump();
         return handled;
     };

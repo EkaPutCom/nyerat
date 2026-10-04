@@ -147,6 +147,18 @@ export class MouseInput {
         this.fake(6, 0, rx, ry);
     }
 
+    // Posisi (x, y) di jendela X11 `xid` dalam koordinat layar (TranslateCoordinates).
+    toRoot(xid: number, x: number, y: number): [number, number] {
+        const request = this.request(40, 0, 16), data = view(request);
+        data.setUint32(4, xid, true);
+        data.setUint32(8, this.root, true);
+        data.setInt16(12, Math.round(x), true);
+        data.setInt16(14, Math.round(y), true);
+        this.write(request);
+        const reply = view(this.reply());
+        return [reply.getInt16(12, true), reply.getInt16(14, true)];
+    }
+
     down(): void { this.fake(4, 1); }
     up(): void { this.fake(5, 1); }
     close(): void { this.connection.close(null); }

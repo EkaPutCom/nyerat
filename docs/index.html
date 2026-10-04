@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nyerat — Editor Markdown AI-native untuk Linux</title>
-<meta name="description" content="Nyerat adalah editor Markdown AI-native untuk desktop Linux. Asisten AI yang sudah membaca seluruh naskah Anda ada di dalam editor, dengan tampilan menulis yang langsung terformat. Dibuat dengan GTK 3, GJS, dan TypeScript.">
+<meta name="description" content="Nyerat adalah editor Markdown AI-native untuk desktop Linux. Asisten AI yang sudah membaca seluruh naskah Anda ada di dalam editor, dengan tampilan menulis yang langsung terformat. Dibuat dengan GTK 4, GJS, dan TypeScript.">
 <meta property="og:title" content="Nyerat — Editor Markdown AI-native untuk Linux">
 <meta property="og:description" content="Asisten AI yang sudah membaca seluruh naskah Anda, di dalam editor Markdown yang langsung terformat. Kanban, tabel, diagram, riwayat Git, mode gelap.">
 <meta property="og:image" content="https://nyerat.ekaput.com/assets/og-image.png">
@@ -343,11 +343,11 @@ footer a { color: var(--muted); }
       <div class="step">
         <h3>Pasang kebutuhan sistem</h3>
         <p class="note">Di Ubuntu atau Debian. WebKitGTK hanya dipakai untuk diagram Mermaid dan DBML, dan libsoup untuk asisten; tanpanya aplikasi tetap berjalan.</p>
-<pre><span class="c"># GJS, GTK 3, dan GtkSourceView</span>
-sudo apt install gjs gir1.2-gtk-3.0 gir1.2-gtksource-4
+<pre><span class="c"># GJS, GTK 4, dan GtkSourceView 5</span>
+sudo apt install gjs gir1.2-gtk-4.0 gir1.2-gtksource-5
 
 <span class="c"># opsional: untuk diagram</span>
-sudo apt install gir1.2-webkit2-4.1
+sudo apt install gir1.2-webkit-6.0
 
 <span class="c"># opsional: untuk asisten AI (butuh API key DeepSeek)</span>
 sudo apt install gir1.2-soup-3.0 gir1.2-secret-1</pre>
@@ -422,7 +422,7 @@ gjs -m dist/nyerat.js ~/catatan</pre>
 <footer>
   <div class="wrap">
     <span>Nyerat · dibuat oleh Eka Putra · Lisensi MIT</span>
-    <span>Dibuat dengan GTK 3, GtkSourceView 4, GJS, dan TypeScript. · <a href="belajar-performa.html">Belajar performa</a></span>
+    <span>Dibuat dengan GTK 4, GtkSourceView 5, GJS, dan TypeScript. · <a href="belajar-performa.html">Belajar performa</a></span>
   </div>
 </footer>
 

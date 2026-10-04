@@ -3,6 +3,7 @@
 import { section, test, eq, ok } from '../framework.js';
 import type { GuiContext } from './context.js';
 import { mermaidRenderer } from '../../src/editor/mermaidrender.js';
+import { iterAtLine } from '../../src/gtkutil.js';
 
 export function mermaidTests(c: GuiContext): void {
     const { ed, buf, pump, text, setText, cursorTo, action, diagrams, waitMermaid } = c;
@@ -14,8 +15,8 @@ export function mermaidTests(c: GuiContext): void {
     }
 
     const GRAPH = '```mermaid\ngraph TD\n    A[Mulai] --> B[Selesai]\n```';
-    const hiddenAt = (line: number) => buf.get_iter_at_line(line).has_tag(ed.tags.mermaidhide);
-    const hasGap = (line: number) => buf.get_iter_at_line(line).get_tags().some(t => t.name?.startsWith('mermaid-gap-'));
+    const hiddenAt = (line: number) => iterAtLine(buf, line).has_tag(ed.tags.mermaidhide);
+    const hasGap = (line: number) => iterAtLine(buf, line).get_tags().some(t => t.name?.startsWith('mermaid-gap-'));
     const pixel = (b: ReturnType<typeof diagrams>[number], x: number, y: number) => {
         const pb = b.pixbuf!;
         const i = y * pb.get_rowstride() + x * pb.get_n_channels();
@@ -40,7 +41,7 @@ export function mermaidTests(c: GuiContext): void {
         for (let l = 2; l <= 5; l++) ok(hiddenAt(l), `baris ${l} tidak disembunyikan`);
         ok(hasGap(5), 'ruang di bawah blok tidak disediakan');
         const b = diagrams()[0];
-        const [lineY] = ed.view.get_line_yrange(buf.get_iter_at_line(5));
+        const [lineY] = ed.view.get_line_yrange(iterAtLine(buf, 5));
         // Baris-barisnya ~1 px, jadi diagram mulai tepat di bawah baris penutup (setelah jarak GAP = 12).
         ok(b.collapsed && b.y > lineY && b.y <= lineY + 20, `diagram (y=${b.y}) tidak menggantikan kodenya (y=${lineY})`);
     });
@@ -49,7 +50,7 @@ export function mermaidTests(c: GuiContext): void {
         for (let l = 2; l <= 5; l++) ok(!hiddenAt(l), `baris ${l} masih disembunyikan`);
         const b = diagrams()[0];
         pump();
-        const [lineY] = ed.view.get_line_yrange(buf.get_iter_at_line(5));
+        const [lineY] = ed.view.get_line_yrange(iterAtLine(buf, 5));
         ok(!b.collapsed && b.widget.get_visible(), 'diagram hilang saat blok disunting');
         ok(b.y > lineY, `diagram (y=${b.y}) tidak di bawah baris penutup (y=${lineY})`);
     });
@@ -60,7 +61,7 @@ export function mermaidTests(c: GuiContext): void {
     test('mengubah kode merender ulang diagramnya', () => {
         cursorTo(3);
         const before = diagrams()[0].pixbuf!;
-        const it = buf.get_iter_at_line(4);
+        const it = iterAtLine(buf, 4);
         it.forward_to_line_end();
         buf.insert(it, '\n    B --> C[Tambahan]\n    C --> D[Lagi]', -1);
         pump();
@@ -79,7 +80,7 @@ export function mermaidTests(c: GuiContext): void {
         for (let l = 0; l <= 3; l++) ok(!hiddenAt(l), `baris ${l} disembunyikan padahal galat`);
     });
     test('memperbaiki kode yang salah memulihkan diagram', () => {
-        const it = buf.get_iter_at_line(2);
+        const it = iterAtLine(buf, 2);
         const end = it.copy();
         end.forward_to_line_end();
         buf.delete(it, end);

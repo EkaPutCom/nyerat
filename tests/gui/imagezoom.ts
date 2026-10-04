@@ -1,11 +1,12 @@
 // Tes GUI: Zoom gambar.
 
 import GLib from 'gi://GLib';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import { clampZoom, fitZoom, ImageViewer, MAX_ZOOM, MIN_ZOOM } from '../../src/ui/imageviewer.js';
 import { section, test, eq, ok, tmp } from '../framework.js';
 import type { GuiContext } from './context.js';
+import { emitClick } from '../widgets.js';
 
 export function imageZoomTests(c: GuiContext): void {
     const { w, ed, buf, pump, setText, cursorTo, action, imgDir, waitImages } = c;
@@ -125,8 +126,7 @@ export function imageZoomTests(c: GuiContext): void {
         const scroller = v['scroller'];
         scroller.get_hadjustment().set_value(0); scroller.get_vadjustment().set_value(0);
         // Roda ke atas di titik (400, 300) pada gambar yang tergulir ke (0, 0).
-        const wheel = { get_coords: () => [true, 400, 300], get_scroll_direction: () => [true, Gdk.ScrollDirection.UP], get_scroll_deltas: () => [false, 0, 0] };
-        v['onScroll'](wheel as unknown as Gdk.Event, true); settleV();
+        v.scrollZoom(-1, true, [400, 300]); settleV();
         // Titik gambar (400, 300) kini di 500 × 375; agar tetap di (400, 300) layar, gulir (100, 75).
         const [h, vv] = [scroller.get_hadjustment().get_value(), scroller.get_vadjustment().get_value()];
         ok(Math.abs(h - 100) < 1.5 && Math.abs(vv - 75) < 1.5, `gulir (${h}, ${vv}), seharusnya (100, 75)`);
@@ -137,21 +137,17 @@ export function imageZoomTests(c: GuiContext): void {
         v.actual(); settleV();
         const scroller = v['scroller'];
         scroller.get_hadjustment().set_value(0); scroller.get_vadjustment().set_value(0);
-        const at = (x: number, y: number, type = Gdk.EventType.BUTTON_PRESS) => ({
-            get_button: () => [true, 1], get_event_type: () => type, get_root_coords: () => [true, x, y],
-        }) as unknown as Gdk.Event;
-        v['onPress'](at(500, 500));
-        v['onMotion'](at(450, 470));   // digeser ke kiri-atas = melihat bagian kanan-bawah
+        v.beginDrag();
+        v.dragBy(-50, -30);   // digeser ke kiri-atas = melihat bagian kanan-bawah
         eq([scroller.get_hadjustment().get_value(), scroller.get_vadjustment().get_value()], [50, 30], 'gulir');
-        v['endDrag'](); ok(!v['onMotion'](at(0, 0)), 'setelah lepas tombol, gerak tidak menggeser');
+        v.endDrag(); ok(!v.dragBy(-500, -500), 'setelah lepas tombol, gerak tidak menggeser');
         v.close();
     });
     test('klik ganda di penampil: bergantian pas layar dan 100%', () => {
         const v = openViewer(makePixbuf(3000, 2000));
-        const dbl = { get_button: () => [true, 1], get_event_type: () => Gdk.EventType.DOUBLE_BUTTON_PRESS, get_root_coords: () => [true, 0, 0] } as unknown as Gdk.Event;
         const fitted = v.zoom;
-        v['onPress'](dbl); eq(v.zoom, 1, 'ke 100%');
-        v['onPress'](dbl); settleV();
+        emitClick(v.area, 2); eq(v.zoom, 1, 'ke 100%');
+        emitClick(v.area, 2); settleV();
         ok(Math.abs(v.zoom - fitted) < 0.02, `kembali ke pas layar (${v.zoom} vs ${fitted})`);
         v.close();
     });

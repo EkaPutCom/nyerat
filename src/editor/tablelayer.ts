@@ -12,7 +12,7 @@
 // Klik sel di grid menaruh kursor di sel itu pada teks mentahnya, yang otomatis
 // membuka tabelnya untuk disunting.
 
-import Gtk from 'gi://Gtk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import { TABLE_CELL_PAD_X, TABLE_CELL_PAD_Y } from '../config.js';
@@ -20,6 +20,8 @@ import { parseTable, type TableRange } from '../markdown/table.js';
 import { cellMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from '../ui/theme.js';
 import { setTagGroup, setTagRanges, type Range } from './tagsync.js';
+import { iterAtLine, onClick } from '../gtkutil.js';
+import { OverlaySlots } from './overlays.js';
 
 const BORDER = 1;       // tebal garis sel (sama dengan CSS di ui/theme.ts)
 const GAP = 12;         // jarak di atas dan bawah grid
@@ -51,7 +53,8 @@ interface Block {
     start: number;           // baris judul
     end: number;             // baris isi terakhir
     key: string;             // isi tabel; mencocokkan blok yang sama setelah baris bergeser
-    widget: Gtk.EventBox | null;   // dibuat saat pertama kali terlihat
+    widget: Gtk.Box | null;    // slot overlay berisi grid (lihat overlays.ts); dibuat saat pertama kali terlihat
+    grid: Gtk.Grid | null;
     height: number;
     geometry: Geometry | null;  // tetap tersedia meski cache bersama sudah berganti
     collapsed: boolean;      // true = tampil sebagai grid
@@ -86,15 +89,22 @@ export class TableLayer {
     private cellSizes = new Map<string, [number, number]>();
     private cellUnits = 0;
     private probe: Gtk.Grid | null = null;
-    private probeCells: { label: Gtk.Label; box: Gtk.EventBox }[] = [];
+    private probeCells: { label: Gtk.Label; box: Gtk.Box }[] = [];
+    private readonly slots: OverlaySlots;
 
     constructor(view: Gtk.TextView, private readonly hideTag: Gtk.TextTag) {
         this.view = view;
         this.buffer = view.buffer;
-        view.connect('destroy', () => { this.destroyed = true; this.probe?.destroy(); });
-        view.connect('size-allocate', () => this.queueRelayout());
+        this.slots = new OverlaySlots(view);
         view.connect('notify::vadjustment', () => this.watchAdjustment());
         this.watchAdjustment();
+    }
+
+    // Editor ditutup: hentikan pekerjaan tertunda (lihat MarkdownView.destroy()).
+    destroy(): void {
+        this.destroyed = true;
+        this.probe = null;
+        this.probeCells = [];
     }
 
     private watchAdjustment(): void {
@@ -149,7 +159,7 @@ export class TableLayer {
                 next.push(block);
             } else {
                 changed = true;
-                next.push({ start: t.start, end: t.end, key, widget: null, height: 0, geometry: null, collapsed: false, x: -1, y: -1 });
+                next.push({ start: t.start, end: t.end, key, widget: null, grid: null, height: 0, geometry: null, collapsed: false, x: -1, y: -1 });
             }
         }
         changed ||= unused.length > 0;
@@ -173,12 +183,12 @@ export class TableLayer {
             changed = true;
             block.collapsed = collapsed;
             if (collapsed) block.height = this.measure(block).height;
-            if (!collapsed) block.widget?.hide();
+            if (!collapsed) block.widget?.set_visible(false);
 
             // Kursor tidak mengubah teks: tag tabel lain tetap benar. Jangan menelusuri
             // seluruh buffer untuk mencari selisih tag setiap masuk/keluar satu tabel.
-            const start = this.buffer.get_iter_at_line(block.start);
-            const lastLine = this.buffer.get_iter_at_line(block.end);
+            const start = iterAtLine(this.buffer, block.start);
+            const lastLine = iterAtLine(this.buffer, block.end);
             const end = lastLine.copy();
             end.forward_to_line_end();
             const gap = this.gapTag(block.height + 2 * GAP);
@@ -206,8 +216,9 @@ export class TableLayer {
     }
 
     private destroyWidget(block: Block): void {
-        block.widget?.destroy();
+        if (block.widget) this.slots.release(block.widget);
         block.widget = null;
+        block.grid = null;
     }
 
     // Samakan teks, ruang kosong, dan widget dengan keadaan sekarang.
@@ -216,11 +227,11 @@ export class TableLayer {
         const gaps = new Map<Gtk.TextTag, Range[]>();
         for (const block of this.blocks) {
             block.collapsed = this.isCollapsed(block);
-            if (!block.collapsed) { block.widget?.hide(); continue; }
+            if (!block.collapsed) { block.widget?.set_visible(false); continue; }
             block.height = this.measure(block).height;
 
-            const first = this.buffer.get_iter_at_line(block.start).get_offset();
-            const lastLine = this.buffer.get_iter_at_line(block.end);
+            const first = iterAtLine(this.buffer, block.start).get_offset();
+            const lastLine = iterAtLine(this.buffer, block.end);
             const afterLast = lastLine.copy();
             afterLast.forward_to_line_end();
             hide.push([first, afterLast.get_offset()]);
@@ -248,7 +259,7 @@ export class TableLayer {
 
     private label(): Gtk.Label {
         return new Gtk.Label({
-            use_markup: true, ellipsize: Pango.EllipsizeMode.END,
+            use_markup: true, ellipsize: Pango.EllipsizeMode.END, hexpand: true,
             margin_start: TABLE_CELL_PAD_X, margin_end: TABLE_CELL_PAD_X,
             margin_top: TABLE_CELL_PAD_Y, margin_bottom: TABLE_CELL_PAD_Y,
         });
@@ -262,17 +273,16 @@ export class TableLayer {
         if (cached) return block.geometry = cached;
         if (!this.probe) {
             this.probe = new Gtk.Grid();
-            this.probe.get_style_context().add_class('md-table');
+            this.probe.add_css_class('md-table');
             for (let r = 0; r < 2; r++) {
                 const label = this.label();
-                const box = new Gtk.EventBox({ visible_window: true });
-                box.get_style_context().add_class('md-table-cell');
-                if (r === 0) box.get_style_context().add_class('md-table-head');
-                box.add(label);
+                const box = new Gtk.Box();
+                box.add_css_class('md-table-cell');
+                if (r === 0) box.add_css_class('md-table-head');
+                box.append(label);
                 this.probe.attach(box, 0, r, 1, 1);
                 this.probeCells.push({ label, box });
             }
-            this.probe.show_all();
         }
         const table = parseTable(block.key.split('\n'));
         const natural = table.header.map(() => 0);
@@ -310,7 +320,7 @@ export class TableLayer {
         if (cached) return cached;
         const cell = this.probeCells[header ? 0 : 1];
         cell.label.set_markup(markup);
-        const size: [number, number] = [cell.box.get_preferred_width()[1], cell.box.get_preferred_height()[1]];
+        const size: [number, number] = [cell.box.measure(Gtk.Orientation.HORIZONTAL, -1)[1], cell.box.measure(Gtk.Orientation.VERTICAL, -1)[1]];
         if (key.length <= 1024 * 1024) {
             while (this.cellSizes.size >= 1024 || this.cellUnits + key.length > 1024 * 1024) {
                 const old = this.cellSizes.keys().next().value!;
@@ -326,10 +336,10 @@ export class TableLayer {
     private resize(block: Block): void {
         const { table, natural } = this.measure(block);
         const widths = fitColumns(natural, this.maxWidth - BORDER);
-        const grid = block.widget!.get_child() as Gtk.Grid;
+        const grid = block.grid!;
         [table.header, ...table.rows].forEach((row, r) => row.forEach((text, c) => {
-            const box = grid.get_child_at(c, r) as Gtk.EventBox;
-            const label = box.get_child() as Gtk.Label;
+            const box = grid.get_child_at(c, r)!;
+            const label = box.get_first_child() as Gtk.Label;
             label.set_size_request(Math.max(1, widths[c] - 2 * TABLE_CELL_PAD_X - BORDER), -1);
             box.set_tooltip_text(widths[c] < natural[c] ? text : null);
         }));
@@ -338,28 +348,26 @@ export class TableLayer {
     private build(block: Block): void {
         const { table, markup } = this.measure(block);
         const grid = new Gtk.Grid();
-        grid.get_style_context().add_class('md-table');
+        grid.add_css_class('md-table');
         markup.forEach((row, r) => row.forEach((text, c) => {
             const align = table.aligns[c];
             const label = this.label();
             label.xalign = align === 'right' ? 1 : align === 'center' ? 0.5 : 0;
             label.set_markup(text);
-            const box = new Gtk.EventBox({ visible_window: true });
-            box.add(label);
-            box.get_style_context().add_class('md-table-cell');
-            if (r === 0) box.get_style_context().add_class('md-table-head');
-            box.connect('button-press-event', () => {
+            const box = new Gtk.Box();
+            box.append(label);
+            box.add_css_class('md-table-cell');
+            if (r === 0) box.add_css_class('md-table-head');
+            onClick(box, () => {
                 this.onActivate(block.start + (r === 0 ? 0 : r + 1), c);
                 return true;
             });
             grid.attach(box, c, r, 1, 1);
         }));
-        const widget = new Gtk.EventBox({ visible_window: false });
-        widget.add(grid);
-        block.widget = widget;
+        block.grid = grid;
+        block.widget = this.slots.acquire();
+        block.widget.append(grid);
         this.resize(block);
-        this.view.add_child_in_window(widget, Gtk.TextWindowType.TEXT, 0, 0);
-        widget.show_all();
         block.x = block.y = -1;
     }
 
@@ -390,13 +398,13 @@ export class TableLayer {
             if (visible && !block.widget) this.build(block);
             block.widget?.set_visible(visible);
             if (!visible || block.end >= this.buffer.get_line_count()) continue;
-            const [lineY, lineHeight] = this.view.get_line_yrange(this.buffer.get_iter_at_line(block.end));
+            const [lineY, lineHeight] = this.view.get_line_yrange(iterAtLine(this.buffer, block.end));
             const y = lineY + lineHeight - block.height - GAP;
             // Hanya pindahkan jika berubah, supaya tidak memicu resize berulang.
             if (x === block.x && y === block.y) continue;
             block.x = x;
             block.y = y;
-            this.view.move_child(block.widget!, x, y);
+            this.view.move_overlay(block.widget!, x, y);
         }
     }
 }

@@ -18,8 +18,8 @@
 // Hasil berupa median, p95, dan maksimum; JSON juga menyimpan sampel mentah.
 
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import System from 'system';
 
@@ -31,6 +31,7 @@ import { markdownToHtml } from '../src/markdown/html.js';
 import { parseInline } from '../src/markdown/inline.js';
 import { findTables, parseTable, renderTable } from '../src/markdown/table.js';
 import { parseBoard, serializeBoard } from '../src/markdown/kanban.js';
+import { iterAtLine } from '../src/gtkutil.js';
 
 const FIXTURE = optVal('fixture') ?? 'mixed';
 if (!['mixed', 'long', 'buku'].includes(FIXTURE)) { printerr('--fixture harus mixed, long, atau buku.'); System.exit(1); }
@@ -264,7 +265,7 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
     const ketik = await measureAsync(async () => {
         // Pulihkan dokumen dan posisi agar tiap pengulangan memakai kondisi sama.
         ed.setText(text);
-        buf.place_cursor(buf.get_iter_at_line(Math.floor(buf.get_line_count() / 2)));
+        buf.place_cursor(iterAtLine(buf, Math.floor(buf.get_line_count() / 2)));
         await idle();
         for (let i = 0; i < 20; i++) {
             const start = now();
@@ -285,7 +286,7 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
         let line = middle;
         while (line < buf.get_line_count() - 1 && (ed.lines[line] ?? '').length < 200) line++;
         if ((ed.lines[line] ?? '').length < 200) line = middle;
-        const it = buf.get_iter_at_line(line);
+        const it = iterAtLine(buf, line);
         it.forward_to_line_end();
         buf.place_cursor(it);
     };
@@ -302,15 +303,14 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
         }
     });
     report('ketik lewat view (paragraf)', viewTyping.slice(5), true);
-    const enter = { get_keyval: () => [true, Gdk.KEY_Return], get_state: () => [true, 0 as Gdk.ModifierType] } as const;
     report('Enter paragraf baru', await operation(async () => { ed.setText(text); paragraphEnd(); await idle(); }, () => edit(() => {
-        if (!ed.onKey(enter as never)) ed.view.emit('insert-at-cursor', '\n');
+        if (!ed.onKey(Gdk.KEY_Return, 0)) ed.view.emit('insert-at-cursor', '\n');
     })), true);
     // Dokumen besar, Unicode, dan satu baris panjang menguji jalur suntingan berbeda.
     const paste = ('😀 catatan **tebal**\n'.repeat(100)) + 'x'.repeat(10000);
     const prepare = async (): Promise<void> => {
         ed.setText(text);
-        buf.place_cursor(buf.get_iter_at_line(Math.floor(buf.get_line_count() / 2)));
+        buf.place_cursor(iterAtLine(buf, Math.floor(buf.get_line_count() / 2)));
         await idle();
     };
     report('paste besar + Unicode', await operation(prepare, () => edit(() => buf.insert_at_cursor(paste, -1))), true);
@@ -334,7 +334,7 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
     await prepare();
     report('pindah kursor 20 baris', await measureAsync(async () => {
         for (let i = 0; i < 20; i++) {
-            buf.place_cursor(buf.get_iter_at_line(Math.min(i * 7, buf.get_line_count() - 1)));
+            buf.place_cursor(iterAtLine(buf, Math.min(i * 7, buf.get_line_count() - 1)));
             await idle();
         }
     }));

@@ -8,21 +8,21 @@
 //   disisipkan/dihapus, jadi subfolder yang sedang terbuka tidak ikut tertutup.
 // - File dan folder tersembunyi (diawali titik) serta node_modules tidak ditampilkan.
 
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
 import { createFile, createFolder, moveEntry, renameEntry, trashEntry } from '../fileops.js';
 import { confirmDialog, promptDialog, showError } from './dialogs.js';
+import { onClick, pack } from '../gtkutil.js';
+import { popupMenu, separator, type MenuEntry } from './menu.js';
 
 export const MARKDOWN_EXTENSIONS = ['.md', '.markdown', '.mdown', '.mkd'];
 const SKIPPED_FOLDERS = new Set(['node_modules']);
-const DRAG_TARGET = 'application/x-nyerat-path';
 const EXPAND_DELAY = 600;   // ms; folder tertutup dibuka otomatis bila ditahan saat drag
 const NO_ACTION = 0 as Gdk.DragAction;
-const NO_DEFAULTS = 0 as Gtk.DestDefaults;
 const REFRESH_DELAY = 150;  // ms; perubahan beruntun di disk digabung jadi satu refresh
 
 // Kolom di Gtk.TreeStore.
@@ -82,7 +82,7 @@ export class FileTree {
     dialogs = {
         prompt: (title: string, label: string, value?: string): string | null => promptDialog(this.parentWindow(), { title, label, value }),
         confirm: (message: string, detail: string): boolean => confirmDialog(this.parentWindow(), message, detail),
-        error: (message: string): void => showError(this.parentWindow() ?? new Gtk.Window(), message),
+        error: (message: string): void => showError(this.parentWindow(), message),
     };
 
     private readonly title: Gtk.Label;
@@ -91,6 +91,7 @@ export class FileTree {
     private pendingRefresh = new Map<string, number>();     // path folder → id timeout
     private dragSource: string | null = null;               // path yang sedang di-drag
     private expandTimer = 0;
+    private revealed: string | null = null;                 // file yang terakhir disorot reveal()
 
     constructor() {
         this.store = new Gtk.TreeStore();
@@ -110,7 +111,7 @@ export class FileTree {
         column.pack_start(text, true);
         column.add_attribute(text, 'text', Col.Name);
         this.view.append_column(column);
-        this.view.connect('button-press-event', (_v, ev) => this.onButtonPress(ev as unknown as Gdk.Event));
+        onClick(this.view, (_n, x, y) => this.showContextMenu(x, y), 3);
         this.setupDrag();
         this.view.connect('row-activated', (_view, path) => this.activate(path));
         this.view.connect('test-expand-row', (_view, iter) => {
@@ -119,15 +120,15 @@ export class FileTree {
         });
 
         const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vexpand: true });
-        scroll.add(this.view);
+        scroll.set_child(this.view);
 
         // Tampilan saat belum ada folder yang dibuka.
-        const empty = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, valign: Gtk.Align.CENTER, margin: 16 });
+        const empty = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, valign: Gtk.Align.CENTER, margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16 });
         const hint = new Gtk.Label({ label: 'Belum ada folder yang dibuka', wrap: true, justify: Gtk.Justification.CENTER });
-        hint.get_style_context().add_class('dim-label');
+        hint.add_css_class('dim-label');
         const button = new Gtk.Button({ label: 'Buka Folder…', action_name: 'app.open-folder', halign: Gtk.Align.CENTER });
-        empty.pack_start(hint, false, false, 0);
-        empty.pack_start(button, false, false, 0);
+        empty.append(hint);
+        empty.append(button);
 
         this.pages = new Gtk.Stack({ vexpand: true });
         this.pages.add_named(empty, 'empty');
@@ -135,17 +136,24 @@ export class FileTree {
 
         this.title = new Gtk.Label({ label: 'BERKAS', xalign: 0, margin_start: 16, margin_top: 4, margin_bottom: 8,
             ellipsize: Pango.EllipsizeMode.END });
-        this.title.get_style_context().add_class('side-title');
+        this.title.add_css_class('side-title');
 
         // Judul = folder root; lepas item di sini memindahkannya ke luar semua subfolder.
-        const titleBox = new Gtk.EventBox();
-        titleBox.add(this.title);
+        const titleBox = new Gtk.Box();
+        this.title.set_hexpand(true);
+        titleBox.append(this.title);
         this.setupTitleDrop(titleBox);
 
-        this.widget = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-        this.widget.pack_start(titleBox, false, false, 0);
-        this.widget.pack_start(this.pages, true, true, 0);
-        this.widget.show_all();
+        // hexpand false: judul mengembang di dalam kotaknya, dan GTK 4 meneruskannya ke atas sampai sidebar.
+        this.widget = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: false });
+        this.widget.append(titleBox);
+        pack(this.widget, this.pages, true);
+    }
+
+    // Jendela ditutup: hentikan pemantau disk dan timer.
+    destroy(): void {
+        this.cancelExpand();
+        this.setRoot(null);
     }
 
     // Ganti folder yang ditampilkan; null = tidak ada folder.
@@ -173,6 +181,7 @@ export class FileTree {
     // Sorot file di pohon, membuka folder-folder induknya bila perlu.
     // false jika file tidak berada di dalam folder yang dibuka.
     reveal(filePath: string | null): boolean {
+        this.revealed = filePath;
         this.view.get_selection().unselect_all();
         const iter = filePath ? this.findRow(filePath, true) : null;
         if (!iter) return false;
@@ -213,7 +222,7 @@ export class FileTree {
     // ---------- Buat file/folder ----------
 
     private parentWindow(): Gtk.Window | null {
-        const top = this.widget.get_toplevel();
+        const top = this.widget.get_root();
         return top instanceof Gtk.Window ? top : null;
     }
 
@@ -285,41 +294,31 @@ export class FileTree {
     }
 
     // Menu klik kanan untuk baris tertentu (null = area kosong).
-    contextMenu(treePath: Gtk.TreePath | null): Gtk.Menu {
+    contextMenu(treePath: Gtk.TreePath | null): MenuEntry[] {
         const dir = this.targetDir(treePath);
-        const menu = new Gtk.Menu();
-        for (const [label, kind] of [['File Baru…', 'file'], ['Folder Baru…', 'folder']] as const) {
-            const item = new Gtk.MenuItem({ label, sensitive: dir !== null });
-            item.connect('activate', () => { if (dir) this.create(kind, dir); });
-            menu.append(item);
-        }
+        const entries: MenuEntry[] = [
+            { label: 'File Baru…', enabled: dir !== null, run: () => { if (dir) this.create('file', dir); } },
+            { label: 'Folder Baru…', enabled: dir !== null, run: () => { if (dir) this.create('folder', dir); } },
+        ];
         const rowPath = treePath ? this.pathOf(treePath) : null;
         if (rowPath) {
-            menu.append(new Gtk.SeparatorMenuItem());
-            const rename = new Gtk.MenuItem({ label: 'Ganti Nama…' });
-            rename.connect('activate', () => this.rename(rowPath));
-            menu.append(rename);
-            const del = new Gtk.MenuItem({ label: 'Hapus' });
-            del.connect('activate', () => this.remove(rowPath));
-            menu.append(del);
+            entries.push(separator());
+            entries.push({ label: 'Ganti Nama…', enabled: true, run: () => this.rename(rowPath) });
+            entries.push({ label: 'Hapus', enabled: true, run: () => this.remove(rowPath) });
         }
-        menu.show_all();
-        return menu;
+        return entries;
     }
 
-    private onButtonPress(event: Gdk.Event): boolean {
-        const [, x, y] = event.get_coords();
-        const [, button] = event.get_button();
-        const [found, treePath] = this.view.get_path_at_pos(Math.round(x), Math.round(y));
-        if (button === 1) {
-            this.dragSource = found && treePath ? this.pathOf(treePath) : null;
-            return false;
-        }
-        if (button !== 3 || !this.root) return false;
+    // Klik kanan di (x, y), koordinat widget TreeView.
+    private showContextMenu(x: number, y: number): boolean {
+        if (!this.root) return false;
+        const [bx, by] = this.view.convert_widget_to_bin_window_coords(Math.round(x), Math.round(y));
+        const [found, treePath] = this.view.get_path_at_pos(bx, by);
         const row = found ? treePath : null;
         if (row) this.view.get_selection().select_path(row);
         else this.view.get_selection().unselect_all();
-        this.contextMenu(row).popup_at_pointer(event);
+
+        popupMenu(this.view, this.contextMenu(row), x, y);
         return true;
     }
 
@@ -330,51 +329,76 @@ export class FileTree {
 
     // ---------- Pindah lewat drag and drop ----------
 
+    // Drag memakai DragSource/DropTarget sendiri, bukan DnD model TreeView: TreeStore akan
+    // memindahkan barisnya sendiri, padahal yang dipindah adalah berkas di disk.
     private setupDrag(): void {
-        const targets = [Gtk.TargetEntry.new(DRAG_TARGET, Gtk.TargetFlags.SAME_APP, 0)];
-        this.view.enable_model_drag_source(Gdk.ModifierType.BUTTON1_MASK, targets, Gdk.DragAction.MOVE);
-        // Tujuan dipasang tanpa model, supaya GTK tidak menolak target yang bukan baris model.
-        this.view.drag_dest_set(NO_DEFAULTS, targets, Gdk.DragAction.MOVE);
+        const source = new Gtk.DragSource({ actions: Gdk.DragAction.MOVE });
+        source.connect('prepare', (_s, x, y) => {
+            const [bx, by] = this.view.convert_widget_to_bin_window_coords(Math.round(x), Math.round(y));
+            const [found, treePath] = this.view.get_path_at_pos(bx, by);
+            this.dragSource = found && treePath ? this.pathOf(treePath) : null;
+            if (!this.dragSource) return null;
+            // Ikon drag: ikon jenis berkasnya. Tanpa ini GTK memakai gambar seluruh TreeView;
+            // widget sebagai ikon (GtkDragIcon) memicu Gtk-CRITICAL saat drag selesai di GTK 4.14.
+            const icon = Gtk.IconTheme.get_for_display(this.view.get_display()).lookup_icon(
+                isDirectory(this.dragSource) ? 'folder-symbolic' : 'text-x-generic-symbolic', null, 32,
+                this.view.get_scale_factor(), Gtk.TextDirection.NONE, 0 as Gtk.IconLookupFlags);
+            source.set_icon(icon, 0, 0);
+            return Gdk.ContentProvider.new_for_value(this.dragSource);
+        });
+        source.connect('drag-end', () => { this.dragSource = null; });
+        this.view.add_controller(source);
 
-        this.view.connect('drag-motion', (_v, ctx, x, y, time) => {
+        const target = new Gtk.DropTarget({ actions: Gdk.DragAction.MOVE });
+        target.set_gtypes([GObject.TYPE_STRING]);
+        target.connect('motion', (_t, x, y) => {
             const dir = this.dropDirAt(x, y);
             const valid = this.canMoveTo(dir);
-            this.view.set_drag_dest_row(valid ? this.dropRowAt(x, y) : null, Gtk.TreeViewDropPosition.INTO_OR_AFTER);
+            this.highlightDrop(valid ? this.dropRowAt(x, y) : null);
             this.scheduleExpand(x, y);
-            Gdk.drag_status(ctx, valid ? Gdk.DragAction.MOVE : NO_ACTION, time);
-            return true;
+            return valid ? Gdk.DragAction.MOVE : NO_ACTION;
         });
-        this.view.connect('drag-leave', () => {
-            this.view.set_drag_dest_row(null, Gtk.TreeViewDropPosition.INTO_OR_AFTER);
+        target.connect('leave', () => {
+            this.highlightDrop(null);
             this.cancelExpand();
         });
-        this.view.connect('drag-drop', (_v, ctx, x, y, time) => {
+        target.connect('drop', (_t, _value, x, y) => {
             this.cancelExpand();
-            this.view.set_drag_dest_row(null, Gtk.TreeViewDropPosition.INTO_OR_AFTER);
+            this.highlightDrop(null);
             const dir = this.dropDirAt(x, y);
-            const ok = this.canMoveTo(dir) && this.moveTo(this.dragSource!, dir!);
-            Gtk.drag_finish(ctx, ok, false, time);
-            return true;
+            return this.canMoveTo(dir) && this.moveTo(this.dragSource!, dir!);
         });
-        this.view.connect('drag-end', () => { this.dragSource = null; });
+        this.view.add_controller(target);
     }
 
-    private setupTitleDrop(box: Gtk.EventBox): void {
-        const targets = [Gtk.TargetEntry.new(DRAG_TARGET, Gtk.TargetFlags.SAME_APP, 0)];
-        box.drag_dest_set(NO_DEFAULTS, targets, Gdk.DragAction.MOVE);
-        box.connect('drag-motion', (_b, ctx, _x, _y, time) => {
+    private setupTitleDrop(box: Gtk.Box): void {
+        const target = new Gtk.DropTarget({ actions: Gdk.DragAction.MOVE });
+        target.set_gtypes([GObject.TYPE_STRING]);
+        target.connect('motion', () => {
             const valid = this.canMoveTo(this.root);
-            Gdk.drag_status(ctx, valid ? Gdk.DragAction.MOVE : NO_ACTION, time);
-            if (valid) box.get_style_context().add_class('side-drop'); else box.get_style_context().remove_class('side-drop');
-            return true;
+            if (valid) box.add_css_class('side-drop'); else box.remove_css_class('side-drop');
+            return valid ? Gdk.DragAction.MOVE : NO_ACTION;
         });
-        box.connect('drag-leave', () => box.get_style_context().remove_class('side-drop'));
-        box.connect('drag-drop', (_b, ctx, _x, _y, time) => {
-            box.get_style_context().remove_class('side-drop');
-            const ok = this.canMoveTo(this.root) && this.moveTo(this.dragSource!, this.root!);
-            Gtk.drag_finish(ctx, ok, false, time);
-            return true;
+        target.connect('leave', () => box.remove_css_class('side-drop'));
+        target.connect('drop', () => {
+            box.remove_css_class('side-drop');
+            return this.canMoveTo(this.root) && this.moveTo(this.dragSource!, this.root!);
         });
+        box.add_controller(target);
+    }
+
+    // Sorot baris tujuan dengan seleksi; null = kembalikan sorotan ke file yang terbuka.
+    // Bukan set_drag_dest_row(): tanpa DnD model bawaan TreeView, GTK 4.14 crash (segfault)
+    // saat menggambar penanda tujuan itu.
+    private highlightDrop(row: Gtk.TreePath | null): void {
+        const selection = this.view.get_selection();
+        if (row) {
+            selection.select_path(row);
+            return;
+        }
+        const revealed = this.revealed ? this.findRow(this.revealed, false) : null;
+        if (revealed) selection.select_iter(revealed);
+        else selection.unselect_all();
     }
 
     private dropRowAt(x: number, y: number): Gtk.TreePath | null {

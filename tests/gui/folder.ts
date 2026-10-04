@@ -1,12 +1,13 @@
 // Tes GUI: Folder.
 
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import { DEFAULTS, loadSettings } from '../../src/settings.js';
 import { listFolder } from '../../src/ui/filetree.js';
 import { MainWindow } from '../../src/window.js';
 import { section, test, eq, ok, tmp } from '../framework.js';
 import type { GuiContext } from './context.js';
+import type { MenuEntry } from '../../src/ui/menu.js';
 
 export function folderTests(c: GuiContext): void {
     const { app, w, ed, buf, pump } = c;
@@ -134,8 +135,8 @@ export function folderTests(c: GuiContext): void {
     const errors: string[] = [];
     const confirms: boolean[] = [];
     ft.dialogs = { prompt: () => prompts.shift() ?? null, confirm: () => confirms.shift() ?? false, error: msg => { errors.push(msg); } };
-    const menuLabels = (m: Gtk.Menu) => m.get_children().map(i => (i as Gtk.MenuItem).label);
-    const activate = (m: Gtk.Menu, label: string) => (m.get_children().find(i => (i as Gtk.MenuItem).label === label) as Gtk.MenuItem).activate();
+    const menuLabels = (m: MenuEntry[]) => m.map(i => i.label);
+    const activate = (m: MenuEntry[], label: string) => m.find(i => i.label === label)!.run!();
     const opened: string[] = [];
     const openBefore = ft.onOpenFile;
     ft.onOpenFile = p => { opened.push(p); openBefore(p); };

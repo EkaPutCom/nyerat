@@ -19,12 +19,13 @@
 //   onViewImage(pixbuf, title)          gambar diminta diperbesar (klik ganda / perintah menu)
 //   getBaseDir()                        folder untuk tautan relatif
 
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
-import GtkSource from 'gi://GtkSource?version=4';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
+import GtkSource from 'gi://GtkSource?version=5';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import type GdkPixbuf from 'gi://GdkPixbuf';
+import { onClick, onKeyPress } from '../gtkutil.js';
 
 import { createTags, paintTags, setTagMargins, SYNTAX_TAGS } from './tags.js';
 import { LineTagger } from './tagsync.js';
@@ -43,6 +44,7 @@ import type { Tags } from './tags.js';
 import type { LineSpan } from './tagsync.js';
 import type { HighlightResult, Heading, Marker } from './highlighter.js';
 import type { Palette } from '../ui/theme.js';
+import { iterAtLine } from '../gtkutil.js';
 
 const TEXT_WIDTH = 780;  // lebar kolom teks maksimum, dalam piksel
 
@@ -58,24 +60,23 @@ const FILL_PRIORITY = GLib.PRIORITY_HIGH_IDLE + 22;
 
 export type Mode = 'source' | 'focus' | 'typewriter';
 
-// Bagian dari Gdk.Event yang dipakai onKey/onClick (memudahkan tes membuat event tiruan).
-export type KeyEvent = Pick<Gdk.Event, 'get_keyval' | 'get_state'>;
-export type ButtonEvent = Pick<Gdk.Event, 'get_button' | 'get_event_type' | 'get_coords' | 'get_state'>;
-
 // Ganti seluruh isi TextView (lewat `replace`), lalu tampilkan dari awal.
 //
-// GTK 3 memberi tinggi 0 pada baris yang belum ditata. Jika gambar pertama mencakup area di
-// bawah baris yang sudah ditata (cache piksel TextView menggambar setengah layar ekstra, dan
-// bottom_margin memperpanjang kanvas), GTK menata semua baris sampai akhir dokumen sekaligus
-// di thread utama: membuka naskah 650 KB membeku ±0,6 detik. Karena itu posisi gulir lama
-// dinolkan dulu, dan gulir ke kursor diantre: GTK lalu menata dua layar di sekitar kursor
-// sebelum menggambar (gtk_text_view_flush_scroll) dan sisanya sedikit demi sedikit di latar.
+// GTK memberi tinggi 0 pada baris yang belum ditata. Jika gambar pertama mencakup area di
+// bawah baris yang sudah ditata, GTK bisa menata semua baris sampai akhir dokumen sekaligus
+// di thread utama (di GTK 3 membuka naskah 650 KB membeku ±0,6 detik). Karena itu posisi
+// gulir lama dinolkan dulu, dan gulir ke kursor diantre: GTK lalu menata layar di sekitar
+// kursor sebelum menggambar dan sisanya sedikit demi sedikit di latar.
+//
+// Gulir ke kursor hanya jika TextView sudah punya ukuran. Sebelum itu (jendela belum tampil,
+// atau tab baru di Stack) GTK 4 menyimpan gulirnya lalu menjalankannya dengan geometri yang
+// belum ada, sehingga dokumen terbuka di tengah atau akhir, bukan di awal.
 export function replaceAllText(view: Gtk.TextView, replace: () => void): void {
     view.get_vadjustment()?.set_value(0);
     replace();
     const buf = view.buffer;
     buf.place_cursor(buf.get_start_iter());
-    view.scroll_to_mark(buf.get_insert(), 0, false, 0, 0);
+    if (view.get_height() > 0) view.scroll_to_mark(buf.get_insert(), 0, false, 0, 0);
 }
 
 export class MarkdownView {
@@ -129,7 +130,7 @@ export class MarkdownView {
             pixels_above_lines: 3, pixels_below_lines: 3, pixels_inside_wrap: 4,
             top_margin: 48, bottom_margin: 240, tab_width: 4,
         });
-        this.view.get_style_context().add_class('editor');
+        this.view.add_css_class('editor');
         this.tags = createTags(this.buffer);
         this.syntaxTagger = new LineTagger(this.buffer, SYNTAX_TAGS.map(n => this.tags[n]));
         this.concealer = new MarkerConcealer(new LineTagger(this.buffer, [this.tags.hidden]), this.tags.hidden);
@@ -149,7 +150,7 @@ export class MarkdownView {
         // Klik sel di grid → kursor ke sel itu di teks mentah (yang membuka tabelnya).
         this.tableLayer.onActivate = (line, col) => {
             const text = this.lines[line] ?? '';
-            const it = this.buffer.get_iter_at_line(line);
+            const it = iterAtLine(this.buffer, line);
             it.forward_chars(cpLength(text.slice(0, cellStart(text, col))));
             this.buffer.place_cursor(it);
             this.view.grab_focus();
@@ -159,7 +160,7 @@ export class MarkdownView {
         this.mermaid.onZoom = (pixbuf, title) => this.onViewImage(pixbuf, title);
         // Klik diagram → kursor ke baris kode terakhir, sehingga kodenya terbuka.
         this.mermaid.onActivate = line => {
-            const it = this.buffer.get_iter_at_line(line);
+            const it = iterAtLine(this.buffer, line);
             it.forward_to_line_end();
             this.buffer.place_cursor(it);
             this.view.grab_focus();
@@ -170,7 +171,7 @@ export class MarkdownView {
         this.images.getBaseDir = () => this.getBaseDir();
         // Klik gambar → kursor ke barisnya, sehingga sintaks ![alt](url) muncul.
         this.images.onActivate = line => {
-            const it = this.buffer.get_iter_at_line(line);
+            const it = iterAtLine(this.buffer, line);
             it.forward_to_line_end();
             this.buffer.place_cursor(it);
             this.view.grab_focus();
@@ -180,7 +181,7 @@ export class MarkdownView {
         // ini + margin) diteruskan ke jendela, sehingga jendela tidak bisa mengecil dan
         // terus membesar setiap margin dihitung ulang.
         this.widget = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.EXTERNAL, hexpand: true, vexpand: true });
-        this.widget.add(this.view);
+        this.widget.set_child(this.view);
 
         this.buffer.connect_after('insert-text', (_b, end, text) => {
             const start = end.copy();
@@ -192,22 +193,37 @@ export class MarkdownView {
         this.buffer.connect('mark-set', (_b, _i, mark) => {
             if (mark === this.buffer.get_insert() || mark === this.buffer.get_selection_bound()) this.queueCursorUpdate();
         });
-        // Margin dihitung dari lebar ScrolledWindow (area yang terlihat), bukan dari
-        // TextView, supaya margin tidak ikut menentukan lebarnya sendiri.
-        this.widget.connect('size-allocate', (_w, alloc) => this.updateMargins(alloc.width));
-        // Tipe @girs menyebut EventKey/EventButton (struct tanpa method), tapi saat
-        // runtime GJS memberikan Gdk.Event yang punya get_keyval(), get_coords(), dst.
-        this.view.connect('key-press-event', (_w, ev) => this.onKey(ev as unknown as Gdk.Event));
-        this.view.connect('button-press-event', (_w, ev) => this.onClick(ev as unknown as Gdk.Event));
-        this.view.connect('destroy', () => {
-            this.destroyed = true;
-            if (this.highlightQueued) GLib.source_remove(this.highlightQueued);
-            this.highlightQueued = 0;
-            if (this.cursorQueued) GLib.source_remove(this.cursorQueued);
-            this.cursorQueued = 0;
-            if (this.fillQueued) GLib.source_remove(this.fillQueued);
-            this.fillQueued = 0;
-        });
+        // Margin dihitung dari lebar area yang terlihat (page_size adjustment horizontal,
+        // diisi TextView saat dialokasikan), bukan dari lebar TextView yang ikut ditentukan
+        // margin itu sendiri. GTK 4 tidak punya sinyal size-allocate.
+        const hadj = this.widget.get_hadjustment();
+        hadj.connect('changed', () => this.updateMargins(hadj.get_page_size()));
+        // Fase CAPTURE: berjalan sebelum penanganan tombol/klik bawaan GtkSourceView
+        // (indentasi otomatis, Tab, menaruh kursor), sama seperti handler GTK 3 yang mendahuluinya.
+        onKeyPress(this.view, (keyval, state) => this.onKey(keyval, state), Gtk.PropagationPhase.CAPTURE);
+        onClick(this.view, (count, x, y, state) => this.onClick(count, x, y, state))
+            .set_propagation_phase(Gtk.PropagationPhase.CAPTURE);
+    }
+
+    // Hentikan semua pekerjaan tertunda. GTK 4 tidak lagi memancarkan "destroy" untuk widget
+    // yang masih dipegang JavaScript, jadi pemilik editor (jendela) wajib memanggil ini saat
+    // tab atau jendela ditutup. Melepas widget dari induknya urusan pemiliknya.
+    destroy(): void {
+        if (this.destroyed) return;
+        this.destroyed = true;
+        if (this.highlightQueued) GLib.source_remove(this.highlightQueued);
+        this.highlightQueued = 0;
+        if (this.cursorQueued) GLib.source_remove(this.cursorQueued);
+        this.cursorQueued = 0;
+        if (this.fillQueued) GLib.source_remove(this.fillQueued);
+        this.fillQueued = 0;
+        this.images.destroy();
+        this.tableLayer.destroy();
+        this.mermaid.destroy();
+    }
+
+    get isDestroyed(): boolean {
+        return this.destroyed;
     }
 
     // ---------- Isi dan tampilan ----------
@@ -226,9 +242,9 @@ export class MarkdownView {
         this.syntaxTagger.defer(FILL_FIRST_LINES);
         this.concealer.defer(FILL_FIRST_LINES);
         replaceAllText(this.view, () => {
-            buf.begin_not_undoable_action();
+            buf.begin_irreversible_action();
             buf.set_text(text, -1);
-            buf.end_not_undoable_action();
+            buf.end_irreversible_action();
             buf.set_modified(false);
         });
         this.highlight();
@@ -280,7 +296,7 @@ export class MarkdownView {
     }
 
     jumpToLine(n: number): void {
-        const it = this.buffer.get_iter_at_line(n);
+        const it = iterAtLine(this.buffer, n);
         it.forward_to_line_end();
         this.buffer.place_cursor(it);
         this.view.grab_focus();
@@ -314,7 +330,7 @@ export class MarkdownView {
         if (m === this.margin && width === this.width) return;
         this.margin = m;
         this.width = width;
-        // Jangan ubah ukuran di dalam size-allocate; tunda ke idle.
+        // Jangan ubah ukuran selagi GTK mengalokasikan; tunda ke idle.
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             if (this.destroyed) return GLib.SOURCE_REMOVE;
             this.view.set_left_margin(m);
@@ -481,10 +497,8 @@ export class MarkdownView {
     // ---------- Input ----------
 
     // Dipanggil untuk setiap tombol. true = sudah ditangani, GTK tidak memprosesnya lagi.
-    onKey(ev: KeyEvent): boolean {
-        const [, keyval] = ev.get_keyval();
-        const [, state] = ev.get_state();
-        if (state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.MOD1_MASK)) return false;
+    onKey(keyval: number, state: number): boolean {
+        if (state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK)) return false;
         if (this.buffer.get_has_selection()) return false;
         const shift = (state & Gdk.ModifierType.SHIFT_MASK) !== 0;
 
@@ -508,17 +522,16 @@ export class MarkdownView {
         return false;
     }
 
-    onClick(ev: ButtonEvent): boolean {
-        const [, button] = ev.get_button();
-        if (button !== 1 || ev.get_event_type() !== Gdk.EventType.BUTTON_PRESS) return false;
-        const [, x, y] = ev.get_coords();
-        const [bx, by] = this.view.window_to_buffer_coords(Gtk.TextWindowType.TEXT, x, y);
+    // Tombol kiri ditekan di (x, y), koordinat widget TextView. count = klik ke berapa
+    // (2 = klik ganda, yang dibiarkan untuk GTK memilih kata).
+    onClick(count: number, x: number, y: number, state: number): boolean {
+        if (count !== 1) return false;
+        const [bx, by] = this.view.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, Math.round(x), Math.round(y));
         const [ok, iter] = this.view.get_iter_at_location(bx, by);
         if (!ok) return false;
 
         if (toggleTaskAt(this.buffer, iter, this.tags)) return true;
 
-        const [, state] = ev.get_state();
         if (state & Gdk.ModifierType.CONTROL_MASK) {
             const url = linkAt(this.buffer, iter, this.tags);
             if (url) {
@@ -550,10 +563,13 @@ export class MarkdownView {
             const path = GLib.path_is_absolute(url) ? url : GLib.build_filenamev([this.getBaseDir(), decodeURI(url)]);
             uri = Gio.File.new_for_path(path).get_uri();
         }
-        try {
-            Gtk.show_uri_on_window(this.view.get_toplevel() as Gtk.Window, uri, Gdk.CURRENT_TIME);
-        } catch {
-            this.onMessage(`Tidak bisa membuka ${url}`);
-        }
+        const root = this.view.get_root();
+        new Gtk.UriLauncher({ uri }).launch(root instanceof Gtk.Window ? root : null, null, (launcher, result) => {
+            try {
+                launcher!.launch_finish(result);
+            } catch {
+                if (!this.destroyed) this.onMessage(`Tidak bisa membuka ${url}`);
+            }
+        });
     }
 }

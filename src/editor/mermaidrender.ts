@@ -3,11 +3,12 @@
 // Mermaid hanya berjalan di lingkungan browser (butuh DOM dan pengukuran teks), jadi
 // dipakai WebKitGTK yang tidak ditampilkan:
 //
-//   1. Sebuah WebKitWebView di dalam GtkOffscreenWindow memuat halaman kosong yang
-//      menyertakan mermaid.min.js (disalin ke dist/ saat build, lihat vite.config.ts).
+//   1. Sebuah WebKitWebView yang tidak pernah dipasang di jendela memuat halaman kosong
+//      yang menyertakan mermaid.min.js (disalin ke dist/ saat build, lihat vite.config.ts).
 //   2. Untuk tiap diagram, halaman menjalankan mermaid.render(), memasang SVG-nya, lalu
 //      mengirim ukurannya kembali lewat script message handler.
-//   3. Jendela diubah seukuran diagram, diambil snapshot-nya, lalu dipotong menjadi pixbuf.
+//   3. Snapshot seluruh dokumen (WebKit menggambarnya walau view tidak tampil; ukurannya
+//      mengikuti isi halaman) dipotong seukuran diagram menjadi pixbuf.
 //
 // Snapshot dipilih daripada memuat SVG lewat librsvg karena label Mermaid memakai
 // <foreignObject> (HTML di dalam SVG) yang tidak didukung librsvg.
@@ -19,17 +20,17 @@
 // diagram tidak membayar biayanya. Diagram dirender satu per satu (antrean), dan hasilnya
 // disimpan di cache per (tema, kode).
 
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import type GdkPixbuf from 'gi://GdkPixbuf';
-import type WebKit2 from 'gi://WebKit2?version=4.1';
+import type WebKit from 'gi://WebKit?version=6.0';
+import type JavaScriptCore from 'gi://JavaScriptCore?version=6.0';
 
 const PAD = 12;              // ruang di sekeliling diagram pada gambar hasil
 const MAX_SIZE = 8000;       // diagram yang lebih besar dari ini (piksel) ditolak
 const TIMEOUT_SECONDS = 20;  // batas waktu satu diagram
-const SETTLE_MS = 150;       // jeda setelah jendela diubah ukurannya, sebelum snapshot
+const SETTLE_MS = 150;       // jeda setelah diagram dipasang, sebelum snapshot
 const CACHE_LIMIT = 100;
 
 export interface DiagramTheme {
@@ -63,10 +64,9 @@ function findScript(): string | null {
 }
 
 export class MermaidRenderer {
-    private webkit: typeof WebKit2 | null = null;
+    private webkit: typeof WebKit | null = null;
     private loading = false;
-    private view: WebKit2.WebView | null = null;
-    private window: Gtk.OffscreenWindow | null = null;
+    private view: WebKit.WebView | null = null;
     private ready = false;
     private failure: string | null = null;
 
@@ -156,36 +156,29 @@ export class MermaidRenderer {
         }
         if (!this.webkit) {
             this.loading = true;
-            import('gi://WebKit2?version=4.1').then(module => {
+            import('gi://WebKit?version=6.0').then(module => {
                 this.webkit = module.default;
             }, () => {
-                this.failure = 'WebKitGTK tidak terpasang (paket gir1.2-webkit2-4.1)';
+                this.failure = 'WebKitGTK tidak terpasang (paket gir1.2-webkit-6.0)';
             }).then(() => {
                 this.loading = false;
                 this.next();
             });
             return;
         }
-        const WebKit2 = this.webkit;
-        const manager = new WebKit2.UserContentManager();
-        manager.register_script_message_handler('nyerat');
-        manager.connect('script-message-received::nyerat', (_m, result) => this.onMessage(result));
+        const WebKit = this.webkit;
+        const manager = new WebKit.UserContentManager();
+        manager.register_script_message_handler('nyerat', null);
+        manager.connect('script-message-received::nyerat', (_m, value) => this.onMessage(value));
 
-        const view = new WebKit2.WebView({ user_content_manager: manager });
+        const view = new WebKit.WebView({ user_content_manager: manager });
         const settings = view.get_settings();
         settings.enable_write_console_messages_to_stdout = false;
         settings.enable_developer_extras = false;
         this.view = view;
 
-        // Harus berada di dalam jendela agar WebKit mau menggambar; GtkOffscreenWindow
-        // tidak pernah muncul di layar.
-        this.window = new Gtk.OffscreenWindow();
-        this.window.add(view);
-        this.window.set_default_size(800, 600);
-        this.window.show_all();
-
         view.connect('load-changed', (_v, event) => {
-            if (event !== WebKit2.LoadEvent.FINISHED) return;
+            if (event !== WebKit.LoadEvent.FINISHED) return;
             this.ready = true;
             this.next();
         });
@@ -241,16 +234,14 @@ export class MermaidRenderer {
                 post({ error: String((e && e.message) || e) });
             }
         })();`;
-        this.view!.run_javascript(script, null, null);
+        this.view!.evaluate_javascript(script, -1, null, null, null, null);
     }
 
-    private onMessage(result: WebKit2.JavascriptResult): void {
+    private onMessage(value: JavaScriptCore.Value): void {
         const job = this.current;
         if (!job) return;
         let msg: { id: number; w?: number; h?: number; error?: string };
         try {
-            // Tipe @girs menyebut JSCValue, tapi saat runtime yang datang JavascriptResult.
-            const value = (result as unknown as { get_js_value(): { to_string(): string } }).get_js_value();
             msg = JSON.parse(value.to_string());
         } catch {
             return;
@@ -266,8 +257,6 @@ export class MermaidRenderer {
             this.finish(job, { ok: false, error: 'Diagram terlalu besar' });
             return;
         }
-        this.window!.resize(w, h);
-        this.view!.set_size_request(w, h);
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, SETTLE_MS, () => {
             if (this.current === job) this.snapshot(job, w, h);
             return GLib.SOURCE_REMOVE;
@@ -276,16 +265,15 @@ export class MermaidRenderer {
 
     private snapshot(job: Job, w: number, h: number): void {
         const view = this.view!;
-        const WebKit2 = this.webkit!;
-        view.get_snapshot(WebKit2.SnapshotRegion.FULL_DOCUMENT, WebKit2.SnapshotOptions.NONE, null, (_v, res) => {
+        const WebKit = this.webkit!;
+        view.get_snapshot(WebKit.SnapshotRegion.FULL_DOCUMENT, WebKit.SnapshotOptions.NONE, null, (_v, res) => {
             if (this.current !== job) return;
             try {
-                // Tipe @girs hanya menyebut cairo.Surface; saat runtime ia ImageSurface.
-                const surface = view.get_snapshot_finish(res) as unknown as { getWidth(): number; getHeight(): number };
+                const texture = view.get_snapshot_finish(res);
                 // Pada layar HiDPI snapshot berukuran piksel perangkat.
-                const sw = surface.getWidth(), sh = surface.getHeight();
+                const sw = texture.get_width(), sh = texture.get_height();
                 const factor = Math.max(1, view.get_scale_factor());
-                const full = Gdk.pixbuf_get_from_surface(surface as unknown as Parameters<typeof Gdk.pixbuf_get_from_surface>[0], 0, 0, sw, sh);
+                const full = Gdk.pixbuf_get_from_texture(texture);
                 if (!full) throw new Error('Snapshot kosong');
                 const cw = Math.min(sw, w * factor), ch = Math.min(sh, h * factor);
                 let pixbuf = full.new_subpixbuf(0, 0, cw, ch);

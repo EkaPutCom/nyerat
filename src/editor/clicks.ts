@@ -1,6 +1,6 @@
 // Arti klik pada teks: mencentang kotak tugas dan membaca URL tautan.
 
-import type Gtk from 'gi://Gtk?version=3.0';
+import type Gtk from 'gi://Gtk?version=4.0';
 import { cpToU16, cpLength } from './offsets.js';
 import type { Tags } from './tags.js';
 import { lineText } from './editing.js';

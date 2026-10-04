@@ -11,8 +11,8 @@
 // Tiap dokumen punya MarkdownView sendiri (undo, kursor, dan gulir terjaga saat berpindah
 // tab); komponen lain (outline, status, pencarian, papan kanban) mengikuti dokumen aktif.
 
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
@@ -33,7 +33,7 @@ import { readProject } from './agent/project.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
 import { TabBar } from './ui/tabbar.js';
-import { createHeaderBar } from './ui/headerbar.js';
+import { createHeaderBar, type HeaderBar } from './ui/headerbar.js';
 import { applyTheme, systemPrefersDark, type Palette } from './ui/theme.js';
 import { chooseFile, askSaveChanges, showError } from './ui/dialogs.js';
 import { registerActions } from './actions.js';
@@ -48,12 +48,12 @@ const AUTOSAVE_DELAY_MS = 1000;
 const errorMessage = (e: unknown): string => e instanceof Error ? e.message : String(e);
 
 // Ukuran jendela tersimpan bisa lebih besar dari layar (misalnya setelah pindah
-// ke monitor yang lebih kecil); batasi ke area kerja monitor.
+// ke monitor yang lebih kecil); batasi ke ukuran monitor. GTK 4 tidak lagi memberi
+// area kerja (tanpa panel) secara umum, jadi dipakai ukuran monitor pertama.
 function fitToScreen(width: number, height: number): [number, number] {
-    const display = Gdk.Display.get_default();
-    const monitor = display?.get_primary_monitor() ?? display?.get_monitor(0);
+    const monitor = Gdk.Display.get_default()?.get_monitors().get_item(0) as Gdk.Monitor | null;
     if (!monitor) return [width, height];
-    const area = monitor.get_workarea();
+    const area = monitor.get_geometry();
     return [Math.min(width, area.width), Math.min(height, area.height)];
 }
 const MODE_LABELS: Record<Mode, string> = { source: 'Source', focus: 'Fokus', typewriter: 'Typewriter' };
@@ -88,7 +88,7 @@ export class MainWindow {
     readonly chat: ChatPanel;
     readonly chatRevealer: Gtk.Revealer;
     private readonly content: Gtk.Stack;
-    readonly header: Gtk.HeaderBar;
+    readonly header: HeaderBar;
     readonly win: Gtk.ApplicationWindow;
 
     private docs: Doc[] = [];
@@ -218,27 +218,29 @@ export class MainWindow {
         const [width, height] = fitToScreen(settings.width, settings.height);
         this.win = new Gtk.ApplicationWindow({ application: app, default_width: width, default_height: height });
         this.win.set_icon_name('accessories-text-editor');
-        this.win.set_titlebar(this.header);
-        const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-        column.pack_start(this.tabBar.widget, false, false, 0);
-        column.pack_start(this.findBar.widget, false, false, 0);
+        this.win.set_titlebar(this.header.bar);
+        const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true });
+        column.append(this.tabBar.widget);
+        column.append(this.findBar.widget);
         this.content.add_named(this.board.widget, 'board');
-        // Anak yang belum ditampilkan tidak bisa dipilih lewat visible_child_name, dan syncMode()
-        // dijalankan sebelum show_all() jendela.
-        this.board.widget.show_all();
-        column.pack_start(this.content, true, true, 0);
-        column.pack_start(this.statusBar.widget, false, false, 0);
+        column.append(this.content);
+        column.append(this.statusBar.widget);
         const main = new Gtk.Box();
-        main.pack_start(this.sidebar.widget, false, false, 0);
-        main.pack_start(column, true, true, 0);
+        main.append(this.sidebar.widget);
+        main.append(column);
         const chatWrap = new Gtk.Box();
-        chatWrap.pack_start(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL }), false, false, 0);
-        chatWrap.pack_start(this.chat.widget, false, false, 0);
-        this.chatRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT, transition_duration: 150 });
-        this.chatRevealer.add(chatWrap);
-        main.pack_start(this.chatRevealer, false, false, 0);
-        this.win.add(main);
-        this.win.connect('delete-event', () => !this.onClose());
+        chatWrap.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL }));
+        chatWrap.append(this.chat.widget);
+        // hexpand false: lihat Sidebar; panel Asisten selebar width_request-nya, bukan sisa ruang.
+        this.chatRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT, transition_duration: 150, hexpand: false });
+        this.chatRevealer.set_child(chatWrap);
+        main.append(this.chatRevealer);
+        this.win.set_child(main);
+        // true = batalkan penutupan (ada perubahan yang tidak jadi dibuang).
+        this.win.connect('close-request', () => !this.onClose());
+        // Jendela dihancurkan (ditutup, atau destroy() di tes). GTK 4 tidak memancarkan "destroy"
+        // untuk widget yang masih dipegang JavaScript, jadi timer komponen dihentikan di sini.
+        this.win.connect('unrealize', () => this.dispose());
         // Commit baru biasanya dibuat di luar aplikasi; saat kembali ke jendela, muat ulang riwayat.
         this.win.connect('notify::is-active', () => {
             if (this.win.is_active) this.syncHistory(true);
@@ -265,7 +267,7 @@ export class MainWindow {
         }
         this.syncMode();
         this.updateTitle();
-        this.win.show_all();
+        this.win.present();
         this.sidebar.setVisible(settings.sidebar);
         this.setChatVisible(settings.chat);
         this.syncHistory();
@@ -325,7 +327,6 @@ export class MainWindow {
         if (this.palette) editor.setPalette(this.palette);
         this.docs.push(doc);
         this.content.add_named(editor.widget, `doc-${doc.id}`);
-        editor.widget.show_all();   // visible_child_name hanya bisa memilih anak yang sudah ditampilkan
         this.tabBar.add(doc.id, UNTITLED);
         return doc;
     }
@@ -378,7 +379,8 @@ export class MainWindow {
         this.tabBar.remove(doc.id);
         // Pindah dulu, baru hancurkan: pencarian dan komponen lain masih menunjuk ke editor ini.
         if (doc === this.doc) this.activate(this.docs[Math.min(index, this.docs.length - 1)]);
-        doc.editor.widget.destroy();   // sekaligus melepasnya dari stack
+        doc.editor.destroy();
+        this.content.remove(doc.editor.widget);
         return true;
     }
 
@@ -632,8 +634,7 @@ export class MainWindow {
         const name = this.nameOf(doc);
         this.tabBar.setTitle(doc.id, `${mark}${name}`, doc.file);
         if (doc !== this.doc) return;
-        this.header.set_title(`${mark}${name}`);
-        this.header.set_subtitle(doc.file ? GLib.path_get_dirname(doc.file).replace(GLib.get_home_dir(), '~') : APP_NAME);
+        this.header.setTitle(`${mark}${name}`, doc.file ? GLib.path_get_dirname(doc.file).replace(GLib.get_home_dir(), '~') : APP_NAME);
         this.win.set_title(`${mark}${name} — ${APP_NAME}`);
     }
 
@@ -833,9 +834,23 @@ export class MainWindow {
         for (const doc of [...this.docs]) if (!this.confirmDiscard(doc)) return false;
         // Setelah konfirmasi: dokumen baru yang disimpan lewat dialog sudah punya file.
         this.rememberTabs();
-        const [width, height] = this.win.get_size();
+        // Di GTK 4 ukuran default mengikuti ukuran jendela saat ini.
+        const [width, height] = this.win.get_default_size();
         Object.assign(this.settings, { width, height });
         saveSettings(this.settings);
         return true;
+    }
+
+    // Hentikan timer dan idle semua komponen setelah jendela dihancurkan.
+    private dispose(): void {
+        for (const doc of this.docs) {
+            this.cancelAutosave(doc);
+            doc.editor.destroy();
+        }
+        this.statusBar.destroy();
+        this.outline.destroy();
+        this.chat.destroy();
+        this.history.destroy();
+        this.fileTree.destroy();
     }
 }

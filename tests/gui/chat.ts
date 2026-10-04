@@ -1,13 +1,14 @@
 // Tes GUI: panel Asisten (chat) dengan penyedia model dan penyimpan key palsu.
 
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import type { KeyStore } from '../../src/agent/apikey.js';
 import { chatsDir, listChats } from '../../src/agent/chatstore.js';
 import { readTextFile } from '../../src/files.js';
 import type { ChatRequest, Provider } from '../../src/agent/provider.js';
 import { section, test, eq, ok, contains, settle, tmp } from '../framework.js';
 import type { GuiContext } from './context.js';
+import { childrenOf } from '../../src/gtkutil.js';
 
 export function chatTests(c: GuiContext): void {
     const { w, setText, cursorTo, pump } = c;
@@ -46,7 +47,9 @@ export function chatTests(c: GuiContext): void {
         const out: string[] = [];
         const walk = (widget: Gtk.Widget) => {
             if (widget instanceof Gtk.Label) out.push(widget.get_text());
-            if (widget instanceof Gtk.Container) widget.get_children().forEach(walk);
+            childrenOf(widget).forEach(walk);
+            // Expander GTK 4 baru memasang isinya sebagai anak saat dibuka.
+            if (widget instanceof Gtk.Expander && !widget.expanded && widget.get_child()) walk(widget.get_child()!);
         };
         walk(panel.messages);
         return out;
@@ -138,7 +141,7 @@ export function chatTests(c: GuiContext): void {
         const texts: string[] = [];
         const walk = (widget: Gtk.Widget) => {
             if (widget instanceof Gtk.Label) texts.push(widget.get_text());
-            if (widget instanceof Gtk.Container) widget.get_children().forEach(walk);
+            childrenOf(widget).forEach(walk);
         };
         walk(popover);
         popover.popdown();
@@ -194,7 +197,7 @@ export function chatTests(c: GuiContext): void {
     });
 
     test('mengetik pesan panjang tanpa spasi tidak melebarkan panel atau menggeser editor', () => {
-        w.win.resize(1280, 760);
+        w.win.set_default_size(1280, 760);
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
         const before = { panel: panel.widget.get_allocated_width(), editor: w.editor.widget.get_allocated_width() };
         panel.input.buffer.set_text('a'.repeat(60), -1);
@@ -212,8 +215,7 @@ export function chatTests(c: GuiContext): void {
     });
 
     test('Enter mengirim, Shift+Enter tidak (baris baru)', () => {
-        const press = (state: number) => (panel as unknown as { onInputKey(e: unknown): boolean })
-            .onInputKey({ get_keyval: () => [true, 0xff0d], get_state: () => [true, state] });
+        const press = (state: number) => panel.onInputKey(0xff0d, state);
         panel.input.buffer.set_text('baris', -1);
         eq(press(1), false);               // Shift
         seen.length = 0;
@@ -321,7 +323,7 @@ export function chatTests(c: GuiContext): void {
         const texts: string[] = [];
         const walk = (widget: Gtk.Widget) => {
             if (widget instanceof Gtk.Label) texts.push(widget.get_text());
-            if (widget instanceof Gtk.Container) widget.get_children().forEach(walk);
+            childrenOf(widget).forEach(walk);
         };
         walk(popover);
         popover.popdown();

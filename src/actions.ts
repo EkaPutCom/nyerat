@@ -7,7 +7,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { wrapSelection, insertLink, insertBlock, togglePrefix, setHeading } from './editor/editing.js';
 import { showAbout } from './ui/dialogs.js';
-import type Gtk from 'gi://Gtk?version=3.0';
+import type Gtk from 'gi://Gtk?version=4.0';
 import type { TableCommand } from './editor/tableedit.js';
 import type { MainWindow, Option } from './window.js';
 

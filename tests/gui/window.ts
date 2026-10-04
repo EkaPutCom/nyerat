@@ -9,9 +9,9 @@ export function windowSizeTests(c: GuiContext): void {
 
     section('Ukuran jendela');
     const settle = () => { for (let i = 0; i < 40; i++) { pump(); GLib.usleep(15000); } };
-    const winWidth = () => w.win.get_size()[0];
+    const winWidth = () => w.win.get_width();
     test('membuka file kedua tidak memperbesar jendela', () => {
-        w.win.resize(1100, 700); settle();
+        w.win.set_default_size(1100, 700); settle();
         const before = winWidth();
         ok(w.load(samplePath), 'load() file pertama gagal'); waitImages(); settle();
         ok(w.load(GLib.build_filenamev([ROOT, 'README.md'])), 'load() file kedua gagal');
@@ -19,10 +19,12 @@ export function windowSizeTests(c: GuiContext): void {
         eq(winWidth(), before, 'lebar jendela');
     });
     test('jendela bisa diperbesar lalu diperkecil lagi', () => {
-        w.win.resize(1500, 700); settle();
-        eq(winWidth(), 1500, 'setelah diperbesar');
-        w.win.resize(800, 700); settle();
-        eq(winWidth(), 800, 'setelah diperkecil');
+        // Lebih kecil dari layar Xvfb (1280): GTK 4 tidak membesarkan jendela melewati monitor.
+        // Lebar widget jendela bisa beberapa piksel lebih kecil dari ukuran default (bingkai CSD).
+        w.win.set_default_size(1240, 700); settle();
+        ok(Math.abs(winWidth() - 1240) <= 16, `setelah diperbesar: ${winWidth()}`);
+        w.win.set_default_size(800, 700); settle();
+        ok(Math.abs(winWidth() - 800) <= 16, `setelah diperkecil: ${winWidth()}`);
         ok(ed.view.get_left_margin() < 100, `margin tidak ikut mengecil (${ed.view.get_left_margin()})`);
     });
     test('gambar tidak lebih lebar dari kolom teks', () => {
@@ -30,7 +32,7 @@ export function windowSizeTests(c: GuiContext): void {
         const column = ed.widget.get_allocated_width() - 2 * ed.view.get_left_margin();
         for (const block of images())
             ok(block.box.get_allocated_width() <= column, `gambar ${block.box.get_allocated_width()}px > kolom ${column}px`);
-        w.win.resize(1100, 700); settle();
+        w.win.set_default_size(1100, 700); settle();
     });
     buf.set_modified(false);
     w.file = null;

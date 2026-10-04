@@ -1,10 +1,11 @@
 // Parser berdasarkan rentang suntingan dibandingkan dengan parsing penuh independen.
-import Gtk from 'gi://Gtk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import { HighlightCache, highlight, type HighlightResult } from '../../src/editor/highlighter.js';
 import { createTags, SYNTAX_TAGS } from '../../src/editor/tags.js';
 import { LineTagger, tagRanges } from '../../src/editor/tagsync.js';
 import { cpLength } from '../../src/editor/offsets.js';
 import { section, test, eq, ok } from '../framework.js';
+import { iterAtLine } from '../../src/gtkutil.js';
 
 export function incrementalTests(): void {
     section('Parsing rentang suntingan');
@@ -52,17 +53,17 @@ export function incrementalTests(): void {
     };
     test('perubahan fence, tabel, emoji, dan beberapa suntingan sebelum flush tetap setara', () => {
         reset('# Awal\n\nparagraf **tebal** 😀\n\nA | B\n-- | --\nx | y\n\n```js\nconst x = 1;\n```\n\nakhir');
-        const insert = (line: number, value: string) => { buffer.insert(buffer.get_iter_at_line(line), value, -1); check(flush()); };
+        const insert = (line: number, value: string) => { buffer.insert(iterAtLine(buffer, line), value, -1); check(flush()); };
         insert(2, '```\n');
         insert(7, '```\n');
         insert(0, '🎉\n');
-        buffer.delete(buffer.get_iter_at_line(1), buffer.get_iter_at_line(4)); check(flush());
+        buffer.delete(iterAtLine(buffer, 1), iterAtLine(buffer, 4)); check(flush());
         buffer.insert(buffer.get_start_iter(), 'baru\n', -1);
         buffer.insert(buffer.get_end_iter(), '\n![gambar](a.png)', -1); check(flush());
         reset('A | B\nx | y\nakhir');
         insert(1, '-- | --\n');  // pemisah baru mengubah baris sebelumnya menjadi judul tabel
         reset('teks\n```\na\n\nb\n\nc\n```\nakhir');
-        buffer.delete(buffer.get_iter_at_line(1), buffer.get_iter_at_line(2)); check(flush());
+        buffer.delete(iterAtLine(buffer, 1), iterAtLine(buffer, 2)); check(flush());
     });
     test('200 rangkaian suntingan acak sama dengan parsing penuh', () => {
         reset('# Judul\n\n**tebal** dan `kode` 🎉\n\nA | B\n-- | --\nx | y\n\n```ts\nconst x = 1;\n```\n\nakhir\n');
@@ -85,7 +86,7 @@ export function incrementalTests(): void {
         const reads: number[] = [];
         buffer.get_text = (a, b, hidden) => { reads.push(b.get_offset() - a.get_offset()); return read(a, b, hidden); };
         try {
-            buffer.insert(buffer.get_iter_at_line(25000), '😀 tambahan ', -1);
+            buffer.insert(iterAtLine(buffer, 25000), '😀 tambahan ', -1);
             const result = flush();
             ok(cache.parsedLines <= 4, `mengurai ${cache.parsedLines} baris`);
             ok(reads.length === 1 && reads[0] < 100, `rentang baca ${JSON.stringify(reads)}`);

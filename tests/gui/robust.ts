@@ -1,8 +1,8 @@
 // Tes GUI: Ketahanan (mencari crash).
 
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import { WELCOME } from '../../src/welcome.js';
 import { readTextFile } from '../../src/files.js';
 import { highlight } from '../../src/editor/highlighter.js';
@@ -10,6 +10,9 @@ import { createTags, SYNTAX_TAGS } from '../../src/editor/tags.js';
 import { LineTagger, normalize, tagRanges } from '../../src/editor/tagsync.js';
 import { section, test, ok, eq, tmp, opt, DIM, RESET } from '../framework.js';
 import type { GuiContext } from './context.js';
+import { iterAtLine } from '../../src/gtkutil.js';
+import { countPointerEvents, listRows, screenPoint } from '../widgets.js';
+import { MouseInput } from './mouse-input.js';
 
 export function robustnessTests(c: GuiContext): void {
     const { w, ed, buf, pump, text, setText, cursorTo, action, waitImages, samplePath } = c;
@@ -102,7 +105,7 @@ export function robustnessTests(c: GuiContext): void {
         setText('awal\n\n**satu** dan *dua*\n\n# Judul\nakhir');
         cursorTo(0);
         check('sebelum pembatas');
-        buf.insert(buf.get_iter_at_line(1), '```\n', -1); pump();
+        buf.insert(iterAtLine(buf, 1), '```\n', -1); pump();
         check('setelah pembatas dibuka');
         cursorTo(6);
         check('kursor pindah setelah pembatas');
@@ -141,19 +144,19 @@ export function robustnessTests(c: GuiContext): void {
         ed.setText(long);
         const lastLine = buf.get_line_count() - 3;
         const boldAt = (line: number) => {
-            const it = buf.get_iter_at_line(line);
+            const it = iterAtLine(buf, line);
             it.forward_chars(12);
             return it.has_tag(ed.tags.bold);
         };
         ok(boldAt(2), 'awal dokumen langsung diberi tag');
         ok(!ed.highlightComplete && !boldAt(lastLine), 'akhir dokumen seharusnya masih dicicil');
-        eq(w.outline.list.get_children().length < 300, true, 'outline seharusnya dibangun bertahap');
+        eq(listRows(w.outline.list).length < 300, true, 'outline seharusnya dibangun bertahap');
         // Menyunting selagi cicilan berjalan, termasuk menambah baris.
-        buf.insert(buf.get_iter_at_line(6), '**baru**\n\n', -1);
+        buf.insert(iterAtLine(buf, 6), '**baru**\n\n', -1);
         for (let i = 0; i < 1000 && !ed.highlightComplete; i++) pump();
         ok(ed.highlightComplete, 'penyorotan bertahap tidak selesai');
         ok(boldAt(lastLine + 2), 'akhir dokumen diberi tag setelah cicilan');
-        eq(w.outline.list.get_children().length, 300, 'jumlah baris outline');
+        eq(listRows(w.outline.list).length, 300, 'jumlah baris outline');
 
         const reference = new Gtk.TextBuffer();
         const tags = createTags(reference);
@@ -170,10 +173,10 @@ export function robustnessTests(c: GuiContext): void {
         const long = Array.from({ length: 3000 }, (_, i) => `Paragraf **tebal** ke-${i}.\n\n`).join('');
         ed.setText(long);
         const lastLine = buf.get_line_count() - 3;
-        buf.place_cursor(buf.get_iter_at_line(lastLine));
+        buf.place_cursor(iterAtLine(buf, lastLine));
         ed.view.scroll_to_mark(buf.get_insert(), 0, false, 0, 0);
         const boldAt = (line: number) => {
-            const it = buf.get_iter_at_line(line);
+            const it = iterAtLine(buf, line);
             it.forward_chars(12);
             return it.has_tag(ed.tags.bold);
         };
@@ -201,7 +204,7 @@ export function robustnessTests(c: GuiContext): void {
         setText('😀 awal\n# Judul\n**tebal**\n\nA | B\n-- | --\nsatu | dua\n\n```js\nconst x = 1;\n```\nakhir');
         check();
         const insert = (line: number, value: string) => {
-            buf.insert(buf.get_iter_at_line(line), value, -1); pump(); check();
+            buf.insert(iterAtLine(buf, line), value, -1); pump(); check();
         };
         insert(0, '🎉\n');
         insert(3, '```\n');  // format inline/tabel berubah menjadi isi blok kode
@@ -209,8 +212,8 @@ export function robustnessTests(c: GuiContext): void {
         insert(0, 'paragraf baru\n');
         buf.undo(); pump(); check();
         buf.redo(); pump(); check();
-        const end = buf.get_iter_at_line(5);
-        buf.delete(buf.get_iter_at_line(0), end); pump(); check();
+        const end = iterAtLine(buf, 5);
+        buf.delete(iterAtLine(buf, 0), end); pump(); check();
         setText('**tebal**'); check();  // newline terakhir memengaruhi rentang tag
         buf.insert_at_cursor('\n', -1); pump(); check();
     });
@@ -235,18 +238,18 @@ export function robustnessTests(c: GuiContext): void {
         ok(w.outline.list.get_row_at_index(2) === last, 'heading terakhir dibangun ulang');
         cursorTo(2);
         buf.insert_at_cursor('x', -1); pump();  // heading kedua menjadi paragraf
-        eq(w.outline.list.get_children().length, 2, 'satu heading dihapus');
+        eq(listRows(w.outline.list).length, 2, 'satu heading dihapus');
         ok(w.outline.list.get_row_at_index(1) === last, 'akhiran tidak dipertahankan');
         w.outline.list.emit('row-activated', last); pump();
         eq(buf.get_iter_at_mark(buf.get_insert()).get_line(), 4, 'tujuan klik setelah heading dihapus');
         buf.undo(); pump();
-        eq(w.outline.list.get_children().length, 3, 'undo mengembalikan heading');
+        eq(listRows(w.outline.list).length, 3, 'undo mengembalikan heading');
     });
     test('outline memakai ulang label saat heading hanya bergeser baris', () => {
         setText('awal\n\n# Judul');
         const row = w.outline.list.get_row_at_index(0)!;
         buf.insert(buf.get_start_iter(), 'baris baru\n', -1); pump();
-        ok(w.outline.list.get_children()[0] === row, 'baris outline tidak dipakai ulang');
+        ok(listRows(w.outline.list)[0] === row, 'baris outline tidak dipakai ulang');
         w.outline.list.emit('row-activated', row);
         pump();
         eq(buf.get_iter_at_mark(buf.get_insert()).get_line(), 3, 'tujuan klik heading bergeser');
@@ -260,10 +263,13 @@ export function robustnessTests(c: GuiContext): void {
 
     if (opt('mouse')) {
         section('Klik mouse sungguhan (XTest)');
-        const tw = ed.view.get_window(Gtk.TextWindowType.TEXT)!;
-        const xtest = (window: Gdk.Window, x: number, y: number) => {
-            Gdk.test_simulate_button(window, x, y, 1, 0 as Gdk.ModifierType, Gdk.EventType.BUTTON_PRESS);
-            Gdk.test_simulate_button(window, x, y, 1, 0 as Gdk.ModifierType, Gdk.EventType.BUTTON_RELEASE);
+        const input = new MouseInput();
+        const original = input.position();
+        // Klik di (x, y), koordinat widget TextView.
+        const xtest = (x: number, y: number) => {
+            input.move(...screenPoint(ed.view, x, y, (xid, sx, sy) => input.toRoot(xid, sx, sy)));
+            input.down();
+            input.up();
             for (let k = 0; k < 8; k++) { pump(); GLib.usleep(15000); }
         };
 
@@ -273,10 +279,10 @@ export function robustnessTests(c: GuiContext): void {
         setText('baris satu\n\nbaris dua'); cursorTo(0);
         w.win.present_with_time(Gdk.CURRENT_TIME);
         for (let k = 0; k < 20; k++) { pump(); GLib.usleep(15000); }
-        let delivered = 0;
-        const probe = ed.view.connect('button-press-event', () => { delivered++; return false; });
-        xtest(tw, 200, 140);
-        ed.view.disconnect(probe);
+        const probe = countPointerEvents(ed.view);
+        xtest(200, 140);
+        probe.stop();
+        const delivered = probe.presses;
 
         if (!delivered) {
             print(`  ${DIM}- dilewati: XTest tidak mengirim tombol mouse ke jendela di lingkungan ini${RESET}`);
@@ -291,20 +297,21 @@ export function robustnessTests(c: GuiContext): void {
                 // Titik 60 px di bawah tepi atas gambar (tingginya 100): tetap di dalam gambar walau klik
                 // pertama menggesernya ke bawah karena sintaks gambar muncul. Posisinya diambil dari
                 // widget gambarnya, bukan dari rumus, supaya tidak bergantung pada margin editor.
-                const widgetWindow = ed.view.get_window(Gtk.TextWindowType.WIDGET)!;
-                const picture = ed.images.blocks[0].content.get_children()[0];
+                const picture = ed.images.blocks[0].content.get_first_child()!;
                 const [, px, py] = picture.translate_coordinates(ed.view, 40, 60);
-                xtest(widgetWindow, px, py);
-                xtest(widgetWindow, px, py);
+                xtest(px, py);
+                xtest(px, py);
                 ed.onViewImage = keep;
                 w.file = null;
                 ok(opened, 'klik ganda dengan mouse tidak membuka penampil');
             });
             test('klik di seluruh area teks tidak membuat editor error', () => {
                 setText(WELCOME);
-                for (let y = 20; y < tw.get_height(); y += 23)
-                    for (const x of [20, 250, 600]) xtest(tw, x, y);
+                for (let y = 20; y < ed.view.get_height(); y += 23)
+                    for (const x of [20, 250, 600]) xtest(x, y);
             });
         }
+        input.move(...original);
+        input.close();
     }
 }

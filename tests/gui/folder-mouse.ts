@@ -1,9 +1,10 @@
 // Seret file/folder di pohon berkas dengan input X11 sungguhan (XTest).
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import { tmp, section, test, ok } from '../framework.js';
 import { MouseInput } from './mouse-input.js';
+import { screenPoint } from '../widgets.js';
 import type { GuiContext } from './context.js';
 
 export function folderMouseTests(c: GuiContext): void {
@@ -23,22 +24,22 @@ export function folderMouseTests(c: GuiContext): void {
     let held = false;
     try {
         mk('a.md'); mk('tujuan/b.md'); mk('lain/c.md');
-        w.win.resize(1100, 700);
+        w.win.set_default_size(1100, 700);
         w.win.present_with_time(Gdk.CURRENT_TIME);
         w.openFolder(proj);
         settle();
 
-        // Titik tengah baris (atau judul) dalam koordinat layar.
-        const origin = () => w.win.get_window()!.get_origin().slice(1) as [number, number];
+        // Titik pada widget dalam koordinat layar.
+        const onScreen = (widget: Gtk.Widget, x: number, y: number) => screenPoint(widget, x, y, (xid, sx, sy) => input.toRoot(xid, sx, sy));
         const rowPoint = (name: string): [number, number] => {
             let [ok2, it] = ft.store.iter_children(null);
             while (ok2 && ft.store.get_value(it, 0) !== name) ok2 = ft.store.iter_next(it);
             ok(ok2, `baris ${name} tidak ada`);
             const rect = ft.view.get_cell_area(ft.store.get_path(it)!, ft.view.get_column(0));
-            const [valid, x, y] = ft.view.translate_coordinates(w.win, rect.x + 40, rect.y + rect.height / 2);
-            ok(valid && ft.view.get_mapped(), 'pohon belum tampil');
-            const [ox, oy] = origin();
-            return [ox + x, oy + y];
+            ok(ft.view.get_mapped(), 'pohon belum tampil');
+            // get_cell_area memberi koordinat bin window; ubah ke koordinat widget TreeView.
+            const [x, y] = ft.view.convert_bin_window_to_widget_coords(rect.x + 40, rect.y + rect.height / 2);
+            return onScreen(ft.view, x, y);
         };
         const drag = (from: [number, number], to: [number, number]) => {
             move(...from);
@@ -57,10 +58,9 @@ export function folderMouseTests(c: GuiContext): void {
             ok(exists(abs('tujuan', 'lain', 'c.md')) && !exists(abs('lain')), 'folder tidak berpindah');
         });
         test('seret file ke judul pohon memindahkannya keluar ke root', () => {
-            const label = ft.widget.get_children()[0];
-            const [valid, x, y] = label.translate_coordinates(w.win, 20, label.get_allocated_height() / 2);
-            ok(valid, 'judul tidak terlihat');
-            const [ox, oy] = origin();
+            const label = ft.widget.get_first_child()!;
+            ok(label.get_mapped(), 'judul tidak terlihat');
+            const titlePoint = onScreen(label, 20, label.get_allocated_height() / 2);
             ft.view.expand_all();
             settle();
             let found: [number, number] | null = null;
@@ -69,8 +69,8 @@ export function folderMouseTests(c: GuiContext): void {
                 while (ok2) {
                     if (ft.store.get_value(it, 1) === abs('tujuan', 'b.md')) {
                         const rect = ft.view.get_cell_area(ft.store.get_path(it)!, ft.view.get_column(0));
-                        const [, px, py] = ft.view.translate_coordinates(w.win, rect.x + 40, rect.y + rect.height / 2);
-                        found = [ox + px, oy + py];
+                        const [px, py] = ft.view.convert_bin_window_to_widget_coords(rect.x + 40, rect.y + rect.height / 2);
+                        found = onScreen(ft.view, px, py);
                     }
                     walk(it, depth + 1);
                     ok2 = ft.store.iter_next(it);
@@ -78,7 +78,7 @@ export function folderMouseTests(c: GuiContext): void {
             };
             walk(null, 0);
             ok(found, 'baris b.md tidak ditemukan');
-            drag(found!, [ox + x, oy + y]);
+            drag(found!, titlePoint);
             ok(exists(abs('b.md')) && !exists(abs('tujuan', 'b.md')), 'file tidak keluar ke root');
         });
     } finally {

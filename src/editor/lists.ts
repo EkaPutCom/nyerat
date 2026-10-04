@@ -1,6 +1,6 @@
 // Perilaku Enter dan Tab di dalam daftar dan kutipan.
 
-import type Gtk from 'gi://Gtk?version=3.0';
+import type Gtk from 'gi://Gtk?version=4.0';
 import { RE } from '../markdown/syntax.js';
 import { lineText } from './editing.js';
 

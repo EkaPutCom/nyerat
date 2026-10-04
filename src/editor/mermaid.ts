@@ -16,14 +16,15 @@
 //
 // Render ditunda sebentar setelah kode berubah, supaya mengetik tidak merender tiap huruf.
 
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import type { CodeBlock } from './highlighter.js';
 import { mermaidRenderer, type DiagramTheme } from './mermaidrender.js';
 import { dbmlToMermaid } from '../markdown/dbml.js';
 import { setTagGroup, setTagRanges, type Range } from './tagsync.js';
+import { OverlaySlots } from './overlays.js';
+import { iterAtLine, onClick, removeChildren } from '../gtkutil.js';
 
 const GAP = 12;             // jarak di atas dan bawah diagram
 const NOTE_HEIGHT = 24;     // tinggi pesan "Merender…" / galat
@@ -50,7 +51,7 @@ export interface Block {
     busy: boolean;           // ada permintaan render yang belum selesai
     pixbuf: GdkPixbuf.Pixbuf | null;   // diagram terakhir yang berhasil (tetap tampil selama dirender ulang)
     error: string | null;
-    widget: Gtk.EventBox;
+    widget: Gtk.Box;         // slot overlay (lihat overlays.ts)
     content: Gtk.Box;
     height: number;
     collapsed: boolean;
@@ -76,17 +77,20 @@ export class MermaidLayer {
     private relayoutQueued = false;
     private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
+    private readonly slots: OverlaySlots;
 
     constructor(view: Gtk.TextView, private readonly hideTag: Gtk.TextTag) {
         this.view = view;
         this.buffer = view.buffer;
-        view.connect('size-allocate', () => this.queueRelayout());
+        this.slots = new OverlaySlots(view);
         view.connect('notify::vadjustment', () => this.watchAdjustment());
-        view.connect('destroy', () => {
-            this.destroyed = true;
-            for (const b of this.blocks) this.cancelTimer(b);
-        });
         this.watchAdjustment();
+    }
+
+    // Editor ditutup: hentikan pekerjaan tertunda (lihat MarkdownView.destroy()).
+    destroy(): void {
+        this.destroyed = true;
+        for (const b of this.blocks) this.cancelTimer(b);
     }
 
     private watchAdjustment(): void {
@@ -235,13 +239,13 @@ export class MermaidLayer {
             block.widget.set_visible(this.enabled);
             if (!this.enabled || block.end >= this.buffer.get_line_count()) continue;
 
-            const afterLast = this.buffer.get_iter_at_line(block.end);
+            const afterLast = iterAtLine(this.buffer, block.end);
             afterLast.forward_to_line_end();
             const end = afterLast.get_offset();
-            if (block.collapsed) hide.push([this.buffer.get_iter_at_line(block.start).get_offset(), end]);
+            if (block.collapsed) hide.push([iterAtLine(this.buffer, block.start).get_offset(), end]);
             const gap = this.gapTag(block.height + 2 * GAP);
             if (!gaps.has(gap)) gaps.set(gap, []);
-            gaps.get(gap)!.push([this.buffer.get_iter_at_line(block.end).get_offset(), end]);
+            gaps.get(gap)!.push([iterAtLine(this.buffer, block.end).get_offset(), end]);
         }
         setTagRanges(this.buffer, this.hideTag, hide);
         setTagGroup(this.buffer, this.gapTags.values(), gaps);
@@ -263,31 +267,30 @@ export class MermaidLayer {
 
     private createBlock(found: CodeBlock): Block {
         const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-        const widget = new Gtk.EventBox({ visible_window: false });
-        widget.add(content);
-        widget.get_style_context().add_class('image-block');
+        content.add_css_class('image-block');
+        const widget = this.slots.acquire();
+        widget.append(content);
         const block: Block = {
             start: found.startLine, end: found.endLine, kind: diagramKind(found)!, code: found.text, status: 'loading', busy: false, pixbuf: null, error: null,
             widget, content, height: NOTE_HEIGHT, collapsed: false, timer: 0, x: -1, y: -1,
         };
-        widget.connect('button-press-event', (_w, ev) => this.onPress(block, ev as unknown as Gdk.Event));
-        this.view.add_child_in_window(widget, Gtk.TextWindowType.TEXT, 0, 0);
+        onClick(content, count => {
+            this.press(block, count === 2);
+            return true;
+        });
         this.render(block);
-        widget.show_all();
         return block;
     }
 
     private destroyBlock(block: Block): void {
         this.cancelTimer(block);
-        block.widget.destroy();
+        this.slots.release(block.widget);
     }
 
     // Klik sekali: kursor masuk ke kode (kodenya terbuka). Klik ganda: perbesar.
-    private onPress(block: Block, ev: Gdk.Event): boolean {
-        if (ev.get_button()[1] !== 1) return false;
-        if (ev.get_event_type() === Gdk.EventType.DOUBLE_BUTTON_PRESS) this.zoom(block);
+    press(block: Block, doubleClick: boolean): void {
+        if (doubleClick) this.zoom(block);
         else this.onActivate(block.end - 1);
-        return true;
     }
 
     zoom(block: Block): void {
@@ -296,13 +299,13 @@ export class MermaidLayer {
 
     // Bangun ulang isi widget sesuai status dan lebar kolom saat ini.
     private render(block: Block): void {
-        for (const child of block.content.get_children()) child.destroy();
+        removeChildren(block.content);
         const note = (text: string, tooltip?: string) => {
             // Tanpa wrap: widget di dalam TextView hanya diberi lebar minimum.
             const label = new Gtk.Label({ label: text, xalign: 0 });
-            label.get_style_context().add_class('image-note');
+            label.add_css_class('image-note');
             if (tooltip) label.set_tooltip_text(tooltip);
-            block.content.add(label);
+            block.content.append(label);
             block.height = NOTE_HEIGHT;
         };
 
@@ -315,15 +318,16 @@ export class MermaidLayer {
             const w = Math.max(1, Math.round(pb.get_width() * scale));
             const h = Math.max(1, Math.round(pb.get_height() * scale));
             const scaled = (scale < 1 ? pb.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR) : null) ?? pb;
-            const image = Gtk.Image.new_from_pixbuf(scaled);
+            // Gtk.Image di GTK 4 berukuran ikon; Picture tampil seukuran gambarnya.
+            const image = Gtk.Picture.new_for_pixbuf(scaled);
+            image.set_can_shrink(false);
             image.set_halign(Gtk.Align.START);
             image.set_tooltip_text('Klik ganda untuk memperbesar');
-            block.content.add(image);
+            block.content.append(image);
             block.height = h;
         } else {
             note('Merender diagram…');
         }
-        block.content.show_all();
     }
 
     // ---------- Posisi widget ----------
@@ -343,13 +347,13 @@ export class MermaidLayer {
         const x = this.view.get_left_margin();
         for (const block of this.blocks) {
             if (block.end >= this.buffer.get_line_count()) continue;
-            const [lineY, lineHeight] = this.view.get_line_yrange(this.buffer.get_iter_at_line(block.end));
+            const [lineY, lineHeight] = this.view.get_line_yrange(iterAtLine(this.buffer, block.end));
             const y = lineY + lineHeight - block.height - GAP;
             // Hanya pindahkan jika berubah, supaya tidak memicu resize berulang.
             if (x === block.x && y === block.y) continue;
             block.x = x;
             block.y = y;
-            this.view.move_child(block.widget, x, y);
+            this.view.move_overlay(block.widget, x, y);
         }
     }
 }

@@ -1,11 +1,14 @@
 // Tes GUI: tab Riwayat git.
 
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import { HistoryViewer } from '../../src/ui/historyviewer.js';
 import type { Commit } from '../../src/gitlog.js';
 import { section, test, eq, ok, tmp } from '../framework.js';
 import type { GuiContext } from './context.js';
+import { iterAtLine } from '../../src/gtkutil.js';
+import { childrenOf } from '../../src/gtkutil.js';
+import { listRows } from '../widgets.js';
 
 export function historyTests(c: GuiContext): void {
     const { w, pump, setText } = c;
@@ -25,7 +28,7 @@ export function historyTests(c: GuiContext): void {
         for (let i = 0; i < 500 && !cond(); i++) { pump(); GLib.usleep(10000); }
         return cond();
     };
-    const rows = () => w.history.list.get_children().length;
+    const rows = () => listRows(w.history.list).length;
 
     const a = GLib.build_filenamev([repo, 'a.md']);
     const untracked = GLib.build_filenamev([repo, 'baru.md']);
@@ -46,12 +49,16 @@ export function historyTests(c: GuiContext): void {
     test('tab riwayat tidak membuat sidebar mengembang (sidebar tetap di tepi kiri, selebar 240)', () => {
         ok(!w.sidebar.widget.compute_expand(Gtk.Orientation.HORIZONTAL), 'sidebar menuntut ruang sisa');
         ok(!w.history.widget.compute_expand(Gtk.Orientation.HORIZONTAL), 'tab riwayat menuntut ruang sisa');
-        w.win.resize(1600, 700);
+        w.win.set_default_size(1600, 700);
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(15000); }
         const a = w.sidebar.widget.get_allocation();
         ok(a.width <= 260, `lebar sidebar ${a.width}`);
         // Relatif ke isi jendela: di desktop, dekorasi/bayangan window manager menggeser alokasi toplevel.
         const x = w.sidebar.widget.translate_coordinates(w.win.get_child()!, 0, 0)[1];
+        // Kembalikan ukuran: jendela yang lebih lebar dari layar Xvfb menaruh tombol di luar
+        // monitor, dan popover dari tombol itu memicu Gdk-CRITICAL di GTK 4 (X11).
+        w.win.set_default_size(1100, 700);
+        for (let i = 0; i < 20; i++) { pump(); GLib.usleep(15000); }
         ok(x < 20, `sidebar bergeser ke x=${x}`);
     });
     test('daftar belum di-commit dengan kolom pesan tidak membuat sidebar mengembang', () => {
@@ -65,7 +72,7 @@ export function historyTests(c: GuiContext): void {
     test('riwayat file tampil terbaru dulu', () => {
         w.load(a);
         ok(waitFor(() => rows() === 2), 'jumlah baris riwayat');
-        const label = (i: number) => ((w.history.list.get_row_at_index(i)!.get_child() as Gtk.Box).get_children()[0] as Gtk.Label).label;
+        const label = (i: number) => ((w.history.list.get_row_at_index(i)!.get_child() as Gtk.Box).get_first_child() as Gtk.Label).label;
         eq([label(0), label(1)], ['Tambah baris dua', 'Buat catatan']);
     });
     test('file yang belum di-commit menampilkan pesan kosong', () => {
@@ -107,7 +114,7 @@ export function historyTests(c: GuiContext): void {
             ok(waitFor(() => diff().includes('+dua')), `diff: ${diff()}`);
             ok(!diff().includes('diff --git'), 'kepala diff tidak dibuang');
             const table = viewer.diffView.buffer.get_tag_table();
-            const lineTags = (n: number) => viewer.diffView.buffer.get_iter_at_line(n).get_tags().map(t => t.name);
+            const lineTags = (n: number) => iterAtLine(viewer.diffView.buffer, n).get_tags().map(t => t.name);
             eq(lineTags(0), ['hunk'], 'tag baris hunk');
             const added = diff().split('\n').findIndex(l => l === '+dua');
             eq(lineTags(added), ['add'], 'tag baris tambahan');
@@ -145,7 +152,7 @@ export function historyTests(c: GuiContext): void {
         write(a, V2 + 'tiga\nempat\n');
         w.history.refresh();
         ok(waitFor(() => w.history.changes.get_visible()), 'tombol perubahan tidak tampil');
-        ok(w.history.changes.label.includes('Perubahan belum di-commit'), w.history.changes.label);
+        ok(w.history.changes.label!.includes('Perubahan belum di-commit'), String(w.history.changes.label));
         const viewer = new HistoryViewer(w.win, a, null, false);
         try {
             const diff = () => viewer.diffView.buffer.get_text(viewer.diffView.buffer.get_start_iter(), viewer.diffView.buffer.get_end_iter(), false);
@@ -162,7 +169,7 @@ export function historyTests(c: GuiContext): void {
     test('file baru yang belum dilacak diff-nya seluruh isi', () => {
         w.load(untracked);
         ok(waitFor(() => w.history.changes.get_visible()), 'tombol tidak tampil');
-        ok(w.history.changes.label.includes('File baru'), w.history.changes.label);
+        ok(w.history.changes.label!.includes('File baru'), String(w.history.changes.label));
         const viewer = new HistoryViewer(w.win, untracked, null, false);
         try {
             const diff = () => viewer.diffView.buffer.get_text(viewer.diffView.buffer.get_start_iter(), viewer.diffView.buffer.get_end_iter(), false);
@@ -182,11 +189,11 @@ export function historyTests(c: GuiContext): void {
         let done = 0;
         viewer.onCommitted = () => { done++; };
         try {
-            viewer.commitButton.clicked();
+            viewer.commitButton.emit('clicked');
             ok(viewer.status.get_text().includes('pesan'), 'pesan kosong tidak ditolak');
             eq(done, 0, 'commit tanpa pesan');
             viewer.messageEntry.set_text('Tambah baris lima');
-            viewer.commitButton.clicked();
+            viewer.commitButton.emit('clicked');
             ok(waitFor(() => done === 1), `commit gagal: ${viewer.closed ? '' : viewer.status.get_text()}`);
         } finally {
             if (!viewer.closed) viewer.window.destroy();   // commit yang berhasil menutup jendelanya sendiri
@@ -202,7 +209,7 @@ export function historyTests(c: GuiContext): void {
         viewer.onCommitted = () => { done++; };
         try {
             viewer.messageEntry.set_text('Tambah catatan baru');
-            viewer.commitButton.clicked();
+            viewer.commitButton.emit('clicked');
             ok(waitFor(() => done === 1), `commit gagal: ${viewer.closed ? '' : viewer.status.get_text()}`);
         } finally {
             if (!viewer.closed) viewer.window.destroy();   // commit yang berhasil menutup jendelanya sendiri
@@ -220,7 +227,7 @@ export function historyTests(c: GuiContext): void {
         write(GLib.build_filenamev([repo, 'c.md']), '# C\n');
         w.load(a);
         w.history.refresh();
-        const names = () => w.history.changedList.get_children().map(r => (((r as Gtk.ListBoxRow).get_child() as Gtk.Box).get_children()[2] as Gtk.Label).label);
+        const names = () => listRows(w.history.changedList).map(r => (childrenOf(r.get_child()!)[2] as Gtk.Label).label);
         ok(waitFor(() => names().length === 2), `daftar: ${names()}`);
         eq(names().sort(), ['b.md', 'c.md']);
         ok(w.history.changedBox.get_visible() && (w.history.changedBox.label ?? '').includes('(2)'), `label: ${w.history.changedBox.label}`);
@@ -253,17 +260,17 @@ export function historyTests(c: GuiContext): void {
         git('add', 'c.md');
         w.load(a);
         w.history.refresh();
-        const names = () => w.history.changedList.get_children().map(r => (((r as Gtk.ListBoxRow).get_child() as Gtk.Box).get_children()[2] as Gtk.Label).label);
+        const names = () => listRows(w.history.changedList).map(r => (childrenOf(r.get_child()!)[2] as Gtk.Label).label);
         ok(waitFor(() => names().length >= 3 && w.history.commitButton.label === 'Commit 3 file'), `daftar: ${names()} / ${w.history.commitButton.label}`);
-        const check = (name: string) => ((w.history.changedList.get_row_at_index(names().indexOf(name))!.get_child() as Gtk.Box).get_children()[0] as Gtk.CheckButton);
+        const check = (name: string) => (w.history.changedList.get_row_at_index(names().indexOf(name))!.get_child()!.get_first_child() as Gtk.CheckButton);
         check('e.md').active = false;
         eq(w.history.commitButton.label, 'Commit 2 file');
-        w.history.commitButton.clicked();
+        w.history.commitButton.emit('clicked');
         ok(w.history.commitStatus.get_text().includes('pesan'), 'pesan kosong tidak ditolak');
         let done = 0;
         w.history.onCommitted = () => { done++; };
         w.history.messageEntry.set_text('Commit b dan c');
-        w.history.commitButton.clicked();
+        w.history.commitButton.emit('clicked');
         ok(waitFor(() => done === 1), `commit gagal: ${w.history.commitStatus.get_text()}`);
         w.history.refresh();
         ok(waitFor(() => names().join() === 'e.md'), `sisa daftar: ${names()}`);
@@ -280,10 +287,10 @@ export function historyTests(c: GuiContext): void {
         write(GLib.build_filenamev([repo, 'd.md']), '# D\n');
         w.file = null; setText('');
         w.history.setFile(null, true, repo);
-        ok(waitFor(() => w.history.changedList.get_children().length === 1), 'daftar kosong padahal folder punya file baru');
+        ok(waitFor(() => listRows(w.history.changedList).length === 1), 'daftar kosong padahal folder punya file baru');
         ok(w.history.note.label.includes('Simpan dokumen'), 'petunjuk simpan hilang');
         w.history.setFile(null, true, null);
-        ok(waitFor(() => w.history.changedList.get_children().length === 0), 'daftar tidak dikosongkan tanpa folder');
+        ok(waitFor(() => listRows(w.history.changedList).length === 0), 'daftar tidak dikosongkan tanpa folder');
     });
 
     // Kembalikan keadaan untuk tes berikutnya.

@@ -1,8 +1,8 @@
 // Warna, font, dan CSS aplikasi untuk mode terang dan gelap.
 // Warna tag teks editor diatur terpisah di editor/tags.ts (paintTags).
 
-import Gtk from 'gi://Gtk?version=3.0';
-import Gdk from 'gi://Gdk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
+import Gdk from 'gi://Gdk?version=4.0';
 import { FONT_TEXT } from '../config.js';
 
 export interface Palette {
@@ -46,7 +46,6 @@ const buildCss = (p: Palette): string => `
     .sidebar row:hover { background-color: alpha(${p.accent}, 0.12); }
     .side-title { font-size: 11px; font-weight: bold; letter-spacing: 1px; color: ${p.faint}; }
     .side-drop { background-color: alpha(${p.accent}, 0.22); }
-    .sidebar treeview.view.dnd { border: 1px solid ${p.accent}; border-radius: 3px; background-color: alpha(${p.accent}, 0.15); }
     .sidebar-tabs button { padding: 3px 6px; min-width: 0; font-size: 12px; }
     .side-meta { font-size: 11px; color: ${p.faint}; }
     .chat-input, .chat-input text { background-color: ${p.bg}; color: ${p.fg}; font-size: 13px; }
@@ -115,9 +114,9 @@ export function applyTheme(dark: boolean): Palette {
     if (settings) settings.gtk_application_prefer_dark_theme = dark;
     if (!provider) {
         provider = new Gtk.CssProvider();
-        const screen = Gdk.Screen.get_default();
-        if (screen) Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+        const display = Gdk.Display.get_default();
+        if (display) Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
     }
-    provider.load_from_data(new TextEncoder().encode(buildCss(palette)));
+    provider.load_from_string(buildCss(palette));
     return palette;
 }

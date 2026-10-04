@@ -7,6 +7,7 @@ import { DEFAULTS, type Settings } from '../../src/settings.js';
 import { MainWindow } from '../../src/window.js';
 import { registerActions } from '../../src/actions.js';
 import type { GuiContext } from './context.js';
+import { listRows } from '../widgets.js';
 
 export function tabTests(c: GuiContext): void {
     const { w, ed, pump } = c;
@@ -47,11 +48,21 @@ export function tabTests(c: GuiContext): void {
         eq(w.win.get_title(), 'bab-2.md — Nyerat', 'judul jendela');
     });
     test('outline dan hitungan kata mengikuti tab aktif', () => {
-        eq(w.outline.list.get_children().length, 2, 'heading bab 2');
+        eq(listRows(w.outline.list).length, 2, 'heading bab 2');
         w.switchTab(-1); settle();
         eq(w.file, bab1, 'file setelah pindah');
-        eq(w.outline.list.get_children().length, 1, 'heading bab 1');
+        eq(listRows(w.outline.list).length, 1, 'heading bab 1');
         ok(w.statusBar.right.label.includes('kata'), `status: ${w.statusBar.right.label}`);
+    });
+    test('file panjang di tab baru terbuka dari awal, bukan tergulir ke tengah', () => {
+        // Editor tab baru belum punya ukuran saat isinya diganti; gulir yang tertunda tidak boleh
+        // memakai geometri kosong itu (GTK 4 lalu menggulir ke tengah/akhir dokumen).
+        const panjang = put('panjang.md', Array.from({ length: 300 }, (_, i) => `Paragraf ${i}`).join('\n\n'));
+        w.openFile(panjang); settle();
+        const vadj = w.editor.view.get_vadjustment()!;
+        ok(vadj.get_upper() > vadj.get_page_size() * 2, 'dokumen tidak cukup panjang untuk digulir');
+        eq(vadj.get_value(), 0, 'posisi gulir');
+        w.closeTab(); settle();
     });
     test('membuka file yang sudah terbuka hanya berpindah tab', () => {
         w.openFile(bab2); settle();

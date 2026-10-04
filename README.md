@@ -1,6 +1,6 @@
 # Nyerat
 
-Editor Markdown **AI-native** untuk desktop Linux: asisten AI adalah bagian inti editor, bukan tambahan, dan ia memahami seluruh naskah Anda. Tampilan penulisannya langsung terformat, tanpa panel pratinjau. Dibuat dengan **GTK 3**, **GtkSourceView 4**, dan **GJS** (JavaScript untuk GNOME). Kodenya ditulis dalam **TypeScript** dan dibundel dengan **Vite**.
+Editor Markdown **AI-native** untuk desktop Linux: asisten AI adalah bagian inti editor, bukan tambahan, dan ia memahami seluruh naskah Anda. Tampilan penulisannya langsung terformat, tanpa panel pratinjau. Dibuat dengan **GTK 4**, **GtkSourceView 5**, dan **GJS** (JavaScript untuk GNOME). Kodenya ditulis dalam **TypeScript** dan dibundel dengan **Vite**.
 
 Tidak ada panel pratinjau terpisah: teks langsung tampil terformat. Sintaks Markdown seperti `#`, `**`, `` ` `` dan `[](url)` disembunyikan, lalu muncul lagi saat kursor berada di baris tersebut.
 
@@ -25,20 +25,20 @@ Keadaan sekarang: chat dengan DeepSeek yang menelusuri naskah dan menjawab denga
 
 - Linux dengan desktop X11 atau Wayland
 - GJS (diuji dengan versi 1.80)
-- GTK 3 dan GtkSourceView 4 (biasanya sudah terpasang di desktop GNOME)
-- WebKitGTK 4.1 dengan binding GObject Introspection (`gir1.2-webkit2-4.1` di Debian/Ubuntu), **hanya untuk diagram Mermaid dan DBML**; tanpanya aplikasi tetap berjalan dan diagram menampilkan pesan galat
+- GTK 4 (diuji dengan 4.14) dan GtkSourceView 5. Pustaka GTK 4 biasanya sudah ada di desktop modern (juga di XFCE, yang sendiri memakai GTK 3); yang perlu dipasang hanya binding GObject Introspection-nya. GTK 3 dan GTK 4 terpasang berdampingan tanpa saling mengganti.
+- WebKitGTK 6.0 dengan binding GObject Introspection (`gir1.2-webkit-6.0` di Debian/Ubuntu), **hanya untuk diagram Mermaid dan DBML**; tanpanya aplikasi tetap berjalan dan diagram menampilkan pesan galat
 - Node.js 20.19+ pada seri 20, atau 22.12+ (syarat Vite), **hanya untuk build** (diuji dengan Node.js 24). Aplikasinya sendiri dijalankan GJS, bukan Node.js.
 
 Di Ubuntu/Debian:
 
 ```bash
-sudo apt install gjs gir1.2-gtk-3.0 gir1.2-gtksource-4
+sudo apt install gjs gir1.2-gtk-4.0 gir1.2-gtksource-5
 ```
 
 Untuk diagram, tambahkan dependensi opsional:
 
 ```bash
-sudo apt install gir1.2-webkit2-4.1
+sudo apt install gir1.2-webkit-6.0
 ```
 
 Untuk **asisten (chat dengan AI)**, tambahkan libsoup 3 (hampir pasti sudah ada karena dipakai WebKitGTK) dan, opsional, libsecret untuk menyimpan API key di keyring:
@@ -244,7 +244,7 @@ Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `di
 - **Kanban**: model (mengenali papan, membaca dan menulis dengan hasil yang stabil, operasi kartu dan daftar, tag dan tanggal); di editor: dokumen dibuka sebagai papan, menambah/mencentang/menyunting/memindahkan lewat menu, seret kartu (jatuh di posisi yang ditunjuk, kartu bayangan dan penanda tujuan dibersihkan, tempat asal tidak mengubah apa pun), gulir otomatis di tepi, undo/redo satu langkah per perubahan, beralih ke tampilan teks dan kembali, aksi pengeditan teks ditolak saat papan tampil, dan simpan
 - **Diagram Mermaid**: blok dirender menjadi gambar, kode disembunyikan di luar blok dan tampil dengan pratinjau di dalamnya, galat sintaks ditampilkan tanpa menyembunyikan kode, render ulang saat kode diubah, widget dipakai ulang saat baris bergeser, blok kosong/tidak ditutup/bukan mermaid diabaikan, mode source, dan tema gelap (warna latar gambar); serta ekspor HTML-nya
 - **Diagram DBML**: penerjemah DBML → Mermaid (tabel, kolom, ref, alias, skema, galat berikut nomor barisnya), blok dbml dirender dan galatnya tampil tanpa menyembunyikan kode, serta ekspor HTML-nya
-- **Zoom gambar**: gambar ukuran penuh dari `imageAt()`, klik sekali vs ganda (dengan event GDK tiruan) dan gambar yang tepat jika satu baris memuat beberapa, perintah menu; di penampil: zoom awal, kelipatan 1,25 dan batas 5%–800%, tombol, titik zoom di penunjuk, geser dengan drag, klik ganda, dan tidak ada peringatan GTK/cairo saat menggambar pada zoom besar
+- **Zoom gambar**: gambar ukuran penuh dari `imageAt()`, klik sekali vs ganda (lewat `GestureClick` yang dipicu tes) dan gambar yang tepat jika satu baris memuat beberapa, perintah menu; di penampil: zoom awal, kelipatan 1,25 dan batas 5%–800%, tombol, titik zoom di penunjuk, geser dengan drag, klik ganda, dan tidak ada peringatan GTK/cairo saat menggambar pada zoom besar
 - **Warna blok kode**: alias nama bahasa, warna kata kunci/string/komentar, blok tanpa bahasa atau bahasa tak dikenal, pewarnaan ulang saat mengetik, emoji sebelum blok, skema terang/gelap, dan mode fokus yang tetap meredupkan blok kode
 - **Riwayat git**: pengurai log/diff dan waktu relatif (unit); di GUI, daftar commit file aktif, tombol perubahan belum di-commit, daftar *Belum di-commit* dengan kotak centang, commit satu atau beberapa file sekaligus di repositori sementara, serta jendela baca commit (tab *Perubahan* dan *Isi versi ini*)
 - **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan; menu klik kanan *File Baru*/*Folder Baru* (di root, folder, dan sebelah file), pemindahan file/folder masuk dan keluar folder, penolakan nama tidak valid/bentrok/pindah ke diri sendiri, dokumen terbuka yang ikut berpindah path, dan seret-lepas dengan mouse X11 sungguhan
@@ -301,6 +301,7 @@ dist/                     hasil build (tidak masuk git)
 src/
 ├── main.ts               titik masuk: hanya memanggil main() dari app.ts
 ├── env.d.ts              tipe untuk GJS dan modul gi:// (dari paket @girs)
+├── gtkutil.ts            pembantu GTK 4 untuk semua lapisan: iter baris, anak widget, klik/tombol, dialog modal (runModal), pack()
 ├── app.ts                membuat Gtk.Application dan jendela
 ├── window.ts             MainWindow: menyusun komponen, mengelola dokumen/tab, buka/simpan/ekspor
 ├── actions.ts            semua aksi menu dan shortcut keyboard
@@ -346,6 +347,7 @@ src/
 │   ├── tablelayer.ts     merender tabel sebagai grid yang muncul/hilang mengikuti kursor
 │   ├── mermaid.ts        menampilkan blok ```mermaid dan ```dbml sebagai diagram (pola yang sama dengan tabel)
 │   ├── mermaidrender.ts  merender kode Mermaid menjadi pixbuf lewat WebKitGTK tak terlihat
+│   ├── overlays.ts       slot widget overlay yang dipakai ulang oleh gambar, tabel, dan diagram
 │   ├── tableedit.ts      Tab/Enter di tabel dan perintah menu Edit Tabel
 │   ├── codehighlight.ts  mewarnai isi blok kode sesuai bahasanya
 │   ├── tagsync.ts        memasang tag dengan selisih (hanya rentang/baris yang berubah)
@@ -362,6 +364,7 @@ src/
     ├── tabbar.ts         baris tab dokumen (tampil jika ada ≥ 2 dokumen)
     ├── statusbar.ts      hitungan kata, posisi kursor, pesan singkat
     ├── dialogs.ts        pilih file, konfirmasi simpan, error, tentang
+    ├── menu.ts           menu konteks sebagai data (MenuEntry) → Gtk.PopoverMenu
     ├── imageviewer.ts    penampil gambar dengan zoom (cairo)
     ├── kanban.ts         tampilan papan kanban: daftar, kartu, menu, seret-lepas
     ├── chat.ts           panel Asisten di kanan: pesan, tombol Konteks, pengaturan key dan model
@@ -370,6 +373,7 @@ tests/
 ├── run-tests.ts          titik masuk dan pendaftaran tes unit/GUI
 ├── framework.ts          asersi, hasil tes, opsi CLI, folder sementara
 ├── fixtures.ts           data papan kanban bersama untuk tes model dan GUI
+├── widgets.ts            pembantu tes GUI: tangkapan layar widget, anak widget, klik tiruan lewat GestureClick, posisi layar X11
 ├── unit/                 tes tanpa jendela: inline, HTML, settings, tabel, kanban, bahasa kode, DBML, operasi berkas, asisten (konteks, SSE, sesi), format berkas percakapan, klien DeepSeek (server tiruan)
 │   └── helpers.ts        helper untuk mengambil isi body HTML hasil konversi
 ├── gui/                  tes editor, file/folder, gambar, tabel, diagram, kanban, riwayat, asisten, ukuran, ketahanan
@@ -397,9 +401,9 @@ node_modules/mermaid/dist/mermaid.min.js ────────► dist/mermai
 - **Dua langkah build.** Vite mengubah TypeScript menjadi JavaScript tanpa memeriksa tipe. Karena itu `npm run build` menjalankan `tsc --noEmit` lebih dulu, dan build berhenti jika ada kesalahan tipe.
 - **Modul bawaan GJS ditandai `external`**: `gi://...`, `system`, `gettext`, `cairo`, dan `console`. Modul-modul ini disediakan GJS saat runtime, jadi tidak ikut dibundel dan tidak dicari di `node_modules`.
 - **Target `firefox115`**, karena GJS 1.80 memakai mesin JavaScript SpiderMonkey 115.
-- **Tipe untuk GTK, GLib, dan lainnya** berasal dari paket `@girs/*` (proyek ts-for-gir). Paket-paket itu didaftarkan di [`src/env.d.ts`](src/env.d.ts), sehingga `import Gtk from 'gi://Gtk?version=3.0'` dikenali TypeScript. Paket ini hanya dipakai saat pengecekan tipe dan tidak ikut ke `dist/`.
+- **Tipe untuk GTK, GLib, dan lainnya** berasal dari paket `@girs/*` (proyek ts-for-gir). Paket-paket itu didaftarkan di [`src/env.d.ts`](src/env.d.ts), sehingga `import Gtk from 'gi://Gtk?version=4.0'` dikenali TypeScript. Paket ini hanya dipakai saat pengecekan tipe dan tidak ikut ke `dist/`.
 - **Import antarmodul tetap memakai akhiran `.js`** (misalnya `'./tags.js'`), meskipun filenya `.ts`. TypeScript dan Vite sama-sama memetakannya ke file `.ts`.
-- **Satu pengecualian tipe di `editor/view.ts`.** Tipe `@girs` menyebut parameter sinyal `key-press-event` sebagai `EventKey`, yaitu struct tanpa method. Padahal saat runtime GJS memberikan `Gdk.Event` yang punya `get_keyval()` dan sejenisnya. Karena itu event tersebut di-*cast* ke `Gdk.Event`.
+- **Input lewat controller GTK 4.** Sinyal `key-press-event`/`button-press-event` GTK 3 sudah tidak ada. Tombol dan klik ditangkap `Gtk.EventControllerKey` dan `Gtk.GestureClick` lewat pembantu `onKeyPress()`/`onClick()` di [`src/gtkutil.ts`](src/gtkutil.ts). Handler-nya menerima angka biasa (keyval, modifier, jumlah klik, posisi), bukan objek event, jadi tes bisa memanggilnya langsung (`MarkdownView.onKey(keyval, state)`, `onClick(n, x, y, state)`).
 
 ### Lapisan dan arah ketergantungan
 
@@ -469,19 +473,32 @@ Keduanya ditunda dengan `GLib.idle_add(PRIORITY_HIGH_IDLE)`. Beberapa perubahan 
 
 **Posisi teks (`editor/offsets.ts`).** GtkTextBuffer menghitung posisi per karakter Unicode, sedangkan string JavaScript menghitung per unit UTF-16. Emoji 🎉 bernilai 1 di GTK tetapi 2 di JavaScript. Penyorot bekerja dengan posisi JavaScript, lalu mengonversinya dengan `makeCpMap()` tepat sebelum menyentuh buffer.
 
-**Menyembunyikan teks tanpa `invisible` (`editor/tags.ts`).** Atribut `invisible` milik GtkTextView di GTK 3 bisa memicu crash *"Byte index is off the end of the line"*. Karena itu tag `hidden` membuat teks sangat kecil dan berwarna sama dengan latar. Hasilnya di layar sama, tapi jalur kode GTK yang bermasalah tidak tersentuh.
+**Menyembunyikan teks tanpa `invisible` (`editor/tags.ts`).** Atribut `invisible` milik GtkTextView di GTK 3 bisa memicu crash *"Byte index is off the end of the line"*. Karena itu tag `hidden` membuat teks sangat kecil dan berwarna sama dengan latar. Hasilnya di layar sama, tapi jalur kode GTK yang bermasalah tidak tersentuh. Cara ini dipertahankan setelah pindah ke GTK 4 karena seluruh tata letak tabel, diagram, dan marker bertumpu padanya.
 
 Ukurannya **bukan 1** (satuan Pango, 1/1024 pt) melainkan 256 (`TINY` di `editor/tags.ts`). Font emoji berwarna adalah font bitmap, dan pada ukuran 1 skalanya menjadi nol sehingga GTK gagal menggambar seluruh jendela (*"invalid matrix (not invertible)"*). Ini ketahuan saat tabel berisi emoji dikecilkan; ada tes yang menjaganya.
 
-**Kolom teks di tengah (`editor/view.ts`).** Margin kiri/kanan dihitung dari lebar ScrolledWindow, dan ScrolledWindow memakai `hscrollbar_policy: EXTERNAL`, bukan `NEVER`. Lebar minimum GtkTextView yang dibungkus sama dengan lebarnya saat ini ditambah margin. Dengan `NEVER`, lebar minimum itu diteruskan ke jendela, sehingga jendela tidak bisa mengecil dan terus membesar setiap margin dihitung ulang.
+**Kolom teks di tengah (`editor/view.ts`).** Margin kiri/kanan dihitung dari lebar area yang terlihat, yaitu `page_size` adjustment horizontal yang diisi TextView saat dialokasikan (GTK 4 tidak punya sinyal `size-allocate`). ScrolledWindow memakai `hscrollbar_policy: EXTERNAL`, bukan `NEVER`. Lebar minimum GtkTextView yang dibungkus sama dengan lebarnya saat ini ditambah margin. Dengan `NEVER`, lebar minimum itu diteruskan ke jendela, sehingga jendela tidak bisa mengecil dan terus membesar setiap margin dihitung ulang.
 
-**Membuka dokumen panjang tanpa membeku (`replaceAllText()` di `editor/view.ts`).** GTK 3 memberi tinggi 0 pada baris yang belum ditata. Jika gambar pertama setelah teks diganti mencakup area di bawah baris yang sudah ditata (cache piksel TextView menggambar setengah layar ekstra, dan `bottom_margin` memperpanjang kanvas), GTK menata *semua* baris sampai akhir dokumen sekaligus di thread utama; naskah 650 KB dulu membeku ±0,6 detik saat dibuka. `replaceAllText()` menolkan posisi gulir lalu mengantre gulir ke kursor, sehingga GTK lebih dulu menata dua layar di sekitar kursor dan sisanya sedikit demi sedikit di latar. Pakai fungsi ini setiap kali mengganti seluruh isi TextView yang bisa panjang (editor, penampil riwayat). Jangan mengubah `bottom_margin` saat runtime: setiap perubahan membuat GTK menata ulang seluruh dokumen.
+**Membuka dokumen panjang tanpa membeku (`replaceAllText()` di `editor/view.ts`).** GTK memberi tinggi 0 pada baris yang belum ditata. Jika gambar pertama setelah teks diganti mencakup area di bawah baris yang sudah ditata (cache piksel TextView menggambar setengah layar ekstra, dan `bottom_margin` memperpanjang kanvas), GTK menata *semua* baris sampai akhir dokumen sekaligus di thread utama; naskah 650 KB dulu membeku ±0,6 detik saat dibuka. `replaceAllText()` menolkan posisi gulir lalu mengantre gulir ke kursor, sehingga GTK lebih dulu menata dua layar di sekitar kursor dan sisanya sedikit demi sedikit di latar. Pakai fungsi ini setiap kali mengganti seluruh isi TextView yang bisa panjang (editor, penampil riwayat). Jangan mengubah `bottom_margin` saat runtime: setiap perubahan membuat GTK menata ulang seluruh dokumen. Gulir ke kursor hanya diantre jika TextView sudah punya ukuran: sebelum itu (jendela belum tampil, tab baru di `Gtk.Stack`) GTK 4 menyimpan gulirnya lalu menjalankannya dengan geometri kosong, sehingga dokumen terbuka di tengah atau akhir. Tes `file panjang di tab baru terbuka dari awal` di `tests/gui/tabs.ts` menjaganya.
 
 **Penyorotan bertahap saat membuka (`queueFill()` di `editor/view.ts`).** `setText()` tetap mengurai seluruh dokumen (struktur baris, heading, dan offset dibutuhkan langsung), tetapi tag sintaks dan marker tersembunyi hanya dipasang untuk 200 baris pertama. Sisanya dicicil oleh idle berprioritas `HIGH_IDLE + 22` (≤8 ms per giliran): di atas penataan latar GtkTextView (125) supaya baris ditata sekali dengan tag akhirnya, di bawah menggambar (120) supaya layar tetap diperbarui. Tiap giliran mendahulukan baris di sekitar kursor dan yang terlihat (sebelum GTK selesai menata, area terlihat belum bisa dipercaya karena baris yang belum ditata setinggi 0), jadi melompat ke akhir dokumen tetap menampilkan teks terformat. `LineTagger.defer()`/`fill()` melewati baris yang ditunda; suntingan selama cicilan tetap disorot seperti biasa. Outline juga dibangun 50 baris per giliran. Tes yang memeriksa tag dokumen panjang menunggu `MarkdownView.highlightComplete`.
 
 **Marker tersembunyi bertahap (`MarkerConcealer` di `editor/decorations.ts`).** Tiap ketukan dan perpindahan kursor hanya memeriksa baris aktif lama dan baru, baris yang diurai ulang penyorot (`reparsed` di hasil `highlight()`), dan baris yang tagnya belum diketahui. Pembatas ``` baru bisa mengubah marker baris di bawahnya tanpa menyunting baris itu, karena itu rentang `reparsed` wajib diteruskan. Marker di hasil penyorot urut menurut barisnya (dicari dengan pencarian biner), dan marker/heading/gambar setelah suntingan digeser di tempat karena snapshot lama tidak dipakai lagi.
 
 **Auto save di latar (`writeTextFileAsync()` di `files.ts`).** Auto save dari timer menulis lewat Gio di thread pekerja (file sementara, fsync, lalu rename atomik), jadi jeda fsync di disk lambat tidak terasa saat pengguna lanjut mengetik. Semua penulisan sinkron, pemindahan, dan pembuangan file lewat `files.ts`/`fileops.ts` lebih dulu menunggu penulisan latar ke path yang sama (`waitForWrites()`), supaya isi lama tidak menimpa yang baru. Status *modified* hanya direset jika teks tidak berubah selama ditulis.
+
+### Catatan GTK 4
+
+Nyerat berjalan di GTK 4, GtkSourceView 5, dan WebKitGTK 6.0. Beberapa perilaku GTK 4 (lewat GJS) memengaruhi cara kode ditulis:
+
+- **Sinyal `destroy` tidak berbunyi untuk widget yang masih dipegang JavaScript.** Widget anak baru di-*dispose* saat referensi terakhirnya hilang, dan GJS memegang referensi selama objek JavaScript-nya hidup. Karena itu pembersihan dilakukan eksplisit: `MarkdownView.destroy()` (dipanggil saat tab ditutup) menghentikan idle/timer editor beserta lapisan gambar, tabel, dan diagram; `MainWindow` memanggil `destroy()` semua komponennya saat jendelanya di-*unrealize* (sinyal yang memang berbunyi ketika jendela dihancurkan). Jendela kecil (riwayat, penampil gambar) menandai dirinya tertutup lewat `unrealize` juga.
+- **Anak overlay GtkTextView tidak bisa dilepas.** Di GTK 4.14, `gtk_text_view_remove()` tidak mengenal anak yang ditambahkan dengan `add_overlay()` (berakhir dengan *"GtkBox is not a child of GtkSourceView"*). `editor/overlays.ts` meminjamkan slot (`Gtk.Box` yang sudah menjadi overlay) ke gambar, tabel, dan diagram; slot yang dikembalikan dikosongkan, disembunyikan, lalu dipakai blok berikutnya. Penerima klik dipasang di isi slot, bukan di slotnya.
+- **Dialog modal lewat main loop bersarang.** `gtk_dialog_run()` sudah tidak ada. `runModal()` (`gtkutil.ts`) menjalankan `GLib.MainLoop` sampai dialog menjawab, sehingga `chooseFile()`, `askSaveChanges()`, dan dialog kanban tetap mengembalikan jawabannya langsung. Pemilih berkas memakai `Gtk.FileDialog` (sudah menanyakan sebelum menimpa; di desktop yang punya xdg-desktop-portal, dialognya dibuka portal). Pesan dan formulir (sunting kartu, prompt) adalah `Gtk.Window` modal sendiri (`modalWindow()` di `ui/dialogs.ts`), bukan `Gtk.AlertDialog` dan tanpa `destroy_with_parent`: keduanya menghubungkan dialog ke sinyal `destroy` jendela induk, dan saat proses keluar GJS bisa memfinalisasi induk lebih dulu sehingga muncul GLib-GObject-CRITICAL.
+- **`hexpand`/`vexpand` diteruskan ke atas.** Di GTK 4, widget yang punya anak mengembang ikut mengembang. Sidebar, tab Riwayat, tab Berkas, dan panel Asisten diberi `hexpand: false` eksplisit, supaya tidak ikut dibagi ruang sisa jendela (dijaga tes `tab riwayat tidak membuat sidebar mengembang`). `pack(box, child, expand)` di `gtkutil.ts` menggantikan `pack_start()` dan menyetel ekspansi sesuai orientasi box.
+- **Seleksi jangan sampai kosong di tengah suntingan.** Di X11, seleksi yang sempat kosong melepas clipboard PRIMARY, dan GTK 4 membatalkan seleksi berikutnya begitu server mengonfirmasi pelepasan itu. `wrapSelection()` (`editor/editing.ts`) karena itu hanya menyisipkan/menghapus penanda di kedua ujung, tanpa menghapus seluruh seleksi dulu; tanpa itu Ctrl+B kedua tidak melepas `**`.
+- **Pohon berkas (GtkTreeView) dan seret-lepas.** Seret memakai `Gtk.DragSource`/`Gtk.DropTarget` sendiri, bukan DnD model TreeView (yang akan memindahkan baris model, padahal yang dipindah berkas di disk). Penanda tujuan memakai seleksi baris, **bukan** `set_drag_dest_row()`: tanpa DnD model, GTK 4.14 crash (segfault) saat menggambar penanda itu. Ikon drag diambil dari tema ikon; widget sebagai ikon (`GtkDragIcon`) memicu Gtk-CRITICAL saat drag selesai.
+- **Menu konteks sebagai data.** `Gtk.Menu` sudah tidak ada. Menu klik kanan (pohon berkas, kartu, daftar) dibangun sebagai `MenuEntry[]` (`ui/menu.ts`) lalu diubah menjadi `Gtk.PopoverMenu` beraksi `menu.*`; tes cukup mencari entri dan memanggil `run()`.
+- **Tangkapan layar.** `gdk_pixbuf_get_from_window()` sudah tidak ada. `tests/widgets.ts` menggambar widget lewat `Gtk.WidgetPaintable` lalu merendernya menjadi tekstur dengan renderer jendelanya (dipakai `--screenshot` dan `scripts/capture.ts`).
 
 ### Cara kerja gambar (`editor/images.ts`)
 
@@ -490,7 +507,7 @@ Gambar tidak dimasukkan ke buffer teks. Jika memakai `GtkTextChildAnchor`, setia
 1. `highlighter.ts` mencatat setiap gambar beserta barisnya: `{ line, url, alt }`.
 2. `ImageLayer` memuat gambar secara async lewat GIO (file lokal, atau http/https lewat gvfs) dan menyimpannya di cache per URI. Mengetik tidak memuat ulang gambar yang sama.
 3. Di bawah baris gambar disediakan ruang kosong dengan tag `pixels_below_lines` setinggi gambarnya.
-4. Widget gambar ditempel di atas ruang itu dengan `add_child_in_window()`. Posisinya dalam koordinat buffer sehingga ikut bergulir, dan dihitung ulang dari `get_line_yrange()` setiap kali tata letak berubah.
+4. Widget gambar ditempel di atas ruang itu sebagai overlay TextView (slot dari `editor/overlays.ts`, posisinya diatur dengan `move_overlay()`). Posisinya dalam koordinat buffer sehingga ikut bergulir, dan dihitung ulang dari `get_line_yrange()` setiap kali tata letak berubah (perubahan terlihat dari adjustment vertikal).
 5. Widget dicocokkan berdasarkan URI, bukan nomor baris. Jika ada baris baru di atasnya, widget yang sama hanya dipindahkan, tidak dibuat ulang.
 
 Seperti format lain, seluruh `![alt](url)` didaftarkan sebagai marker, jadi sintaksnya tersembunyi kecuali di baris aktif.
@@ -507,7 +524,7 @@ Tabel memakai cara yang sama dengan gambar: widget ditempel di atas ruang kosong
 1. `markdown/table.ts` mengenali blok tabel (`findTables()`), dan itu satu-satunya tempat aturan tabel ditulis: penyorot, perintah edit, dan ekspor HTML semuanya memakainya.
 2. `highlighter.ts` meneruskan rentang baris tiap tabel ke `TableLayer`.
 3. Saat tabel perlu tampil sebagai grid, `TableLayer` memecah isinya (`parseTable()`), membuat `Gtk.Label` untuk setiap sel dengan markup Pango dari `markdown/pango.ts` (tebal, miring, kode, tautan), lalu menyusunnya di `Gtk.Grid`. Ukuran tabel diukur dengan dua sel GTK yang dipakai ulang; grid lengkap baru dibuat ketika tabel terlihat. Ukuran disimpan pada blok tabel aktif; cache yang dipakai bersama dibatasi 256 tabel dan 1.024 sel, masing-masing maksimal 1 Mi unit UTF-16 kunci. Mengetik di dalam tabel tidak membangun grid.
-4. Ruang kosong disediakan lewat tag `pixels_below_lines` di baris terakhir tabel setinggi grid, lalu grid ditempel di atasnya dengan `add_child_in_window()`. Saat kursor atau seleksi berpindah, hanya tag tabel yang berganti keadaan yang diubah. Posisi dihitung ulang dari `get_line_yrange()` hanya untuk grid yang terlihat; grid di luar layar disembunyikan tanpa menghapus ruangnya, lalu diposisikan ketika digulir ke layar. Ini mencegah perpindahan kursor memaksa GTK menata seluruh dokumen. Mengubah lebar kolom memakai ulang grid dan mengatur ulang lebar sel tanpa membongkar widget; ellipsize menjaga tinggi tabel tetap sama.
+4. Ruang kosong disediakan lewat tag `pixels_below_lines` di baris terakhir tabel setinggi grid, lalu grid ditempel di atasnya sebagai overlay (slot dari `editor/overlays.ts`). Saat kursor atau seleksi berpindah, hanya tag tabel yang berganti keadaan yang diubah. Posisi dihitung ulang dari `get_line_yrange()` hanya untuk grid yang terlihat; grid di luar layar disembunyikan tanpa menghapus ruangnya, lalu diposisikan ketika digulir ke layar. Ini mencegah perpindahan kursor memaksa GTK menata seluruh dokumen. Mengubah lebar kolom memakai ulang grid dan mengatur ulang lebar sel tanpa membongkar widget; ellipsize menjaga tinggi tabel tetap sama.
 5. Lebar kolom sebesar teks terpanjang. Jika jumlahnya melebihi lebar kolom teks, kolom yang sempit dibiarkan dan sisa ruang dibagi ke kolom yang lebar (`fitColumns()`), lalu teksnya dipotong dengan "…". Lebarnya harus dipaksa dengan `set_size_request`, karena TextView hanya memberi anak widget ukuran minimumnya.
 6. Klik sel menaruh kursor di sel itu pada teks mentah (`cellStart()`), yang otomatis membuka tabelnya.
 7. `tableedit.ts` membaca ulang dokumen dari buffer setiap kali dipakai (bukan dari hasil penyorotan terakhir), lalu menulis ulang baris tabel dalam satu langkah undo. Perintah menu selalu menghasilkan tabel yang dirapikan, karena menambah atau menghapus kolom mengubah lebar kolom.
@@ -516,7 +533,7 @@ Tabel memakai cara yang sama dengan gambar: widget ditempel di atas ruang kosong
 
 Mermaid hanya berjalan di browser (butuh DOM dan pengukuran teks), jadi tidak bisa dipanggil langsung dari GJS.
 
-1. **Perender (`mermaidrender.ts`).** Satu `WebKitWebView` di dalam `GtkOffscreenWindow` (tidak pernah tampil) memuat `mermaid.min.js`. Skrip itu disalin dari `node_modules/mermaid` ke `dist/` oleh plugin kecil di `vite.config.ts`. Untuk tiap diagram, halaman menjalankan `mermaid.render()` lalu mengirim ukurannya kembali lewat *script message handler*; jendela diubah seukuran diagram, diambil snapshot-nya, dan dipotong menjadi `GdkPixbuf`. Snapshot dipilih daripada SVG + librsvg karena label Mermaid memakai `<foreignObject>` yang tidak didukung librsvg.
+1. **Perender (`mermaidrender.ts`).** Satu `WebKitWebView` (WebKitGTK 6.0) yang tidak pernah dipasang di jendela memuat `mermaid.min.js`. Skrip itu disalin dari `node_modules/mermaid` ke `dist/` oleh plugin kecil di `vite.config.ts`. Untuk tiap diagram, halaman menjalankan `mermaid.render()` lalu mengirim ukurannya kembali lewat *script message handler*; snapshot seluruh dokumen (WebKit menggambarnya walau view tidak tampil, dan ukurannya mengikuti isi halaman) dipotong seukuran diagram menjadi `GdkPixbuf`. Snapshot dipilih daripada SVG + librsvg karena label Mermaid memakai `<foreignObject>` yang tidak didukung librsvg.
 2. WebKitGTK dimuat dengan `import()` dan WebView baru dibuat saat diagram pertama dibutuhkan, jadi dokumen tanpa diagram tidak membayar biayanya (dan aplikasi tetap jalan tanpa WebKitGTK). Diagram dirender satu per satu, hasilnya disimpan di cache per (tema, kode).
 3. **Lapisan (`mermaid.ts`)** meniru `TableLayer`: gambar ditempel di ruang kosong di bawah baris penutup blok (`pixels_below_lines`). Saat kursor di luar blok, semua barisnya dikecilkan dengan tag `mermaidhide`; saat di dalam, kode tampil dan diagram menjadi pratinjau di bawahnya. Tag-nya terpisah dari `tablehide` karena tiap lapisan menghapus tag-nya di seluruh dokumen saat sinkron.
 4. Render ditunda 400 ms setelah kode berubah; diagram lama tetap tampil selama dirender ulang. Blok yang gagal dirender (galat sintaks) tidak pernah disembunyikan.
@@ -557,7 +574,7 @@ buffer teks ──parseBoard()──► KanbanBoard (model + tampilan)
 3. Undo/redo (aksi `undo`/`redo`, `Ctrl+Z`) mengubah buffer. Perubahan yang bukan dari papan sendiri dikenali dengan membandingkan teks dengan yang terakhir ditulis papan, lalu papan membaca ulang teksnya.
 4. Semua operasi atas model (`addCard`, `moveCard`, `moveColumn`, …) murni dan tidak mengubah papan asal, sehingga mudah diuji. `moveCard` memakai posisi *akhir* kartu di daftar tujuan, jadi memindahkan ke bawah di daftar yang sama tidak butuh penyesuaian.
 
-**Menyeret.** Tidak memakai drag-and-drop bawaan GTK, melainkan penunjuk sendiri: tekan di kartu, gerakkan lebih dari 6 piksel, lepas. Selama menyeret, kartu bayangan (jendela kecil berisi tangkapan kartu) mengikuti penunjuk, kartu asal diredupkan, dan penanda putus-putus menunjukkan tujuan. Tujuan dihitung dari posisi penunjuk: daftar yang melingkupinya (atau yang terdekat), lalu `dropIndex()` menghitung berapa kartu lain yang titik tengahnya di atas penunjuk. Dekat tepi, papan atau daftar tujuan digulir otomatis. Gerakan di bawah 6 piksel dianggap klik biasa dan membuka dialog sunting. Cara ini dipilih supaya perilakunya terkendali dan bisa diuji dengan event penunjuk tiruan.
+**Menyeret.** Tidak memakai drag-and-drop bawaan GTK, melainkan penunjuk sendiri (`Gtk.GestureDrag` di tiap kartu): tekan di kartu, gerakkan lebih dari 6 piksel, lepas. Selama menyeret, kartu bayangan (gambar diam kartu dari `Gtk.WidgetPaintable`, di lapisan `Gtk.Overlay` di atas papan, karena GTK 4 tidak bisa memindahkan jendela popup sendiri) mengikuti penunjuk, kartu asal diredupkan, dan penanda putus-putus menunjukkan tujuan. Tujuan dihitung dari posisi penunjuk: daftar yang melingkupinya (atau yang terdekat), lalu `dropIndex()` menghitung berapa kartu lain yang titik tengahnya di atas penunjuk. Dekat tepi, papan atau daftar tujuan digulir otomatis. Gerakan di bawah 6 piksel dianggap klik biasa dan membuka dialog sunting. Cara ini dipilih supaya perilakunya terkendali dan bisa diuji dengan memanggil `onCardPress()`/`onCardMotion()`/`onCardRelease()` langsung (koordinat kartu).
 
 **Dialog** (`editCardDialog`, `promptDialog`, `confirmDialog`) menahan program sampai ditutup, jadi `KanbanBoard.dialogs` bisa diganti, dan tes memakai pengganti.
 
@@ -579,11 +596,11 @@ Urutan prioritas dan batas anggarannya: pilihan teks (8%), dokumen aktif (40%; b
 
 ### Cara kerja zoom gambar (`ui/imageviewer.ts`)
 
-1. Setiap gambar di editor dibungkus `Gtk.EventBox` sendiri, sehingga klik ganda tahu gambar mana yang dimaksud jika satu baris memuat beberapa gambar. Satu klik tetap membuka sintaksnya (`onActivate`); klik ganda (`DOUBLE_BUTTON_PRESS` dari GDK) memanggil `onZoom`, dan menu *Perbesar Gambar* memanggil `MarkdownView.zoomImage()` untuk baris kursor.
+1. Setiap gambar di editor (`Gtk.Picture`) punya `Gtk.GestureClick` sendiri, sehingga klik ganda tahu gambar mana yang dimaksud jika satu baris memuat beberapa gambar. Satu klik tetap membuka sintaksnya (`onActivate`); klik ganda (klik ke-2 dari gesture) memanggil `onZoom`, dan menu *Perbesar Gambar* memanggil `MarkdownView.zoomImage()` untuk baris kursor.
 2. `ImageLayer.imageAt()` memberikan **pixbuf ukuran penuh** dari cache (gambar di editor hanya salinan yang diperkecil), jadi penampil menampilkan resolusi aslinya.
 3. `MarkdownView` tidak membuka jendela sendiri. Ia memanggil `onViewImage`, dan `MainWindow` yang membuka `ImageViewer`, sehingga lapisan `editor/` tetap tidak bergantung pada `ui/`.
-4. `ImageViewer` menggambar dengan cairo pada skala zoom di `Gtk.DrawingArea`, bukan membuat salinan yang diperbesar, jadi zoom 800% pada foto besar tidak menghabiskan memori. Zoom mulai 300% memakai filter `NEAREST` supaya piksel tampil apa adanya.
-5. Zoom dibatasi 5%–800%, berkelipatan 1,25. Saat roda mouse diputar di atas gambar, titik gambar di bawah penunjuk dijaga tidak bergeser: titik itu dihitung dalam koordinat gambar, lalu posisi gulir diatur ulang setelah tata letak selesai.
+4. `ImageViewer` menggambar dengan cairo pada skala zoom di `Gtk.DrawingArea` (`set_draw_func()`), bukan membuat salinan yang diperbesar, jadi zoom 800% pada foto besar tidak menghabiskan memori. Zoom mulai 300% memakai filter `NEAREST` supaya piksel tampil apa adanya.
+5. Zoom dibatasi 5%–800%, berkelipatan 1,25 (roda mouse lewat `Gtk.EventControllerScroll`; geser lewat `Gtk.GestureDrag` di ScrolledWindow yang tidak ikut bergeser). Saat roda mouse diputar di atas gambar, titik gambar di bawah penunjuk dijaga tidak bergeser: titik itu dihitung dalam koordinat gambar, lalu posisi gulir diatur ulang setelah tata letak selesai.
 6. Gambar dibuka dalam mode "pas layar tapi tidak diperbesar melebihi 100%", dan mengikuti ukuran jendela selama zoom belum diubah.
 
 ### Cara kerja warna blok kode (`editor/codehighlight.ts`)

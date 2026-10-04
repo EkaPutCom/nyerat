@@ -1,7 +1,7 @@
 // Header bar: tombol-tombol dan menu ☰. Setiap tombol/menu hanya menyebut nama
 // aksi ("app.save"); aksinya sendiri didaftarkan di actions.ts.
 
-import Gtk from 'gi://Gtk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import Gio from 'gi://Gio';
 
 type Item = [label: string, action: string];
@@ -29,14 +29,30 @@ const MENU: Item[][] = [
 
 function iconButton(icon: string, action: string, tooltip: string, toggle = false): Gtk.Button {
     const button = toggle ? new Gtk.ToggleButton() : new Gtk.Button();
-    button.set_image(Gtk.Image.new_from_icon_name(icon, Gtk.IconSize.BUTTON));
+    button.set_icon_name(icon);
     button.set_action_name(action);
     button.set_tooltip_text(tooltip);
     return button;
 }
 
-export function createHeaderBar(): Gtk.HeaderBar {
-    const bar = new Gtk.HeaderBar({ show_close_button: true });
+export interface HeaderBar {
+    readonly bar: Gtk.HeaderBar;
+    readonly title: Gtk.Label;
+    readonly subtitle: Gtk.Label;
+    // GTK 4 HeaderBar tidak punya judul dan subjudul sendiri; keduanya label di title_widget.
+    setTitle(title: string, subtitle: string): void;
+}
+
+export function createHeaderBar(): HeaderBar {
+    const bar = new Gtk.HeaderBar({ show_title_buttons: true });
+    const title = new Gtk.Label({ ellipsize: 3, single_line_mode: true });
+    title.add_css_class('title');
+    const subtitle = new Gtk.Label({ ellipsize: 3, single_line_mode: true });
+    subtitle.add_css_class('subtitle');
+    const titles = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER });
+    titles.append(title);
+    titles.append(subtitle);
+    bar.set_title_widget(titles);
     bar.pack_start(iconButton('format-justify-left-symbolic', 'app.sidebar', 'Sidebar (Ctrl+\\)', true));
     // Ikon dokumen, bukan document-open-symbolic: di beberapa tema ikon (misalnya
     // elementary-xfce) document-open berupa folder, sehingga tertukar dengan Buka Folder.
@@ -60,10 +76,15 @@ export function createHeaderBar(): Gtk.HeaderBar {
         }
         menu.append_section(null, part);
     }
-    const menuButton = new Gtk.MenuButton({ menu_model: menu, tooltip_text: 'Menu' });
-    menuButton.set_image(Gtk.Image.new_from_icon_name('open-menu-symbolic', Gtk.IconSize.BUTTON));
+    const menuButton = new Gtk.MenuButton({ menu_model: menu, tooltip_text: 'Menu', icon_name: 'open-menu-symbolic' });
     bar.pack_end(menuButton);
     bar.pack_end(iconButton('document-save-symbolic', 'app.save', 'Simpan (Ctrl+S)'));
     bar.pack_end(iconButton('user-available-symbolic', 'app.chat', 'Asisten (Ctrl+Shift+A)', true));
-    return bar;
+    return {
+        bar, title, subtitle,
+        setTitle(text: string, sub: string): void {
+            title.set_text(text);
+            subtitle.set_text(sub);
+        },
+    };
 }

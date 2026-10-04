@@ -13,8 +13,8 @@
 // Segmen disimpan di cache per (skema, bahasa, isi blok). Mengetik di luar blok
 // kode, atau di blok lain, tidak membuat blok ini disorot ulang.
 
-import Gtk from 'gi://Gtk?version=3.0';
-import GtkSource from 'gi://GtkSource?version=4';
+import Gtk from 'gi://Gtk?version=4.0';
+import GtkSource from 'gi://GtkSource?version=5';
 import Pango from 'gi://Pango';
 import type { CodeBlock } from './highlighter.js';
 import { setTagGroup, type Range } from './tagsync.js';

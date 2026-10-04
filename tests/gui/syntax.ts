@@ -2,6 +2,7 @@
 
 import { section, test, eq, ok } from '../framework.js';
 import type { GuiContext } from './context.js';
+import { listRows } from '../widgets.js';
 
 export function syntaxHidingTests(c: GuiContext): void {
     const { w, ed, setText, cursorTo, hidden, tagAt, action } = c;
@@ -47,6 +48,6 @@ export function syntaxHidingTests(c: GuiContext): void {
     test('outline berisi heading', () => {
         setText('# Satu\n## Dua\nteks\n### Tiga');
         eq(ed.headings.map(h => [h.level, h.text, h.line]), [[1, 'Satu', 0], [2, 'Dua', 1], [3, 'Tiga', 3]]);
-        eq(w.outline.list.get_children().length, 3, 'jumlah baris outline');
+        eq(listRows(w.outline.list).length, 3, 'jumlah baris outline');
     });
 }

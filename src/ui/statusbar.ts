@@ -2,7 +2,7 @@
 //   kiri:  mode aktif, atau pesan singkat ("Tersimpan") selama 2,5 detik
 //   kanan: jumlah kata/karakter dan posisi kursor
 
-import Gtk from 'gi://Gtk?version=3.0';
+import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
 import { cpLength } from '../editor/offsets.js';
 
@@ -20,14 +20,15 @@ export class StatusBar {
         this.left = new Gtk.Label({ xalign: 0 });
         this.right = new Gtk.Label({ xalign: 1, hexpand: true });
         this.widget = new Gtk.Box({ spacing: 12 });
-        this.widget.get_style_context().add_class('statusbar');
-        this.widget.pack_start(this.left, false, false, 0);
-        this.widget.pack_end(this.right, true, true, 0);
-        // Pesan yang masih tampil saat jendela ditutup: timer-nya tidak boleh menyentuh label yang sudah dihancurkan.
-        this.widget.connect('destroy', () => {
-            if (this.toastId) GLib.source_remove(this.toastId);
-            this.toastId = 0;
-        });
+        this.widget.add_css_class('statusbar');
+        this.widget.append(this.left);
+        this.widget.append(this.right);
+    }
+
+    // Pesan yang masih tampil saat jendela ditutup: timer-nya tidak boleh menyentuh label yang sudah dibuang.
+    destroy(): void {
+        if (this.toastId) GLib.source_remove(this.toastId);
+        this.toastId = 0;
     }
 
     setCounts(text: string): void {

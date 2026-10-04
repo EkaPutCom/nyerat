@@ -1,8 +1,9 @@
 // Dekorasi yang bergantung pada posisi kursor. Dipanggil setiap kursor pindah baris.
 
-import type Gtk from 'gi://Gtk?version=3.0';
+import type Gtk from 'gi://Gtk?version=4.0';
 import type { Marker } from './highlighter.js';
 import { setTagRanges, type LineSpan, type LineTagger } from './tagsync.js';
+import { iterAtLine } from '../gtkutil.js';
 
 // Inti efek sintaks tersembunyi: sembunyikan semua marker, kecuali yang aktif di
 // baris l0..l1 (baris kursor atau baris yang terseleksi).
@@ -109,8 +110,8 @@ export function dimOutsideParagraph(buffer: Gtk.TextBuffer, tag: Gtk.TextTag, li
     let b0 = l0, b1 = l1;
     while (b0 > 0 && !blank(b0 - 1)) b0--;
     while (b1 < lines.length - 1 && !blank(b1 + 1)) b1++;
-    const s = buffer.get_iter_at_line(b0);
-    const e = buffer.get_iter_at_line(b1);
+    const s = iterAtLine(buffer, b0);
+    const e = iterAtLine(buffer, b1);
     e.forward_to_line_end();
     setTagRanges(buffer, tag, [[0, s.get_offset()], [e.get_offset(), buffer.get_char_count()]]);
 }
