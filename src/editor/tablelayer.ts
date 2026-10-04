@@ -1,4 +1,4 @@
-// Menampilkan tabel sebagai grid sungguhan, seperti Typora.
+// Menampilkan tabel sebagai grid sungguhan.
 //
 // Caranya sama dengan gambar (images.ts): widget ditempel di atas ruang kosong
 // yang disediakan di dalam teks, sehingga isi dokumen tidak berubah.

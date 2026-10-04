@@ -1,10 +1,21 @@
 # Nyerat
 
-Editor Markdown ala [Typora](https://typora.io) untuk desktop Linux, dibuat dengan **GTK 3**, **GtkSourceView 4**, dan **GJS** (JavaScript untuk GNOME). Kodenya ditulis dalam **TypeScript** dan dibundel dengan **Vite**.
+Editor Markdown **AI-native** untuk desktop Linux: asisten AI adalah bagian inti editor, bukan tambahan, dan ia memahami seluruh naskah Anda. Tampilan penulisannya langsung terformat, tanpa panel pratinjau. Dibuat dengan **GTK 3**, **GtkSourceView 4**, dan **GJS** (JavaScript untuk GNOME). Kodenya ditulis dalam **TypeScript** dan dibundel dengan **Vite**.
 
 Tidak ada panel pratinjau terpisah: teks langsung tampil terformat. Sintaks Markdown seperti `#`, `**`, `` ` `` dan `[](url)` disembunyikan, lalu muncul lagi saat kursor berada di baris tersebut.
 
 Landing page-nya ada di [`docs/`](docs/index.html) (HTML statis; aktifkan GitHub Pages dari folder `/docs` pada branch `main` untuk menayangkannya). Tangkapan layar dibuat oleh [`scripts/capture.ts`](scripts/capture.ts).
+
+## Visi: editor yang AI-native
+
+Menulis panjang (novel, dokumentasi, riset) sulit karena penulis harus mengingat semuanya: usia tokoh di bab 1, istilah yang dipakai di bab 7, keputusan yang dicatat bulan lalu. Nyerat dirancang agar AI menjadi rekan kerja yang **sudah membaca naskah itu**, bukan kotak chat terpisah yang harus disuapi salinan teks. Prinsipnya:
+
+- **Konteks datang dari naskah, bukan dari salin-tempel.** Dokumen yang terbuka (termasuk yang belum disimpan), pilihan, posisi kursor, dan peta seluruh folder disusun otomatis; model juga menelusuri berkas sendiri dengan alat baca-saja
+- **Transparan.** Setiap jawaban memperlihatkan konteks apa yang dikirim, penelusuran apa yang dilakukan, dan berapa token yang terpakai
+- **Penulis memegang kendali.** Asisten hanya membaca dan mengusulkan; naskah tidak pernah diubah tanpa Anda. Naskah yang dikirim ke penyedia model bisa dibatasi lewat saklar, dan API key milik Anda sendiri
+- **Teks tetap milik Anda.** Semua berupa Markdown biasa di berkas biasa (bisa di-diff dan di-commit ke Git); tanpa format tertutup dan tanpa akun
+
+Keadaan sekarang: chat dengan DeepSeek yang menelusuri naskah dan menjawab dengan kutipan berkas dan nomor baris. Yang belum ada (lihat *Keterbatasan*): menyisipkan usulan langsung ke dokumen, pemeriksaan konsistensi otomatis, riwayat percakapan yang tersimpan, dan penyedia model selain DeepSeek.
 
 ## Arti nama
 
@@ -77,6 +88,7 @@ gjs -m dist/nyerat.js ~/catatan
 | `npm start` | Build, lalu jalankan aplikasi |
 | `npm test` | Build, lalu jalankan semua tes unit, GUI, dan mouse kanban di Xvfb |
 | `npm run test:ui` | Build, lalu jalankan rangkaian tes yang sama di desktop X11 |
+| `npm run test:live` | Build, lalu jalankan tes langsung ke API DeepSeek atas naskah contoh (butuh `DEEPSEEK_API_KEY` di `.env`, lihat `.env.example`; tidak ikut `npm test`) |
 | `npm run bench` | Build, lalu ukur performa modul Markdown dan editor (setText, penyorotan, mengetik) di Xvfb; opsi: `--size=`, `--runs=`, `--budget=`, `--no-gui` |
 | `npm run bench:save` | Jalankan benchmark dan simpan hasilnya ke `bench/<tanggal-waktu>.json` |
 | `npm run bench:compare` | Jalankan benchmark dan tampilkan selisih terhadap [`bench/baseline.json`](bench/baseline.json) (hijau = lebih cepat, merah = lebih lambat, abu-abu = selisih < 25%, derau pengukuran) |
@@ -120,7 +132,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 
 ## Fitur
 
-**Penulisan ala Typora**
+**Penulisan langsung terformat**
 - Heading, **tebal**, *miring*, ~~coret~~, ==stabilo==, `kode inline`, tautan, dan gambar langsung tampil terformat
 - Blok kode, kutipan, dan garis pemisah diberi gaya (kutipan bersarang `>>` makin menjorok, sampai tiga tingkat); baris pembatas ```` ``` ```` disembunyikan di luar blok
 - **Papan kanban ala Trello.** File Markdown yang frontmatter-nya memuat `kanban: true` dibuka sebagai papan: heading `##` menjadi daftar, item `- [ ]` menjadi kartu. Seret kartu antar daftar (atau ke posisi lain di daftar yang sama), klik kartu untuk menyunting judul dan catatannya, klik kanan untuk menu (pindahkan, naik/turun, hapus), centang untuk menandai selesai, dan tambah kartu/daftar langsung di papan. `#tag` tampil sebagai label berwarna dan `@{2026-10-20}` sebagai tanggal (merah jika lewat batas). Semua perubahan ditulis ke teks Markdown-nya, dan penanda lama `kanban-plugin:` dari plugin Kanban Obsidian tetap dikenali. `Ctrl+Shift+B` beralih ke tampilan teks dan kembali; menu ☰ → *Papan Kanban Baru* membuat papan kosong
@@ -218,7 +230,7 @@ Di Xvfb, tes memakai rendering perangkat lunak Mesa (`LIBGL_ALWAYS_SOFTWARE=1`) 
 
 Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `dist/run-tests.js`, lalu dijalankan GJS. Script keluar dengan kode `1` jika ada yang gagal. Isinya:
 
-- **Unit**: konversi Markdown → HTML, pengurai format inline, simpan/baca pengaturan, model tabel dan kanban, alias bahasa kode, serta DBML, tanpa GUI
+- **Unit**: konversi Markdown → HTML, pengurai format inline, simpan/baca pengaturan, model tabel dan kanban, alias bahasa kode, DBML, operasi berkas (buat/ganti nama/hapus/pindah), pengurai keluaran git, serta asisten, tanpa GUI
 - **Editor**: membuka jendela sungguhan, lalu memeriksa sintaks yang disembunyikan/ditampilkan, Enter dan Tab di daftar, shortcut format, undo, klik kotak tugas, serta simpan dan buka file
 - **Tabel**: aturan pengenalan tabel (pemisah satu strip, tanpa pipa di tepi, berhenti di blok lain), pemecahan sel, perataan, merapikan kolom (termasuk lebar CJK dan emoji), operasi baris/kolom, konversi format inline ke markup Pango, lebar kolom; lalu di editor: grid yang muncul dan hilang mengikuti kursor, letak grid di antara paragraf, klik sel, Tab/Shift+Tab/Enter, semua perintah menu, satu perintah = satu langkah undo, mode source, serta tabel beremoji yang tidak membuat GTK gagal menggambar
 - **Kanban**: model (mengenali papan, membaca dan menulis dengan hasil yang stabil, operasi kartu dan daftar, tag dan tanggal); di editor: dokumen dibuka sebagai papan, menambah/mencentang/menyunting/memindahkan lewat menu, seret kartu (jatuh di posisi yang ditunjuk, kartu bayangan dan penanda tujuan dibersihkan, tempat asal tidak mengubah apa pun), gulir otomatis di tepi, undo/redo satu langkah per perubahan, beralih ke tampilan teks dan kembali, aksi pengeditan teks ditolak saat papan tampil, dan simpan
@@ -226,6 +238,7 @@ Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `di
 - **Diagram DBML**: penerjemah DBML → Mermaid (tabel, kolom, ref, alias, skema, galat berikut nomor barisnya), blok dbml dirender dan galatnya tampil tanpa menyembunyikan kode, serta ekspor HTML-nya
 - **Zoom gambar**: gambar ukuran penuh dari `imageAt()`, klik sekali vs ganda (dengan event GDK tiruan) dan gambar yang tepat jika satu baris memuat beberapa, perintah menu; di penampil: zoom awal, kelipatan 1,25 dan batas 5%–800%, tombol, titik zoom di penunjuk, geser dengan drag, klik ganda, dan tidak ada peringatan GTK/cairo saat menggambar pada zoom besar
 - **Warna blok kode**: alias nama bahasa, warna kata kunci/string/komentar, blok tanpa bahasa atau bahasa tak dikenal, pewarnaan ulang saat mengetik, emoji sebelum blok, skema terang/gelap, dan mode fokus yang tetap meredupkan blok kode
+- **Riwayat git**: pengurai log/diff dan waktu relatif (unit); di GUI, daftar commit file aktif, tombol perubahan belum di-commit, daftar *Belum di-commit* dengan kotak centang, commit satu atau beberapa file sekaligus di repositori sementara, serta jendela baca commit (tab *Perubahan* dan *Isi versi ini*)
 - **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan; menu klik kanan *File Baru*/*Folder Baru* (di root, folder, dan sebelah file), pemindahan file/folder masuk dan keluar folder, penolakan nama tidak valid/bentrok/pindah ke diri sendiri, dokumen terbuka yang ikut berpindah path, dan seret-lepas dengan mouse X11 sungguhan
 - **Tes langsung ke API** (`npm run test:live`, butuh `DEEPSEEK_API_KEY` di `.env`, tidak ikut `npm test`): empat skenario atas naskah `tests/samples/buku-contoh` yang sengaja berisi kontradiksi, termasuk satu dengan anggaran konteks 900 token supaya model wajib memakai alat; `-- --thinking` untuk mode berpikir dan `-- --model=...` untuk model lain
 - **Asisten**: penyusunan konteks (pemecahan per heading, BM25, anggaran token, jendela di sekitar kursor, @lampiran, prefiks `system` yang stabil, pemangkasan riwayat), pembacaan aliran SSE dan pesan galat, markup jawaban, klien DeepSeek terhadap server tiruan, lalu alat penelusuran (hasil, batas, galat), loop agen (alat dikirim balik, penalaran dikembalikan, batas putaran dan anggaran, pembatalan), pembentukan pesan alat untuk API, lalu panel: pesan terkirim dengan dokumen/pilihan/potongan yang benar, langkah penelusuran tampil, jawaban terformat beserta token, riwayat, `@nama`, saklar konteks, galat dan pembatalan, Enter/Shift+Enter, serta pengaturan key dan model (semua dengan penyedia palsu; tanpa jaringan)
@@ -311,7 +324,7 @@ src/
 │   ├── dbml.ts           penerjemah DBML (dbdiagram.io) → diagram ER Mermaid
 │   └── html.ts           markdownToHtml(): untuk Ekspor HTML
 │
-├── editor/               mesin editor ala Typora
+├── editor/               mesin editor
 │   ├── view.ts           MarkdownView: widget editor, menyatukan modul di bawah
 │   ├── tags.ts           gaya teks (GtkTextTag) dan warnanya
 │   ├── highlighter.ts    memasang tag sesuai sintaks, mengumpulkan marker
@@ -423,7 +436,7 @@ Kursor pindah ──► queueCursorUpdate() ──► updateCursor()
 
 Keduanya ditunda dengan `GLib.idle_add(PRIORITY_HIGH_IDLE)`. Beberapa perubahan beruntun (misalnya saat menempel teks) digabung jadi satu proses, dan prosesnya selesai sebelum GTK menggambar ulang layar sehingga tidak berkedip.
 
-### Cara kerja efek "ala Typora"
+### Cara kerja efek sintaks tersembunyi
 
 1. **`highlighter.ts`** membaca seluruh dokumen saat pertama dibuka, lalu hanya rentang suntingan saat teks berubah. Untuk setiap sintaks, ia memasang tag gaya pada isinya (misalnya `bold` pada "tebal" di `**tebal**`) dan mencatat posisi penandanya (`**`) sebagai **marker**.
 2. Setiap marker menyimpan rentang baris tempat ia "aktif": `[awal, akhir, barisPertama, barisTerakhir, baris]`. Untuk format inline, rentangnya hanya barisnya sendiri. Untuk pembatas ```` ``` ````, rentangnya seluruh blok kode, jadi pembatas muncul selama kursor ada di dalam blok.
@@ -571,7 +584,7 @@ Skema warnanya `tango` untuk mode terang dan `cobalt` untuk mode gelap (diatur d
 Untuk mempelajari kodenya, urutan berikut bergerak dari yang paling sederhana:
 
 1. `src/markdown/syntax.ts` → `inline.ts` → `html.ts`: aturan Markdown, tanpa GTK
-2. `src/editor/tags.ts` → `highlighter.ts` → `decorations.ts`: inti efek Typora
+2. `src/editor/tags.ts` → `highlighter.ts` → `decorations.ts`: inti efek sintaks tersembunyi
 3. `src/editor/view.ts`: bagaimana semuanya digerakkan oleh sinyal GTK
 4. `src/editor/editing.ts`, `lists.ts`, `clicks.ts`: interaksi pengguna
 5. `src/editor/images.ts`, `codehighlight.ts`, dan `tablelayer.ts`: gambar, warna kode, dan tabel (`markdown/table.ts` lebih dulu)

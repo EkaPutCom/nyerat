@@ -77,7 +77,7 @@ export function showAbout(parent: Gtk.Window): void {
     const dialog = new Gtk.AboutDialog({
         transient_for: parent, modal: true, program_name: APP_NAME, version: APP_VERSION,
         logo_icon_name: 'accessories-text-editor',
-        comments: 'Editor Markdown ala Typora dengan GTK 3 dan GJS.',
+        comments: 'Editor Markdown AI-native dengan GTK 3 dan GJS.',
     });
     dialog.run();
     dialog.destroy();

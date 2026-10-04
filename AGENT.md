@@ -4,7 +4,7 @@ Panduan singkat untuk AI agent yang bekerja di proyek ini. Penjelasan lengkap (f
 
 ## Ringkasan
 
-Nyerat: editor Markdown ala Typora untuk desktop Linux. **GTK 3 + GtkSourceView 4 + GJS**, kode **TypeScript** yang dibundel **Vite** ke `dist/`. Aplikasi dijalankan GJS (SpiderMonkey 115), **bukan** Node.js, jadi API Node dan browser tidak tersedia saat runtime. Node hanya untuk build.
+Nyerat: editor Markdown **AI-native** untuk desktop Linux (asisten AI yang memahami seluruh naskah adalah bagian inti; tampilan penulisan langsung terformat). Asisten bersifat baca-saja dan transparan soal konteks dan token; jaga prinsip itu saat mengubah `agent/` dan `ui/chat.ts`. **GTK 3 + GtkSourceView 4 + GJS**, kode **TypeScript** yang dibundel **Vite** ke `dist/`. Aplikasi dijalankan GJS (SpiderMonkey 115), **bukan** Node.js, jadi API Node dan browser tidak tersedia saat runtime. Node hanya untuk build.
 
 Bahasa: komentar kode, pesan commit, teks antarmuka, nama tes, dan dokumentasi ditulis dalam **bahasa Indonesia**. Ikuti itu.
 
@@ -19,6 +19,7 @@ Bahasa: komentar kode, pesan commit, teks antarmuka, nama tes, dan dokumentasi d
 | `npm run dev` | Build ulang dan buka ulang aplikasi tiap file disimpan |
 | `npm test` | Build lalu semua tes (unit + GUI + mouse) di display Xvfb terpisah |
 | `npm run test:ui` | Build lalu semua tes ditampilkan di desktop X11; pointer akan bergerak |
+| `npm run test:live` | Tes langsung ke API DeepSeek (butuh `DEEPSEEK_API_KEY` di `.env`; tidak ikut `npm test`, memakai kuota sungguhan) |
 | `npm run bench` | Build lalu ukur performa (Markdown + editor GUI) di Xvfb; `gjs -m dist/bench.js --no-gui` hanya modul Markdown |
 | `npm run bench:compare` | Benchmark dan bandingkan dengan `bench/baseline.json`; setelah optimasi sengaja, perbarui baseline lewat `--save=bench/baseline.json` |
 | `gjs -m dist/run-tests.js --no-gui` | Tes tanpa jendela (setelah build) |

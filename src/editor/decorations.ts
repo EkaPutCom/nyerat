@@ -4,7 +4,7 @@ import type Gtk from 'gi://Gtk?version=3.0';
 import type { Marker } from './highlighter.js';
 import { setTagRanges, type LineSpan, type LineTagger } from './tagsync.js';
 
-// Inti efek "ala Typora": sembunyikan semua marker, kecuali yang aktif di
+// Inti efek sintaks tersembunyi: sembunyikan semua marker, kecuali yang aktif di
 // baris l0..l1 (baris kursor atau baris yang terseleksi). Hanya baris yang
 // keadaannya berubah yang disentuh (lihat LineTagger).
 export function concealMarkers(tagger: LineTagger, tag: Gtk.TextTag, markers: Marker[], starts: number[], l0: number, l1: number, enabled: boolean): void {

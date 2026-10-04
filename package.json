@@ -1,7 +1,7 @@
 {
   "name": "nyerat",
   "version": "1.0.0",
-  "description": "Editor Markdown ala Typora dengan GTK 3 dan GJS",
+  "description": "Editor Markdown AI-native dengan GTK 3 dan GJS",
   "private": true,
   "type": "module",
   "license": "MIT",

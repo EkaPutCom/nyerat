@@ -2,7 +2,7 @@
 
 export const WELCOME = `# Selamat datang di Nyerat
 
-Editor **Markdown** ala *Typora*: sintaks disembunyikan, dan muncul lagi saat kursor berada di barisnya. Coba klik baris ini.
+Editor **Markdown** yang langsung terformat: sintaks disembunyikan, dan muncul lagi saat kursor berada di barisnya. Coba klik baris ini.
 
 ## Format teks
 

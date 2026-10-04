@@ -216,7 +216,7 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
         if (!withImages) return;
         for (const img of imgs) {
             images.push({ line, url: img.url, alt: img.alt });
-            // Seperti Typora: di baris yang tidak aktif, seluruh ![alt](url) disembunyikan
+            // Di baris yang tidak aktif, seluruh ![alt](url) disembunyikan
             // dan hanya gambarnya yang terlihat (lihat editor/images.ts).
             hide(base + img.start, base + img.end, line, line);
         }

@@ -1,4 +1,4 @@
-// MarkdownView: widget editor ala Typora.
+// MarkdownView: widget editor Markdown yang langsung terformat.
 //
 // Menyatukan GtkSourceView dengan modul-modul di folder ini:
 //   tags.ts         gaya teks

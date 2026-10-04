@@ -51,7 +51,7 @@ Tautan dengan format: [**tebal** dan *miring*](https://example.com).
 
 Tautan relatif: [README](../../README.md).
 
-Autolink: <https://typora.io> dan <mailto:halo@example.com>.
+Autolink: <https://example.org> dan <mailto:halo@example.com>.
 
 URL polos: https://developer.gnome.org/documentation/ di tengah kalimat.
 

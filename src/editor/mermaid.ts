@@ -1,4 +1,4 @@
-// Menampilkan blok ```mermaid dan ```dbml sebagai diagram, seperti Typora.
+// Menampilkan blok ```mermaid dan ```dbml sebagai diagram.
 // Blok DBML (bahasa skema dbdiagram.io) diterjemahkan dulu menjadi diagram ER Mermaid
 // oleh markdown/dbml.ts, lalu dirender dengan jalur yang sama.
 //

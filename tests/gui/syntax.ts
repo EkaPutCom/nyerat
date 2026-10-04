@@ -1,4 +1,4 @@
-// Tes GUI: Menyembunyikan sintaks (ala Typora).
+// Tes GUI: Menyembunyikan sintaks.
 
 import { section, test, eq, ok } from '../framework.js';
 import type { GuiContext } from './context.js';
@@ -6,7 +6,7 @@ import type { GuiContext } from './context.js';
 export function syntaxHidingTests(c: GuiContext): void {
     const { w, ed, setText, cursorTo, hidden, tagAt, action } = c;
 
-    section('Menyembunyikan sintaks (ala Typora)');
+    section('Menyembunyikan sintaks');
     test('marker heading tersembunyi saat kursor di baris lain', () => {
         setText('# Judul\n\nteks **tebal** di sini');
         cursorTo(2, -1);
