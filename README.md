@@ -6,6 +6,10 @@ Tidak ada panel pratinjau terpisah: teks langsung tampil terformat. Sintaks Mark
 
 Landing page-nya ada di [`docs/`](docs/index.html) (HTML statis; aktifkan GitHub Pages dari folder `/docs` pada branch `main` untuk menayangkannya). Tangkapan layar dibuat oleh [`scripts/capture.ts`](scripts/capture.ts).
 
+## Arti nama
+
+**Nyerat** berasal dari kata dalam bahasa Sunda dan Jawa yang berarti *menulis*. Aplikasi ini dibuat untuk **membantu penulis**: tampilannya bersih dan bebas gangguan, sehingga penulis bisa fokus pada tulisannya tanpa repot dengan sintaks Markdown.
+
 ## Kebutuhan
 
 - Linux dengan desktop X11 atau Wayland
