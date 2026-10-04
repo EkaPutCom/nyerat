@@ -1,7 +1,7 @@
 // Tes operasi berkas: buat file/folder dan pindahkan.
 
 import GLib from 'gi://GLib';
-import { createFile, createFolder, moveEntry, remapPath } from '../../src/fileops.js';
+import { createFile, createFolder, moveEntry, remapPath, renameEntry } from '../../src/fileops.js';
 import { section, test, eq, ok, tmp } from '../framework.js';
 
 const throws = (fn: () => unknown, part: string): void => {
@@ -50,6 +50,14 @@ export function fileOpsTests(): void {
         createFile(at('tujuan'), 'catatan');
         throws(() => moveEntry(at('catatan.md'), at('tujuan')), 'sudah ada');
         ok(exists(at('catatan.md')), 'sumber tidak boleh hilang');
+    });
+    test('renameEntry mengganti nama file (tetap .md) dan folder, menolak bentrok', () => {
+        createFile(base, 'r1'); createFile(base, 'r2'); createFolder(base, 'rd');
+        eq(renameEntry(at('r1.md'), 'r3'), at('r3.md'), 'file');
+        eq(renameEntry(at('rd'), 'rd2'), at('rd2'), 'folder tanpa ekstensi');
+        eq(renameEntry(at('r3.md'), 'r3.md'), null, 'nama sama');
+        throws(() => renameEntry(at('r3.md'), 'r2'), 'sudah ada');
+        throws(() => renameEntry(at('r3.md'), 'a/b'), '/');
     });
     test('remapPath mengikuti pemindahan file dan folder', () => {
         eq(remapPath('/a/b.md', '/a/b.md', '/c/b.md'), '/c/b.md', 'file');

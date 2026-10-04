@@ -70,3 +70,29 @@ export function remapPath(path: string, source: string, target: string): string 
     if (path.startsWith(`${source}/`)) return target + path.slice(source.length);
     return null;
 }
+
+// Ganti nama file/folder di tempatnya. Mengembalikan path baru, atau null jika namanya tidak berubah.
+// File tetap diberi ekstensi Markdown supaya tidak hilang dari pohon.
+export function renameEntry(path: string, rawName: string): string | null {
+    let name = cleanName(rawName);
+    const isDir = GLib.file_test(path, GLib.FileTest.IS_DIR);
+    if (!isDir && !MARKDOWN_EXTENSION.test(name)) name += '.md';
+    if (name === GLib.path_get_basename(path)) return null;
+    const target = join(GLib.path_get_dirname(path), name);
+    if (exists(target)) throw new Error(`“${name}” sudah ada di folder ini.`);
+    try {
+        Gio.File.new_for_path(path).move(Gio.File.new_for_path(target), Gio.FileCopyFlags.NONE, null, null);
+    } catch (e) {
+        throw new Error(`Gagal mengganti nama: ${(e as Error).message}`);
+    }
+    return target;
+}
+
+// Buang ke Tempat Sampah (bisa dipulihkan), bukan hapus permanen.
+export function trashEntry(path: string): void {
+    try {
+        Gio.File.new_for_path(path).trash(null);
+    } catch (e) {
+        throw new Error(`Gagal menghapus: ${(e as Error).message}`);
+    }
+}

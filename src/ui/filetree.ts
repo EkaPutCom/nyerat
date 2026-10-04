@@ -14,8 +14,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
-import { createFile, createFolder, moveEntry } from '../fileops.js';
-import { promptDialog, showError } from './dialogs.js';
+import { createFile, createFolder, moveEntry, renameEntry, trashEntry } from '../fileops.js';
+import { confirmDialog, promptDialog, showError } from './dialogs.js';
 
 export const MARKDOWN_EXTENSIONS = ['.md', '.markdown', '.mdown', '.mkd'];
 const SKIPPED_FOLDERS = new Set(['node_modules']);
@@ -75,11 +75,13 @@ export class FileTree {
     root: string | null = null;
 
     onOpenFile: (path: string) => void = () => {};  // file diklik
-    onMoved: (from: string, to: string) => void = () => {};  // file/folder dipindah lewat pohon
+    onMoved: (from: string, to: string) => void = () => {};  // file/folder dipindah atau diganti namanya
+    onDeleted: (path: string) => void = () => {};            // file/folder dibuang ke sampah
 
     // Dapat diganti di tes: dialog yang menahan program tidak bisa dipakai di sana.
     dialogs = {
-        prompt: (title: string, label: string): string | null => promptDialog(this.parentWindow(), { title, label }),
+        prompt: (title: string, label: string, value?: string): string | null => promptDialog(this.parentWindow(), { title, label, value }),
+        confirm: (message: string, detail: string): boolean => confirmDialog(this.parentWindow(), message, detail),
         error: (message: string): void => showError(this.parentWindow() ?? new Gtk.Window(), message),
     };
 
@@ -246,6 +248,42 @@ export class FileTree {
         return path;
     }
 
+    // Ganti nama file/folder lewat dialog.
+    rename(path: string): string | null {
+        const isDir = isDirectory(path);
+        const name = this.dialogs.prompt('Ganti Nama', isDir ? 'Nama folder' : 'Nama file', GLib.path_get_basename(path));
+        if (name === null) return null;
+        let target: string | null;
+        try {
+            target = renameEntry(path, name);
+        } catch (e) {
+            this.dialogs.error((e as Error).message);
+            return null;
+        }
+        if (!target) return null;
+        this.refresh(GLib.path_get_dirname(path));
+        this.reveal(target);
+        this.onMoved(path, target);
+        return target;
+    }
+
+    // Buang ke Tempat Sampah setelah konfirmasi.
+    remove(path: string): boolean {
+        const isDir = isDirectory(path);
+        const name = GLib.path_get_basename(path);
+        const detail = isDir ? 'Folder beserta seluruh isinya akan dipindahkan ke Tempat Sampah.' : 'File akan dipindahkan ke Tempat Sampah.';
+        if (!this.dialogs.confirm(`Hapus “${name}”?`, detail)) return false;
+        try {
+            trashEntry(path);
+        } catch (e) {
+            this.dialogs.error((e as Error).message);
+            return false;
+        }
+        this.refresh(GLib.path_get_dirname(path));
+        this.onDeleted(path);
+        return true;
+    }
+
     // Menu klik kanan untuk baris tertentu (null = area kosong).
     contextMenu(treePath: Gtk.TreePath | null): Gtk.Menu {
         const dir = this.targetDir(treePath);
@@ -254,6 +292,16 @@ export class FileTree {
             const item = new Gtk.MenuItem({ label, sensitive: dir !== null });
             item.connect('activate', () => { if (dir) this.create(kind, dir); });
             menu.append(item);
+        }
+        const rowPath = treePath ? this.pathOf(treePath) : null;
+        if (rowPath) {
+            menu.append(new Gtk.SeparatorMenuItem());
+            const rename = new Gtk.MenuItem({ label: 'Ganti Nama…' });
+            rename.connect('activate', () => this.rename(rowPath));
+            menu.append(rename);
+            const del = new Gtk.MenuItem({ label: 'Hapus' });
+            del.connect('activate', () => this.remove(rowPath));
+            menu.append(del);
         }
         menu.show_all();
         return menu;

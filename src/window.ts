@@ -119,6 +119,15 @@ export class MainWindow {
             this.updateTitle();
             this.syncHistory(true);
         };
+        this.fileTree.onDeleted = path => {
+            if (!this.file || !remapPath(this.file, path, path)) return;
+            // Dokumen yang terbuka ikut terbuang: isinya tetap di editor, ditandai belum disimpan.
+            this.file = null;
+            this.editor.buffer.set_modified(true);
+            this.updateTitle();
+            this.fileTree.reveal(null);
+            this.syncHistory(true);
+        };
         this.history.onOpen = commit => {
             if (this.file) new HistoryViewer(this.win, this.file, commit, this.dark).show();
         };

@@ -129,7 +129,8 @@ export function folderTests(c: GuiContext): void {
     // ---------- Kelola berkas lewat pohon ----------
     const prompts: (string | null)[] = [];
     const errors: string[] = [];
-    ft.dialogs = { prompt: () => prompts.shift() ?? null, error: msg => { errors.push(msg); } };
+    const confirms: boolean[] = [];
+    ft.dialogs = { prompt: () => prompts.shift() ?? null, confirm: () => confirms.shift() ?? false, error: msg => { errors.push(msg); } };
     const menuLabels = (m: Gtk.Menu) => m.get_children().map(i => (i as Gtk.MenuItem).label);
     const activate = (m: Gtk.Menu, label: string) => (m.get_children().find(i => (i as Gtk.MenuItem).label === label) as Gtk.MenuItem).activate();
     const opened: string[] = [];
@@ -191,6 +192,52 @@ export function folderTests(c: GuiContext): void {
     });
 
     const abs = (...p: string[]) => GLib.build_filenamev([proj, ...p]);
+    test('menu baris menambah Ganti Nama dan Hapus; area kosong tidak', () => {
+        const row = ft.store.get_path(rowOf(null, 'a.md'))!;
+        eq(menuLabels(ft.contextMenu(row)).filter(l => l), ['File Baru…', 'Folder Baru…', 'Ganti Nama…', 'Hapus']);
+        eq(menuLabels(ft.contextMenu(null)), ['File Baru…', 'Folder Baru…']);
+    });
+    test('ganti nama file dan folder memperbarui pohon dan disk', () => {
+        write('lama.md');
+        ok(waitFor(() => childNames(null).includes('lama.md')), 'file uji tidak muncul');
+        prompts.push('baru');
+        activate(ft.contextMenu(ft.store.get_path(rowOf(null, 'lama.md'))!), 'Ganti Nama…');
+        ok(GLib.file_test(abs('baru.md'), GLib.FileTest.EXISTS) && !GLib.file_test(abs('lama.md'), GLib.FileTest.EXISTS), 'disk');
+        ok(waitFor(() => childNames(null).includes('baru.md') && !childNames(null).includes('lama.md')), 'pohon');
+        prompts.push('ganti-dir');
+        activate(ft.contextMenu(ft.store.get_path(rowOf(null, 'z-kosong'))!), 'Ganti Nama…');
+        ok(GLib.file_test(abs('ganti-dir'), GLib.FileTest.IS_DIR), 'folder diganti namanya');
+        ok(ft.rename(abs('ganti-dir')) === null, 'dialog dibatalkan tidak mengubah apa pun');
+        prompts.push('z-kosong');
+        activate(ft.contextMenu(ft.store.get_path(rowOf(null, 'ganti-dir'))!), 'Ganti Nama…');
+        ok(GLib.file_test(abs('z-kosong'), GLib.FileTest.IS_DIR), 'kembali');
+    });
+    test('ganti nama ditolak jika bentrok; file terbuka mengikuti nama baru', () => {
+        errors.length = 0;
+        prompts.push('a.md');
+        activate(ft.contextMenu(ft.store.get_path(rowOf(null, 'baru.md'))!), 'Ganti Nama…');
+        eq(errors.length, 1, 'galat bentrok');
+        ok(w.load(abs('baru.md')), 'load');
+        prompts.push('terbuka');
+        ft.rename(abs('baru.md'));
+        eq(w.file, abs('terbuka.md'), 'path dokumen');
+    });
+    test('hapus meminta konfirmasi; batal tidak menghapus', () => {
+        confirms.push(false);
+        ok(!ft.remove(abs('terbuka.md')), 'dibatalkan');
+        ok(GLib.file_test(abs('terbuka.md'), GLib.FileTest.EXISTS), 'file hilang padahal dibatalkan');
+    });
+    test('hapus membuang file ke sampah dan melepas dokumen yang terbuka', () => {
+        errors.length = 0;
+        confirms.push(true);
+        const done = ft.remove(abs('terbuka.md'));
+        if (!done) { eq(errors.length, 1, 'gagal tanpa galat'); return; }  // lingkungan tanpa Tempat Sampah
+        ok(!GLib.file_test(abs('terbuka.md'), GLib.FileTest.EXISTS), 'file masih ada');
+        ok(!childNames(null).includes('terbuka.md'), 'baris masih ada');
+        eq(w.file, null, 'dokumen terbuka dilepas');
+        ok(buf.get_modified(), 'isi harus ditandai belum disimpan');
+        buf.set_modified(false);
+    });
     test('pindahkan file ke dalam folder', () => {
         errors.length = 0;
         ok(ft.moveTo(abs('Catatan.markdown'), abs('z-kosong')), 'moveTo gagal');
