@@ -389,3 +389,71 @@ memberi paste 158.80 ms, sehingga variasinya besar dan biaya tambahan belum
 diisolasi pada salah satu jalur. Kenaikan paste ini tetap menjadi keterbatasan
 perubahan, bukan dianggap lulus hanya karena total membuka pertama jauh turun.
 Semua log benchmark akhir lengkap dan bersih dari galat/peringatan runtime.
+
+
+## Migrasi ke GTK 4 (GTK 4.14.5, GtkSourceView 5, WebKitGTK 6.0)
+
+Aplikasi pindah dari GTK 3.24.41 ke GTK 4.14.5. Pembanding diukur berdampingan pada
+mesin yang sama (GJS 1.80.2, X11/Xvfb, host c640): versi GTK 3 dibangun dari `main`
+di worktree terpisah, lalu kedua versi dijalankan bergantian dengan fixture, ukuran,
+dan 10 pengulangan yang sama. Kolom GTK 4 (cairo) memakai `GSK_RENDERER=cairo` untuk
+memisahkan biaya renderer dari biaya GTK 4 sendiri. Semua angka median dalam ms.
+
+| Operasi (mixed 100 blok, 30 KB) | GTK 3 | GTK 4 (GL) | GTK 4 (cairo) | p95/maks GTK 3 → GTK 4 (GL) |
+| --- | ---: | ---: | ---: | ---: |
+| setText + sorot + layout | 216.24 | 283.81 | 244.91 | 228.05/228.05 → 308.27/308.27 |
+| buka: jeda terpanjang | 37.16 | 44.13 | 41.37 | 41.44/41.44 → 49.44/49.44 |
+| ketik per karakter | 1.26 | 1.69 | 1.54 | 2.98/12.58 → 11.65/19.31 |
+| ketik lewat view (paragraf) | 1.95 | 3.31 | 2.54 | 11.51/16.00 → 14.18/15.02 |
+| Enter paragraf baru | 2.30 | 3.22 | 2.23 | 10.42/10.42 → 14.12/14.12 |
+| paste besar + Unicode | 142.25 | 156.32 | 152.72 | 145.11/145.11 → 186.08/186.08 |
+| redo paste besar | 155.65 | 157.22 | 157.81 | 172.16/172.16 → 179.80/179.80 |
+| pindah kursor 20 baris | 21.32 | 41.35 | 29.17 | 26.06/26.06 → 45.17/45.17 |
+
+| Operasi (buku 400 blok, 651 KB) | GTK 3 | GTK 4 (GL) | GTK 4 (cairo) | p95/maks GTK 3 → GTK 4 (GL) |
+| --- | ---: | ---: | ---: | ---: |
+| setText + sorot + layout | 852.68 | 2394.35 | 1787.85 | 871.32/871.32 → 2716.54/2716.54 |
+| buka: jeda terpanjang | 64.51 | 97.44 | 92.18 | 81.16/81.16 → 116.75/116.75 |
+| ketik per karakter | 1.95 | 2.87 | 2.29 | 4.39/14.38 → 15.06/36.74 |
+| ketik lewat view (paragraf) | 2.72 | 6.24 | 4.20 | 12.93/14.73 → 17.60/18.94 |
+| Enter paragraf baru | 3.37 | 18.02 | 4.17 | 12.30/12.30 → 31.26/31.26 |
+| paste besar + Unicode | 140.34 | 191.69 | 151.21 | 155.24/155.24 → 205.06/205.06 |
+| redo paste besar | 168.62 | 197.66 | 230.56 | 178.64/178.64 → 216.48/216.48 |
+| pindah kursor 20 baris | 14.69 | 43.89 | 47.53 | 21.96/21.96 → 59.41/59.41 |
+
+Temuan dan penyebabnya:
+
+- **Penggambaran mendominasi selisih di Xvfb.** Xvfb tidak punya GPU, jadi renderer
+  OpenGL bawaan GTK 4 berjalan di llvmpipe (Mesa, perangkat lunak), sedangkan GTK 3
+  menggambar dengan cairo. Dengan `GSK_RENDERER=cairo` sebagian besar selisih hilang
+  (mis. Enter di buku 18.02 → 4.17, ketik lewat view di buku 6.24 → 4.20). Mesin
+  pengembangan punya GPU Intel UHD; di desktop sungguhan GTK 4 memakai OpenGL
+  perangkat keras, jadi angka Xvfb ini kasus terburuk (setara mesin tanpa GPU).
+- **Jeda terpanjang membuka buku 651 KB naik 64.51 → 97.44 ms** (p95 81.16 → 116.75).
+  Jeda itu seluruhnya `setText()` sinkron. Diukur terpisah: `highlight()` setara
+  (±40–45 ms di kedua versi), tetapi `GtkTextBuffer.set_text()` yang menggantikan isi
+  lama naik dari ±27 ms (GTK 3) menjadi ±45–58 ms (GTK 4). Mematikan undo atau memakai
+  aksi tak terbatalkan tidak mengubahnya; melepas buffer dari view selama `set_text()`
+  memberi hasil tidak stabil dan menambah jeda ±25–46 ms sesudahnya, jadi tidak dipakai.
+  Ini biaya GTK 4.14 sendiri, bukan kode Nyerat.
+- **Total membuka (sampai seluruh layout selesai) naik 2–2,8×** di buku. Penataan latar
+  dan penggambaran berjalan di idle; jendela tetap merespons (lihat jeda terpanjang).
+- **Pindah kursor 20 baris naik ±3×** di buku pada kedua renderer. Diukur di editor
+  tersendiri, `updateCursor()` (marker tersembunyi, mode fokus) tetap ±0,25 ms per
+  gerakan; sisanya siklus frame GTK 4 yang ikut tertunggu `idle(PRIORITY_LOW)` di
+  pengukuran. Per gerakan tetap ±2 ms, jauh di bawah satu frame 16 ms.
+- Model Markdown (tanpa GTK) tidak berubah: markdownToHtml 7.75 → 7.80 ms,
+  parseInline 2.59 → 2.75 ms.
+
+Proses anak buku 400 blok GTK 4 (GL) butuh ±230 detik di Xvfb, melebihi batas bawaan
+120 detik; ukur buku dengan `--timeout=600`.
+
+**Baseline diganti** dengan hasil GTK 4 (GL) yang lengkap dan valid ini:
+`bench/baseline.json` (mixed) dan `bench/baseline-buku.json` (buku, `--timeout=600`).
+Baseline lama memakai GTK 3.24.41, sehingga `bench:compare` sudah menganggapnya tidak
+setara dan melewati selisihnya; baseline baru menjaga regresi berikutnya di GTK 4.
+Regresi di atas tetap tercatat sebagai keterbatasan migrasi, bukan disembunyikan.
+
+Keterbatasan: belum diukur di desktop dengan GPU (renderer OpenGL perangkat keras) dan
+belum diukur di Wayland. Validasi fungsi: `npm test` **391 lulus, 0 gagal**, dua kali
+berturut-turut, log lengkap bersih dari peringatan, critical, dan galat.
