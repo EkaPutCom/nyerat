@@ -1,5 +1,5 @@
 // Membaca riwayat git sebuah file lewat perintah `git`. Satu-satunya perubahan pada repositori
-// adalah commitFile(), dan hanya atas permintaan pengguna. Semua async (Gio.Subprocess) supaya riwayat panjang tidak menahan editor.
+// adalah commitFile()/commitFiles(), dan hanya atas permintaan pengguna. Semua async (Gio.Subprocess) supaya riwayat panjang tidak menahan editor.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -135,5 +135,20 @@ export async function commitFile(file: string, message: string): Promise<TextRes
     const add = await runGit(dirOf(file), ['add', '--', spec]);
     if (add?.status !== 0) return failure(add);
     const run = await runGit(dirOf(file), ['commit', '--only', '--no-verify', '-m', message, '--', spec]);
+    return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
+}
+
+// Commit beberapa file sekaligus (path absolut); file lain yang sudah di-stage tidak ikut. Path dihitung dari
+// akar repo karena folder file bisa berbeda-beda.
+export async function commitFiles(files: string[], message: string): Promise<TextResult> {
+    if (!files.length) return { ok: false, reason: 'failed', message: 'Tidak ada file yang dipilih' };
+    const dir = dirOf(files[0]);
+    const root = await runGit(dir, ['rev-parse', '--show-toplevel']);
+    if (root?.status !== 0) return failure(root);
+    const top = root.out.trim();
+    const specs = files.map(f => `:(top,literal)${f.startsWith(top + '/') ? f.slice(top.length + 1) : f}`);
+    const add = await runGit(dir, ['add', '--all', '--', ...specs]);
+    if (add?.status !== 0) return failure(add);
+    const run = await runGit(dir, ['commit', '--only', '--no-verify', '-m', message, '--', ...specs]);
     return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
 }

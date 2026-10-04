@@ -54,6 +54,14 @@ export function historyTests(c: GuiContext): void {
         const x = w.sidebar.widget.translate_coordinates(w.win.get_child()!, 0, 0)[1];
         ok(x < 20, `sidebar bergeser ke x=${x}`);
     });
+    test('daftar belum di-commit dengan kolom pesan tidak membuat sidebar mengembang', () => {
+        ok(!w.history.commitBar.compute_expand(Gtk.Orientation.HORIZONTAL), 'kolom commit menuntut ruang sisa');
+        ok(!w.history.changedBox.compute_expand(Gtk.Orientation.HORIZONTAL), 'daftar perubahan menuntut ruang sisa');
+    });
+    test('daftar belum di-commit dengan kolom pesan tidak membuat sidebar mengembang', () => {
+        ok(!w.history.commitBar.compute_expand(Gtk.Orientation.HORIZONTAL), 'kolom commit menuntut ruang sisa');
+        ok(!w.history.changedBox.compute_expand(Gtk.Orientation.HORIZONTAL), 'daftar perubahan menuntut ruang sisa');
+    });
     test('riwayat file tampil terbaru dulu', () => {
         w.load(a);
         ok(waitFor(() => rows() === 2), 'jumlah baris riwayat');
@@ -212,7 +220,7 @@ export function historyTests(c: GuiContext): void {
         write(GLib.build_filenamev([repo, 'c.md']), '# C\n');
         w.load(a);
         w.history.refresh();
-        const names = () => w.history.changedList.get_children().map(r => (((r as Gtk.ListBoxRow).get_child() as Gtk.Box).get_children()[1] as Gtk.Label).label);
+        const names = () => w.history.changedList.get_children().map(r => (((r as Gtk.ListBoxRow).get_child() as Gtk.Box).get_children()[2] as Gtk.Label).label);
         ok(waitFor(() => names().length === 2), `daftar: ${names()}`);
         eq(names().sort(), ['b.md', 'c.md']);
         ok(w.history.changedBox.get_visible() && (w.history.changedBox.label ?? '').includes('(2)'), `label: ${w.history.changedBox.label}`);
@@ -233,6 +241,39 @@ export function historyTests(c: GuiContext): void {
         w.history.refresh();
         ok(waitFor(() => !w.history.changedBox.get_visible()), 'daftar tidak hilang setelah semua di-commit');
         w.history.onOpenChanges = () => {};
+    });
+
+    test('beberapa file dicentang lalu di-commit sekaligus', () => {
+        const b = GLib.build_filenamev([repo, 'b.md']);
+        const c2 = GLib.build_filenamev([repo, 'c.md']);
+        const e = GLib.build_filenamev([repo, 'e.md']);
+        write(b, '# B\nlagi\n');
+        write(c2, '# C\nlagi\n');
+        write(e, '# E\n');
+        git('add', 'c.md');
+        w.load(a);
+        w.history.refresh();
+        const names = () => w.history.changedList.get_children().map(r => (((r as Gtk.ListBoxRow).get_child() as Gtk.Box).get_children()[2] as Gtk.Label).label);
+        ok(waitFor(() => names().length >= 3 && w.history.commitButton.label === 'Commit 3 file'), `daftar: ${names()} / ${w.history.commitButton.label}`);
+        const check = (name: string) => ((w.history.changedList.get_row_at_index(names().indexOf(name))!.get_child() as Gtk.Box).get_children()[0] as Gtk.CheckButton);
+        check('e.md').active = false;
+        eq(w.history.commitButton.label, 'Commit 2 file');
+        w.history.commitButton.clicked();
+        ok(w.history.commitStatus.get_text().includes('pesan'), 'pesan kosong tidak ditolak');
+        let done = 0;
+        w.history.onCommitted = () => { done++; };
+        w.history.messageEntry.set_text('Commit b dan c');
+        w.history.commitButton.clicked();
+        ok(waitFor(() => done === 1), `commit gagal: ${w.history.commitStatus.get_text()}`);
+        w.history.refresh();
+        ok(waitFor(() => names().join() === 'e.md'), `sisa daftar: ${names()}`);
+        ok(!check('e.md').active, 'centang e.md hilang setelah muat ulang');
+        eq(w.history.messageEntry.get_text(), '', 'pesan tidak dikosongkan');
+        git('add', '-A');
+        git('commit', '-q', '-m', 'Bersihkan e');
+        w.history.onCommitted = () => {};
+        w.history.refresh();
+        ok(waitFor(() => !w.history.changedBox.get_visible()), 'daftar tidak hilang');
     });
 
     test('tanpa file, folder yang dibuka tetap menampilkan file yang belum di-commit', () => {

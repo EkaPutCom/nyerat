@@ -4,7 +4,7 @@
 import Gtk from 'gi://Gtk?version=3.0';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
-import { fileLog, repoChanges, workingState, type GitFailure } from '../git.js';
+import { commitFiles, fileLog, repoChanges, workingState, type GitFailure } from '../git.js';
 import { relativeTime, type ChangeKind, type Commit, type FileChange } from '../gitlog.js';
 
 // Commit yang dimuat per permintaan; riwayat panjang dimuat bertahap.
@@ -28,6 +28,14 @@ export class History {
     readonly changedList: Gtk.ListBox;         // semua file di repositori yang belum di-commit
     readonly changedBox: Gtk.Expander;
     private changed: FileChange[] = [];
+    private readonly unchecked = new Set<string>();   // file daftar yang tidak ikut di-commit; sisanya dicentang
+    private readonly checks = new Map<string, Gtk.CheckButton>();
+    readonly commitBar: Gtk.Box;
+    readonly messageEntry: Gtk.Entry;
+    readonly commitButton: Gtk.Button;
+    readonly commitStatus: Gtk.Label;
+    beforeCommit: () => boolean = () => true;      // simpan dokumen dulu; false = batalkan commit
+    onCommitted: () => void = () => {};
 
     private folder: string | null = null;     // folder yang dibuka; sumber daftar perubahan saat belum ada file
     private file: string | null | undefined;   // undefined = belum pernah dimuat
@@ -71,11 +79,25 @@ export class History {
             if (change) this.onOpenChanges(change.path);
         });
         const changedScroll = new Gtk.ScrolledWindow({
-            hscrollbar_policy: Gtk.PolicyType.NEVER, propagate_natural_height: true, max_content_height: 150,
+            hscrollbar_policy: Gtk.PolicyType.NEVER, propagate_natural_height: true, max_content_height: 240,
         });
         changedScroll.add(this.changedList);
+        this.messageEntry = new Gtk.Entry({ placeholder_text: 'Pesan commit' });
+        this.commitButton = new Gtk.Button({ label: 'Commit' });
+        this.commitButton.get_style_context().add_class('suggested-action');
+        this.commitStatus = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 24, no_show_all: true });
+        this.commitStatus.get_style_context().add_class('dim-label');
+        this.commitButton.connect('clicked', () => this.commitSelected());
+        this.messageEntry.connect('activate', () => this.commitSelected());
+        this.commitBar = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: 8 });
+        this.commitBar.pack_start(this.messageEntry, false, false, 0);
+        this.commitBar.pack_start(this.commitButton, false, false, 0);
+        this.commitBar.pack_start(this.commitStatus, false, false, 0);
+        const changedContent = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
+        changedContent.pack_start(changedScroll, false, false, 0);
+        changedContent.pack_start(this.commitBar, false, false, 0);
         this.changedBox = new Gtk.Expander({ expanded: true, no_show_all: true, margin_start: 8, margin_end: 8, margin_bottom: 8 });
-        this.changedBox.add(changedScroll);
+        this.changedBox.add(changedContent);
 
         const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vexpand: true });
         scroll.add(this.list);
@@ -136,14 +158,24 @@ export class History {
             && changes.every((c, i) => c.path === this.changed[i].path && c.kind === this.changed[i].kind);
         if (same) return;
         this.changed = changes;
+        this.checks.clear();
         for (const row of this.changedList.get_children()) row.destroy();
+        for (const path of [...this.unchecked]) if (!changes.some(c => c.path === path)) this.unchecked.delete(path);
         const dir = this.file ? GLib.path_get_dirname(this.file) : this.folder ?? '';
         for (const change of changes) {
             const rel = dir && change.path.startsWith(dir + '/') ? change.path.slice(dir.length + 1) : change.path;
+            const check = new Gtk.CheckButton({ active: !this.unchecked.has(change.path) });
+            check.set_tooltip_text('Ikut di-commit');
+            check.connect('toggled', () => {
+                if (check.active) this.unchecked.delete(change.path); else this.unchecked.add(change.path);
+                this.updateCommitButton();
+            });
+            this.checks.set(change.path, check);
             const mark = new Gtk.Label({ label: KIND_MARK[change.kind], xalign: 0, width_chars: 1 });
             mark.get_style_context().add_class('side-meta');
             const name = new Gtk.Label({ label: rel, xalign: 0, ellipsize: Pango.EllipsizeMode.START });
-            const box = new Gtk.Box({ spacing: 8, margin_start: 4, margin_end: 4, margin_top: 3, margin_bottom: 3 });
+            const box = new Gtk.Box({ spacing: 8, margin_start: 4, margin_end: 4, margin_top: 0, margin_bottom: 0 });
+            box.pack_start(check, false, false, 0);
             box.pack_start(mark, false, false, 0);
             box.pack_start(name, true, true, 0);
             const row = new Gtk.ListBoxRow();
@@ -153,10 +185,42 @@ export class History {
             this.changedList.insert(row, -1);
         }
         this.changedBox.set_label(`Belum di-commit (${changes.length})`);
+        this.updateCommitButton();
         if (changes.length) {
             this.changedBox.show();
             this.changedBox.get_child()?.show_all();   // show_all pada widget no_show_all diabaikan, dan anaknya belum pernah ditampilkan
         } else this.changedBox.hide();
+    }
+
+    // File yang dicentang; urutannya mengikuti daftar.
+    private selected(): string[] {
+        return this.changed.filter(c => !this.unchecked.has(c.path)).map(c => c.path);
+    }
+
+    private updateCommitButton(): void {
+        const n = this.selected().length;
+        this.commitButton.set_label(n ? `Commit ${n} file` : 'Commit');
+        this.commitButton.set_sensitive(n > 0);
+    }
+
+    private showCommitStatus(text: string): void {
+        this.commitStatus.set_text(text);
+        this.commitStatus.show();
+    }
+
+    private async commitSelected(): Promise<void> {
+        const files = this.selected();
+        const message = this.messageEntry.get_text().trim();
+        if (!files.length) return this.showCommitStatus('Pilih file yang akan di-commit');
+        if (!message) return this.showCommitStatus('Isi pesan commit dulu');
+        if (!this.beforeCommit()) return this.showCommitStatus('Dokumen gagal disimpan; commit dibatalkan');
+        this.commitButton.set_sensitive(false);
+        const result = await commitFiles(files, message);
+        this.updateCommitButton();
+        if (!result.ok) return this.showCommitStatus(`Commit gagal: ${result.message}`);
+        this.messageEntry.set_text('');
+        this.commitStatus.hide();
+        this.onCommitted();
     }
 
     private clear(): void {

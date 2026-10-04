@@ -114,6 +114,12 @@ export class MainWindow {
         this.history.onOpen = commit => {
             if (this.file) new HistoryViewer(this.win, this.file, commit, this.dark).show();
         };
+        // Hanya simpan jika dokumen berkas ada perubahan; tanpa berkas, jangan memunculkan dialog simpan.
+        this.history.beforeCommit = () => !this.file || !this.editor.buffer.get_modified() || this.save();
+        this.history.onCommitted = () => {
+            this.statusBar.toast('Berhasil di-commit');
+            this.syncHistory(true);
+        };
         this.history.onOpenChanges = file => {
             const viewer = new HistoryViewer(this.win, file, null, this.dark);
             viewer.beforeCommit = () => this.save();
