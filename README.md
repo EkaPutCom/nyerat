@@ -127,7 +127,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 - Sidebar dengan tiga tab:
   - **Berkas**: pohon folder yang dibuka (lewat tombol folder di header bar, `Ctrl+Shift+O`, atau dengan memilih folder di dialog Buka File), berisi subfolder dan file Markdown (`.md`, `.markdown`, `.mdown`, `.mkd`). Klik file untuk membukanya; file yang sedang dibuka ikut disorot. File/folder tersembunyi dan `node_modules` tidak ditampilkan. Pohon diperbarui otomatis saat ada file yang ditambah atau dihapus di disk, dan folder terakhir dibuka lagi saat aplikasi dijalankan
   - **Outline**: daftar heading dokumen; klik untuk melompat
-  - **Riwayat**: commit git yang menyentuh file yang sedang dibuka, terbaru dulu (hash pendek, pesan, penulis, waktu relatif; riwayat mengikuti file yang di-rename). Jika file berbeda dari commit terakhir (atau belum dilacak), tombol *Perubahan belum di-commit* muncul di atas daftar dan membuka diff terhadap HEAD (file baru ditampilkan seluruhnya sebagai tambahan). Klik commit untuk membuka jendela baca dengan dua tab: *Perubahan* (diff terhadap commit sebelumnya, baris tambah/hapus berwarna) dan *Isi versi ini* (file lengkap pada commit itu). Hanya baca: aplikasi tidak pernah mengubah repositori. Riwayat dimuat saat tab terlihat, 100 commit sekali muat (tombol *Muat lebih banyak*), dan dimuat ulang saat berganti file, saat jendela kembali aktif, atau lewat tombol muat ulang. Butuh `git` terpasang; file di luar repositori atau yang belum di-commit menampilkan pesan di tab
+  - **Riwayat**: commit git yang menyentuh file yang sedang dibuka, terbaru dulu (hash pendek, pesan, penulis, waktu relatif; riwayat mengikuti file yang di-rename). Jika file berbeda dari commit terakhir (atau belum dilacak), tombol *Perubahan belum di-commit* muncul di atas daftar dan membuka diff terhadap HEAD (file baru ditampilkan seluruhnya sebagai tambahan). Klik commit untuk membuka jendela baca dengan dua tab: *Perubahan* (diff terhadap commit sebelumnya, baris tambah/hapus berwarna) dan *Isi versi ini* (file lengkap pada commit itu). Jendela perubahan belum di-commit juga punya kolom pesan dan tombol *Commit file ini*: dokumen disimpan dulu, lalu hanya file itu yang di-commit (`git add` + `git commit --only`; file lain tidak ikut, hook git tidak dijalankan). Selain itu aplikasi tidak pernah mengubah repositori. Riwayat dimuat saat tab terlihat, 100 commit sekali muat (tombol *Muat lebih banyak*), dan dimuat ulang saat berganti file, saat jendela kembali aktif, atau lewat tombol muat ulang. Butuh `git` terpasang; file di luar repositori atau yang belum di-commit menampilkan pesan di tab
 - Mode fokus: paragraf selain yang sedang disunting diredupkan
 - Mode typewriter: baris aktif selalu di tengah layar
 - Mode source: semua sintaks Markdown ditampilkan; widget gambar, grid tabel, dan diagram disembunyikan
@@ -261,7 +261,7 @@ src/
 ├── config.ts             nama, ID, versi aplikasi, dan font
 ├── settings.ts           baca/tulis ~/.config/nyerat/settings.json
 ├── files.ts              baca/tulis file teks UTF-8
-├── git.ts                riwayat git sebuah file lewat perintah `git` (async, hanya baca)
+├── git.ts                riwayat git sebuah file lewat perintah `git` (async; hanya membaca, kecuali commit file aktif)
 ├── gitlog.ts             pengurai keluaran git: log, diff, waktu relatif (murni, tanpa GTK)
 ├── welcome.ts            dokumen contoh saat pertama dibuka
 │

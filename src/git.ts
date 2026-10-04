@@ -1,5 +1,5 @@
-// Membaca riwayat git sebuah file lewat perintah `git`. Hanya baca: tidak pernah mengubah
-// repositori. Semua async (Gio.Subprocess) supaya riwayat panjang tidak menahan editor.
+// Membaca riwayat git sebuah file lewat perintah `git`. Satu-satunya perubahan pada repositori
+// adalah commitFile(), dan hanya atas permintaan pengguna. Semua async (Gio.Subprocess) supaya riwayat panjang tidak menahan editor.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -42,7 +42,8 @@ function runGit(cwd: string, args: string[]): Promise<Run | null> {
 
 function failure(run: Run | null): { ok: false; reason: GitFailure; message: string } {
     if (!run) return { ok: false, reason: 'no-git', message: 'git tidak dapat dijalankan' };
-    const message = run.err.trim();
+    // `git commit` melaporkan masalah (mis. "nothing to commit", user.name kosong) lewat stdout atau stderr.
+    const message = (run.err.trim() || run.out.trim());
     return { ok: false, reason: /not a git repository/i.test(message) ? 'no-repo' : 'failed', message };
 }
 
@@ -110,5 +111,15 @@ export async function workingDiff(file: string): Promise<TextResult> {
     if (run && run.status !== 0 && /unknown revision|bad revision|ambiguous argument 'HEAD'/i.test(run.err)) {
         run = await runGit(dirOf(file), ['diff', ...flags, '--cached', '--', spec]);
     }
+    return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
+}
+
+// Commit hanya file ini; perubahan file lain yang sudah di-stage tidak ikut. File baru di-add
+// dulu karena `git commit -- path` menolak path yang belum dilacak.
+export async function commitFile(file: string, message: string): Promise<TextResult> {
+    const spec = `:(literal)${nameOf(file)}`;
+    const add = await runGit(dirOf(file), ['add', '--', spec]);
+    if (add?.status !== 0) return failure(add);
+    const run = await runGit(dirOf(file), ['commit', '--only', '--no-verify', '-m', message, '--', spec]);
     return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
 }

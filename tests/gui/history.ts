@@ -162,6 +162,45 @@ export function historyTests(c: GuiContext): void {
         }
     });
 
+    test('commit dari jendela perubahan hanya mengambil file itu', () => {
+        write(a, V2 + 'tiga\nempat\nlima\n');
+        write(untracked, '# Belum masuk git\nubah\n');
+        git('add', 'baru.md');
+        w.load(a);
+        ok(waitFor(() => w.history.changes.get_visible()), 'tombol perubahan');
+        const viewer = new HistoryViewer(w.win, a, null, false);
+        let done = 0;
+        viewer.onCommitted = () => { done++; };
+        try {
+            viewer.commitButton.clicked();
+            ok(viewer.status.get_text().includes('pesan'), 'pesan kosong tidak ditolak');
+            eq(done, 0, 'commit tanpa pesan');
+            viewer.messageEntry.set_text('Tambah baris lima');
+            viewer.commitButton.clicked();
+            ok(waitFor(() => done === 1), `commit gagal: ${viewer.status.get_text()}`);
+        } finally {
+            viewer.window.destroy();
+        }
+        w.history.refresh();
+        ok(waitFor(() => rows() === 5 && !w.history.changes.get_visible()), 'riwayat tidak memuat commit baru');
+        w.load(untracked);
+        ok(waitFor(() => w.history.changes.get_visible()), 'file lain ikut ter-commit');
+    });
+    test('commit file baru yang belum dilacak', () => {
+        const viewer = new HistoryViewer(w.win, untracked, null, false);
+        let done = 0;
+        viewer.onCommitted = () => { done++; };
+        try {
+            viewer.messageEntry.set_text('Tambah catatan baru');
+            viewer.commitButton.clicked();
+            ok(waitFor(() => done === 1), `commit gagal: ${viewer.status.get_text()}`);
+        } finally {
+            viewer.window.destroy();
+        }
+        w.history.refresh();
+        ok(waitFor(() => rows() === 1 && !w.history.changes.get_visible()), 'riwayat file baru');
+    });
+
     // Kembalikan keadaan untuk tes berikutnya.
     w.history.onOpen = () => {};
     w.sidebar.setPage('outline');

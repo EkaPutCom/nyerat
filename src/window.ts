@@ -115,7 +115,14 @@ export class MainWindow {
             if (this.file) new HistoryViewer(this.win, this.file, commit, this.dark).show();
         };
         this.history.onOpenChanges = () => {
-            if (this.file) new HistoryViewer(this.win, this.file, null, this.dark).show();
+            if (!this.file) return;
+            const viewer = new HistoryViewer(this.win, this.file, null, this.dark);
+            viewer.beforeCommit = () => this.save();
+            viewer.onCommitted = () => {
+                this.statusBar.toast('Berhasil di-commit');
+                this.syncHistory(true);
+            };
+            viewer.show();
         };
         this.sidebar.onPageChanged = page => {
             this.settings.sidebarPage = page;

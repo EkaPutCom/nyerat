@@ -5,7 +5,7 @@
 import Gtk from 'gi://Gtk?version=3.0';
 import Gdk from 'gi://Gdk?version=3.0';
 import GLib from 'gi://GLib';
-import { commitContent, commitDiff, workingDiff, type TextResult } from '../git.js';
+import { commitContent, commitDiff, commitFile, workingDiff, type TextResult } from '../git.js';
 import { parseDiff, type Commit } from '../gitlog.js';
 
 const DIFF_COLORS = {
@@ -19,6 +19,11 @@ export class HistoryViewer {
     readonly contentView: Gtk.TextView;
     readonly stack: Gtk.Stack;
     closed = false;
+    readonly messageEntry: Gtk.Entry;          // pesan commit (hanya mode perubahan belum di-commit)
+    readonly commitButton: Gtk.Button;
+    readonly status: Gtk.Label;
+    beforeCommit: () => boolean = () => true;  // simpan dokumen dulu; false = batalkan commit
+    onCommitted: () => void = () => {};
 
     constructor(parent: Gtk.Window | null, file: string, readonly commit: Commit | null, dark: boolean) {
         this.window = new Gtk.Window({
@@ -55,6 +60,20 @@ export class HistoryViewer {
         body.pack_start(new Gtk.Separator(), false, false, 0);
         body.pack_start(this.stack, true, true, 0);
 
+        this.messageEntry = new Gtk.Entry({ placeholder_text: 'Pesan commit', hexpand: true });
+        this.commitButton = new Gtk.Button({ label: 'Commit file ini' });
+        this.commitButton.get_style_context().add_class('suggested-action');
+        this.status = new Gtk.Label({ xalign: 0, wrap: true, no_show_all: true, margin_start: 12, margin_end: 12, margin_bottom: 8 });
+        if (!commit) {
+            const bar = new Gtk.Box({ spacing: 8, margin: 10 });
+            bar.pack_start(this.messageEntry, true, true, 0);
+            bar.pack_start(this.commitButton, false, false, 0);
+            body.pack_start(new Gtk.Separator(), false, false, 0);
+            body.pack_start(bar, false, false, 0);
+            body.pack_start(this.status, false, false, 0);
+            this.commitButton.connect('clicked', () => this.doCommit(file));
+            this.messageEntry.connect('activate', () => this.doCommit(file));
+        }
         this.window.add(body);
 
         this.window.connect('destroy', () => { this.closed = true; });
@@ -72,6 +91,26 @@ export class HistoryViewer {
         } else {
             workingDiff(file).then(result => this.showDiff(result));
         }
+    }
+
+    private async doCommit(file: string): Promise<void> {
+        const message = this.messageEntry.get_text().trim();
+        if (!message) return this.showStatus('Isi pesan commit dulu');
+        if (!this.beforeCommit()) return this.showStatus('Dokumen gagal disimpan; commit dibatalkan');
+        this.commitButton.set_sensitive(false);
+        const result = await commitFile(file, message);
+        if (this.closed) return;
+        if (!result.ok) {
+            this.commitButton.set_sensitive(true);
+            return this.showStatus(`Commit gagal: ${result.message}`);
+        }
+        this.onCommitted();
+        this.window.destroy();
+    }
+
+    private showStatus(text: string): void {
+        this.status.set_text(text);
+        this.status.show();
     }
 
     show(): void {
