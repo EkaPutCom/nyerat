@@ -1,6 +1,6 @@
 // Tes pengurai keluaran git.
 
-import { parseDiff, parseLog, relativeTime } from '../../src/gitlog.js';
+import { parseDiff, parseLog, parseStatus, relativeTime } from '../../src/gitlog.js';
 import { section, test, eq } from '../framework.js';
 
 const record = (hash: string, short: string, author: string, time: number, subject: string, ...files: string[]) =>
@@ -25,6 +25,13 @@ export function gitLogTests(): void {
     });
     test('pesan commit boleh memuat titik dua dan tab', () => {
         eq(parseLog(record('d'.repeat(40), 'ddddddd', 'E', 1, 'Perbaiki: a\tb', 'a.md'))[0].subject, 'Perbaiki: a\tb');
+    });
+    test('status dibaca menjadi daftar file berubah, rename memakai path baru', () => {
+        eq(parseStatus(' M a.md\nA  b.md\n?? c d.md\nR  lama.md -> baru.md\n D x.md\n?? "t\\"k.md"\n'), [
+            { path: 'a.md', kind: 'modified' }, { path: 'b.md', kind: 'added' }, { path: 'c d.md', kind: 'untracked' },
+            { path: 'baru.md', kind: 'renamed' }, { path: 'x.md', kind: 'deleted' }, { path: 't"k.md', kind: 'untracked' },
+        ]);
+        eq(parseStatus(''), []);
     });
     test('waktu relatif', () => {
         const now = 1_000_000_000;

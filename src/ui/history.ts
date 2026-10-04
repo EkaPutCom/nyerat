@@ -4,8 +4,8 @@
 import Gtk from 'gi://Gtk?version=3.0';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
-import { fileLog, workingState, type GitFailure } from '../git.js';
-import { relativeTime, type Commit } from '../gitlog.js';
+import { fileLog, repoChanges, workingState, type GitFailure } from '../git.js';
+import { relativeTime, type ChangeKind, type Commit, type FileChange } from '../gitlog.js';
 
 // Commit yang dimuat per permintaan; riwayat panjang dimuat bertahap.
 const PAGE_SIZE = 100;
@@ -16,14 +16,20 @@ const FAILURE_TEXT: Record<GitFailure, string> = {
     'failed': 'Riwayat tidak dapat dibaca',
 };
 
+const KIND_MARK: Record<ChangeKind, string> = { modified: 'M', added: 'A', deleted: 'D', renamed: 'R', untracked: 'U' };
+
 export class History {
     readonly list: Gtk.ListBox;
     readonly widget: Gtk.Box;
     readonly more: Gtk.Button;
     readonly changes: Gtk.Button;              // baris "belum di-commit", tampil hanya jika file berubah
     onOpen: (commit: Commit) => void = () => {};   // commit diklik
-    onOpenChanges: () => void = () => {};          // perubahan belum di-commit diklik
+    onOpenChanges: (file: string) => void = () => {};   // perubahan belum di-commit diklik (file aktif atau file dari daftar)
+    readonly changedList: Gtk.ListBox;         // semua file di repositori yang belum di-commit
+    readonly changedBox: Gtk.Expander;
+    private changed: FileChange[] = [];
 
+    private folder: string | null = null;     // folder yang dibuka; sumber daftar perubahan saat belum ada file
     private file: string | null | undefined;   // undefined = belum pernah dimuat
     private commits: Commit[] = [];
     private token = 0;                         // hasil git yang basi (file sudah berganti) diabaikan
@@ -56,7 +62,20 @@ export class History {
         this.changes = new Gtk.Button({ no_show_all: true, margin_start: 8, margin_end: 8, margin_bottom: 8 });
         this.changes.set_relief(Gtk.ReliefStyle.NONE);
         this.changes.set_tooltip_text('Lihat perubahan terhadap commit terakhir');
-        this.changes.connect('clicked', () => this.onOpenChanges());
+        this.changes.connect('clicked', () => { if (this.file) this.onOpenChanges(this.file); });
+
+        this.changedList = new Gtk.ListBox({ activate_on_single_click: true });
+        this.changedList.set_selection_mode(Gtk.SelectionMode.NONE);
+        this.changedList.connect('row-activated', (_list, row) => {
+            const change = this.changed[row.get_index()];
+            if (change) this.onOpenChanges(change.path);
+        });
+        const changedScroll = new Gtk.ScrolledWindow({
+            hscrollbar_policy: Gtk.PolicyType.NEVER, propagate_natural_height: true, max_content_height: 150,
+        });
+        changedScroll.add(this.changedList);
+        this.changedBox = new Gtk.Expander({ expanded: true, no_show_all: true, margin_start: 8, margin_end: 8, margin_bottom: 8 });
+        this.changedBox.add(changedScroll);
 
         const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vexpand: true });
         scroll.add(this.list);
@@ -66,6 +85,7 @@ export class History {
         this.widget = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
         this.widget.pack_start(header, false, false, 0);
         this.widget.pack_start(this.changes, false, false, 0);
+        this.widget.pack_start(this.changedBox, false, false, 0);
         this.widget.pack_start(scroll, true, true, 0);
         this.widget.pack_start(this.more, false, false, 0);
         this.widget.show_all();
@@ -73,16 +93,19 @@ export class History {
 
     // Tampilkan riwayat file ini. Memanggil lagi dengan file yang sama tidak melakukan apa-apa
     // kecuali force, jadi aman dipanggil sering.
-    setFile(file: string | null, force = false): void {
-        if (!force && file === this.file) return;
+    setFile(file: string | null, force = false, folder: string | null = this.folder): void {
+        if (!force && file === this.file && folder === this.folder) return;
         const same = file === this.file;
         this.file = file;
+        this.folder = folder;
         this.token++;
         // Muat ulang file yang sama tidak mengosongkan daftar dulu; daftar hanya diganti jika isinya berubah.
         if (!same) this.clear();
         this.changes.hide();
+        if (!same) this.setChanged([]);
         if (!file) {
             this.note.set_text('Simpan dokumen ke berkas, lalu riwayat git-nya tampil di sini');
+            this.loadChanges();
             return;
         }
         if (!same) this.note.set_text('Memuat…');
@@ -97,12 +120,43 @@ export class History {
     // Tombol perubahan hanya tampil jika isi file berbeda dari commit terakhir.
     private async loadChanges(): Promise<void> {
         const token = this.token, file = this.file;
-        if (!file) return;
-        const result = await workingState(file);
+        const dir = file ? GLib.path_get_dirname(file) : this.folder;
+        if (!dir) return this.setChanged([]);
+        const [state, repo] = await Promise.all([file ? workingState(file) : null, repoChanges(dir)]);
         if (token !== this.token) return;
-        if (!result.ok || result.state === 'clean') return this.changes.hide();
-        this.changes.set_label(result.state === 'untracked' ? '● File baru, belum di-commit' : '● Perubahan belum di-commit');
+        this.setChanged(repo.ok ? repo.changes : []);
+        if (!state || !state.ok || state.state === 'clean') return this.changes.hide();
+        this.changes.set_label(state.state === 'untracked' ? '● File baru, belum di-commit' : '● Perubahan belum di-commit');
         this.changes.show();
+    }
+
+    // Daftar file berubah; tidak dibangun ulang jika sama, supaya posisi gulir tidak lompat saat muat ulang.
+    private setChanged(changes: FileChange[]): void {
+        const same = changes.length === this.changed.length
+            && changes.every((c, i) => c.path === this.changed[i].path && c.kind === this.changed[i].kind);
+        if (same) return;
+        this.changed = changes;
+        for (const row of this.changedList.get_children()) row.destroy();
+        const dir = this.file ? GLib.path_get_dirname(this.file) : this.folder ?? '';
+        for (const change of changes) {
+            const rel = dir && change.path.startsWith(dir + '/') ? change.path.slice(dir.length + 1) : change.path;
+            const mark = new Gtk.Label({ label: KIND_MARK[change.kind], xalign: 0, width_chars: 1 });
+            mark.get_style_context().add_class('side-meta');
+            const name = new Gtk.Label({ label: rel, xalign: 0, ellipsize: Pango.EllipsizeMode.START });
+            const box = new Gtk.Box({ spacing: 8, margin_start: 4, margin_end: 4, margin_top: 3, margin_bottom: 3 });
+            box.pack_start(mark, false, false, 0);
+            box.pack_start(name, true, true, 0);
+            const row = new Gtk.ListBoxRow();
+            row.add(box);
+            row.set_tooltip_text(change.path);
+            row.show_all();
+            this.changedList.insert(row, -1);
+        }
+        this.changedBox.set_label(`Belum di-commit (${changes.length})`);
+        if (changes.length) {
+            this.changedBox.show();
+            this.changedBox.get_child()?.show_all();   // show_all pada widget no_show_all diabaikan, dan anaknya belum pernah ditampilkan
+        } else this.changedBox.hide();
     }
 
     private clear(): void {

@@ -50,7 +50,9 @@ export function historyTests(c: GuiContext): void {
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(15000); }
         const a = w.sidebar.widget.get_allocation();
         ok(a.width <= 260, `lebar sidebar ${a.width}`);
-        ok(a.x < 20, `sidebar bergeser ke x=${a.x}`);
+        // Relatif ke isi jendela: di desktop, dekorasi/bayangan window manager menggeser alokasi toplevel.
+        const x = w.sidebar.widget.translate_coordinates(w.win.get_child()!, 0, 0)[1];
+        ok(x < 20, `sidebar bergeser ke x=${x}`);
     });
     test('riwayat file tampil terbaru dulu', () => {
         w.load(a);
@@ -177,9 +179,9 @@ export function historyTests(c: GuiContext): void {
             eq(done, 0, 'commit tanpa pesan');
             viewer.messageEntry.set_text('Tambah baris lima');
             viewer.commitButton.clicked();
-            ok(waitFor(() => done === 1), `commit gagal: ${viewer.status.get_text()}`);
+            ok(waitFor(() => done === 1), `commit gagal: ${viewer.closed ? '' : viewer.status.get_text()}`);
         } finally {
-            viewer.window.destroy();
+            if (!viewer.closed) viewer.window.destroy();   // commit yang berhasil menutup jendelanya sendiri
         }
         w.history.refresh();
         ok(waitFor(() => rows() === 5 && !w.history.changes.get_visible()), 'riwayat tidak memuat commit baru');
@@ -193,12 +195,54 @@ export function historyTests(c: GuiContext): void {
         try {
             viewer.messageEntry.set_text('Tambah catatan baru');
             viewer.commitButton.clicked();
-            ok(waitFor(() => done === 1), `commit gagal: ${viewer.status.get_text()}`);
+            ok(waitFor(() => done === 1), `commit gagal: ${viewer.closed ? '' : viewer.status.get_text()}`);
         } finally {
-            viewer.window.destroy();
+            if (!viewer.closed) viewer.window.destroy();   // commit yang berhasil menutup jendelanya sendiri
         }
         w.history.refresh();
         ok(waitFor(() => rows() === 1 && !w.history.changes.get_visible()), 'riwayat file baru');
+    });
+
+    test('daftar semua file yang belum di-commit tampil dan membuka diff file yang diklik', () => {
+        const b = GLib.build_filenamev([repo, 'b.md']);
+        write(b, '# B\n');
+        git('add', 'b.md');
+        git('commit', '-q', '-m', 'Tambah b');
+        write(b, '# B\nubah\n');
+        write(GLib.build_filenamev([repo, 'c.md']), '# C\n');
+        w.load(a);
+        w.history.refresh();
+        const names = () => w.history.changedList.get_children().map(r => (((r as Gtk.ListBoxRow).get_child() as Gtk.Box).get_children()[1] as Gtk.Label).label);
+        ok(waitFor(() => names().length === 2), `daftar: ${names()}`);
+        eq(names().sort(), ['b.md', 'c.md']);
+        ok(w.history.changedBox.get_visible() && (w.history.changedBox.label ?? '').includes('(2)'), `label: ${w.history.changedBox.label}`);
+        const opened: string[] = [];
+        w.history.onOpenChanges = f => { opened.push(f); };
+        const idx = names().indexOf('b.md');
+        w.history.changedList.emit('row-activated', w.history.changedList.get_row_at_index(idx)!);
+        eq(opened, [b], 'file yang dibuka');
+        const viewer = new HistoryViewer(w.win, b, null, false);
+        try {
+            const diff = () => viewer.diffView.buffer.get_text(viewer.diffView.buffer.get_start_iter(), viewer.diffView.buffer.get_end_iter(), false);
+            ok(waitFor(() => diff().includes('+ubah')), `diff: ${diff()}`);
+        } finally {
+            viewer.window.destroy();
+        }
+        git('add', '-A');
+        git('commit', '-q', '-m', 'Bersihkan');
+        w.history.refresh();
+        ok(waitFor(() => !w.history.changedBox.get_visible()), 'daftar tidak hilang setelah semua di-commit');
+        w.history.onOpenChanges = () => {};
+    });
+
+    test('tanpa file, folder yang dibuka tetap menampilkan file yang belum di-commit', () => {
+        write(GLib.build_filenamev([repo, 'd.md']), '# D\n');
+        w.newDocument();
+        w.history.setFile(null, true, repo);
+        ok(waitFor(() => w.history.changedList.get_children().length === 1), 'daftar kosong padahal folder punya file baru');
+        ok(w.history.note.label.includes('Simpan dokumen'), 'petunjuk simpan hilang');
+        w.history.setFile(null, true, null);
+        ok(waitFor(() => w.history.changedList.get_children().length === 0), 'daftar tidak dikosongkan tanpa folder');
     });
 
     // Kembalikan keadaan untuk tes berikutnya.

@@ -3,7 +3,7 @@
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { LOG_FORMAT, parseLog, type Commit } from './gitlog.js';
+import { LOG_FORMAT, parseLog, parseStatus, type Commit, type FileChange } from './gitlog.js';
 
 export type GitFailure = 'no-git' | 'no-repo' | 'failed';
 
@@ -92,6 +92,20 @@ export async function workingState(file: string): Promise<StateResult> {
     const line = run.out.split('\n')[0];
     if (!line.trim()) return { ok: true, state: 'clean' };
     return { ok: true, state: line.startsWith('??') ? 'untracked' : 'modified' };
+}
+
+export type ChangesResult =
+    | { ok: true; changes: FileChange[] }
+    | { ok: false; reason: GitFailure; message: string };
+
+// Semua file di repositori folder ini yang berbeda dari commit terakhir; path-nya absolut.
+export async function repoChanges(dir: string): Promise<ChangesResult> {
+    const root = await runGit(dir, ['rev-parse', '--show-toplevel']);
+    if (root?.status !== 0) return failure(root);
+    const run = await runGit(dir, ['status', '--porcelain=v1', '--untracked-files=all']);
+    if (run?.status !== 0) return failure(run);
+    const top = root.out.trim();
+    return { ok: true, changes: parseStatus(run.out).map(c => ({ ...c, path: GLib.build_filenamev([top, c.path]) })) };
 }
 
 // Perubahan file yang belum di-commit, terhadap HEAD. File baru (belum dilacak) ditampilkan

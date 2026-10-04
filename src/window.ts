@@ -114,9 +114,8 @@ export class MainWindow {
         this.history.onOpen = commit => {
             if (this.file) new HistoryViewer(this.win, this.file, commit, this.dark).show();
         };
-        this.history.onOpenChanges = () => {
-            if (!this.file) return;
-            const viewer = new HistoryViewer(this.win, this.file, null, this.dark);
+        this.history.onOpenChanges = file => {
+            const viewer = new HistoryViewer(this.win, file, null, this.dark);
             viewer.beforeCommit = () => this.save();
             viewer.onCommitted = () => {
                 this.statusBar.toast('Berhasil di-commit');
@@ -251,7 +250,7 @@ export class MainWindow {
     // force = baca ulang walau file yang sama.
     syncHistory(force = false): void {
         if (!this.sidebar.visible || this.sidebar.page !== 'history') return;
-        this.history.setFile(this.file, force);
+        this.history.setFile(this.file, force, this.fileTree.root);
     }
 
     private showBoardCounts(board: Board): void {
@@ -430,6 +429,7 @@ export class MainWindow {
         const absolute = Gio.File.new_for_path(path).get_path() ?? path;
         this.fileTree.setRoot(absolute);
         this.fileTree.reveal(this.file);
+        this.syncHistory();
         this.settings.folder = absolute;
         saveSettings(this.settings);
         if (!show) return;

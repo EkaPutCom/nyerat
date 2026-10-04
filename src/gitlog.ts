@@ -63,3 +63,34 @@ export function parseDiff(output: string): DiffLine[] {
         return { kind: 'context', text };
     });
 }
+
+export type ChangeKind = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
+
+export interface FileChange { path: string; kind: ChangeKind }   // path relatif ke akar repo
+
+// Path yang mengandung tab, kutip, atau backslash dikutip git ("..." dengan escape C).
+function unquote(path: string): string {
+    if (!path.startsWith('"') || !path.endsWith('"')) return path;
+    return path.slice(1, -1).replace(/\\([tn"\\])/g, (_m, c: string) => ({ t: '\t', n: '\n' })[c] ?? c);
+}
+
+// Keluaran `git status --porcelain=v1` (tanpa -z: GJS membaca keluaran sebagai string UTF-8 yang terpotong di NUL):
+// "XY path", dan untuk rename/copy "XY lama -> baru".
+export function parseStatus(output: string): FileChange[] {
+    const changes: FileChange[] = [];
+    for (const line of output.split('\n')) {
+        if (line.length < 4) continue;
+        const code = line.slice(0, 2);
+        let path = line.slice(3);
+        let kind: ChangeKind = 'modified';
+        if (code === '??') kind = 'untracked';
+        else if (code.includes('R') || code.includes('C')) {
+            kind = 'renamed';
+            const arrow = path.lastIndexOf(' -> ');
+            if (arrow >= 0) path = path.slice(arrow + 4);
+        } else if (code.includes('D')) kind = 'deleted';
+        else if (code.includes('A')) kind = 'added';
+        changes.push({ path: unquote(path), kind });
+    }
+    return changes;
+}

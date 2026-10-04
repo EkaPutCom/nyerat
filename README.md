@@ -127,7 +127,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 - Sidebar dengan tiga tab:
   - **Berkas**: pohon folder yang dibuka (lewat tombol folder di header bar, `Ctrl+Shift+O`, atau dengan memilih folder di dialog Buka File), berisi subfolder dan file Markdown (`.md`, `.markdown`, `.mdown`, `.mkd`). Klik file untuk membukanya; file yang sedang dibuka ikut disorot. File/folder tersembunyi dan `node_modules` tidak ditampilkan. Pohon diperbarui otomatis saat ada file yang ditambah atau dihapus di disk, dan folder terakhir dibuka lagi saat aplikasi dijalankan
   - **Outline**: daftar heading dokumen; klik untuk melompat
-  - **Riwayat**: commit git yang menyentuh file yang sedang dibuka, terbaru dulu (hash pendek, pesan, penulis, waktu relatif; riwayat mengikuti file yang di-rename). Jika file berbeda dari commit terakhir (atau belum dilacak), tombol *Perubahan belum di-commit* muncul di atas daftar dan membuka diff terhadap HEAD (file baru ditampilkan seluruhnya sebagai tambahan). Klik commit untuk membuka jendela baca dengan dua tab: *Perubahan* (diff terhadap commit sebelumnya, baris tambah/hapus berwarna) dan *Isi versi ini* (file lengkap pada commit itu). Jendela perubahan belum di-commit juga punya kolom pesan dan tombol *Commit file ini*: dokumen disimpan dulu, lalu hanya file itu yang di-commit (`git add` + `git commit --only`; file lain tidak ikut, hook git tidak dijalankan). Selain itu aplikasi tidak pernah mengubah repositori. Riwayat dimuat saat tab terlihat, 100 commit sekali muat (tombol *Muat lebih banyak*), dan dimuat ulang saat berganti file, saat jendela kembali aktif, atau lewat tombol muat ulang. Butuh `git` terpasang; file di luar repositori atau yang belum di-commit menampilkan pesan di tab
+  - **Riwayat**: commit git yang menyentuh file yang sedang dibuka, terbaru dulu (hash pendek, pesan, penulis, waktu relatif; riwayat mengikuti file yang di-rename). Jika file berbeda dari commit terakhir (atau belum dilacak), tombol *Perubahan belum di-commit* muncul di atas daftar dan membuka diff terhadap HEAD (file baru ditampilkan seluruhnya sebagai tambahan). Di bawahnya, daftar *Belum di-commit (N)* memuat semua file di repositori yang sedang berubah (M diubah, A baru di-stage, D dihapus, R diganti nama, U belum dilacak); klik salah satu untuk membuka diff-nya di jendela yang sama (juga bisa di-commit dari sana). Daftar ini juga tampil saat belum ada file terbuka tetapi sebuah folder sudah dibuka. Klik commit untuk membuka jendela baca dengan dua tab: *Perubahan* (diff terhadap commit sebelumnya, baris tambah/hapus berwarna) dan *Isi versi ini* (file lengkap pada commit itu). Jendela perubahan belum di-commit juga punya kolom pesan dan tombol *Commit file ini*: dokumen disimpan dulu, lalu hanya file itu yang di-commit (`git add` + `git commit --only`; file lain tidak ikut, hook git tidak dijalankan). Selain itu aplikasi tidak pernah mengubah repositori. Riwayat dimuat saat tab terlihat, 100 commit sekali muat (tombol *Muat lebih banyak*), dan dimuat ulang saat berganti file, saat jendela kembali aktif, atau lewat tombol muat ulang. Butuh `git` terpasang; file di luar repositori atau yang belum di-commit menampilkan pesan di tab
 - Mode fokus: paragraf selain yang sedang disunting diredupkan
 - Mode typewriter: baris aktif selalu di tengah layar
 - Mode source: semua sintaks Markdown ditampilkan; widget gambar, grid tabel, dan diagram disembunyikan
@@ -190,6 +190,8 @@ npm run test:ui   # tampilkan jendela dan drag kartu di desktop
 ```
 
 `npm test` menjalankan seluruh tes unit, GUI, dan lima tes input mouse kanban di display **Xvfb terpisah**. Tidak membutuhkan sesi desktop; pointer desktop tidak bergerak. Jika Xvfb belum terpasang, perintah gagal dan tes mouse tidak diam-diam dilewati. `npm run docs` tetap memakai jalur capture desktop seperti sebelumnya.
+
+Di Xvfb, tes memakai rendering perangkat lunak Mesa (`LIBGL_ALWAYS_SOFTWARE=1`) serta menonaktifkan compositing GPU dan perender DMA-BUF WebKitGTK (`WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1`) karena display virtual tidak menyediakan perangkat DRI3. Ini menghindari peringatan libEGL saat tes diagram Mermaid dan DBML; pengaturan ini hanya berlaku untuk `npm test`.
 
 `npm run test:ui` menjalankan rangkaian tes yang sama pada desktop **X11 lokal** (atau XWayland yang menyediakan `DISPLAY` lokal), sehingga jendela tes terlihat. Mode ini tidak membutuhkan Xvfb. Pointer desktop akan bergerak selama tes drag; biarkan mouse dan keyboard sampai selesai. Pointer dikembalikan ke posisi semula setelah bagian tes mouse.
 
@@ -261,7 +263,7 @@ src/
 ├── config.ts             nama, ID, versi aplikasi, dan font
 ├── settings.ts           baca/tulis ~/.config/nyerat/settings.json
 ├── files.ts              baca/tulis file teks UTF-8
-├── git.ts                riwayat git sebuah file lewat perintah `git` (async; hanya membaca, kecuali commit file aktif)
+├── git.ts                riwayat git sebuah file dan daftar file yang belum di-commit lewat perintah `git` (async; hanya membaca, kecuali commit satu file)
 ├── gitlog.ts             pengurai keluaran git: log, diff, waktu relatif (murni, tanpa GTK)
 ├── welcome.ts            dokumen contoh saat pertama dibuka
 │
