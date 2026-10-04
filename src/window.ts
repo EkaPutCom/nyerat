@@ -114,6 +114,9 @@ export class MainWindow {
         this.history.onOpen = commit => {
             if (this.file) new HistoryViewer(this.win, this.file, commit, this.dark).show();
         };
+        this.history.onOpenChanges = () => {
+            if (this.file) new HistoryViewer(this.win, this.file, null, this.dark).show();
+        };
         this.sidebar.onPageChanged = page => {
             this.settings.sidebarPage = page;
             saveSettings(this.settings);

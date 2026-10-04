@@ -77,3 +77,38 @@ export async function commitContent(file: string, commit: Commit): Promise<TextR
     const run = await runGit(dirOf(file), ['show', '--no-textconv', `${commit.hash}:${spec}`]);
     return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
 }
+
+export type WorkingState = 'clean' | 'modified' | 'untracked';
+
+export type StateResult =
+    | { ok: true; state: WorkingState }
+    | { ok: false; reason: GitFailure; message: string };
+
+// Apakah file berbeda dari commit terakhir (termasuk yang sudah di-stage atau belum dilacak).
+export async function workingState(file: string): Promise<StateResult> {
+    const run = await runGit(dirOf(file), ['status', '--porcelain=v1', '--', `:(literal)${nameOf(file)}`]);
+    if (run?.status !== 0) return failure(run);
+    const line = run.out.split('\n')[0];
+    if (!line.trim()) return { ok: true, state: 'clean' };
+    return { ok: true, state: line.startsWith('??') ? 'untracked' : 'modified' };
+}
+
+// Perubahan file yang belum di-commit, terhadap HEAD. File baru (belum dilacak) ditampilkan
+// seluruhnya sebagai tambahan; repo tanpa commit dibandingkan dengan indeks.
+export async function workingDiff(file: string): Promise<TextResult> {
+    const state = await workingState(file);
+    if (!state.ok) return state;
+    if (state.state === 'clean') return { ok: true, text: '' };
+    const flags = ['--no-color', '--no-ext-diff', '--no-textconv'];
+    const spec = `:(literal)${nameOf(file)}`;
+    if (state.state === 'untracked') {
+        // --no-index keluar dengan status 1 jika ada beda; itu hasil normal.
+        const run = await runGit(dirOf(file), ['diff', ...flags, '--no-index', '--', '/dev/null', nameOf(file)]);
+        return run && run.status <= 1 ? { ok: true, text: run.out } : failure(run);
+    }
+    let run = await runGit(dirOf(file), ['diff', ...flags, 'HEAD', '--', spec]);
+    if (run && run.status !== 0 && /unknown revision|bad revision|ambiguous argument 'HEAD'/i.test(run.err)) {
+        run = await runGit(dirOf(file), ['diff', ...flags, '--cached', '--', spec]);
+    }
+    return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
+}

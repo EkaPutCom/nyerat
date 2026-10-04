@@ -128,6 +128,40 @@ export function historyTests(c: GuiContext): void {
         }
     });
 
+    test('perubahan yang belum di-commit tampil sebagai tombol dan diff terhadap HEAD', () => {
+        w.load(a);
+        ok(waitFor(() => rows() === 3), 'riwayat dimuat');
+        ok(waitFor(() => !w.history.changes.get_visible()), 'tombol perubahan tampil padahal file bersih');
+        write(a, V2 + 'tiga\nempat\n');
+        w.history.refresh();
+        ok(waitFor(() => w.history.changes.get_visible()), 'tombol perubahan tidak tampil');
+        ok(w.history.changes.label.includes('Perubahan belum di-commit'), w.history.changes.label);
+        const viewer = new HistoryViewer(w.win, a, null, false);
+        try {
+            const diff = () => viewer.diffView.buffer.get_text(viewer.diffView.buffer.get_start_iter(), viewer.diffView.buffer.get_end_iter(), false);
+            ok(waitFor(() => diff().includes('+empat')), `diff: ${diff()}`);
+            ok(!diff().includes('+tiga'), 'baris yang sudah di-commit ikut tampil sebagai tambahan');
+            ok(viewer.stack.get_child_by_name('content') === null, 'tab isi versi ikut muncul');
+        } finally {
+            viewer.window.destroy();
+        }
+        git('commit', '-q', '-a', '-m', 'Tambah baris empat');
+        w.history.refresh();
+        ok(waitFor(() => !w.history.changes.get_visible()), 'tombol tidak hilang setelah commit');
+    });
+    test('file baru yang belum dilacak diff-nya seluruh isi', () => {
+        w.load(untracked);
+        ok(waitFor(() => w.history.changes.get_visible()), 'tombol tidak tampil');
+        ok(w.history.changes.label.includes('File baru'), w.history.changes.label);
+        const viewer = new HistoryViewer(w.win, untracked, null, false);
+        try {
+            const diff = () => viewer.diffView.buffer.get_text(viewer.diffView.buffer.get_start_iter(), viewer.diffView.buffer.get_end_iter(), false);
+            ok(waitFor(() => diff().includes('+# Belum masuk git')), `diff: ${diff()}`);
+        } finally {
+            viewer.window.destroy();
+        }
+    });
+
     // Kembalikan keadaan untuk tes berikutnya.
     w.history.onOpen = () => {};
     w.sidebar.setPage('outline');

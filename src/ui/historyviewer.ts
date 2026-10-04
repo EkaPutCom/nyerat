@@ -1,11 +1,11 @@
-// Jendela baca untuk satu commit: tab Perubahan (diff terhadap commit sebelumnya) dan
+// Jendela baca untuk satu commit (atau, dengan commit null, perubahan file yang belum di-commit): tab Perubahan (diff terhadap commit sebelumnya) dan
 // tab Isi (file lengkap pada commit itu). Hanya baca; jendela tidak modal supaya dokumen
 // tetap bisa dibandingkan sambil mengedit.
 
 import Gtk from 'gi://Gtk?version=3.0';
 import Gdk from 'gi://Gdk?version=3.0';
 import GLib from 'gi://GLib';
-import { commitContent, commitDiff, type TextResult } from '../git.js';
+import { commitContent, commitDiff, workingDiff, type TextResult } from '../git.js';
 import { parseDiff, type Commit } from '../gitlog.js';
 
 const DIFF_COLORS = {
@@ -20,19 +20,22 @@ export class HistoryViewer {
     readonly stack: Gtk.Stack;
     closed = false;
 
-    constructor(parent: Gtk.Window | null, file: string, readonly commit: Commit, dark: boolean) {
+    constructor(parent: Gtk.Window | null, file: string, readonly commit: Commit | null, dark: boolean) {
         this.window = new Gtk.Window({
             transient_for: parent, default_width: 860, default_height: 620,
             window_position: Gtk.WindowPosition.CENTER_ON_PARENT,
         });
-        const date = GLib.DateTime.new_from_unix_local(commit.time).format('%d %b %Y %H:%M');
+        const title = commit ? commit.subject || '(tanpa pesan)' : 'Perubahan belum di-commit';
+        const detail = commit
+            ? `${commit.short} · ${commit.author} · ${GLib.DateTime.new_from_unix_local(commit.time).format('%d %b %Y %H:%M')}`
+            : `${GLib.path_get_basename(file)} · dibandingkan dengan commit terakhir`;
         // Judul header dipakai StackSwitcher, jadi info commit ditaruh di atas isi.
         const header = new Gtk.HeaderBar({ show_close_button: true });
         this.window.set_titlebar(header);
-        this.window.set_title(commit.subject || '(tanpa pesan)');
-        const subject = new Gtk.Label({ label: commit.subject || '(tanpa pesan)', xalign: 0, wrap: true });
-        subject.set_markup(`<b>${GLib.markup_escape_text(commit.subject || '(tanpa pesan)', -1)}</b>`);
-        const meta = new Gtk.Label({ label: `${commit.short} · ${commit.author} · ${date}`, xalign: 0 });
+        this.window.set_title(title);
+        const subject = new Gtk.Label({ label: title, xalign: 0, wrap: true });
+        subject.set_markup(`<b>${GLib.markup_escape_text(title, -1)}</b>`);
+        const meta = new Gtk.Label({ label: detail, xalign: 0 });
         meta.get_style_context().add_class('dim-label');
         const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, margin: 12, margin_bottom: 8 });
         info.pack_start(subject, false, false, 0);
@@ -42,12 +45,16 @@ export class HistoryViewer {
         this.contentView = this.createView();
         this.stack = new Gtk.Stack({ transition_type: Gtk.StackTransitionType.CROSSFADE, transition_duration: 100 });
         this.stack.add_titled(this.scrolled(this.diffView), 'diff', 'Perubahan');
-        this.stack.add_titled(this.scrolled(this.contentView), 'content', 'Isi versi ini');
-        header.set_custom_title(new Gtk.StackSwitcher({ stack: this.stack }));
+        // Perubahan yang belum di-commit tidak punya "versi"; isi terbarunya sudah ada di editor.
+        if (commit) {
+            this.stack.add_titled(this.scrolled(this.contentView), 'content', 'Isi versi ini');
+            header.set_custom_title(new Gtk.StackSwitcher({ stack: this.stack }));
+        }
         const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
         body.pack_start(info, false, false, 0);
         body.pack_start(new Gtk.Separator(), false, false, 0);
         body.pack_start(this.stack, true, true, 0);
+
         this.window.add(body);
 
         this.window.connect('destroy', () => { this.closed = true; });
@@ -59,8 +66,12 @@ export class HistoryViewer {
 
         this.setupDiffTags(dark);
         this.setPlaceholder('Memuat…');
-        commitDiff(file, commit).then(result => this.showDiff(result));
-        commitContent(file, commit).then(result => this.showContent(result));
+        if (commit) {
+            commitDiff(file, commit).then(result => this.showDiff(result));
+            commitContent(file, commit).then(result => this.showContent(result));
+        } else {
+            workingDiff(file).then(result => this.showDiff(result));
+        }
     }
 
     show(): void {
@@ -106,7 +117,9 @@ export class HistoryViewer {
         const buffer = this.diffView.buffer;
         if (!result.ok) return buffer.set_text(`Gagal membaca perubahan:\n${result.message}`, -1);
         const lines = parseDiff(result.text);
-        if (!lines.length) return buffer.set_text('Tidak ada perubahan isi pada commit ini (misalnya hanya ganti nama)', -1);
+        if (!lines.length) return buffer.set_text(this.commit
+            ? 'Tidak ada perubahan isi pada commit ini (misalnya hanya ganti nama)'
+            : 'Tidak ada perubahan yang belum di-commit', -1);
         buffer.set_text(lines.map(l => l.text).join('\n'), -1);
         lines.forEach((line, i) => {
             if (line.kind === 'context') return;

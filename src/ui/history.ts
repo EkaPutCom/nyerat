@@ -4,7 +4,7 @@
 import Gtk from 'gi://Gtk?version=3.0';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
-import { fileLog, type GitFailure } from '../git.js';
+import { fileLog, workingState, type GitFailure } from '../git.js';
 import { relativeTime, type Commit } from '../gitlog.js';
 
 // Commit yang dimuat per permintaan; riwayat panjang dimuat bertahap.
@@ -20,7 +20,9 @@ export class History {
     readonly list: Gtk.ListBox;
     readonly widget: Gtk.Box;
     readonly more: Gtk.Button;
+    readonly changes: Gtk.Button;              // baris "belum di-commit", tampil hanya jika file berubah
     onOpen: (commit: Commit) => void = () => {};   // commit diklik
+    onOpenChanges: () => void = () => {};          // perubahan belum di-commit diklik
 
     private file: string | null | undefined;   // undefined = belum pernah dimuat
     private commits: Commit[] = [];
@@ -51,6 +53,11 @@ export class History {
         header.pack_start(title, true, true, 0);
         header.pack_start(refresh, false, false, 0);
 
+        this.changes = new Gtk.Button({ no_show_all: true, margin_start: 8, margin_end: 8, margin_bottom: 8 });
+        this.changes.set_relief(Gtk.ReliefStyle.NONE);
+        this.changes.set_tooltip_text('Lihat perubahan terhadap commit terakhir');
+        this.changes.connect('clicked', () => this.onOpenChanges());
+
         const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vexpand: true });
         scroll.add(this.list);
         this.more = new Gtk.Button({ label: 'Muat lebih banyak', margin: 8, no_show_all: true });
@@ -58,6 +65,7 @@ export class History {
 
         this.widget = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
         this.widget.pack_start(header, false, false, 0);
+        this.widget.pack_start(this.changes, false, false, 0);
         this.widget.pack_start(scroll, true, true, 0);
         this.widget.pack_start(this.more, false, false, 0);
         this.widget.show_all();
@@ -72,16 +80,29 @@ export class History {
         this.token++;
         // Muat ulang file yang sama tidak mengosongkan daftar dulu; daftar hanya diganti jika isinya berubah.
         if (!same) this.clear();
+        this.changes.hide();
         if (!file) {
             this.note.set_text('Simpan dokumen ke berkas, lalu riwayat git-nya tampil di sini');
             return;
         }
         if (!same) this.note.set_text('Memuat…');
         this.load(0, same);
+        this.loadChanges();
     }
 
     refresh(): void {
         if (this.file !== undefined) this.setFile(this.file, true);
+    }
+
+    // Tombol perubahan hanya tampil jika isi file berbeda dari commit terakhir.
+    private async loadChanges(): Promise<void> {
+        const token = this.token, file = this.file;
+        if (!file) return;
+        const result = await workingState(file);
+        if (token !== this.token) return;
+        if (!result.ok || result.state === 'clean') return this.changes.hide();
+        this.changes.set_label(result.state === 'untracked' ? '● File baru, belum di-commit' : '● Perubahan belum di-commit');
+        this.changes.show();
     }
 
     private clear(): void {
