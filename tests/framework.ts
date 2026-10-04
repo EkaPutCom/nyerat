@@ -53,3 +53,17 @@ export function ok(cond: unknown, msg: string): asserts cond { if (!cond) throw 
 export function contains(haystack: string, needle: string): void {
     if (!haystack.includes(needle)) throw new Error(`tidak mengandung ${JSON.stringify(needle)}\n    dalam: ${JSON.stringify(haystack.slice(0, 300))}`);
 }
+
+// Menunggu Promise selesai sambil menjalankan main loop (tes bersifat sinkron). Melempar jika galat atau lewat batas waktu.
+export function settle<T>(promise: Promise<T>, timeoutMs = 10000): T {
+    let done = false, value: T | undefined, error: unknown;
+    const loop = new GLib.MainLoop(null, false);
+    const finish = () => { done = true; loop.quit(); };
+    promise.then(v => { value = v; finish(); }, e => { error = e; finish(); });
+    const timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, timeoutMs, () => { loop.quit(); return GLib.SOURCE_REMOVE; });
+    if (!done) loop.run();
+    if (done) GLib.source_remove(timer);
+    if (!done) throw new Error('Promise tidak selesai sebelum batas waktu');
+    if (error) throw error;
+    return value as T;
+}

@@ -15,6 +15,20 @@ import System from 'system';
 import { DEFAULTS } from '../src/settings.js';
 import { MainWindow } from '../src/window.js';
 import { isKanban, moveCard, parseBoard } from '../src/markdown/kanban.js';
+import type { Provider } from '../src/agent/provider.js';
+
+// Naskah contoh untuk tangkapan panel Asisten (provider palsu; tanpa jaringan dan tanpa API key).
+const BOOK = {
+    'bab-1.md': '# Bab 1: Pelabuhan\n\nRaka berusia tujuh belas tahun ketika ia pertama kali melihat kapal *Camar Putih*.\n\n## Pertemuan\n\nDi dermaga, Raka bertemu Laras. Laras membawa surat dari ayahnya dan tidak mau menunjukkannya kepada siapa pun.\n',
+    'bab-2.md': '# Bab 2: Pelayaran\n\nKapal meninggalkan pelabuhan saat fajar. Nakhoda Hasan memimpin pelayaran dengan tenang.\n\n## Badai\n\nBadai menghantam pada malam ketiga. Laras menyembunyikan surat itu di balik jaketnya, sementara Raka yang berusia dua puluh lima tahun memegang kemudi.\n',
+    'bab-3.md': '# Bab 3: Pulau\n\nMereka menemukan pulau tanpa nama. Tidak ada yang tahu siapa pemiliknya.\n',
+};
+const ANSWER = `Ada **satu ketidakkonsistenan** yang perlu Anda cek:
+
+- Di *bab-1.md* › Pelabuhan: "Raka berusia tujuh belas tahun ketika ia pertama kali melihat kapal Camar Putih."
+- Di *bab-2.md* › Badai: "Raka yang berusia dua puluh lima tahun memegang kemudi."
+
+Pelayaran di bab 2 terjadi tak lama setelah pertemuan di bab 1, jadi selisih delapan tahun itu tampak tidak disengaja. Usulan: samakan menjadi "tujuh belas tahun", atau tambahkan loncatan waktu di awal bab 2.`;
 
 const GIF_WIDTH = 900;   // PNG aslinya lebih besar
 const GIF_STEP = 140;    // ms per frame
@@ -340,6 +354,42 @@ function main(app: Gtk.Application): void {
     load(DOC, true, 0);
     cursorTo(0);
     frame('tema', 8);
+
+    // ───────── Panel Asisten ─────────
+    const bookDir = GLib.dir_make_tmp('nyerat-buku-XXXXXX');
+    for (const [name, text] of Object.entries(BOOK)) GLib.file_set_contents(GLib.build_filenamev([bookDir, name]), text);
+    w.openFolder(bookDir, false);
+    w.load(GLib.build_filenamev([bookDir, 'bab-2.md']));
+    // Putaran pertama: model menelusuri naskah dengan alat; putaran kedua: jawaban.
+    let round = 0;
+    const reply: Provider = {
+        async chat(req) {
+            if (!req.tools || ++round % 2 === 0) {
+                for (const part of ANSWER.match(/\S+\s*/g) ?? []) req.onText(part);
+                return { usage: { prompt: 3920, cached: 1536, completion: 148 }, cancelled: false, toolCalls: [], reasoning: '' };
+            }
+            return {
+                usage: { prompt: 1840, cached: 1536, completion: 40 }, cancelled: false, reasoning: '',
+                toolCalls: [
+                    { id: 'a', name: 'cari_teks', arguments: '{"teks":"Raka"}' },
+                    { id: 'b', name: 'baca_berkas', arguments: '{"nama":"bab-1.md"}' },
+                ],
+            };
+        },
+    };
+    w.chat.makeProvider = () => reply;
+    w.chat.keyStore = { get: async () => ({ key: 'contoh', source: 'env' }), set: async () => 'env', clear: async () => {} };
+    for (const dark of [false, true]) {
+        w.setDark(dark);
+        w.chat.reset();
+        w.setOption('chat', true);
+        w.sidebar.setPage('files');
+        let done = false;
+        void w.chat.ask('Adakah yang tidak konsisten antara bab 1 dan bab 2 soal Raka?').then(() => { done = true; });
+        while (!done) { pump(); GLib.usleep(5000); }
+        settle(20);
+        shot(dark ? 'asisten-gelap' : 'asisten-terang');
+    }
 
     finishGifs();
     print(`Selesai: ${OUT}`);

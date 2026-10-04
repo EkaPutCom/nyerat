@@ -7,6 +7,9 @@ export interface Settings {
     dark: boolean | null;
     sidebar: boolean;
     sidebarPage: 'files' | 'outline' | 'history';
+    chat: boolean;           // panel asisten terbuka
+    chatModel: string;       // model DeepSeek untuk asisten
+    chatThinking: boolean;   // mode berpikir model (lebih teliti, lebih lambat)
     folder: string | null;   // folder yang terakhir dibuka
     typewriter: boolean;
     focus: boolean;
@@ -20,6 +23,9 @@ export const DEFAULTS: Settings = {
     dark: null,          // null = ikuti tema sistem
     sidebar: true,
     sidebarPage: 'outline',
+    chat: false,
+    chatModel: 'deepseek-flash',
+    chatThinking: false,
     folder: null,
     typewriter: false,
     focus: false,

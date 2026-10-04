@@ -24,6 +24,8 @@ import { HistoryViewer } from './ui/historyviewer.js';
 import { remapPath } from './fileops.js';
 import { FileTree, isDirectory } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
+import { ChatPanel } from './ui/chat.js';
+import { readProject } from './agent/project.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
 import { createHeaderBar } from './ui/headerbar.js';
@@ -52,7 +54,7 @@ function fitToScreen(width: number, height: number): [number, number] {
 const MODE_LABELS: Record<Mode, string> = { source: 'Source', focus: 'Fokus', typewriter: 'Typewriter' };
 
 // Pilihan tampilan yang bisa diubah dari menu.
-export type Option = 'sidebar' | 'dark' | 'autosave' | Mode;
+export type Option = 'sidebar' | 'chat' | 'dark' | 'autosave' | Mode;
 
 export class MainWindow {
     readonly app: Gtk.Application;
@@ -65,6 +67,8 @@ export class MainWindow {
     readonly findBar: FindBar;
     readonly statusBar: StatusBar;
     readonly board: KanbanBoard;
+    readonly chat: ChatPanel;
+    readonly chatRevealer: Gtk.Revealer;
     private readonly content: Gtk.Stack;
     readonly header: Gtk.HeaderBar;
     readonly win: Gtk.ApplicationWindow;
@@ -92,6 +96,7 @@ export class MainWindow {
         this.findBar = new FindBar(this.editor.buffer, this.editor.view);
         this.statusBar = new StatusBar();
         this.board = new KanbanBoard();
+        this.chat = new ChatPanel();
         this.header = createHeaderBar();
 
         this.editor.modes.focus = settings.focus;
@@ -146,6 +151,28 @@ export class MainWindow {
             };
             viewer.show();
         };
+        this.chat.setModel(settings.chatModel);
+        this.chat.setThinking(settings.chatThinking);
+        this.chat.onModelChanged = model => {
+            this.settings.chatModel = model;
+            saveSettings(this.settings);
+        };
+        this.chat.onThinkingChanged = thinking => {
+            this.settings.chatThinking = thinking;
+            saveSettings(this.settings);
+        };
+        this.chat.host = {
+            active: () => {
+                const buf = this.editor.buffer;
+                return { name: this.projectName(this.file) ?? this.documentName, text: this.editor.getText(), cursorLine: buf.get_iter_at_mark(buf.get_insert()).get_line() };
+            },
+            selection: () => {
+                const buf = this.editor.buffer;
+                const bounds = buf.get_selection_bounds();
+                return bounds[0] ? buf.get_text(bounds[1], bounds[2], false) : '';
+            },
+            files: () => this.fileTree.root ? readProject(this.fileTree.root, this.file) : [],
+        };
         this.sidebar.onPageChanged = page => {
             this.settings.sidebarPage = page;
             saveSettings(this.settings);
@@ -177,6 +204,12 @@ export class MainWindow {
         const main = new Gtk.Box();
         main.pack_start(this.sidebar.widget, false, false, 0);
         main.pack_start(column, true, true, 0);
+        const chatWrap = new Gtk.Box();
+        chatWrap.pack_start(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL }), false, false, 0);
+        chatWrap.pack_start(this.chat.widget, false, false, 0);
+        this.chatRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT, transition_duration: 150 });
+        this.chatRevealer.add(chatWrap);
+        main.pack_start(this.chatRevealer, false, false, 0);
         this.win.add(main);
         this.win.connect('delete-event', () => !this.onClose());
         // Commit baru biasanya dibuat di luar aplikasi; saat kembali ke jendela, muat ulang riwayat.
@@ -203,6 +236,7 @@ export class MainWindow {
         this.updateTitle();
         this.win.show_all();
         this.sidebar.setVisible(settings.sidebar);
+        this.setChatVisible(settings.chat);
         this.syncHistory();
         this.editor.view.grab_focus();
     }
@@ -214,6 +248,22 @@ export class MainWindow {
         const palette = applyTheme(dark);
         this.editor.setPalette(palette);
         this.board.setPalette(palette);
+        this.chat.setPalette(palette);
+    }
+
+    // ---------- Asisten ----------
+
+    setChatVisible(visible: boolean): void {
+        this.chatRevealer.set_reveal_child(visible);
+        if (!visible) return;
+        this.chat.updateContextSummary();
+        this.chat.focusInput();
+    }
+
+    // Nama berkas relatif terhadap folder proyek (sama dengan nama di agent/project.ts); null jika di luar folder atau belum disimpan.
+    private projectName(path: string | null): string | null {
+        const root = this.fileTree.root;
+        return path && root && path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path ? GLib.path_get_basename(path) : null;
     }
 
     // ---------- Papan kanban ----------
@@ -314,6 +364,7 @@ export class MainWindow {
             this.sidebar.setVisible(value);
             this.syncHistory();
         }
+        else if (key === 'chat') this.setChatVisible(value);
         else if (key === 'dark') this.setDark(value);
         else if (key !== 'autosave') this.editor.setMode(key, value);
         if (key !== 'source') {

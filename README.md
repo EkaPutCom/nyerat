@@ -30,6 +30,14 @@ Untuk diagram, tambahkan dependensi opsional:
 sudo apt install gir1.2-webkit2-4.1
 ```
 
+Untuk **asisten (chat dengan AI)**, tambahkan libsoup 3 (hampir pasti sudah ada karena dipakai WebKitGTK) dan, opsional, libsecret untuk menyimpan API key di keyring:
+
+```bash
+sudo apt install gir1.2-soup-3.0 gir1.2-secret-1
+```
+
+Tanpa libsoup hanya asisten yang tidak berfungsi; tanpa libsecret, key disimpan di file berizin 0600.
+
 Gambar dari internet dimuat melalui GIO dan memerlukan backend HTTP/HTTPS GVfs yang tersedia pada sistem.
 
 ## Menjalankan
@@ -138,6 +146,13 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 - Mode gelap, otomatis mengikuti tema sistem saat pertama dibuka
 - Kolom teks dibuat di tengah dengan lebar baca yang nyaman
 
+**Asisten (chat dengan AI)**
+- Panel di sisi kanan (`Ctrl+Shift+A` atau tombol gelembung di header bar) untuk bertanya tentang naskah ke model **DeepSeek** (`deepseek-flash` atau `deepseek-v4-pro`, dipilih di pengaturan panel; kotak *Berpikir mendalam* menyalakan mode berpikir yang lebih teliti tetapi lebih lambat dan mahal). Jawaban mengalir saat dibuat, tampil dengan format Markdown, dan proses berpikir model bisa dibuka terpisah. Asisten hanya membaca: ia tidak pernah mengubah berkas, usulannya berupa teks yang Anda salin sendiri
+- **Konteks disusun otomatis dari naskah**: dokumen yang terbuka (isi editor, termasuk yang belum disimpan; jika terlalu panjang, bagian di sekitar kursor), teks yang sedang dipilih, posisi kursor, peta seluruh berkas Markdown di folder yang dibuka (nama, jumlah kata, heading), dan potongan paling relevan dari berkas lain (dicari dari pertanyaan, pilihan, dan dua pertanyaan sebelumnya). `@namaberkas` di pesan (opsional) langsung melampirkan berkas utuh di pesan pertama, jadi model tidak perlu satu putaran penelusuran untuk membacanya; tanpa itu pun model mencari dan membaca berkas lain sendiri lewat alat Tombol **Konteks** di bawah panel merinci apa yang akan dikirim beserta perkiraan tokennya dan punya tiga saklar (dokumen aktif, pilihan, berkas lain)
+- **Asisten menelusuri naskah sendiri (function calling).** Konteks awal hanya bagian yang dipilih otomatis, jadi model juga diberi empat alat baca-saja: `daftar_berkas`, `cari_naskah` (topik), `cari_teks` (teks persis, mis. nama tokoh), dan `baca_berkas` (isi berkas per rentang baris). Untuk pertanyaan seperti "adakah kontradiksi usia Raka?", model mengumpulkan semua kemunculannya sendiri, membaca bagian sekitarnya, lalu menjawab dengan kutipan berkas dan nomor baris. Tiap penelusuran tampil sebagai baris kecil di atas jawaban (mis. *Mencari teks “Raka” → 3 baris*). Alat memakai isi editor untuk dokumen yang terbuka, hanya membaca berkas Markdown di folder yang dibuka, dan ikut saklar *Berkas lain di folder*: dimatikan, tidak ada alat sama sekali
+- Tiap jawaban diberi rincian konteks yang dikirim dan pemakaian token (termasuk bagian yang dilayani dari cache, dan jumlah penelusuran). **Naskah yang disertakan dikirim ke server DeepSeek**; matikan saklar *Berkas lain di folder* dan *Dokumen yang sedang dibuka* untuk bertanya tanpa mengirim naskah
+- API key diambil dari variabel lingkungan `DEEPSEEK_API_KEY`, atau diisi di pengaturan panel (ikon roda gigi) dan disimpan di keyring sistem; jika keyring tidak tersedia, di `~/.config/nyerat/deepseek.key` (mode 0600). Key tidak ditulis ke `settings.json`
+
 **Lainnya**
 - Cari teks, undo/redo, hitungan kata dan karakter, posisi kursor
 - Ekspor ke HTML dengan CSS disertakan. Gambar dan tautan tetap memakai URL/path aslinya; diagram Mermaid/DBML memerlukan internet untuk memuat Mermaid dari CDN
@@ -177,6 +192,8 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 | F8 | Mode fokus |
 | F9 | Mode typewriter |
 | Ctrl+Shift+D | Mode gelap |
+| Ctrl+Shift+A | Tampilkan/sembunyikan panel Asisten |
+| Enter / Shift+Enter | Di kotak pesan Asisten: kirim / baris baru |
 
 ## Tes
 
@@ -210,6 +227,8 @@ Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `di
 - **Zoom gambar**: gambar ukuran penuh dari `imageAt()`, klik sekali vs ganda (dengan event GDK tiruan) dan gambar yang tepat jika satu baris memuat beberapa, perintah menu; di penampil: zoom awal, kelipatan 1,25 dan batas 5%–800%, tombol, titik zoom di penunjuk, geser dengan drag, klik ganda, dan tidak ada peringatan GTK/cairo saat menggambar pada zoom besar
 - **Warna blok kode**: alias nama bahasa, warna kata kunci/string/komentar, blok tanpa bahasa atau bahasa tak dikenal, pewarnaan ulang saat mengetik, emoji sebelum blok, skema terang/gelap, dan mode fokus yang tetap meredupkan blok kode
 - **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan; menu klik kanan *File Baru*/*Folder Baru* (di root, folder, dan sebelah file), pemindahan file/folder masuk dan keluar folder, penolakan nama tidak valid/bentrok/pindah ke diri sendiri, dokumen terbuka yang ikut berpindah path, dan seret-lepas dengan mouse X11 sungguhan
+- **Tes langsung ke API** (`npm run test:live`, butuh `DEEPSEEK_API_KEY` di `.env`, tidak ikut `npm test`): empat skenario atas naskah `tests/samples/buku-contoh` yang sengaja berisi kontradiksi, termasuk satu dengan anggaran konteks 900 token supaya model wajib memakai alat; `-- --thinking` untuk mode berpikir dan `-- --model=...` untuk model lain
+- **Asisten**: penyusunan konteks (pemecahan per heading, BM25, anggaran token, jendela di sekitar kursor, @lampiran, prefiks `system` yang stabil, pemangkasan riwayat), pembacaan aliran SSE dan pesan galat, markup jawaban, klien DeepSeek terhadap server tiruan, lalu alat penelusuran (hasil, batas, galat), loop agen (alat dikirim balik, penalaran dikembalikan, batas putaran dan anggaran, pembatalan), pembentukan pesan alat untuk API, lalu panel: pesan terkirim dengan dokumen/pilihan/potongan yang benar, langkah penelusuran tampil, jawaban terformat beserta token, riwayat, `@nama`, saklar konteks, galat dan pembatalan, Enter/Shift+Enter, serta pengaturan key dan model (semua dengan penyedia palsu; tanpa jaringan)
 - **Dokumen contoh lengkap**: membuka `tests/samples/semua-format.md`, lalu memeriksa tag setiap format, kasus-kasus sulit, dan hasil ekspor HTML-nya
 - **Ukuran jendela**: membuka file kedua tidak memperbesar jendela, jendela bisa diperbesar lalu diperkecil, dan gambar dibatasi lebar kolom teks
 - **Ketahanan**: kursor disapu ke semua baris, mengetik di tiap baris, dan dokumen dihapus sedikit demi sedikit untuk mencari crash
@@ -272,12 +291,23 @@ src/
 ├── gitlog.ts             pengurai keluaran git: log, diff, waktu relatif (murni, tanpa GTK)
 ├── welcome.ts            dokumen contoh saat pertama dibuka
 │
+├── agent/                asisten AI: konteks naskah dan klien model (tanpa GTK, kecuali yang tertulis)
+│   ├── tools.ts          murni: alat penelusuran untuk model (daftar_berkas, cari_naskah, cari_teks, baca_berkas)
+│   ├── context.ts        murni: memecah naskah per heading, pencarian BM25, menyusun konteks dalam anggaran token, memangkas riwayat
+│   ├── session.ts        murni: satu percakapan (riwayat) dan loop agen satu giliran (model ↔ alat)
+│   ├── provider.ts       antarmuka Provider (dipakai klien sungguhan dan penyedia palsu di tes)
+│   ├── sse.ts            murni: baca baris aliran SSE (teks, penalaran, potongan pemanggilan alat, usage) dan pesan galat HTTP
+│   ├── deepseek.ts       klien DeepSeek lewat libsoup 3 (GIO/GLib; dimuat saat dipakai)
+│   ├── project.ts        baca berkas Markdown di folder proyek dengan cache (GLib/GIO)
+│   └── apikey.ts         API key: variabel lingkungan, keyring (libsecret), atau file 0600
+│
 ├── markdown/             memahami Markdown (TypeScript murni, tanpa GTK)
 │   ├── syntax.ts         regex untuk heading, daftar, kutipan, tabel, penekanan
 │   ├── inline.ts         parseInline(): format di dalam satu baris
 │   ├── table.ts          tabel: mengenali blok, memecah sel, rapikan, tambah/hapus baris dan kolom
 │   ├── kanban.ts         papan kanban: membaca/menulis Markdown, operasi kartu dan daftar, tag dan tanggal
 │   ├── pango.ts          isi sel tabel (Markdown inline) → markup Pango untuk Gtk.Label
+│   ├── chatmarkup.ts     jawaban asisten (heading, daftar, kutipan, blok kode, inline) → markup Pango
 │   ├── dbml.ts           penerjemah DBML (dbdiagram.io) → diagram ER Mermaid
 │   └── html.ts           markdownToHtml(): untuk Ekspor HTML
 │
@@ -310,14 +340,15 @@ src/
     ├── dialogs.ts        pilih file, konfirmasi simpan, error, tentang
     ├── imageviewer.ts    penampil gambar dengan zoom (cairo)
     ├── kanban.ts         tampilan papan kanban: daftar, kartu, menu, seret-lepas
+    ├── chat.ts           panel Asisten di kanan: pesan, tombol Konteks, pengaturan key dan model
     └── theme.ts          palet warna, font, CSS terang/gelap
 tests/
 ├── run-tests.ts          titik masuk dan pendaftaran tes unit/GUI
 ├── framework.ts          asersi, hasil tes, opsi CLI, folder sementara
 ├── fixtures.ts           data papan kanban bersama untuk tes model dan GUI
-├── unit/                 tes tanpa jendela: inline, HTML, settings, tabel, kanban, bahasa kode, DBML, operasi berkas
+├── unit/                 tes tanpa jendela: inline, HTML, settings, tabel, kanban, bahasa kode, DBML, operasi berkas, asisten (konteks, SSE, sesi), klien DeepSeek (server tiruan)
 │   └── helpers.ts        helper untuk mengambil isi body HTML hasil konversi
-├── gui/                  tes editor, file/folder, gambar, tabel, diagram, kanban, ukuran, ketahanan
+├── gui/                  tes editor, file/folder, gambar, tabel, diagram, kanban, riwayat, asisten, ukuran, ketahanan
 │   ├── context.ts        konteks jendela/editor dan helper tes GUI
 │   ├── kanban-mouse.ts   lima tes seret/klik lewat input mouse X11
 │   └── mouse-input.ts    klien X11/XTest TypeScript melalui Gio
@@ -356,9 +387,11 @@ Kode dibagi menjadi lapisan. Setiap lapisan hanya boleh memakai lapisan di bawah
         ├─ ui/*            komponen antarmuka
         ├─ editor/*        mesin editor
         │    └─ markdown/* aturan Markdown (tanpa GTK)
+        ├─ agent/*         konteks naskah dan klien model (tanpa GTK)
         └─ settings.ts, files.ts, git.ts, gitlog.ts, config.ts
 ```
 
+- **`agent/`** juga tanpa GTK. `ui/chat.ts` memakainya, dan jendela hanya memberinya cara mengambil naskah (`ChatHost`: dokumen aktif, pilihan, berkas proyek). `agent/` tidak tahu soal editor atau widget.
 - **`markdown/`** tidak meng-import GTK sama sekali. Isinya hanya fungsi string → data, jadi paling mudah dipelajari dan diuji.
 - **`editor/`** tidak tahu apa-apa soal file, menu, atau sidebar. `MarkdownView` hanya memberi kabar lewat callback (`onHighlighted`, `onCursorMoved`, `onMessage`).
 - **`ui/`** berisi komponen yang berdiri sendiri. `Outline` tidak kenal editor; ia hanya menerima daftar heading dan memanggil `onJump(baris)` saat diklik. Begitu juga `FileTree`: ia hanya menampilkan folder dan memanggil `onOpenFile(path)`; yang memutuskan cara membuka file (termasuk bertanya dulu jika ada perubahan belum disimpan) adalah jendela.
@@ -496,6 +529,22 @@ buffer teks ──parseBoard()──► KanbanBoard (model + tampilan)
 
 **Dialog** (`editCardDialog`, `promptDialog`, `confirmDialog`) menahan program sampai ditutup, jadi `KanbanBoard.dialogs` bisa diganti, dan tes memakai pengganti.
 
+### Cara kerja asisten (`agent/*`, `ui/chat.ts`)
+
+Model hanya tahu apa yang dikirim, jadi mutu jawaban ditentukan oleh `agent/context.ts`. Tiap pertanyaan membangun konteks baru (naskah bisa berubah di antara pertanyaan) dalam anggaran token (`DEFAULT_BUDGET` = 48.000 token; 1 token ≈ 3 karakter, sengaja boros). Konteks dibagi dua supaya cache prefiks DeepSeek terpakai:
+
+```
+pesan system  (stabil)   instruksi + <peta_proyek> + <dokumen_aktif>     ← sama antar-pertanyaan, jadi prefiksnya di-cache
+riwayat       (dipangkas) pertanyaan dan jawaban sebelumnya, tanpa konteks lamanya
+pesan user    (berubah)  <konteks_tambahan> + pertanyaan                ← pilihan, kursor, @lampiran, potongan relevan
+```
+
+Semua baris naskah yang dikirim diberi nomor di depannya (`12│ teks`, nomor asli di berkasnya, juga pada jendela di sekitar kursor dan pada potongan), sama dengan keluaran `baca_berkas`. Tanpa nomor, model menebak lokasi dan sering meleset; instruksinya melarang mengutip nomor itu sebagai bagian naskah. Tes langsung (`npm run test:live`) memeriksa bahwa tiap kutipan `berkas.md:N` di jawaban menunjuk baris yang benar.
+
+Urutan prioritas dan batas anggarannya: pilihan teks (8%), dokumen aktif (40%; bila lebih panjang diambil jendela baris di sekitar kursor dan sisanya ikut dicari lewat potongan), berkas `@mention` (20% per berkas), peta proyek (6%; makin ringkas jika berkasnya banyak), lalu potongan relevan (40%, paling banyak 10). Potongan berasal dari memecah tiap berkas per heading (bagian panjang dipecah di baris kosong) dan diurutkan dengan BM25 atas kata kunci pertanyaan (bobot 1), pilihan (0,5), dan dua pertanyaan sebelumnya (0,4); kata umum dibuang dan akhiran seperti *-nya*/*-kan* dikupas seadanya. Tidak ada embedding, jadi tanpa unduhan model dan tanpa pengiriman naskah hanya untuk pencarian. Riwayat dibatasi 25% anggaran, dibuang berpasangan dari yang tertua.
+
+`ChatSession.ask()` membangun konteks lalu menjalankan **loop agen**: memanggil `Provider.chat()` dengan empat alat; jika model meminta alat (`toolCalls`), `runTool()` menjalankannya atas daftar berkas (isi editor untuk dokumen aktif, bukan versi disk), hasilnya ditambahkan sebagai pesan `tool`, dan model dipanggil lagi, sampai ia menjawab. Batasnya: 10 putaran per pertanyaan (putaran terakhir dipanggil tanpa alat supaya selalu berakhir dengan jawaban), 6.000 token per hasil alat (berkas panjang dipotong dengan petunjuk `dari_baris` berikutnya), dan total hasil alat per pertanyaan sebesar anggaran konteks; setelah itu alat menjawab "anggaran habis". Argumen yang salah atau berkas yang tidak ada dikembalikan sebagai teks sehingga model bisa memperbaikinya, bukan galat. Pemanggilan alat dan hasilnya hanya hidup selama giliran itu; riwayat tetap hanya pertanyaan dan jawaban. Saat mode berpikir menyala, `reasoning_content` dikembalikan bersama `tool_calls` seperti yang diwajibkan API DeepSeek. Setelah selesai, pasangan tanya-jawab disimpan ke riwayat (galat tidak menambah riwayat; jawaban yang dihentikan di tengah tetap disimpan). `DeepSeek` memanggil `POST /chat/completions` dengan `stream: true` lewat libsoup 3 dan membaca aliran SSE baris demi baris (`Gio.DataInputStream`); pembatalan lewat `Gio.Cancellable`. Panel menggabungkan pembaruan jawaban (±15 kali per detik) dan menampilkan jawaban lewat `chatMarkup()`, yang tahan terhadap teks yang terpotong di tengah blok kode atau penebalan. Tes memakai `Provider` palsu, dan klien sungguhan diuji terhadap server SSE tiruan di 127.0.0.1.
+
 ### Cara kerja zoom gambar (`ui/imageviewer.ts`)
 
 1. Setiap gambar di editor dibungkus `Gtk.EventBox` sendiri, sehingga klik ganda tahu gambar mana yang dimaksud jika satu baris memuat beberapa gambar. Satu klik tetap membuka sintaksnya (`onActivate`); klik ganda (`DOUBLE_BUTTON_PRESS` dari GDK) memanggil `onZoom`, dan menu *Perbesar Gambar* memanggil `MarkdownView.zoomImage()` untuk baris kursor.
@@ -542,12 +591,13 @@ Contoh menambah format baru, misalnya `^superskrip^`:
 
 ## Pengaturan
 
-Disimpan di `$XDG_CONFIG_HOME/nyerat/settings.json` (bawaan `~/.config/nyerat/settings.json`): mode gelap, sidebar dan tab yang terakhir dipilih (Berkas, Outline, atau Riwayat), folder yang terakhir dibuka, mode fokus, mode typewriter, auto save, ukuran jendela, dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
+Disimpan di `$XDG_CONFIG_HOME/nyerat/settings.json` (bawaan `~/.config/nyerat/settings.json`): mode gelap, sidebar dan tab yang terakhir dipilih (Berkas, Outline, atau Riwayat), folder yang terakhir dibuka, mode fokus, mode typewriter, auto save, ukuran jendela, panel Asisten (terbuka atau tidak) beserta model dan mode berpikirnya, dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
 
-Nilai bawaan: sidebar terbuka pada tab Outline, fokus/typewriter mati, ukuran jendela 1100 × 760 piksel, dan mode gelap mengikuti tema sistem (`dark: null`). Setelah mode gelap dipilih lewat menu, pilihan itu disimpan. Ukuran awal jendela dibatasi ke area kerja monitor. Mode source dan pilihan tampilan papan/teks tidak disimpan antar proses.
+Nilai bawaan: sidebar terbuka pada tab Outline, panel Asisten tertutup dengan model `deepseek-flash` tanpa mode berpikir, fokus/typewriter mati, ukuran jendela 1100 × 760 piksel, dan mode gelap mengikuti tema sistem (`dark: null`). Setelah mode gelap dipilih lewat menu, pilihan itu disimpan. Ukuran awal jendela dibatasi ke area kerja monitor. Mode source dan pilihan tampilan papan/teks tidak disimpan antar proses.
 
 ## Keterbatasan
 
+- Asisten: hanya DeepSeek, hanya chat (belum bisa menyisipkan jawaban ke dokumen atau menjalankan pemeriksaan kontradiksi otomatis; kontradiksi bisa ditanyakan lewat chat dan model menelusurinya sendiri), dan riwayat percakapan tidak disimpan antar proses. Pencarian (`cari_naskah` dan potongan otomatis) berbasis kata kunci (BM25), bukan makna, jadi kualitas penelusuran bergantung pada kata kunci yang dipilih model; `cari_teks` mencari teks persis dan tidak mengenali sinonim atau ejaan berbeda. Penelusuran memakan putaran model sehingga pertanyaan yang luas lebih lambat dan memakai lebih banyak token. Nama model mengikuti dokumentasi DeepSeek saat ini; jika API menolak nama model, galatnya tampil di panel. Perkiraan token kasar (3 karakter per token). Jawaban tampil sebagai teks terformat, bukan Markdown penuh (tanpa tabel dan gambar)
 - Gambar yang diubah di disk tidak dimuat ulang sampai aplikasi dibuka lagi (ada cache per URI); GIF animasi hanya menampilkan frame pertama, termasuk di penampil zoom
 - **Seret kartu telah diuji lewat input mouse X11/XTest.** `npm test` dan `npm run test:ui` memeriksa lima skenario melalui event yang benar-benar diterima GTK, termasuk perubahan Markdown, undo/redo, dan simpan. Jalur input ini berhasil di lingkungan pengembangan, sementara helper klik lama `Gdk.test_simulate_button` tidak meneruskan tombol dengan andal. Pengujian manual dengan mouse fisik dan sesi Wayland masih belum terverifikasi
 - Papan: hanya item daftar di tingkat atas yang menjadi kartu (daftar bersarang dipertahankan sebagai catatan kartu); baris biasa di antara dua kartu dipindahkan ke akhir daftar saat disimpan. Belum ada arsip, pemilih tanggal, atau penyuntingan label lewat antarmuka (tulis `#tag` dan `@{YYYY-MM-DD}` di judul kartu), dan memindahkan kartu dengan keyboard hanya lewat menu klik kanan

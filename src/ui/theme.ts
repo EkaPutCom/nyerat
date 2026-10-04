@@ -49,6 +49,17 @@ const buildCss = (p: Palette): string => `
     .sidebar treeview.view.dnd { border: 1px solid ${p.accent}; border-radius: 3px; background-color: alpha(${p.accent}, 0.15); }
     .sidebar-tabs button { padding: 3px 6px; min-width: 0; font-size: 12px; }
     .side-meta { font-size: 11px; color: ${p.faint}; }
+    .chat-input, .chat-input text { background-color: ${p.bg}; color: ${p.fg}; font-size: 13px; }
+    .chat-user { background-color: alpha(${p.accent}, 0.16); border-radius: 10px; padding: 8px 10px; color: ${p.fg}; font-size: 13px; }
+    .chat-assistant { color: ${p.fg}; font-size: 13px; }
+    .chat-thinking { color: ${p.faint}; font-size: 12px; font-style: italic; }
+    /* Popover memakai latar tema GTK, bukan latar sidebar: warna redup sidebar jadi tak terbaca di sana.
+       Warnanya juga harus mengikuti tema GTK (@theme_fg_color), bukan palet aplikasi: keduanya bisa berbeda mode. */
+    .chat-pop label { color: @theme_fg_color; }
+    .chat-pop label.side-title, .chat-pop label.side-meta { opacity: 0.7; }
+    .chat-step { color: ${p.faint}; font-size: 12px; }
+    .chat-error { color: #c9372c; font-size: 12px; }
+    .chat button.flat { color: ${p.sideFg}; }
     .history-text, .history-text text { background-color: ${p.bg}; color: ${p.fg}; font-size: 13px; }
     .md-table { border-top: 1px solid alpha(${p.fg}, 0.28); border-left: 1px solid alpha(${p.fg}, 0.28); }
     .md-table-cell { border-right: 1px solid alpha(${p.fg}, 0.28); border-bottom: 1px solid alpha(${p.fg}, 0.28); }

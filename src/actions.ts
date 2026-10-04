@@ -99,6 +99,7 @@ export function registerActions(app: Gtk.Application, w: MainWindow): void {
     // Tampilan
     const s = w.settings;
     toggle('sidebar', ['<Control>backslash', '<Control><Shift>1'], s.sidebar);
+    toggle('chat', ['<Control><Shift>a'], s.chat);
     toggle('source', ['<Control>slash'], false);
     toggle('focus', ['F8'], s.focus);
     toggle('typewriter', ['F9'], s.typewriter);

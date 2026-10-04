@@ -28,6 +28,9 @@ import { htmlTests } from './unit/html.js';
 import { dbmlTests } from './unit/dbml.js';
 import { gitLogTests } from './unit/gitlog.js';
 import { fileOpsTests } from './unit/fileops.js';
+import { agentTests, apiKeyTests, toolTests } from './unit/agent.js';
+import { deepseekTests } from './unit/deepseek.js';
+import { chatTests } from './gui/chat.js';
 import { syntaxHidingTests } from './gui/syntax.js';
 import { listTests } from './gui/lists.js';
 import { formatTests } from './gui/format.js';
@@ -59,6 +62,10 @@ function runUnitTests(): void {
     dbmlTests();
     gitLogTests();
     fileOpsTests();
+    agentTests();
+    apiKeyTests();
+    toolTests();
+    deepseekTests();
 }
 
 function runGuiTests(app: Gtk.Application): void {
@@ -84,6 +91,7 @@ function runGuiTests(app: Gtk.Application): void {
     sampleTests(c);
     windowSizeTests(c);
     historyTests(c);
+    chatTests(c);
     robustnessTests(c);
 
     const shot = optVal('screenshot');

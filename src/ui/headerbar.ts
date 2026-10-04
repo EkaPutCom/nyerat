@@ -64,5 +64,6 @@ export function createHeaderBar(): Gtk.HeaderBar {
     menuButton.set_image(Gtk.Image.new_from_icon_name('open-menu-symbolic', Gtk.IconSize.BUTTON));
     bar.pack_end(menuButton);
     bar.pack_end(iconButton('document-save-symbolic', 'app.save', 'Simpan (Ctrl+S)'));
+    bar.pack_end(iconButton('user-available-symbolic', 'app.chat', 'Asisten (Ctrl+Shift+A)', true));
     return bar;
 }

@@ -45,6 +45,7 @@ Bahasa: komentar kode, pesan commit, teks antarmuka, nama tes, dan dokumentasi d
 ```
 src/
   markdown/   aturan Markdown, TypeScript murni, TANPA import GTK (mudah diuji)
+  agent/      asisten AI: penyusunan konteks naskah dan klien model (context/session/sse murni, tanpa GTK)
   editor/     mesin editor (MarkdownView, tag, penyorot, gambar, tabel, kode)
   ui/         komponen antarmuka mandiri (sidebar, kanban, dialog, ...)
   window.ts   satu-satunya tempat komponen saling dihubungkan
@@ -56,7 +57,7 @@ tests/
   samples/    dokumen contoh (dipakai tes dan pemeriksaan manual)
 ```
 
-Arah ketergantungan: `window.ts` → `ui/*`, `editor/*` → `markdown/*`. Lapisan bawah tidak boleh meng-import lapisan atas. `editor/` tidak boleh tahu soal `ui/`, file, atau menu; ia memberi kabar lewat callback (`onHighlighted`, `onCursorMoved`, ...) yang disambungkan di `window.ts`.
+Arah ketergantungan: `window.ts` → `ui/*`, `editor/*` → `markdown/*`, `agent/*`. Lapisan bawah tidak boleh meng-import lapisan atas. `editor/` tidak boleh tahu soal `ui/`, file, atau menu; ia memberi kabar lewat callback (`onHighlighted`, `onCursorMoved`, ...) yang disambungkan di `window.ts`.
 
 ## Konvensi kode
 
@@ -76,8 +77,9 @@ Detail dan alasannya ada di README, bagian "Hal teknis yang perlu diketahui".
 - **Teks buffer adalah sumber kebenaran** untuk papan kanban. Perubahan dari papan lewat `commit()` → `serializeBoard()` → `MarkdownView.replaceText()` agar jadi satu langkah undo.
 - **Penyorotan ditunda** dengan `GLib.idle_add(PRIORITY_HIGH_IDLE)` (`queueHighlight`, `queueCursorUpdate`). Jangan memanggil `highlight()` langsung dari handler yang bisa terpicu beruntun.
 - **Jangan `remove_tag()` di seluruh buffer lalu pasang ulang.** GTK lalu menata ulang seluruh dokumen; itu dulu membuat mengetik di dokumen 30 KB ±300 ms per ketukan. Pakai `setTagRanges()`/`setTagGroup()` atau `LineTagger` dari `editor/tagsync.ts`. Tag sintaks harus tetap di dalam satu baris (boleh mencakup newline-nya) supaya `LineTagger` bisa dipakai.
-- **Lebar jendela:** ScrolledWindow editor memakai `hscrollbar_policy: EXTERNAL`, bukan `NEVER`, supaya jendela bisa mengecil.
+- **Lebar jendela:** ScrolledWindow editor memakai `hscrollbar_policy: EXTERNAL`, bukan `NEVER`, supaya jendela bisa mengecil. Hal yang sama berlaku untuk ScrolledWindow di panel Asisten (`ui/chat.ts`): dengan `NEVER`, teks panjang tanpa spasi di kotak pesan melebarkan panel; tesnya ada di `tests/gui/chat.ts`.
 - **Diagram Mermaid** dirender WebKitGTK tak terlihat (`editor/mermaidrender.ts`), memuat `dist/mermaid.min.js` yang disalin dari `node_modules` oleh plugin di `vite.config.ts`. Lapisannya (`editor/mermaid.ts`) memakai tag `mermaidhide` sendiri; jangan dipakai bersama `tablehide` karena tiap lapisan menghapus tag-nya di seluruh buffer. Blok ```dbml diterjemahkan ke Mermaid `erDiagram` oleh `markdown/dbml.ts` dan memakai lapisan yang sama. Tes pertama yang merender butuh beberapa detik (WebKit dijalankan).
+- **Asisten:** konteks naskah disusun di `agent/context.ts` (murni, diuji di `tests/unit/agent.ts`); jaga agar bagian `system` stabil antar-pertanyaan (cache prefiks DeepSeek) dan semua bagian yang berubah masuk ke `note`. Alat penelusuran model ada di `agent/tools.ts` dan hanya-baca; alat baru harus murni (bekerja di atas `SourceFile[]`), tidak melempar, dan terdaftar di `TOOLS` serta `runTool()`/`describeCall()`. Loop agen ada di `agent/session.ts`. Tes tidak boleh memanggil API sungguhan: pakai `Provider` palsu (`panel.makeProvider`) dan `KeyStore` palsu (`panel.keyStore`); `systemKeyStore` menyentuh keyring dan file di `~/.config`. libsoup dan libsecret dimuat dengan `import()` dinamis supaya typelib yang hilang tidak mematikan aplikasi. Tes yang menunggu Promise memakai `settle()` dari `tests/framework.ts`.
 - GJS tidak punya HMR; perubahan baru terlihat setelah aplikasi dibuka ulang (`npm run dev` melakukannya otomatis).
 
 ## Menambah atau mengubah fitur

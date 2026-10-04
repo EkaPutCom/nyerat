@@ -17,6 +17,7 @@
     "bench": "npm run build && xvfb-run -a -s '-screen 0 1280x800x24' env GDK_BACKEND=x11 gjs -m dist/bench.js",
     "bench:save": "npm run build && xvfb-run -a -s '-screen 0 1280x800x24' env GDK_BACKEND=x11 gjs -m dist/bench.js --save=bench/$(date +%Y%m%d-%H%M%S).json",
     "bench:compare": "npm run build && xvfb-run -a -s '-screen 0 1280x800x24' env GDK_BACKEND=x11 gjs -m dist/bench.js --compare=bench/baseline.json",
+    "test:live": "npm run build && set -a && . ./.env && set +a && gjs -m dist/live-test.js",
     "docs": "npm run build && XDG_CONFIG_HOME=$(mktemp -d) gjs -m dist/capture.js"
   },
   "devDependencies": {
@@ -29,6 +30,8 @@
     "@girs/gtk-3.0": "^5.5.0",
     "@girs/gtksource-4": "^5.5.0",
     "@girs/pango-1.0": "^5.5.0",
+    "@girs/secret-1": "^5.5.0",
+    "@girs/soup-3.0": "^5.5.0",
     "@girs/webkit2-4.1": "^5.5.0",
     "gifenc": "^1.0.3",
     "mermaid": "^12.1.0",
