@@ -21,6 +21,7 @@ import { MarkdownView, type Mode } from './editor/view.js';
 import { Outline } from './ui/outline.js';
 import { History } from './ui/history.js';
 import { HistoryViewer } from './ui/historyviewer.js';
+import { remapPath } from './fileops.js';
 import { FileTree, isDirectory } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
 import { FindBar } from './ui/findbar.js';
@@ -111,6 +112,13 @@ export class MainWindow {
         this.editor.getBaseDir = () => this.file ? GLib.path_get_dirname(this.file) : GLib.get_home_dir();
         this.outline.onJump = line => this.editor.jumpToLine(line);
         this.fileTree.onOpenFile = file => this.openFile(file);
+        this.fileTree.onMoved = (from, to) => {
+            const moved = this.file ? remapPath(this.file, from, to) : null;
+            if (!moved) return;
+            this.file = moved;  // dokumen yang terbuka ikut pindah; isi buffer tidak berubah
+            this.updateTitle();
+            this.syncHistory(true);
+        };
         this.history.onOpen = commit => {
             if (this.file) new HistoryViewer(this.win, this.file, commit, this.dark).show();
         };

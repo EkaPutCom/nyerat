@@ -126,6 +126,114 @@ export function folderTests(c: GuiContext): void {
         w3.win.destroy();
         pump();
     });
+    // ---------- Kelola berkas lewat pohon ----------
+    const prompts: (string | null)[] = [];
+    const errors: string[] = [];
+    ft.dialogs = { prompt: () => prompts.shift() ?? null, error: msg => { errors.push(msg); } };
+    const menuLabels = (m: Gtk.Menu) => m.get_children().map(i => (i as Gtk.MenuItem).label);
+    const activate = (m: Gtk.Menu, label: string) => (m.get_children().find(i => (i as Gtk.MenuItem).label === label) as Gtk.MenuItem).activate();
+    const opened: string[] = [];
+    const openBefore = ft.onOpenFile;
+    ft.onOpenFile = p => { opened.push(p); openBefore(p); };
+    ft.setRoot(proj);
+    w.file = null;
+    buf.set_modified(false);
+
+    test('menu klik kanan berisi File Baru dan Folder Baru', () => {
+        eq(menuLabels(ft.contextMenu(null)), ['File Baru…', 'Folder Baru…']);
+    });
+    test('klik kanan area kosong membuat file di root dan membukanya', () => {
+        prompts.push('kosong-baru');
+        activate(ft.contextMenu(null), 'File Baru…');
+        pump();
+        ok(waitFor(() => childNames(null).includes('kosong-baru.md')), 'file tidak muncul di pohon');
+        ok(GLib.file_test(GLib.build_filenamev([proj, 'kosong-baru.md']), GLib.FileTest.EXISTS), 'file tidak ada di disk');
+        eq(opened, [GLib.build_filenamev([proj, 'kosong-baru.md'])], 'file tidak dibuka');
+        eq(w.file, GLib.build_filenamev([proj, 'kosong-baru.md']), 'file editor');
+    });
+    test('klik kanan folder membuat file di dalam folder itu', () => {
+        prompts.push('di-sub.md');
+        activate(ft.contextMenu(ft.store.get_path(rowOf(null, 'sub'))!), 'File Baru…');
+        pump();
+        ok(GLib.file_test(GLib.build_filenamev([proj, 'sub', 'di-sub.md']), GLib.FileTest.EXISTS), 'file tidak ada di disk');
+        const sub = rowOf(null, 'sub');
+        ok(childNames(sub).includes('di-sub.md'), 'file tidak muncul di folder');
+        ok(ft.view.row_expanded(ft.store.get_path(sub)!), 'folder tujuan tidak terbuka');
+    });
+    test('klik kanan file membuat file di folder induknya', () => {
+        const row = rowOf(rowOf(null, 'sub'), 'c.md');
+        prompts.push('sebelah');
+        activate(ft.contextMenu(ft.store.get_path(row)!), 'File Baru…');
+        pump();
+        ok(GLib.file_test(GLib.build_filenamev([proj, 'sub', 'sebelah.md']), GLib.FileTest.EXISTS), 'file tidak di folder induk');
+    });
+    test('Folder Baru membuat folder di root dan di dalam folder', () => {
+        prompts.push('baru-root');
+        activate(ft.contextMenu(null), 'Folder Baru…');
+        ok(waitFor(() => childNames(null).includes('baru-root')), 'folder root tidak muncul');
+        prompts.push('baru-dalam');
+        activate(ft.contextMenu(ft.store.get_path(rowOf(null, 'z-kosong'))!), 'Folder Baru…');
+        ok(GLib.file_test(GLib.build_filenamev([proj, 'z-kosong', 'baru-dalam']), GLib.FileTest.IS_DIR), 'folder dalam tidak dibuat');
+        ok(childNames(rowOf(null, 'z-kosong')).includes('baru-dalam'), 'folder dalam tidak tampil');
+    });
+    test('nama bentrok atau tidak valid menampilkan galat, dialog dibatalkan tidak membuat apa-apa', () => {
+        errors.length = 0;
+        prompts.push('a');
+        activate(ft.contextMenu(null), 'File Baru…');
+        eq(errors.length, 1, 'galat bentrok');
+        prompts.push('x/y');
+        activate(ft.contextMenu(null), 'Folder Baru…');
+        eq(errors.length, 2, 'galat nama tidak valid');
+        const before = childNames(null).length;
+        prompts.push(null);
+        activate(ft.contextMenu(null), 'File Baru…');
+        eq(childNames(null).length, before, 'dibatalkan');
+    });
+
+    const abs = (...p: string[]) => GLib.build_filenamev([proj, ...p]);
+    test('pindahkan file ke dalam folder', () => {
+        errors.length = 0;
+        ok(ft.moveTo(abs('Catatan.markdown'), abs('z-kosong')), 'moveTo gagal');
+        ok(GLib.file_test(abs('z-kosong', 'Catatan.markdown'), GLib.FileTest.EXISTS), 'file belum pindah');
+        ok(!childNames(null).includes('Catatan.markdown'), 'baris lama masih ada');
+        ok(childNames(rowOf(null, 'z-kosong')).includes('Catatan.markdown'), 'baris baru tidak ada');
+        eq(errors, [], 'galat');
+    });
+    test('pindahkan file keluar dari folder ke root', () => {
+        ok(ft.moveTo(abs('z-kosong', 'Catatan.markdown'), proj), 'moveTo gagal');
+        ok(childNames(null).includes('Catatan.markdown'), 'baris tidak muncul di root');
+        ok(!childNames(rowOf(null, 'z-kosong')).includes('Catatan.markdown'), 'baris lama masih ada');
+    });
+    test('pindahkan folder ke folder lain dan keluar lagi', () => {
+        ok(ft.moveTo(abs('baru-root'), abs('sub')), 'moveTo gagal');
+        ok(GLib.file_test(abs('sub', 'baru-root'), GLib.FileTest.IS_DIR), 'folder belum pindah');
+        ok(childNames(rowOf(null, 'sub')).includes('baru-root'), 'baris tidak muncul di folder tujuan');
+        ok(ft.moveTo(abs('sub', 'baru-root'), proj), 'moveTo keluar gagal');
+        ok(childNames(null).includes('baru-root'), 'baris tidak kembali ke root');
+    });
+    test('folder tidak bisa dipindah ke dalam dirinya atau turunannya, bentrok nama ditolak', () => {
+        errors.length = 0;
+        ok(!ft.moveTo(abs('sub'), abs('sub', 'dalam')), 'masuk ke turunan seharusnya gagal');
+        eq(errors.length, 1, 'galat');
+        ok(GLib.file_test(abs('sub', 'dalam'), GLib.FileTest.IS_DIR), 'folder hilang');
+        write('z-kosong/a.md');
+        ok(!ft.moveTo(abs('a.md'), abs('z-kosong')), 'bentrok seharusnya gagal');
+        ok(GLib.file_test(abs('a.md'), GLib.FileTest.EXISTS), 'sumber hilang');
+    });
+    test('memindahkan file yang sedang terbuka memperbarui path dokumen', () => {
+        ok(w.load(abs('sub', 'c.md')), 'load');
+        ok(ft.moveTo(abs('sub', 'c.md'), proj), 'moveTo');
+        eq(w.file, abs('c.md'), 'path dokumen');
+        ok(!buf.get_modified(), 'dokumen tidak boleh berubah');
+        ok(ft.moveTo(abs('sub'), abs('z-kosong')), 'pindah folder induk');
+        ok(w.load(abs('z-kosong', 'sub', 'dalam', 'd.md')), 'load d.md');
+        ok(ft.moveTo(abs('z-kosong', 'sub'), proj), 'kembalikan');
+        eq(w.file, abs('sub', 'dalam', 'd.md'), 'path dokumen setelah folder induk pindah');
+    });
+    buf.set_modified(false);
+    w.file = null;
+    ft.onOpenFile = openBefore;
+
     test('menutup folder mengosongkan pohon', () => {
         ft.setRoot(null);
         eq(childNames(null), [], 'baris');

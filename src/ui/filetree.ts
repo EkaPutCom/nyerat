@@ -9,13 +9,20 @@
 // - File dan folder tersembunyi (diawali titik) serta node_modules tidak ditampilkan.
 
 import Gtk from 'gi://Gtk?version=3.0';
+import Gdk from 'gi://Gdk?version=3.0';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
+import { createFile, createFolder, moveEntry } from '../fileops.js';
+import { promptDialog, showError } from './dialogs.js';
 
 export const MARKDOWN_EXTENSIONS = ['.md', '.markdown', '.mdown', '.mkd'];
 const SKIPPED_FOLDERS = new Set(['node_modules']);
+const DRAG_TARGET = 'application/x-nyerat-path';
+const EXPAND_DELAY = 600;   // ms; folder tertutup dibuka otomatis bila ditahan saat drag
+const NO_ACTION = 0 as Gdk.DragAction;
+const NO_DEFAULTS = 0 as Gtk.DestDefaults;
 const REFRESH_DELAY = 150;  // ms; perubahan beruntun di disk digabung jadi satu refresh
 
 // Kolom di Gtk.TreeStore.
@@ -68,11 +75,20 @@ export class FileTree {
     root: string | null = null;
 
     onOpenFile: (path: string) => void = () => {};  // file diklik
+    onMoved: (from: string, to: string) => void = () => {};  // file/folder dipindah lewat pohon
+
+    // Dapat diganti di tes: dialog yang menahan program tidak bisa dipakai di sana.
+    dialogs = {
+        prompt: (title: string, label: string): string | null => promptDialog(this.parentWindow(), { title, label }),
+        error: (message: string): void => showError(this.parentWindow() ?? new Gtk.Window(), message),
+    };
 
     private readonly title: Gtk.Label;
     private readonly pages: Gtk.Stack;
     private monitors = new Map<string, Gio.FileMonitor>();  // path folder → pemantau
     private pendingRefresh = new Map<string, number>();     // path folder → id timeout
+    private dragSource: string | null = null;               // path yang sedang di-drag
+    private expandTimer = 0;
 
     constructor() {
         this.store = new Gtk.TreeStore();
@@ -92,6 +108,8 @@ export class FileTree {
         column.pack_start(text, true);
         column.add_attribute(text, 'text', Col.Name);
         this.view.append_column(column);
+        this.view.connect('button-press-event', (_v, ev) => this.onButtonPress(ev as unknown as Gdk.Event));
+        this.setupDrag();
         this.view.connect('row-activated', (_view, path) => this.activate(path));
         this.view.connect('test-expand-row', (_view, iter) => {
             this.loadChildren(iter);
@@ -117,8 +135,13 @@ export class FileTree {
             ellipsize: Pango.EllipsizeMode.END });
         this.title.get_style_context().add_class('side-title');
 
+        // Judul = folder root; lepas item di sini memindahkannya ke luar semua subfolder.
+        const titleBox = new Gtk.EventBox();
+        titleBox.add(this.title);
+        this.setupTitleDrop(titleBox);
+
         this.widget = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-        this.widget.pack_start(this.title, false, false, 0);
+        this.widget.pack_start(titleBox, false, false, 0);
         this.widget.pack_start(this.pages, true, true, 0);
         this.widget.show_all();
     }
@@ -183,6 +206,185 @@ export class FileTree {
                 this.addRow(parent, entry, ok ? iter : null);
             }
         }
+    }
+
+    // ---------- Buat file/folder ----------
+
+    private parentWindow(): Gtk.Window | null {
+        const top = this.widget.get_toplevel();
+        return top instanceof Gtk.Window ? top : null;
+    }
+
+    // Folder tempat item baru dibuat untuk baris yang diklik kanan: folder itu sendiri,
+    // atau folder induk file; null (area kosong) = root.
+    private targetDir(treePath: Gtk.TreePath | null): string | null {
+        if (treePath) {
+            const [ok, iter] = this.store.get_iter(treePath);
+            if (ok) {
+                const path = this.get(iter, Col.Path);
+                return this.get(iter, Col.IsDir) ? path : GLib.path_get_dirname(path);
+            }
+        }
+        return this.root;
+    }
+
+    // Tanya nama lalu buat file/folder di dir. File baru langsung dibuka di editor.
+    create(kind: 'file' | 'folder', dir: string): string | null {
+        const label = kind === 'file' ? 'Nama file' : 'Nama folder';
+        const name = this.dialogs.prompt(kind === 'file' ? 'File Baru' : 'Folder Baru', label);
+        if (name === null) return null;
+        let path: string;
+        try {
+            path = kind === 'file' ? createFile(dir, name) : createFolder(dir, name);
+        } catch (e) {
+            this.dialogs.error((e as Error).message);
+            return null;
+        }
+        this.refresh(dir);
+        this.reveal(path);
+        if (kind === 'file') this.onOpenFile(path);
+        return path;
+    }
+
+    // Menu klik kanan untuk baris tertentu (null = area kosong).
+    contextMenu(treePath: Gtk.TreePath | null): Gtk.Menu {
+        const dir = this.targetDir(treePath);
+        const menu = new Gtk.Menu();
+        for (const [label, kind] of [['File Baru…', 'file'], ['Folder Baru…', 'folder']] as const) {
+            const item = new Gtk.MenuItem({ label, sensitive: dir !== null });
+            item.connect('activate', () => { if (dir) this.create(kind, dir); });
+            menu.append(item);
+        }
+        menu.show_all();
+        return menu;
+    }
+
+    private onButtonPress(event: Gdk.Event): boolean {
+        const [, x, y] = event.get_coords();
+        const [, button] = event.get_button();
+        const [found, treePath] = this.view.get_path_at_pos(Math.round(x), Math.round(y));
+        if (button === 1) {
+            this.dragSource = found && treePath ? this.pathOf(treePath) : null;
+            return false;
+        }
+        if (button !== 3 || !this.root) return false;
+        const row = found ? treePath : null;
+        if (row) this.view.get_selection().select_path(row);
+        else this.view.get_selection().unselect_all();
+        this.contextMenu(row).popup_at_pointer(event);
+        return true;
+    }
+
+    private pathOf(treePath: Gtk.TreePath): string | null {
+        const [ok, iter] = this.store.get_iter(treePath);
+        return ok ? this.get(iter, Col.Path) : null;
+    }
+
+    // ---------- Pindah lewat drag and drop ----------
+
+    private setupDrag(): void {
+        const targets = [Gtk.TargetEntry.new(DRAG_TARGET, Gtk.TargetFlags.SAME_APP, 0)];
+        this.view.enable_model_drag_source(Gdk.ModifierType.BUTTON1_MASK, targets, Gdk.DragAction.MOVE);
+        // Tujuan dipasang tanpa model, supaya GTK tidak menolak target yang bukan baris model.
+        this.view.drag_dest_set(NO_DEFAULTS, targets, Gdk.DragAction.MOVE);
+
+        this.view.connect('drag-motion', (_v, ctx, x, y, time) => {
+            const dir = this.dropDirAt(x, y);
+            const valid = this.canMoveTo(dir);
+            this.view.set_drag_dest_row(valid ? this.dropRowAt(x, y) : null, Gtk.TreeViewDropPosition.INTO_OR_AFTER);
+            this.scheduleExpand(x, y);
+            Gdk.drag_status(ctx, valid ? Gdk.DragAction.MOVE : NO_ACTION, time);
+            return true;
+        });
+        this.view.connect('drag-leave', () => {
+            this.view.set_drag_dest_row(null, Gtk.TreeViewDropPosition.INTO_OR_AFTER);
+            this.cancelExpand();
+        });
+        this.view.connect('drag-drop', (_v, ctx, x, y, time) => {
+            this.cancelExpand();
+            this.view.set_drag_dest_row(null, Gtk.TreeViewDropPosition.INTO_OR_AFTER);
+            const dir = this.dropDirAt(x, y);
+            const ok = this.canMoveTo(dir) && this.moveTo(this.dragSource!, dir!);
+            Gtk.drag_finish(ctx, ok, false, time);
+            return true;
+        });
+        this.view.connect('drag-end', () => { this.dragSource = null; });
+    }
+
+    private setupTitleDrop(box: Gtk.EventBox): void {
+        const targets = [Gtk.TargetEntry.new(DRAG_TARGET, Gtk.TargetFlags.SAME_APP, 0)];
+        box.drag_dest_set(NO_DEFAULTS, targets, Gdk.DragAction.MOVE);
+        box.connect('drag-motion', (_b, ctx, _x, _y, time) => {
+            const valid = this.canMoveTo(this.root);
+            Gdk.drag_status(ctx, valid ? Gdk.DragAction.MOVE : NO_ACTION, time);
+            if (valid) box.get_style_context().add_class('side-drop'); else box.get_style_context().remove_class('side-drop');
+            return true;
+        });
+        box.connect('drag-leave', () => box.get_style_context().remove_class('side-drop'));
+        box.connect('drag-drop', (_b, ctx, _x, _y, time) => {
+            box.get_style_context().remove_class('side-drop');
+            const ok = this.canMoveTo(this.root) && this.moveTo(this.dragSource!, this.root!);
+            Gtk.drag_finish(ctx, ok, false, time);
+            return true;
+        });
+    }
+
+    private dropRowAt(x: number, y: number): Gtk.TreePath | null {
+        const [found, treePath] = this.view.get_dest_row_at_pos(x, y);
+        return found ? treePath : null;
+    }
+
+    // Folder tujuan di posisi itu: folder yang ditunjuk, folder induk file yang ditunjuk, atau root.
+    private dropDirAt(x: number, y: number): string | null {
+        return this.targetDir(this.dropRowAt(x, y));
+    }
+
+    // Lepas ke folder tempat item sudah berada = tidak berguna, dan folder ke dalam dirinya sendiri dilarang.
+    private canMoveTo(dir: string | null): boolean {
+        const source = this.dragSource;
+        if (!source || !dir) return false;
+        if (GLib.path_get_dirname(source) === dir) return false;
+        return dir !== source && !dir.startsWith(`${source}/`);
+    }
+
+    private scheduleExpand(x: number, y: number): void {
+        this.cancelExpand();
+        const treePath = this.dropRowAt(x, y);
+        if (!treePath || this.view.row_expanded(treePath)) return;
+        const [ok, iter] = this.store.get_iter(treePath);
+        if (!ok || !this.get(iter, Col.IsDir)) return;
+        this.expandTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, EXPAND_DELAY, () => {
+            this.expandTimer = 0;
+            this.view.expand_row(treePath, false);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    private cancelExpand(): void {
+        if (this.expandTimer) GLib.source_remove(this.expandTimer);
+        this.expandTimer = 0;
+    }
+
+    // Pindahkan source ke dalam dir, perbarui pohon, dan kabari pemilik (file yang terbuka ikut berpindah).
+    moveTo(source: string, dir: string): boolean {
+        let target: string | null;
+        try {
+            target = moveEntry(source, dir);
+        } catch (e) {
+            this.dialogs.error((e as Error).message);
+            return false;
+        }
+        if (!target) return false;
+        this.refresh(GLib.path_get_dirname(source));
+        this.refresh(dir);
+        const dirIter = dir === this.root ? null : this.findRow(dir, false);
+        if (dirIter) {
+            const dirPath = this.store.get_path(dirIter);
+            if (dirPath && this.get(dirIter, Col.Loaded)) this.view.expand_row(dirPath, false);
+        }
+        this.reveal(target);
+        this.onMoved(source, target);
+        return true;
     }
 
     // ---------- Baris ----------

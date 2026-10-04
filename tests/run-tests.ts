@@ -27,6 +27,7 @@ import { codeLanguageTests } from './unit/codelang.js';
 import { htmlTests } from './unit/html.js';
 import { dbmlTests } from './unit/dbml.js';
 import { gitLogTests } from './unit/gitlog.js';
+import { fileOpsTests } from './unit/fileops.js';
 import { syntaxHidingTests } from './gui/syntax.js';
 import { listTests } from './gui/lists.js';
 import { formatTests } from './gui/format.js';
@@ -39,6 +40,7 @@ import { tableGridTests } from './gui/table.js';
 import { kanbanBoardTests } from './gui/kanban.js';
 import { kanbanMouseTests } from './gui/kanban-mouse.js';
 import { folderTests } from './gui/folder.js';
+import { folderMouseTests } from './gui/folder-mouse.js';
 import { sampleTests } from './gui/sample.js';
 import { windowSizeTests } from './gui/window.js';
 import { robustnessTests } from './gui/robust.js';
@@ -56,6 +58,7 @@ function runUnitTests(): void {
     htmlTests();
     dbmlTests();
     gitLogTests();
+    fileOpsTests();
 }
 
 function runGuiTests(app: Gtk.Application): void {
@@ -77,6 +80,7 @@ function runGuiTests(app: Gtk.Application): void {
     // mouse selagi aksi masih terhubung ke jendela konteks ini.
     if (opt('with-kanban-mouse')) kanbanMouseTests(c);
     folderTests(c);
+    if (opt('with-kanban-mouse')) folderMouseTests(c);
     sampleTests(c);
     windowSizeTests(c);
     historyTests(c);

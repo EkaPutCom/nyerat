@@ -129,7 +129,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 
 **Tampilan**
 - Sidebar dengan tiga tab:
-  - **Berkas**: pohon folder yang dibuka (lewat tombol folder di header bar, `Ctrl+Shift+O`, atau dengan memilih folder di dialog Buka File), berisi subfolder dan file Markdown (`.md`, `.markdown`, `.mdown`, `.mkd`). Klik file untuk membukanya; file yang sedang dibuka ikut disorot. File/folder tersembunyi dan `node_modules` tidak ditampilkan. Pohon diperbarui otomatis saat ada file yang ditambah atau dihapus di disk, dan folder terakhir dibuka lagi saat aplikasi dijalankan
+  - **Berkas**: pohon folder yang dibuka (lewat tombol folder di header bar, `Ctrl+Shift+O`, atau dengan memilih folder di dialog Buka File), berisi subfolder dan file Markdown (`.md`, `.markdown`, `.mdown`, `.mkd`). Klik file untuk membukanya; file yang sedang dibuka ikut disorot. File/folder tersembunyi dan `node_modules` tidak ditampilkan. **Klik kanan** pada folder, file, atau area kosong membuka menu *File Baru…* dan *Folder Baru…*: item dibuat di folder yang diklik (untuk file: di folder induknya; untuk area kosong: di folder root). Nama file tanpa ekstensi Markdown diberi `.md`, nama yang kosong, memuat `/`, diawali titik, atau sudah ada ditolak dengan pesan galat; file baru langsung dibuka di editor. **Seret dan lepas** memindahkan file atau folder: lepas di sebuah folder untuk memasukkannya ke sana (folder tertutup yang ditahan sebentar terbuka sendiri), lepas di file untuk memindahkannya ke folder file itu, atau lepas di judul pohon/area kosong untuk mengeluarkannya ke folder root. Folder tidak bisa dipindah ke dalam dirinya sendiri, dan nama yang bentrok di folder tujuan ditolak tanpa menimpa. Jika dokumen yang terbuka (atau folder induknya) dipindah, dokumen tetap terbuka dengan path barunya. Pohon diperbarui otomatis saat ada file yang ditambah atau dihapus di disk, dan folder terakhir dibuka lagi saat aplikasi dijalankan
   - **Outline**: daftar heading dokumen; klik untuk melompat
   - **Riwayat**: commit git yang menyentuh file yang sedang dibuka, terbaru dulu (hash pendek, pesan, penulis, waktu relatif; riwayat mengikuti file yang di-rename). Jika file berbeda dari commit terakhir (atau belum dilacak), tombol *Perubahan belum di-commit* muncul di atas daftar dan membuka diff terhadap HEAD (file baru ditampilkan seluruhnya sebagai tambahan). Di bawahnya, daftar *Belum di-commit (N)* memuat semua file di repositori yang sedang berubah (M diubah, A baru di-stage, D dihapus, R diganti nama, U belum dilacak); klik salah satu untuk membuka diff-nya di jendela yang sama (juga bisa di-commit dari sana). Tiap baris punya kotak centang (semua tercentang awalnya); isi pesan lalu tekan *Commit N file* untuk meng-commit beberapa file sekaligus (`git add --all` + `git commit --only` pada file terpilih; dokumen yang terbuka disimpan dulu). Daftar ini juga tampil saat belum ada file terbuka tetapi sebuah folder sudah dibuka. Klik commit untuk membuka jendela baca dengan dua tab: *Perubahan* (diff terhadap commit sebelumnya, baris tambah/hapus berwarna) dan *Isi versi ini* (file lengkap pada commit itu). Jendela perubahan belum di-commit juga punya kolom pesan dan tombol *Commit file ini*: dokumen disimpan dulu, lalu hanya file itu yang di-commit (`git add` + `git commit --only`; file lain tidak ikut, hook git tidak dijalankan). Selain itu aplikasi tidak pernah mengubah repositori. Riwayat dimuat saat tab terlihat, 100 commit sekali muat (tombol *Muat lebih banyak*), dan dimuat ulang saat berganti file, saat jendela kembali aktif, atau lewat tombol muat ulang. Butuh `git` terpasang; file di luar repositori atau yang belum di-commit menampilkan pesan di tab
 - Mode fokus: paragraf selain yang sedang disunting diredupkan
@@ -209,7 +209,7 @@ Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `di
 - **Diagram DBML**: penerjemah DBML → Mermaid (tabel, kolom, ref, alias, skema, galat berikut nomor barisnya), blok dbml dirender dan galatnya tampil tanpa menyembunyikan kode, serta ekspor HTML-nya
 - **Zoom gambar**: gambar ukuran penuh dari `imageAt()`, klik sekali vs ganda (dengan event GDK tiruan) dan gambar yang tepat jika satu baris memuat beberapa, perintah menu; di penampil: zoom awal, kelipatan 1,25 dan batas 5%–800%, tombol, titik zoom di penunjuk, geser dengan drag, klik ganda, dan tidak ada peringatan GTK/cairo saat menggambar pada zoom besar
 - **Warna blok kode**: alias nama bahasa, warna kata kunci/string/komentar, blok tanpa bahasa atau bahasa tak dikenal, pewarnaan ulang saat mengetik, emoji sebelum blok, skema terang/gelap, dan mode fokus yang tetap meredupkan blok kode
-- **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan
+- **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan; menu klik kanan *File Baru*/*Folder Baru* (di root, folder, dan sebelah file), pemindahan file/folder masuk dan keluar folder, penolakan nama tidak valid/bentrok/pindah ke diri sendiri, dokumen terbuka yang ikut berpindah path, dan seret-lepas dengan mouse X11 sungguhan
 - **Dokumen contoh lengkap**: membuka `tests/samples/semua-format.md`, lalu memeriksa tag setiap format, kasus-kasus sulit, dan hasil ekspor HTML-nya
 - **Ukuran jendela**: membuka file kedua tidak memperbesar jendela, jendela bisa diperbesar lalu diperkecil, dan gambar dibatasi lebar kolom teks
 - **Ketahanan**: kursor disapu ke semua baris, mengetik di tiap baris, dan dokumen dihapus sedikit demi sedikit untuk mencari crash
@@ -267,6 +267,7 @@ src/
 ├── config.ts             nama, ID, versi aplikasi, dan font
 ├── settings.ts           baca/tulis ~/.config/nyerat/settings.json
 ├── files.ts              baca/tulis file teks UTF-8
+├── fileops.ts            buat file/folder dan pindahkan di disk (tanpa GTK; dipakai pohon berkas)
 ├── git.ts                riwayat git sebuah file dan daftar file yang belum di-commit lewat perintah `git` (async; hanya membaca, kecuali commit file terpilih)
 ├── gitlog.ts             pengurai keluaran git: log, diff, waktu relatif (murni, tanpa GTK)
 ├── welcome.ts            dokumen contoh saat pertama dibuka
@@ -300,7 +301,7 @@ src/
 └── ui/                   komponen antarmuka
     ├── headerbar.ts      tombol dan menu ☰
     ├── sidebar.ts        sidebar bertab: Berkas, Outline, dan Riwayat
-    ├── filetree.ts       tab Berkas: pohon folder, dipantau dengan Gio.FileMonitor
+    ├── filetree.ts       tab Berkas: pohon folder, menu klik kanan, seret-lepas, dipantau dengan Gio.FileMonitor
     ├── outline.ts        tab Outline: daftar heading
     ├── history.ts        tab Riwayat: commit git untuk file aktif
     ├── historyviewer.ts  jendela baca satu commit: diff dan isi versi itu
@@ -314,7 +315,7 @@ tests/
 ├── run-tests.ts          titik masuk dan pendaftaran tes unit/GUI
 ├── framework.ts          asersi, hasil tes, opsi CLI, folder sementara
 ├── fixtures.ts           data papan kanban bersama untuk tes model dan GUI
-├── unit/                 tes tanpa jendela: inline, HTML, settings, tabel, kanban, bahasa kode, DBML
+├── unit/                 tes tanpa jendela: inline, HTML, settings, tabel, kanban, bahasa kode, DBML, operasi berkas
 │   └── helpers.ts        helper untuk mengambil isi body HTML hasil konversi
 ├── gui/                  tes editor, file/folder, gambar, tabel, diagram, kanban, ukuran, ketahanan
 │   ├── context.ts        konteks jendela/editor dan helper tes GUI
