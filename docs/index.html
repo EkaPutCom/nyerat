@@ -197,12 +197,14 @@ footer a { color: var(--muted); }
     </div>
     <div class="grid">
       <div class="card"><div class="ico">✦</div><h3>AI di inti editor (DeepSeek)</h3><p>Tanya soal naskah Anda di panel samping. Asisten sudah membaca naskah: ia menyusun konteks otomatis dan menelusuri berkas di folder untuk menemukan, misalnya, kontradiksi antarbab. Hanya membaca, tidak pernah mengubah berkas.</p></div>
+      <div class="card"><div class="ico">❏</div><h3>Riwayat percakapan per folder</h3><p>Percakapan dengan asisten disimpan sebagai berkas Markdown di <code>.nyerat/chats</code> dalam folder naskah. Buka lagi dan lanjutkan kapan saja; folder itu tidak ikut Git secara otomatis.</p></div>
       <div class="card"><div class="ico">✎</div><h3>Penulisan langsung terformat</h3><p>Heading, tebal, miring, coret, stabilo, kode inline, tautan, dan gambar langsung terformat. Sintaksnya muncul lagi saat kursor ada di baris itu.</p></div>
       <div class="card"><div class="ico">▦</div><h3>Papan kanban</h3><p>File Markdown dengan <code>kanban: true</code> dibuka sebagai papan ala Trello. Setiap perubahan ditulis kembali sebagai teks Markdown biasa.</p></div>
       <div class="card"><div class="ico">⊞</div><h3>Tabel sebagai grid</h3><p>Tabel digambar dengan garis sel dan rata kolom. <kbd>Tab</kbd> pindah antar sel, dan menu Edit Tabel menambah atau menghapus baris dan kolom.</p></div>
       <div class="card"><div class="ico">◇</div><h3>Diagram Mermaid dan DBML</h3><p>Flowchart, sequence, class, ER, gantt, dan skema dbdiagram.io dirender langsung di dokumen, ikut berubah selagi Anda mengetik.</p></div>
       <div class="card"><div class="ico">{ }</div><h3>Blok kode berwarna</h3><p>Ratusan bahasa diwarnai lewat GtkSourceView, dengan skema warna yang mengikuti mode terang atau gelap.</p></div>
       <div class="card"><div class="ico">◐</div><h3>Mode gelap</h3><p>Otomatis mengikuti tema sistem saat pertama dibuka, dan bisa diganti kapan saja dari menu.</p></div>
+      <div class="card"><div class="ico">⧉</div><h3>Banyak dokumen, satu jendela</h3><p>Buka beberapa file sebagai tab. Tiap tab punya undo, kursor, dan posisi gulir sendiri, dan asisten ikut membaca tab yang belum disimpan.</p></div>
       <div class="card"><div class="ico">▤</div><h3>Sidebar berkas dan outline</h3><p>Buka sebuah folder dan telusuri file Markdown-nya, atau lompat antar heading lewat outline dokumen.</p></div>
       <div class="card"><div class="ico">⎘</div><h3>Kelola berkas di pohon</h3><p>Klik kanan untuk membuat file atau folder baru, mengganti nama, dan menghapus (ke Tempat Sampah). Seret dan lepas untuk memindahkan.</p></div>
       <div class="card"><div class="ico">⑂</div><h3>Riwayat Git</h3><p>Lihat commit untuk file yang dibuka, baca diff dan isi tiap versi, lalu commit satu atau beberapa file yang berubah langsung dari sidebar.</p></div>
@@ -278,6 +280,7 @@ footer a { color: var(--muted); }
           <li>Jawaban mengalir dan menyebut berkas serta nomor barisnya</li>
           <li>Tiap jawaban memperlihatkan konteks dan pemakaian token</li>
           <li>Hanya membaca: tidak pernah mengubah berkas Anda</li>
+          <li>Percakapan tersimpan per folder sebagai Markdown, bisa dilanjutkan lagi</li>
           <li>Naskah yang disertakan dikirim ke DeepSeek; saklar konteks bisa dimatikan</li>
         </ul>
       </div>

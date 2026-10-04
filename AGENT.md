@@ -46,10 +46,10 @@ Bahasa: komentar kode, pesan commit, teks antarmuka, nama tes, dan dokumentasi d
 ```
 src/
   markdown/   aturan Markdown, TypeScript murni, TANPA import GTK (mudah diuji)
-  agent/      asisten AI: penyusunan konteks naskah dan klien model (context/session/sse murni, tanpa GTK)
+  agent/      asisten AI: penyusunan konteks naskah dan klien model (context/session/sse/transcript murni, tanpa GTK; chatstore.ts memakai Gio)
   editor/     mesin editor (MarkdownView, tag, penyorot, gambar, tabel, kode)
   ui/         komponen antarmuka mandiri (sidebar, kanban, dialog, ...)
-  window.ts   satu-satunya tempat komponen saling dihubungkan
+  window.ts   satu-satunya tempat komponen saling dihubungkan; juga mengelola dokumen/tab (satu `MarkdownView` per tab)
   actions.ts  semua aksi menu dan shortcut
 tests/
   unit/       tes tanpa GUI, satu file per modul
@@ -81,6 +81,8 @@ Detail dan alasannya ada di README, bagian "Hal teknis yang perlu diketahui".
 - **Lebar jendela:** ScrolledWindow editor memakai `hscrollbar_policy: EXTERNAL`, bukan `NEVER`, supaya jendela bisa mengecil. Hal yang sama berlaku untuk ScrolledWindow di panel Asisten (`ui/chat.ts`): dengan `NEVER`, teks panjang tanpa spasi di kotak pesan melebarkan panel; tesnya ada di `tests/gui/chat.ts`.
 - **Diagram Mermaid** dirender WebKitGTK tak terlihat (`editor/mermaidrender.ts`), memuat `dist/mermaid.min.js` yang disalin dari `node_modules` oleh plugin di `vite.config.ts`. Lapisannya (`editor/mermaid.ts`) memakai tag `mermaidhide` sendiri; jangan dipakai bersama `tablehide` karena tiap lapisan menghapus tag-nya di seluruh buffer. Blok ```dbml diterjemahkan ke Mermaid `erDiagram` oleh `markdown/dbml.ts` dan memakai lapisan yang sama. Tes pertama yang merender butuh beberapa detik (WebKit dijalankan).
 - **Asisten:** konteks naskah disusun di `agent/context.ts` (murni, diuji di `tests/unit/agent.ts`); jaga agar bagian `system` stabil antar-pertanyaan (cache prefiks DeepSeek) dan semua bagian yang berubah masuk ke `note`. Alat penelusuran model ada di `agent/tools.ts` dan hanya-baca; alat baru harus murni (bekerja di atas `SourceFile[]`), tidak melempar, dan terdaftar di `TOOLS` serta `runTool()`/`describeCall()`. Loop agen ada di `agent/session.ts`. Tes tidak boleh memanggil API sungguhan: pakai `Provider` palsu (`panel.makeProvider`) dan `KeyStore` palsu (`panel.keyStore`); `systemKeyStore` menyentuh keyring dan file di `~/.config`. libsoup dan libsecret dimuat dengan `import()` dinamis supaya typelib yang hilang tidak mematikan aplikasi. Tes yang menunggu Promise memakai `settle()` dari `tests/framework.ts`.
+- **Banyak dokumen (tab):** `MainWindow` memegang `docs: Doc[]` dan satu `doc` aktif; `w.editor` dan `w.file` adalah getter ke dokumen aktif, jadi jangan menyimpan `w.editor` di variabel jangka panjang (tes memakai `c.ed` hanya selama tab pertama aktif). Callback editor harus mengecek `doc === this.doc` sebelum menyentuh komponen bersama (outline, status bar). `load()` mengganti isi dokumen aktif; `openInTab()`/`openFile()`/`newDocument()` membuka tab (dokumen tanpa file dan tanpa perubahan dipakai ulang). Tes yang membuka file lewat pohon atau `newDocument()` harus menutup tab tambahannya (`w.closeTab()`) supaya `ed`/`buf` konteks tetap dokumen aktif. Menutup editor menghancurkan widget-nya: idle/timeout di lapisan editor harus mengecek flag `destroyed`, kalau tidak muncul `Gjs-CRITICAL ... already disposed`.
+- **Riwayat percakapan:** `ChatPanel.persist()` menulis ke `<folder>/.nyerat/chats` lewat `agent/chatstore.ts` (format di `agent/transcript.ts`, murni dan diuji di `tests/unit/transcript.ts`). Tes GUI memakai folder sementara, jadi aman; jangan menulis ke folder pengguna. Folder bertitik tetap tidak dibaca `readProject`, jaga itu supaya asisten tidak menelusuri riwayatnya sendiri.
 - GJS tidak punya HMR; perubahan baru terlihat setelah aplikasi dibuka ulang (`npm run dev` melakukannya otomatis).
 
 ## Menambah atau mengubah fitur
