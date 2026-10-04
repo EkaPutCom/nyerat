@@ -60,6 +60,7 @@ const buildCss = (p: Palette): string => `
     .chat-step { color: ${p.faint}; font-size: 12px; }
     .chat-error { color: #c9372c; font-size: 12px; }
     .chat button.flat { color: ${p.sideFg}; }
+    .sidebar button.flat { color: ${p.sideFg}; }
     .history-text, .history-text text { background-color: ${p.bg}; color: ${p.fg}; font-size: 13px; }
     .md-table { border-top: 1px solid alpha(${p.fg}, 0.28); border-left: 1px solid alpha(${p.fg}, 0.28); }
     .md-table-cell { border-right: 1px solid alpha(${p.fg}, 0.28); border-bottom: 1px solid alpha(${p.fg}, 0.28); }
