@@ -291,6 +291,23 @@ export class MarkdownView {
         });
     }
 
+    // Posisi kursor dalam code point, untuk diingat lalu dipulihkan dengan restoreCursor().
+    get cursorOffset(): number {
+        return this.buffer.get_iter_at_mark(this.buffer.get_insert()).get_offset();
+    }
+
+    // Taruh kursor di offset (dipotong ke akhir dokumen jika file memendek) dan gulir ke sana.
+    // Tanpa grab_focus(): editor tab latar tidak boleh merebut fokus. Gulir ditunda ke idle
+    // supaya berlaku setelah editor mendapat ukuran, termasuk tab yang belum pernah tampil.
+    restoreCursor(offset: number): void {
+        this.buffer.place_cursor(this.buffer.get_iter_at_offset(Math.max(0, offset)));
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            if (this.destroyed) return GLib.SOURCE_REMOVE;
+            this.view.scroll_to_mark(this.buffer.get_insert(), 0, true, 0, 0.3);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
     // Kolom teks di tengah: margin kiri/kanan mengikuti lebar jendela.
     private updateMargins(width: number): void {
         const m = Math.max(36, Math.floor((width - TEXT_WIDTH) / 2));

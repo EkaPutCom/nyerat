@@ -23,6 +23,11 @@ export class StatusBar {
         this.widget.get_style_context().add_class('statusbar');
         this.widget.pack_start(this.left, false, false, 0);
         this.widget.pack_end(this.right, true, true, 0);
+        // Pesan yang masih tampil saat jendela ditutup: timer-nya tidak boleh menyentuh label yang sudah dihancurkan.
+        this.widget.connect('destroy', () => {
+            if (this.toastId) GLib.source_remove(this.toastId);
+            this.toastId = 0;
+        });
     }
 
     setCounts(text: string): void {

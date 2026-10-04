@@ -248,12 +248,15 @@ export class MainWindow {
         this.setDark(this.dark);
         this.tabBar.setActive(this.doc.id);
 
-        // Isi awal: folder dari argumen, atau folder terakhir; lalu file.
+        // Isi awal: folder dari argumen, atau folder terakhir; lalu file, atau tab terakhir
+        // jika dibuka tanpa argumen (path di baris perintah berarti pengguna meminta isi tertentu).
         this.sidebar.setPage(settings.sidebarPage);
         if (path && isDirectory(path)) this.openFolder(path);
         else if (settings.folder && isDirectory(settings.folder)) this.openFolder(settings.folder, false);
         if (path && !isDirectory(path)) {
             this.load(path);
+        } else if (!path && this.restoreTabs()) {
+            // tab terakhir dipulihkan
         } else if (!settings.welcomed) {
             this.editor.setText(WELCOME);
             settings.welcomed = true;
@@ -376,6 +379,41 @@ export class MainWindow {
         // Pindah dulu, baru hancurkan: pencarian dan komponen lain masih menunjuk ke editor ini.
         if (doc === this.doc) this.activate(this.docs[Math.min(index, this.docs.length - 1)]);
         doc.editor.widget.destroy();   // sekaligus melepasnya dari stack
+        return true;
+    }
+
+    // ---------- Pemulihan tab ----------
+
+    // Catat tab berfile (urut seperti baris tab) beserta kursornya untuk pembukaan berikutnya.
+    // Dokumen tanpa file tidak dicatat: isinya tidak ada di disk untuk dibaca lagi.
+    private rememberTabs(): void {
+        const docs = this.tabBar.ids()
+            .map(id => this.docs.find(d => d.id === id))
+            .filter((d): d is Doc => !!d?.file);
+        this.settings.tabs = docs.map(d => ({ file: d.file!, cursor: d.editor.cursorOffset }));
+        this.settings.activeTab = docs.indexOf(this.doc);
+    }
+
+    // Buka lagi tab dari pengaturan. File yang sudah hilang dilewati (tidak dibuat ulang).
+    // true = ada tab yang dipulihkan.
+    private restoreTabs(): boolean {
+        const saved = Array.isArray(this.settings.tabs) ? this.settings.tabs : [];
+        const opened: [Doc, number][] = [];
+        let active: Doc | null = null;
+        let missing = 0;
+        for (const [i, tab] of saved.entries()) {
+            if (typeof tab?.file !== 'string' || !fileExists(tab.file) || isDirectory(tab.file)) {
+                missing++;
+                continue;
+            }
+            if (!this.openInTab(tab.file)) continue;
+            opened.push([this.doc, Number(tab.cursor) || 0]);
+            if (i === this.settings.activeTab) active = this.doc;
+        }
+        if (!opened.length) return false;
+        for (const [doc, cursor] of opened) doc.editor.restoreCursor(cursor);
+        this.activate(active ?? opened[opened.length - 1][0]);
+        if (missing) this.statusBar.toast(`${missing} berkas dari sesi terakhir tidak ditemukan`);
         return true;
     }
 
@@ -793,6 +831,8 @@ export class MainWindow {
     // true = jendela boleh ditutup. Tiap dokumen yang berubah ditanyakan satu per satu.
     onClose(): boolean {
         for (const doc of [...this.docs]) if (!this.confirmDiscard(doc)) return false;
+        // Setelah konfirmasi: dokumen baru yang disimpan lewat dialog sudah punya file.
+        this.rememberTabs();
         const [width, height] = this.win.get_size();
         Object.assign(this.settings, { width, height });
         saveSettings(this.settings);

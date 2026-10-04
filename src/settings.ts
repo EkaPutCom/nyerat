@@ -3,6 +3,12 @@
 import GLib from 'gi://GLib';
 import { readTextFile, writeTextFile } from './files.js';
 
+// Tab berfile yang terbuka saat jendela terakhir ditutup, dipulihkan pada pembukaan berikutnya.
+export interface SavedTab {
+    file: string;
+    cursor: number;          // posisi kursor (code point)
+}
+
 export interface Settings {
     dark: boolean | null;
     sidebar: boolean;
@@ -12,6 +18,8 @@ export interface Settings {
     chatThinking: boolean;   // mode berpikir model (lebih teliti, lebih lambat)
     chatSave: boolean;       // simpan riwayat percakapan di <folder>/.nyerat/chats
     folder: string | null;   // folder yang terakhir dibuka
+    tabs: SavedTab[];        // tab yang dipulihkan saat dibuka tanpa argumen
+    activeTab: number;       // indeks tab aktif di tabs, -1 = tidak ada
     typewriter: boolean;
     focus: boolean;
     autosave: boolean;
@@ -29,6 +37,8 @@ export const DEFAULTS: Settings = {
     chatThinking: false,
     chatSave: true,
     folder: null,
+    tabs: [],
+    activeTab: -1,
     typewriter: false,
     focus: false,
     autosave: true,      // simpan otomatis dokumen yang sudah punya file

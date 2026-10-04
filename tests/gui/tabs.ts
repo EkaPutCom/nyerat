@@ -3,6 +3,9 @@
 import GLib from 'gi://GLib';
 import { section, test, eq, ok, tmp } from '../framework.js';
 import { readTextFile } from '../../src/files.js';
+import { DEFAULTS, type Settings } from '../../src/settings.js';
+import { MainWindow } from '../../src/window.js';
+import { registerActions } from '../../src/actions.js';
 import type { GuiContext } from './context.js';
 
 export function tabTests(c: GuiContext): void {
@@ -141,6 +144,80 @@ export function tabTests(c: GuiContext): void {
         w.editor.buffer.undo(); w.editor.buffer.set_modified(false); pump();
         ok(w.closeTab(), 'closeTab() gagal');
         ok(w.closeTab(), 'closeTab() terakhir gagal');
+    });
+
+    // ---------- Pemulihan tab ----------
+    section('Pemulihan tab');
+    const bab3 = put('bab-3.md', '# Bab Tiga\n\nBaris kedua.\n\nBaris ketiga yang dituju kursor.\n');
+    const settingsFor = (extra: Partial<Settings>): Settings => ({ ...DEFAULTS, welcomed: true, dark: false, autosave: false, ...extra });
+    // Jendela kedua mendaftarkan ulang aksi aplikasi; hancurkan lalu kembalikan aksi ke jendela tes utama.
+    const closeWindow = (win: MainWindow) => {
+        win.win.destroy();
+        settle();
+        registerActions(c.app, w);
+    };
+    const opened = (win: MainWindow) => {
+        const files: (string | null)[] = [];
+        for (let i = 0; i < win.documentCount; i++) { win.switchTab(1); files.push(win.file); }
+        return files;
+    };
+
+    test('menutup jendela mencatat tab berfile, urutan, tab aktif, dan kursornya', () => {
+        const s = settingsFor({});
+        const w2 = new MainWindow(c.app, s, null); settle();
+        w2.openFile(bab1); settle();
+        w2.newDocument(); settle();
+        w2.editor.buffer.insert_at_cursor('tanpa file', -1);
+        w2.editor.buffer.set_modified(false);   // dokumen tanpa file: tidak ikut dicatat, tanpa dialog
+        w2.openFile(bab3); settle();
+        w2.editor.restoreCursor(20); settle();
+        w2.openFile(bab2); settle();
+        w2.switchTab(-1); settle();   // bab-3 aktif (urutan tab: bab-1, kosong, bab-3, bab-2)
+        ok(w2.onClose(), 'onClose() menolak menutup');
+        eq(s.tabs.map(t => t.file), [bab1, bab3, bab2], 'tab tercatat');
+        eq(s.activeTab, 1, 'tab aktif');
+        eq(s.tabs[1].cursor, 20, 'kursor bab-3');
+        closeWindow(w2);
+    });
+    test('membuka tanpa argumen memulihkan tab, tab aktif, dan kursor', () => {
+        const s = settingsFor({ tabs: [{ file: bab1, cursor: 0 }, { file: bab3, cursor: 20 }, { file: bab2, cursor: 3 }], activeTab: 1 });
+        const w2 = new MainWindow(c.app, s, null); settle();
+        eq(w2.documentCount, 3, 'jumlah tab');
+        eq(w2.file, bab3, 'tab aktif');
+        eq(w2.editor.cursorOffset, 20, 'kursor tab aktif');
+        ok(!w2.editor.buffer.get_modified(), 'dokumen dipulihkan ditandai berubah');
+        eq(opened(w2), [bab2, bab1, bab3], 'urutan tab');   // mulai dari tab sesudah bab-3
+        closeWindow(w2);
+    });
+    test('file yang hilang dilewati dan tidak dibuat ulang', () => {
+        const hilang = path('hilang.md');
+        const s = settingsFor({ tabs: [{ file: hilang, cursor: 0 }, { file: bab2, cursor: 0 }], activeTab: 0 });
+        const w2 = new MainWindow(c.app, s, null); settle();
+        eq(w2.documentCount, 1, 'jumlah tab');
+        eq(w2.file, bab2, 'tab aktif jatuh ke tab yang ada');
+        ok(!GLib.file_test(hilang, GLib.FileTest.EXISTS), 'file hilang dibuat ulang');
+        ok(w2.statusBar.left.label.includes('tidak ditemukan'), `status: ${w2.statusBar.left.label}`);
+        closeWindow(w2);
+    });
+    test('kursor di luar dokumen dipotong ke akhir', () => {
+        const s = settingsFor({ tabs: [{ file: bab1, cursor: 99999 }], activeTab: 0 });
+        const w2 = new MainWindow(c.app, s, null); settle();
+        eq(w2.editor.cursorOffset, w2.editor.buffer.get_char_count(), 'kursor');
+        closeWindow(w2);
+    });
+    test('file dari argumen tidak memulihkan tab terakhir', () => {
+        const s = settingsFor({ tabs: [{ file: bab1, cursor: 0 }, { file: bab2, cursor: 0 }], activeTab: 0 });
+        const w2 = new MainWindow(c.app, s, bab3); settle();
+        eq(w2.documentCount, 1, 'jumlah tab');
+        eq(w2.file, bab3, 'file');
+        closeWindow(w2);
+    });
+    test('pengaturan tab yang rusak diabaikan', () => {
+        const s = settingsFor({ tabs: [null, { file: 42 }] as unknown as Settings['tabs'], activeTab: 5 });
+        const w2 = new MainWindow(c.app, s, null); settle();
+        eq(w2.documentCount, 1, 'jumlah tab');
+        eq(w2.file, null, 'file');
+        closeWindow(w2);
     });
 
     w.file = null;
