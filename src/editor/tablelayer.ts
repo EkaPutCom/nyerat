@@ -51,11 +51,19 @@ interface Block {
     start: number;           // baris judul
     end: number;             // baris isi terakhir
     key: string;             // isi tabel; mencocokkan blok yang sama setelah baris bergeser
-    widget: Gtk.EventBox | null;   // dibuat saat pertama kali dibutuhkan
+    widget: Gtk.EventBox | null;   // dibuat saat pertama kali terlihat
     height: number;
+    geometry: Geometry | null;  // tetap tersedia meski cache bersama sudah berganti
     collapsed: boolean;      // true = tampil sebagai grid
     x: number;
     y: number;
+}
+
+interface Geometry {
+    table: ReturnType<typeof parseTable>;
+    markup: string[][];
+    natural: number[];
+    height: number;
 }
 
 export class TableLayer {
@@ -67,18 +75,23 @@ export class TableLayer {
 
     onActivate: (line: number, col: number) => void = () => {};  // sel diklik
 
-    private lines: string[] = [];
     private cursor: [number, number] = [-1, -1];
     private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#4183c4', mark: '#fff3a3' };
     private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
     private relayoutQueued = false;
     private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
+    private geometry = new Map<string, Geometry>();
+    private geometryUnits = 0;
+    private cellSizes = new Map<string, [number, number]>();
+    private cellUnits = 0;
+    private probe: Gtk.Grid | null = null;
+    private probeCells: { label: Gtk.Label; box: Gtk.EventBox }[] = [];
 
     constructor(view: Gtk.TextView, private readonly hideTag: Gtk.TextTag) {
         this.view = view;
         this.buffer = view.buffer;
-        view.connect('destroy', () => { this.destroyed = true; });
+        view.connect('destroy', () => { this.destroyed = true; this.probe?.destroy(); });
         view.connect('size-allocate', () => this.queueRelayout());
         view.connect('notify::vadjustment', () => this.watchAdjustment());
         this.watchAdjustment();
@@ -94,6 +107,11 @@ export class TableLayer {
 
     setPalette(palette: Palette): void {
         this.colors = { code: palette.codeFg, codeBg: palette.codeBg, link: palette.accent, mark: palette.markBg };
+        this.geometry.clear();
+        this.geometryUnits = 0;
+        this.cellSizes.clear();
+        this.cellUnits = 0;
+        for (const block of this.blocks) block.geometry = null;
         this.rebuildAll();
     }
 
@@ -102,7 +120,10 @@ export class TableLayer {
         width = Math.max(200, Math.floor(width));
         if (width === this.maxWidth) return;
         this.maxWidth = width;
-        this.rebuildAll();
+        // Sel memakai ellipsize, bukan wrap: tinggi tidak berubah saat lebar berubah.
+        // Pakai ulang widget serta ruang tabel, termasuk tabel yang belum terlihat.
+        for (const block of this.blocks) if (block.widget) this.resize(block);
+        this.queueRelayout();
     }
 
     setEnabled(enabled: boolean): void {
@@ -113,7 +134,6 @@ export class TableLayer {
 
     // tables dari highlighter.ts; lines = isi dokumen per baris.
     update(tables: TableRange[], lines: string[], force = false): void {
-        this.lines = lines;
         // Pakai ulang blok yang isinya sama walaupun barisnya bergeser.
         let changed = force, moved = false;
         const unused = [...this.blocks];
@@ -129,7 +149,7 @@ export class TableLayer {
                 next.push(block);
             } else {
                 changed = true;
-                next.push({ start: t.start, end: t.end, key, widget: null, height: 0, collapsed: false, x: -1, y: -1 });
+                next.push({ start: t.start, end: t.end, key, widget: null, height: 0, geometry: null, collapsed: false, x: -1, y: -1 });
             }
         }
         changed ||= unused.length > 0;
@@ -152,8 +172,8 @@ export class TableLayer {
             if (collapsed === block.collapsed) continue;
             changed = true;
             block.collapsed = collapsed;
-            if (collapsed && !block.widget) this.build(block);
-            block.widget?.set_visible(collapsed);
+            if (collapsed) block.height = this.measure(block).height;
+            if (!collapsed) block.widget?.hide();
 
             // Kursor tidak mengubah teks: tag tabel lain tetap benar. Jangan menelusuri
             // seluruh buffer untuk mencari selisih tag setiap masuk/keluar satu tabel.
@@ -196,9 +216,8 @@ export class TableLayer {
         const gaps = new Map<Gtk.TextTag, Range[]>();
         for (const block of this.blocks) {
             block.collapsed = this.isCollapsed(block);
-            if (block.collapsed && !block.widget) this.build(block);
-            block.widget?.set_visible(block.collapsed);
-            if (!block.collapsed) continue;
+            if (!block.collapsed) { block.widget?.hide(); continue; }
+            block.height = this.measure(block).height;
 
             const first = this.buffer.get_iter_at_line(block.start).get_offset();
             const lastLine = this.buffer.get_iter_at_line(block.end);
@@ -227,65 +246,120 @@ export class TableLayer {
 
     // ---------- Widget ----------
 
+    private label(): Gtk.Label {
+        return new Gtk.Label({
+            use_markup: true, ellipsize: Pango.EllipsizeMode.END,
+            margin_start: TABLE_CELL_PAD_X, margin_end: TABLE_CELL_PAD_X,
+            margin_top: TABLE_CELL_PAD_Y, margin_bottom: TABLE_CELL_PAD_Y,
+        });
+    }
+
+    // Dua sel pengukur memakai CSS yang sama dengan grid. Sel tidak membungkus teks,
+    // jadi tinggi baris cukup maksimum tinggi selnya, tanpa membuat seluruh grid.
+    private measure(block: Block): Geometry {
+        if (block.geometry) return block.geometry;
+        const cached = this.geometry.get(block.key);
+        if (cached) return block.geometry = cached;
+        if (!this.probe) {
+            this.probe = new Gtk.Grid();
+            this.probe.get_style_context().add_class('md-table');
+            for (let r = 0; r < 2; r++) {
+                const label = this.label();
+                const box = new Gtk.EventBox({ visible_window: true });
+                box.get_style_context().add_class('md-table-cell');
+                if (r === 0) box.get_style_context().add_class('md-table-head');
+                box.add(label);
+                this.probe.attach(box, 0, r, 1, 1);
+                this.probeCells.push({ label, box });
+            }
+            this.probe.show_all();
+        }
+        const table = parseTable(block.key.split('\n'));
+        const natural = table.header.map(() => 0);
+        let height = BORDER;
+        const markup = [table.header, ...table.rows].map((row, r) => {
+            let rowHeight = 0;
+            const result = row.map((text, c) => {
+                const m = cellMarkup(text, this.colors);
+                const value = r === 0 ? `<b>${m}</b>` : m;
+                const [width, cellHeight] = this.measureCell(value, r === 0);
+                natural[c] = Math.max(natural[c], width + BORDER);
+                rowHeight = Math.max(rowHeight, cellHeight);
+                return value;
+            });
+            height += rowHeight;
+            return result;
+        });
+        const result = { table, markup, natural, height };
+        // Boros bila naskah terus diganti: batasi cache isi tabel, bukan hanya jumlahnya.
+        if (block.key.length <= 1024 * 1024) {
+            while (this.geometry.size >= 256 || this.geometryUnits + block.key.length > 1024 * 1024) {
+                const key = this.geometry.keys().next().value!;
+                this.geometryUnits -= key.length;
+                this.geometry.delete(key);
+            }
+            this.geometry.set(block.key, result);
+            this.geometryUnits += block.key.length;
+        }
+        return block.geometry = result;
+    }
+
+    private measureCell(markup: string, header: boolean): [number, number] {
+        const key = (header ? 'h:' : 'b:') + markup;
+        const cached = this.cellSizes.get(key);
+        if (cached) return cached;
+        const cell = this.probeCells[header ? 0 : 1];
+        cell.label.set_markup(markup);
+        const size: [number, number] = [cell.box.get_preferred_width()[1], cell.box.get_preferred_height()[1]];
+        if (key.length <= 1024 * 1024) {
+            while (this.cellSizes.size >= 1024 || this.cellUnits + key.length > 1024 * 1024) {
+                const old = this.cellSizes.keys().next().value!;
+                this.cellUnits -= old.length;
+                this.cellSizes.delete(old);
+            }
+            this.cellSizes.set(key, size);
+            this.cellUnits += key.length;
+        }
+        return size;
+    }
+
+    private resize(block: Block): void {
+        const { table, natural } = this.measure(block);
+        const widths = fitColumns(natural, this.maxWidth - BORDER);
+        const grid = block.widget!.get_child() as Gtk.Grid;
+        [table.header, ...table.rows].forEach((row, r) => row.forEach((text, c) => {
+            const box = grid.get_child_at(c, r) as Gtk.EventBox;
+            const label = box.get_child() as Gtk.Label;
+            label.set_size_request(Math.max(1, widths[c] - 2 * TABLE_CELL_PAD_X - BORDER), -1);
+            box.set_tooltip_text(widths[c] < natural[c] ? text : null);
+        }));
+    }
+
     private build(block: Block): void {
-        const table = parseTable(this.lines.slice(block.start, block.end + 1));
-        const columns = table.header.length;
+        const { table, markup } = this.measure(block);
         const grid = new Gtk.Grid();
         grid.get_style_context().add_class('md-table');
-
-        const allRows = [table.header, ...table.rows];
-        const labels: Gtk.Label[][] = [];
-        const boxes: Gtk.EventBox[][] = [];
-        allRows.forEach((row, r) => {
-            labels.push([]);
-            boxes.push([]);
-            row.forEach((text, c) => {
-                const align = table.aligns[c];
-                const label = new Gtk.Label({
-                    use_markup: true, ellipsize: Pango.EllipsizeMode.END,
-                    xalign: align === 'right' ? 1 : align === 'center' ? 0.5 : 0,
-                    margin_start: TABLE_CELL_PAD_X, margin_end: TABLE_CELL_PAD_X,
-                    margin_top: TABLE_CELL_PAD_Y, margin_bottom: TABLE_CELL_PAD_Y,
-                });
-                const markup = cellMarkup(text, this.colors);
-                label.set_markup(r === 0 ? `<b>${markup}</b>` : markup);
-
-                const box = new Gtk.EventBox({ visible_window: true });
-                box.add(label);
-                const style = box.get_style_context();
-                style.add_class('md-table-cell');
-                if (r === 0) style.add_class('md-table-head');
-                // Hitung baris saat klik karena grid dipakai ulang setelah teks bergeser.
-                // Baris pemisah dilewati saat memilih baris isi.
-                box.connect('button-press-event', () => {
-                    this.onActivate(block.start + (r === 0 ? 0 : r + 1), c);
-                    return true;
-                });
-                grid.attach(box, c, r, 1, 1);
-                labels[r].push(label);
-                boxes[r].push(box);
+        markup.forEach((row, r) => row.forEach((text, c) => {
+            const align = table.aligns[c];
+            const label = this.label();
+            label.xalign = align === 'right' ? 1 : align === 'center' ? 0.5 : 0;
+            label.set_markup(text);
+            const box = new Gtk.EventBox({ visible_window: true });
+            box.add(label);
+            box.get_style_context().add_class('md-table-cell');
+            if (r === 0) box.get_style_context().add_class('md-table-head');
+            box.connect('button-press-event', () => {
+                this.onActivate(block.start + (r === 0 ? 0 : r + 1), c);
+                return true;
             });
-        });
-
-        // GTK melaporkan ukuran 0 untuk widget yang belum ditampilkan, jadi tampilkan dulu.
-        grid.show_all();
-
-        // Lebar kolom: sebesar teks terpanjang, dipersempit jika melebihi lebar kolom teks.
-        const natural = Array.from({ length: columns }, (_, c) =>
-            Math.max(...boxes.map(row => row[c].get_preferred_width()[1])) + BORDER);
-        const widths = fitColumns(natural, this.maxWidth - BORDER);
-        labels.forEach((row, r) => row.forEach((label, c) => {
-            // Anak TextView hanya diberi ukuran minimumnya, jadi lebar harus dipaksa.
-            label.set_size_request(Math.max(1, widths[c] - 2 * TABLE_CELL_PAD_X - BORDER), -1);
-            if (widths[c] < natural[c]) boxes[r][c].set_tooltip_text(allRows[r][c]);  // teks yang terpotong
+            grid.attach(box, c, r, 1, 1);
         }));
-
         const widget = new Gtk.EventBox({ visible_window: false });
         widget.add(grid);
+        block.widget = widget;
+        this.resize(block);
         this.view.add_child_in_window(widget, Gtk.TextWindowType.TEXT, 0, 0);
         widget.show_all();
-        block.widget = widget;
-        block.height = grid.get_preferred_height()[1];
         block.x = block.y = -1;
     }
 
@@ -309,12 +383,12 @@ export class TableLayer {
         const [bottom] = this.view.get_line_at_y(rect.y + rect.height);
         const first = top.get_line(), last = bottom.get_line();
         for (const block of this.blocks) {
-            if (!block.widget) continue;
             // get_line_yrange() untuk semua tabel memaksa GTK menata sampai akhir
             // dokumen tiap kursor berpindah. Grid di luar layar menyimpan ruangnya
             // lewat tag, tetapi baru diposisikan saat digulir ke layar.
             const visible = block.collapsed && block.end >= first && block.start <= last;
-            block.widget.set_visible(visible);
+            if (visible && !block.widget) this.build(block);
+            block.widget?.set_visible(visible);
             if (!visible || block.end >= this.buffer.get_line_count()) continue;
             const [lineY, lineHeight] = this.view.get_line_yrange(this.buffer.get_iter_at_line(block.end));
             const y = lineY + lineHeight - block.height - GAP;
@@ -322,7 +396,7 @@ export class TableLayer {
             if (x === block.x && y === block.y) continue;
             block.x = x;
             block.y = y;
-            this.view.move_child(block.widget, x, y);
+            this.view.move_child(block.widget!, x, y);
         }
     }
 }

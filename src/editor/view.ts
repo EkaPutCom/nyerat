@@ -415,7 +415,10 @@ export class MarkdownView {
         const [bottom] = this.view.get_line_at_y(rect.y + rect.height);
         const cursor = this.buffer.get_iter_at_mark(this.buffer.get_insert()).get_line();
         const lines = new Set<number>();
-        for (let l = top.get_line(); l <= bottom.get_line(); l++) lines.add(l);
+        // Sebelum validasi GTK, ribuan baris setinggi 0 bisa dianggap terlihat.
+        // Jangan memasangnya sekaligus dan mengalahkan batas waktu cicilan.
+        if (bottom.get_line() - top.get_line() <= FILL_FIRST_LINES)
+            for (let l = top.get_line(); l <= bottom.get_line(); l++) lines.add(l);
         for (let l = cursor - FILL_CHUNK_LINES; l <= cursor + FILL_CHUNK_LINES; l++) lines.add(l);
         return [...lines].filter(l => l >= 0 && l < this.starts.length).sort((a, b) => a - b);
     }

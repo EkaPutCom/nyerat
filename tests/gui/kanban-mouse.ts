@@ -1,5 +1,6 @@
 // Pengujian input dari server X11: tidak memanggil handler seret secara langsung.
 import GLib from 'gi://GLib';
+import System from 'system';
 import Gtk from 'gi://Gtk?version=3.0';
 import Gdk from 'gi://Gdk?version=3.0';
 import { parseBoard } from '../../src/markdown/kanban.js';
@@ -16,7 +17,12 @@ export function kanbanMouseTests(c: GuiContext): void {
     section('Seret kartu lewat mouse X11 (XTest)');
     ok(Gdk.Display.get_default()?.get_name().includes(':'), 'Tes membutuhkan backend X11 (GDK_BACKEND=x11).');
     const input = new MouseInput();
-    const settle = () => { for (let i = 0; i < 12; i++) { pump(); GLib.usleep(10000); } };
+    const settle = () => {
+        // pump() memutar main loop bersarang. Selesaikan GC GJS sebelum masuk ke
+        // putaran itu agar callback destroy saat papan digambar ulang tidak ditolak.
+        System.gc();
+        for (let i = 0; i < 12; i++) { pump(); GLib.usleep(10000); }
+    };
     const move = (x: number, y: number) => { input.move(x, y); settle(); };
     const point = (widget: Gtk.Widget, y: number): readonly [number, number] => {
         const [valid, x, wy] = widget.translate_coordinates(w.win, widget.get_allocated_width() / 2, y);

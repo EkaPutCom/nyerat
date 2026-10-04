@@ -104,11 +104,13 @@ export function tableGridTests(c: GuiContext): void {
         const first = ed.tableLayer.blocks[0];
         const last = ed.tableLayer.blocks[39];
         ok(first.widget?.get_visible(), 'grid awal tidak tampil');
-        ok(!last.widget?.get_visible(), 'grid di luar layar masih tampil');
+        eq(last.widget, null, 'grid di luar layar dibuat sebelum diperlukan');
+        ok(ed.tableLayer.blocks.filter(b => b.widget).length < 10, 'terlalu banyak grid dibuat saat membuka');
         const height = ed.view.get_vadjustment()!.upper;
         ed.view.scroll_to_iter(buf.get_iter_at_line(last.end), 0, true, 0, 0.5);
         settleT();
         ok(last.widget?.get_visible(), 'grid akhir tidak tampil setelah digulir');
+        eq((last.widget!.get_child() as Gtk.Grid).get_preferred_height()[1], last.height, 'tinggi cadangan berbeda dari grid sebenarnya');
         ok(!first.widget?.get_visible(), 'grid awal tidak disembunyikan setelah digulir');
         const [lineY, lineHeight] = ed.view.get_line_yrange(buf.get_iter_at_line(last.end));
         eq(last.y, lineY + lineHeight - last.height - 12, 'posisi grid akhir salah');
@@ -116,6 +118,23 @@ export function tableGridTests(c: GuiContext): void {
         ed.view.scroll_to_iter(buf.get_start_iter(), 0, true, 0, 0);
         settleT();
         ok(first.widget?.get_visible(), 'grid awal tidak kembali');
+    });
+    test('tinggi tabel di luar layar tepat untuk isi berbeda, Unicode, dan pergantian tema', () => {
+        const docs = Array.from({ length: 30 }, (_, i) =>
+            `atas ${i}\n\n| **Judul ${i}** | Nilai |\n| --- | --- |\n| 🎉 ${i} | \`kode\` |\n` +
+            (i % 2 ? '| baris tambahan | ==sorot== |\n' : '') + '\nbawah\n\n');
+        setText(docs.join('')); cursorTo(0); settleT();
+        const last = ed.tableLayer.blocks[29];
+        eq(last.widget, null, 'tabel berbeda di luar layar sudah dibuat');
+        const height = ed.view.get_vadjustment()!.upper;
+        ed.view.scroll_to_iter(buf.get_iter_at_line(last.end), 0, true, 0, 0.5); settleT();
+        ok(last.widget?.get_visible(), 'grid akhir tidak muncul');
+        eq((last.widget!.get_child() as Gtk.Grid).get_preferred_height()[1], last.height, 'tinggi pengukur salah');
+        eq(ed.view.get_vadjustment()!.upper, height, 'membuat grid menggeser tinggi dokumen');
+        w.setDark(true); settleT();
+        ok(last.widget?.get_visible(), 'grid hilang saat tema berubah');
+        eq((last.widget!.get_child() as Gtk.Grid).get_preferred_height()[1], last.height, 'tinggi tema gelap salah');
+        w.setDark(false); settleT();
     });
     test('Tab pindah ke sel berikutnya, lalu ke baris berikutnya', () => {
         setText(DOC); cursorTo(4, 2);
@@ -222,8 +241,13 @@ export function tableGridTests(c: GuiContext): void {
     test('grid dipersempit agar muat di lebar kolom teks', () => {
         const before = ed.tableLayer.maxWidth;
         setText(`| ${'x'.repeat(80)} | ${'y'.repeat(80)} |\n| --- | --- |\n| 1 | 2 |\n\nakhir`); cursorTo(4);
+        settleT();
+        const widget = tBlock().widget;
+        const height = tBlock().height;
         ed.tableLayer.setMaxWidth(320);
         settleT();
+        eq(tBlock().widget, widget, 'perubahan lebar membangun ulang grid');
+        eq(tBlock().height, height, 'ellipsize mengubah tinggi tabel');
         // TextView memberi anak widget ukuran minimumnya; itulah lebar yang tampil.
         const width = tBlock().widget!.get_allocated_width();
         ok(width > 0 && width <= 320, `lebar grid ${width}px melebihi kolom 320px`);

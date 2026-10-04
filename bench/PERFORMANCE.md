@@ -252,3 +252,140 @@ Dengan demikian perbaikan kursor konsisten, sedangkan kenaikan total membuka
 sekitar 7–9% terhadap baseline tersimpan tetap terlihat dan tidak dihapus lewat
 penggantian baseline. Kenaikan ini kecil tetapi belum dipisahkan antara biaya
 menyembunyikan grid awal dan derau lingkungan. Pemeriksaan log run ulang juga bersih.
+
+## Pembuatan grid tabel saat membuka (2026-10-04)
+
+Grid lengkap sekarang dibuat ketika tabel masuk ke layar. Dua sel GTK pengukur
+memakai CSS yang sama untuk menyediakan tinggi tabel sebelum grid dibuat;
+ukuran dan markup disimpan pada blok aktif. Cache bersama dibatasi 256 tabel,
+1.024 sel, dan masing-masing 1 Mi unit UTF-16 kunci. Perubahan lebar memakai
+ulang sel dengan ellipsize, sehingga tidak membongkar grid atau memasang ulang
+tag tinggi. Pergantian palet menghapus hasil pengukuran. Penyorotan bertahap
+juga tidak lagi mempercayai rentang ribuan baris yang dianggap terlihat sebelum
+GTK memvalidasi tinggi baris.
+
+Pembanding membuka pertama memakai tiga proses GJS/Xvfb terpisah per varian,
+satu jendela baru per proses, 500 blok fixture mixed, lalu `setText` ulang isi
+yang sama. Varian berbeda mengganti satu sel pada tiap tabel. Sumber sebelum
+adalah `tablelayer.ts` dan `view.ts` pada HEAD `7080c4e`; sumber sesudah adalah
+working tree perubahan ini. GJS 1.80.2, GTK 3.24.41, X11/Xvfb, host c640.
+Timer main loop 1 ms mengukur jeda terpanjang; total sampai idle GTK dan
+penyorotan selesai, bukan sampai semua piksel layar selesai digambar.
+GC dipanggil sebelum pengukuran. Sampel mentah beserta jumlah panggilan ada di
+[table-opening-profile.json](table-opening-profile.json). Waktu metode bersifat
+inklusif, sehingga tidak boleh dijumlahkan.
+
+Semua angka ms. Untuk tiga sampel, p95 dengan nearest rank sama dengan maksimum;
+sampel kecil ini merupakan diagnosis, bukan estimasi distribusi produksi.
+
+| Skenario | Median sebelum → sesudah | p95/maksimum sebelum → sesudah |
+| --- | ---: | ---: |
+| 500 tabel identik, buka pertama: total | 8249.69 → 2019.03 | 8274.09 → 2044.20 |
+| 500 tabel identik, buka pertama: jeda | 1916.57 → 256.49 | 1931.16 → 262.93 |
+| 500 tabel berbeda, buka pertama: total | 8304.25 → 2153.29 | 8643.93 → 2158.40 |
+| 500 tabel berbeda, buka pertama: jeda | 1927.89 → 353.56 | 1963.84 → 364.34 |
+| 500 tabel identik, buka ulang: total | 3395.40 → 1699.07 | 3415.86 → 1725.12 |
+| 500 tabel identik, buka ulang: jeda | 641.19 → 556.91 | 660.89 → 577.63 |
+| 500 tabel berbeda, buka ulang: total | 3400.55 → 1702.07 | 3503.12 → 1823.32 |
+| 500 tabel berbeda, buka ulang: jeda | 641.82 → 572.32 | 645.41 → 581.96 |
+
+Pada kedua varian, membuka pertama membuat **1 grid** untuk 1 tabel terlihat,
+sebelumnya 500 grid. Panggilan `build` turun **1000 → 1**: implementasi lama
+membangun semua grid lagi ketika lebar awal 700 berubah menjadi 781 px.
+Total membuka pertama turun 76% untuk tabel identik dan 74% untuk tabel berbeda.
+Widget yang pernah terlihat tetap dipakai ulang; ini belum membatasi jumlah
+widget setelah pengguna menggulir seluruh dokumen.
+
+Benchmark GUI mixed 500 blok sesudah pemanasan berhasil menyelesaikan seluruh
+14 operasi dengan 10 pengulangan, hasil di [tables-500.json](tables-500.json).
+
+| Operasi | Median | p95 | Maksimum |
+| --- | ---: | ---: | ---: |
+| setText + sorot + layout | 1679.04 | 1827.03 | 1827.03 |
+| buka: jeda terpanjang | 605.28 | 741.70 | 741.70 |
+| ketik per karakter | 3.91 | 10.29 | 18.71 |
+| ketik lewat view | 14.90 | 25.86 | 28.77 |
+| Enter paragraf | 12.45 | 14.44 | 14.44 |
+| paste besar + Unicode | 157.20 | 168.30 | 168.30 |
+| hapus teks besar | 5.40 | 6.46 | 6.46 |
+| undo paste besar | 5.09 | 6.75 | 6.75 |
+| redo paste besar | 177.00 | 191.11 | 191.11 |
+| pindah kursor 20 baris | 27.76 | 42.95 | 42.95 |
+
+Proses lengkap ini memerlukan sekitar **198 detik**, memakai batas subprocess
+diagnostik 900 detik dan `--child` untuk melewati batas runner induk. Run lama
+berbatas 180 detik yang berhenti di tengah tidak dipakai sebagai baseline.
+Dengan demikian perbaikan pembuatan grid terbukti, tetapi jeda membuka ulang
+sekitar 0,6 detik dan lamanya rangkaian 500 blok masih perlu ditangani; ini bukan
+bukti seluruh masalah freeze/GC atau timeout selesai.
+
+`npm run bench:compare` lengkap dijalankan dua kali, tanpa tes GUI bersamaan.
+Pada mixed 100 blok, total 229.44/213.61 ms, jeda 40.00/43.74 ms, mengetik
+1.24/1.51 ms per karakter. Baseline kursor yang lebih tua sudah mendahului
+optimasi kursor sebelumnya; penurunan kursor terhadap baseline itu tidak boleh
+seluruhnya diatribusikan pada perubahan ini. Variasi masih terlihat: mixed 25
+paste 200.45 lalu 158.80 ms (baseline 134.21), mengetik lewat view 3.75 lalu
+2.98 ms (baseline 1.95), sedangkan redo mixed 50 mencapai 203.44 ms pada run
+ulang (baseline 151.07). Modul Markdown murni tidak berubah, tetapi
+`markdownToHtml` juga bergeser 10.27 → 8.35 ms dan `findTables` 0.43 → 0.27 ms;
+ini menunjukkan variasi lingkungan, bukan alasan menghapus kenaikan operasi GUI.
+
+Fixture buku diperiksa lengkap pada 50/200/400 blok, masing-masing 10
+pengulangan. Pada buku 651 KB, median/p95/maksimum jeda membuka
+**65.78/79.59/79.59 ms**, mengetik **1.87/4.76/15.09 ms** per karakter.
+Kenaikan terhadap baseline tersimpan tetap dicatat: total membuka
+820.16 → 904.69 ms (p95/maksimum 869.32 → 944.62), Enter
+3.35 → 5.05 ms (p95/maksimum 11.59 sesudah), dan redo
+165.55 → 183.47 ms (p95/maksimum 196.63 sesudah). Ini belum membuktikan
+peningkatan total membuka dokumen tanpa tabel.
+
+Fixture long 2.000 blok (~1,3 MB) diukur sebelum/sesudah secara berurutan,
+masing-masing tiga pengulangan, bukan hanya dibanding baseline historis:
+
+| Operasi | Median sebelum → sesudah | p95/maksimum sebelum → sesudah |
+| --- | ---: | ---: |
+| setText + sorot + layout | 1925.10 → 2031.42 | 1991.04 → 2083.39 |
+| buka: jeda terpanjang | 127.73 → 141.62 | 133.74 → 143.03 |
+| Enter paragraf | 13.43 → 8.69 | 15.89 → 15.98 |
+| paste besar + Unicode | 159.26 → 163.48 | 168.55 → 176.29 |
+| redo paste besar | 189.82 → 199.13 | 196.53 → 215.36 |
+| pindah kursor 20 baris | 26.13 → 27.94 | 30.00 → 28.09 |
+
+Mengetik per karakter long 5.74 → 4.90 ms, p95 16.18 → 7.99,
+maksimum 30.56 → 26.11. Total membuka long naik 5,5% dan jeda naik 10,9%
+(~14 ms). Pembatasan prioritas tag dapat mengubah jadwal penyelesaian, tetapi
+pengukuran ini belum memisahkan biaya tersebut dari variasi lingkungan.
+Baseline mixed/buku tidak diganti dan tidak ada klaim semua operasi membaik.
+
+Validasi: `npm test` **384 lulus, 0 gagal**. Log lengkap dibaca dan bersih dari
+peringatan, critical, serta galat runtime. Typecheck dan pemeriksaan diff lolos.
+Tes mencakup grid yang belum dibuat di luar layar, tinggi reservasi dibanding
+tinggi GTK, kestabilan tinggi dokumen setelah gulir, isi Unicode, tema, dan
+identitas widget setelah lebar berubah. Tes mouse menyelesaikan GC sebelum
+memutar main loop bersarang agar callback destroy GJS tidak ditolak oleh GC.
+Screenshot tema terang/gelap di awal dan akhir dokumen diperiksa: grid,
+paragraf, dan sidebar tampil tanpa tumpang tindih. `test:ui` desktop tidak
+dijalankan karena mode tes yang ditampilkan tidak diminta, sesuai bagian
+Lingkungan tes di AGENT.md; tes GUI/mouse berjalan di Xvfb.
+
+Pemeriksaan terarah terakhir mixed 25 memakai sumber sebelum/sesudah final,
+masing-masing 10 pengulangan dalam proses terpisah, dijalankan berurutan:
+
+| Operasi | Median sebelum → sesudah | p95/maksimum sebelum → sesudah |
+| --- | ---: | ---: |
+| setText + sorot + layout | 69.29 → 69.00 | 86.75 → 79.89 |
+| buka: jeda terpanjang | 20.82 → 19.92 | 34.18 → 23.67 |
+| ketik lewat view | 2.23 → 2.10 | 11.79 → 10.73 |
+| Enter paragraf | 3.67 → 3.73 | 14.16 → 14.75 |
+| paste besar + Unicode | 162.08 → 205.09 | 297.03 → 322.80 |
+| redo paste besar | 180.69 → 177.23 | 197.29 → 182.45 |
+
+Maksimum ketik lewat view 14.22 → 14.81 ms. Regresi redo terhadap baseline
+historis tidak muncul pada pembanding ini, tetapi paste **naik 26,5%**.
+Skenario paste memasukkan 100 baris Unicode dan satu baris 10.000 karakter,
+lalu menunggu sorot/layout selesai; sumber runtime yang berubah adalah lapisan
+tabel dan pemilihan baris prioritas untuk cicilan tag. Run sesudah final lain
+memberi paste 158.80 ms, sehingga variasinya besar dan biaya tambahan belum
+diisolasi pada salah satu jalur. Kenaikan paste ini tetap menjadi keterbatasan
+perubahan, bukan dianggap lulus hanya karena total membuka pertama jauh turun.
+Semua log benchmark akhir lengkap dan bersih dari galat/peringatan runtime.
