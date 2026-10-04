@@ -362,10 +362,15 @@ function main(app: Gtk.Application): void {
     w.load(GLib.build_filenamev([bookDir, 'bab-2.md']));
     // Putaran pertama: model menelusuri naskah dengan alat; putaran kedua: jawaban.
     let round = 0;
+    let streamFrames = false;
     const reply: Provider = {
         async chat(req) {
             if (!req.tools || ++round % 2 === 0) {
-                for (const part of ANSWER.match(/\S+\s*/g) ?? []) req.onText(part);
+                const parts = ANSWER.match(/\S+\s*/g) ?? [];
+                parts.forEach((part, i) => {
+                    req.onText(part);
+                    if (streamFrames && i % 6 === 5) frame('asisten', 0);
+                });
                 return { usage: { prompt: 3920, cached: 1536, completion: 148 }, cancelled: false, toolCalls: [], reasoning: '' };
             }
             return {
@@ -385,10 +390,103 @@ function main(app: Gtk.Application): void {
         w.setOption('chat', true);
         w.sidebar.setPage('files');
         let done = false;
+        streamFrames = !dark;
+        if (streamFrames) frame('asisten', 4);
         void w.chat.ask('Adakah yang tidak konsisten antara bab 1 dan bab 2 soal Raka?').then(() => { done = true; });
         while (!done) { pump(); GLib.usleep(5000); }
         settle(20);
+        if (streamFrames) frame('asisten', 10);
         shot(dark ? 'asisten-gelap' : 'asisten-terang');
+    }
+    w.setDark(false);
+    w.setOption('chat', false);
+
+    // ───────── Berkas: pohon folder ─────────
+    const proj = GLib.dir_make_tmp('nyerat-novel-XXXXXX');
+    const put = (rel: string, text: string) => {
+        const path = GLib.build_filenamev([proj, ...rel.split('/')]);
+        GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
+        GLib.file_set_contents(path, text);
+        return path;
+    };
+    put('naskah/bab-1.md', BOOK['bab-1.md']);
+    const bab2 = put('naskah/bab-2.md', BOOK['bab-2.md']);
+    put('naskah/bab-3.md', BOOK['bab-3.md']);
+    put('riset/pelabuhan.md', '# Riset pelabuhan\n');
+    put('riset/kapal-layar.md', '# Kapal layar\n');
+    put('tokoh/raka.md', '# Raka\n');
+    put('tokoh/laras.md', '# Laras\n');
+    put('sketsa-alur.md', '# Sketsa alur\n');
+    put('catatan.md', '# Catatan\n');
+    w.openFolder(proj, false);
+    w.load(bab2);
+    w.setOption('sidebar', true);
+    w.sidebar.setPage('files');
+    w.fileTree.reveal(put('riset/kapal-layar.md', '# Kapal layar\n'));
+    w.fileTree.reveal(bab2);
+    settle(20);
+    shot('berkas');
+
+    // ───────── Riwayat git ─────────
+    const repo = GLib.dir_make_tmp('nyerat-riwayat-XXXXXX');
+    const env = [...GLib.get_environ(), 'GIT_CONFIG_GLOBAL=/dev/null', 'GIT_CONFIG_SYSTEM=/dev/null'];
+    const git = (...args: string[]) => {
+        const [, , err, status] = GLib.spawn_sync(repo, ['git', '-c', 'user.name=Eka Putra', '-c', 'user.email=eka@example.com', ...args], env, GLib.SpawnFlags.SEARCH_PATH, null);
+        if (status !== 0) throw new Error(`git ${args.join(' ')}: ${new TextDecoder().decode(err ?? undefined)}`);
+    };
+    const note = GLib.build_filenamev([repo, 'catatan.md']);
+    const versions = [
+        ['Buat kerangka catatan', '# Catatan Proyek\n\n## Tujuan\n\nMenulis tanpa gangguan.\n'],
+        ['Tambah bagian jadwal', '# Catatan Proyek\n\n## Tujuan\n\nMenulis tanpa gangguan.\n\n## Jadwal\n\n- Draf pertama: Oktober\n'],
+        ['Perbaiki tujuan dan jadwal', '# Catatan Proyek\n\n## Tujuan\n\nMenulis tanpa gangguan, dengan tampilan yang langsung terformat.\n\n## Jadwal\n\n- Draf pertama: 10 Oktober\n- Revisi: 24 Oktober\n'],
+    ];
+    git('init', '-q');
+    for (const [msg, text] of versions) {
+        GLib.file_set_contents(note, text);
+        git('add', 'catatan.md');
+        git('commit', '-q', '-m', msg);
+    }
+    GLib.file_set_contents(note, versions[2][1] + '- Rilis: 1 November\n');
+    GLib.file_set_contents(GLib.build_filenamev([repo, 'ide.md']), '# Ide\n\nBelum masuk git.\n');
+    w.openFolder(repo, false);
+    w.load(note);
+    w.setOption('sidebar', true);
+    w.sidebar.setPage('history');
+    const idle = (ms: number) => { for (let i = 0; i < ms / 10; i++) { pump(); GLib.usleep(10000); } };
+    idle(3000);
+    shot('riwayat');
+    w.setDark(true);
+    idle(300);
+    shot('riwayat-gelap');
+    w.setDark(false);
+    idle(300);
+
+    // Jendela baca commit: ambil dari daftar riwayat seperti klik pengguna.
+    const toplevels = () => Gtk.Window.list_toplevels();
+    // Jendela anak (penampil) saja; jendela WebKit tak terlihat milik Mermaid ikut menjadi toplevel.
+    const child = () => toplevels().find(t => t.get_visible() && (t as unknown as Gtk.Window).get_transient_for() === (w.win as unknown as Gtk.Window));
+    w.history.list.emit('row-activated', w.history.list.get_row_at_index(0)!);
+    idle(1500);
+    const viewer = child();
+    if (viewer) {
+        idle(500);
+        const vw = viewer.get_window()!;
+        Gdk.pixbuf_get_from_window(vw, 0, 0, vw.get_width(), vw.get_height())!.savev(`${OUT}/riwayat-diff.png`, 'png', [], []);
+        viewer.destroy();
+    }
+
+    // ───────── Zoom gambar ─────────
+    const picture = GLib.build_filenamev([GLib.get_current_dir(), 'tests/samples/gambar/contoh.png']);
+    load(`# Gambar\n\nKlik ganda gambar untuk memperbesarnya.\n\n![Contoh gambar](${picture})\n`, false, 4, false);
+    idle(1200);
+    cursorTo(4);
+    ed.zoomImage();
+    idle(800);
+    const zoomWin = child();
+    if (zoomWin) {
+        const zw = zoomWin.get_window()!;
+        Gdk.pixbuf_get_from_window(zw, 0, 0, zw.get_width(), zw.get_height())!.savev(`${OUT}/zoom-gambar.png`, 'png', [], []);
+        zoomWin.destroy();
     }
 
     finishGifs();

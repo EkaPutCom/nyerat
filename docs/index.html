@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nyerat — Editor Markdown ala Typora untuk Linux</title>
-<meta name="description" content="Nyerat adalah editor Markdown ala Typora untuk desktop Linux. Tanpa panel pratinjau: tulisan langsung tampil terformat. Dibuat dengan GTK 3, GJS, dan TypeScript.">
-<meta property="og:title" content="Nyerat — Editor Markdown ala Typora untuk Linux">
-<meta property="og:description" content="Tulis Markdown, lihat hasilnya seketika di tempat yang sama. Kanban, tabel, diagram Mermaid dan DBML, mode gelap.">
+<title>Nyerat — Editor Markdown AI-native untuk Linux</title>
+<meta name="description" content="Nyerat adalah editor Markdown AI-native untuk desktop Linux. Asisten AI yang sudah membaca seluruh naskah Anda ada di dalam editor, dengan tampilan menulis yang langsung terformat. Dibuat dengan GTK 3, GJS, dan TypeScript.">
+<meta property="og:title" content="Nyerat — Editor Markdown AI-native untuk Linux">
+<meta property="og:description" content="Asisten AI yang sudah membaca seluruh naskah Anda, di dalam editor Markdown yang langsung terformat. Kanban, tabel, diagram, riwayat Git, mode gelap.">
 <meta property="og:image" content="https://nyerat.ekaput.com/assets/editor-terang.png">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
@@ -174,10 +174,10 @@ footer a { color: var(--muted); }
 <div class="hero">
   <div class="wrap">
     <span class="pill">Sumber terbuka · Lisensi MIT · Untuk desktop Linux</span>
-    <h1>Menulis Markdown,<br><em>tanpa pratinjau terpisah.</em></h1>
-    <p class="lead">Nyerat adalah editor Markdown ala Typora untuk Linux. Sintaks seperti <code>#</code>, <code>**</code>, dan <code>[](url)</code> menghilang saat Anda berpindah baris, jadi yang terlihat adalah tulisannya, bukan tanda bacanya.</p>
+    <h1>Editor Markdown yang<br><em>AI-native.</em></h1>
+    <p class="lead">Asisten AI di Nyerat sudah membaca seluruh naskah Anda: dokumen yang terbuka, pilihan, dan semua berkas di folder. Tanya apa saja tanpa salin-tempel, dan jawabannya datang dengan kutipan berkas dan nomor baris. Menulisnya tetap bersih, tanpa pratinjau terpisah.</p>
     <figure class="shot">
-      <img src="assets/editor-terang.png" width="1332" height="867" alt="Jendela Nyerat berisi catatan rapat dengan heading, teks tebal, daftar tugas, blok kode, dan sidebar outline">
+      <img src="assets/asisten-terang.png" width="1332" height="867" alt="Jendela Nyerat dengan panel Asisten yang menelusuri dua bab dan menunjukkan ketidakkonsistenan usia tokoh">
     </figure>
   </div>
 </div>
@@ -187,17 +187,22 @@ footer a { color: var(--muted); }
   <div class="wrap">
     <div class="center">
       <p class="eyebrow">Fitur</p>
-      <h2>Editor yang tidak mengganggu</h2>
+      <h2>AI yang paham naskah, editor yang tidak mengganggu</h2>
       <p class="sub">Semua yang dibutuhkan untuk menulis catatan, dokumentasi, dan rencana kerja, dalam satu jendela GTK yang ringan.</p>
     </div>
     <div class="grid">
-      <div class="card"><div class="ico">✎</div><h3>Penulisan ala Typora</h3><p>Heading, tebal, miring, coret, stabilo, kode inline, tautan, dan gambar langsung terformat. Sintaksnya muncul lagi saat kursor ada di baris itu.</p></div>
+      <div class="card"><div class="ico">✦</div><h3>AI di inti editor (DeepSeek)</h3><p>Tanya soal naskah Anda di panel samping. Asisten sudah membaca naskah: ia menyusun konteks otomatis dan menelusuri berkas di folder untuk menemukan, misalnya, kontradiksi antarbab. Hanya membaca, tidak pernah mengubah berkas.</p></div>
+      <div class="card"><div class="ico">✎</div><h3>Penulisan langsung terformat</h3><p>Heading, tebal, miring, coret, stabilo, kode inline, tautan, dan gambar langsung terformat. Sintaksnya muncul lagi saat kursor ada di baris itu.</p></div>
       <div class="card"><div class="ico">▦</div><h3>Papan kanban</h3><p>File Markdown dengan <code>kanban: true</code> dibuka sebagai papan ala Trello. Setiap perubahan ditulis kembali sebagai teks Markdown biasa.</p></div>
       <div class="card"><div class="ico">⊞</div><h3>Tabel sebagai grid</h3><p>Tabel digambar dengan garis sel dan rata kolom. <kbd>Tab</kbd> pindah antar sel, dan menu Edit Tabel menambah atau menghapus baris dan kolom.</p></div>
       <div class="card"><div class="ico">◇</div><h3>Diagram Mermaid dan DBML</h3><p>Flowchart, sequence, class, ER, gantt, dan skema dbdiagram.io dirender langsung di dokumen, ikut berubah selagi Anda mengetik.</p></div>
       <div class="card"><div class="ico">{ }</div><h3>Blok kode berwarna</h3><p>Ratusan bahasa diwarnai lewat GtkSourceView, dengan skema warna yang mengikuti mode terang atau gelap.</p></div>
       <div class="card"><div class="ico">◐</div><h3>Mode gelap</h3><p>Otomatis mengikuti tema sistem saat pertama dibuka, dan bisa diganti kapan saja dari menu.</p></div>
       <div class="card"><div class="ico">▤</div><h3>Sidebar berkas dan outline</h3><p>Buka sebuah folder dan telusuri file Markdown-nya, atau lompat antar heading lewat outline dokumen.</p></div>
+      <div class="card"><div class="ico">⎘</div><h3>Kelola berkas di pohon</h3><p>Klik kanan untuk membuat file atau folder baru, mengganti nama, dan menghapus (ke Tempat Sampah). Seret dan lepas untuk memindahkan.</p></div>
+      <div class="card"><div class="ico">⑂</div><h3>Riwayat Git</h3><p>Lihat commit untuk file yang dibuka, baca diff dan isi tiap versi, lalu commit satu atau beberapa file yang berubah langsung dari sidebar.</p></div>
+      <div class="card"><div class="ico">⌕</div><h3>Zoom gambar</h3><p>Gambar lokal maupun dari internet tampil di bawah barisnya. Klik ganda untuk membuka penampil dengan zoom, geser, dan pas layar.</p></div>
+      <div class="card"><div class="ico">↻</div><h3>Auto save</h3><p>Dokumen yang sudah punya file disimpan otomatis sesaat setelah Anda berhenti mengetik, dengan peringatan jika ada yang belum tersimpan.</p></div>
       <div class="card"><div class="ico">◎</div><h3>Mode fokus dan typewriter</h3><p>Redupkan semua paragraf selain yang sedang disunting, atau jaga baris aktif tetap di tengah layar.</p></div>
       <div class="card"><div class="ico">⇪</div><h3>Ekspor HTML</h3><p>Simpan dokumen sebagai satu file HTML mandiri, CSS-nya sudah disertakan. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>.</p></div>
     </div>
@@ -258,6 +263,35 @@ footer a { color: var(--muted); }
       </div>
       <figure class="shot"><img src="assets/kanban.gif" width="900" height="586" loading="lazy" alt="Animasi kartu kanban berpindah antar daftar Rencana, Dikerjakan, Review, dan Selesai"><figcaption>Kartu berpindah dari Rencana ke Dikerjakan hingga Review</figcaption></figure>
     </div>
+
+    <div class="row">
+      <div class="text">
+        <p class="eyebrow">Asisten</p>
+        <h2>Tanya naskah Anda, jawabannya berikut kutipan.</h2>
+        <p class="sub" style="margin-bottom:18px">Panel Asisten (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd>) menyusun konteks dari dokumen, pilihan, dan berkas lain di folder, lalu menelusuri naskah sendiri dengan alat baca-saja sebelum menjawab.</p>
+        <ul>
+          <li>Jawaban mengalir dan menyebut berkas serta nomor barisnya</li>
+          <li>Tiap jawaban memperlihatkan konteks dan pemakaian token</li>
+          <li>Hanya membaca: tidak pernah mengubah berkas Anda</li>
+          <li>Naskah yang disertakan dikirim ke DeepSeek; saklar konteks bisa dimatikan</li>
+        </ul>
+      </div>
+      <figure class="shot"><img src="assets/asisten.gif" width="900" height="586" loading="lazy" alt="Animasi panel Asisten menjawab pertanyaan tentang ketidakkonsistenan usia tokoh antara dua bab"><figcaption>Asisten menelusuri bab dan menunjukkan kontradiksi usia tokoh</figcaption></figure>
+    </div>
+
+    <div class="row flip">
+      <div class="text">
+        <p class="eyebrow">Riwayat Git</p>
+        <h2>Lihat dan simpan versi tulisan, tanpa keluar editor.</h2>
+        <p class="sub" style="margin-bottom:18px">Tab Riwayat menampilkan commit untuk file yang dibuka. Klik satu commit untuk membaca diff dan isi versinya.</p>
+        <ul>
+          <li>Daftar file yang belum di-commit, dengan kotak centang</li>
+          <li>Commit beberapa file sekaligus dari sidebar</li>
+          <li>Diff berwarna dan isi lengkap tiap versi</li>
+        </ul>
+      </div>
+      <figure class="shot"><img src="assets/riwayat-gelap.png" width="1332" height="867" loading="lazy" alt="Tab Riwayat berisi daftar file belum di-commit dan tiga commit"><figcaption>Tab Riwayat: file belum di-commit dan daftar commit</figcaption></figure>
+    </div>
   </div>
 </section>
 
@@ -278,6 +312,11 @@ footer a { color: var(--muted); }
       <figure class="shot"><img src="assets/dbml.png" width="1332" height="867" loading="lazy" alt="Skema DBML digambar sebagai diagram ER dengan tabel pengguna dan catatan"><figcaption>Skema DBML menjadi diagram ER</figcaption></figure>
       <figure class="shot"><img src="assets/kanban.png" width="1332" height="867" loading="lazy" alt="Papan kanban mode terang dengan empat daftar dan kartu berlabel"><figcaption>Papan kanban, mode terang</figcaption></figure>
       <figure class="shot"><img src="assets/kanban-gelap.png" width="1332" height="867" loading="lazy" alt="Papan kanban dalam mode gelap"><figcaption>Papan kanban, mode gelap</figcaption></figure>
+      <figure class="shot"><img src="assets/asisten-terang.png" width="1332" height="867" loading="lazy" alt="Panel Asisten di sisi kanan berisi pertanyaan, langkah penelusuran, dan jawaban"><figcaption>Panel Asisten, mode terang</figcaption></figure>
+      <figure class="shot"><img src="assets/asisten-gelap.png" width="1332" height="867" loading="lazy" alt="Panel Asisten dalam mode gelap"><figcaption>Panel Asisten, mode gelap</figcaption></figure>
+      <figure class="shot"><img src="assets/berkas.png" width="1332" height="867" loading="lazy" alt="Tab Berkas menampilkan pohon folder naskah, riset, dan tokoh"><figcaption>Pohon berkas dengan folder dan file Markdown</figcaption></figure>
+      <figure class="shot"><img src="assets/riwayat-diff.png" width="912" height="705" loading="lazy" alt="Jendela diff sebuah commit dengan baris tambah dan hapus berwarna"><figcaption>Diff sebuah commit</figcaption></figure>
+      <figure class="shot"><img src="assets/zoom-gambar.png" width="812" height="487" loading="lazy" alt="Penampil gambar dengan tombol zoom, pas layar, dan 100 persen"><figcaption>Penampil gambar dengan zoom</figcaption></figure>
     </div>
   </div>
 </section>
@@ -291,12 +330,15 @@ footer a { color: var(--muted); }
     <div class="steps">
       <div class="step">
         <h3>Pasang kebutuhan sistem</h3>
-        <p class="note">Di Ubuntu atau Debian. WebKitGTK hanya dipakai untuk diagram Mermaid dan DBML; tanpanya aplikasi tetap berjalan.</p>
+        <p class="note">Di Ubuntu atau Debian. WebKitGTK hanya dipakai untuk diagram Mermaid dan DBML, dan libsoup untuk asisten; tanpanya aplikasi tetap berjalan.</p>
 <pre><span class="c"># GJS, GTK 3, dan GtkSourceView</span>
 sudo apt install gjs gir1.2-gtk-3.0 gir1.2-gtksource-4
 
 <span class="c"># opsional: untuk diagram</span>
-sudo apt install gir1.2-webkit2-4.1</pre>
+sudo apt install gir1.2-webkit2-4.1
+
+<span class="c"># opsional: untuk asisten AI (butuh API key DeepSeek)</span>
+sudo apt install gir1.2-soup-3.0 gir1.2-secret-1</pre>
       </div>
       <div class="step">
         <h3>Ambil kodenya</h3>
@@ -334,6 +376,8 @@ gjs -m dist/nyerat.js ~/catatan</pre>
         <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td>Ekspor HTML</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Cari</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd></td><td>Kanban: papan ↔ teks</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>Panel Asisten</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>\</kbd></td><td>Sidebar</td></tr>
       </table>
       <table>
         <tr><th>Shortcut</th><th>Fungsi</th></tr>
@@ -343,6 +387,9 @@ gjs -m dist/nyerat.js ~/catatan</pre>
         <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></td><td>Stabilo</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>`</kbd></td><td>Kode inline</td></tr>
         <tr><td><kbd>Ctrl</kbd>+klik</td><td>Buka tautan</td></tr>
+        <tr><td><kbd>F8</kbd> / <kbd>F9</kbd></td><td>Mode fokus / typewriter</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td><td>Mode source</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></td><td>Mode gelap</td></tr>
       </table>
     </div>
   </div>
