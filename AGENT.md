@@ -25,7 +25,10 @@ Bahasa: komentar kode, pesan commit, teks antarmuka, nama tes, dan dokumentasi d
 
 - `dist/` adalah hasil build dan tidak masuk git. **Tes selalu berjalan dari `dist/`**, jadi build ulang sebelum menjalankan `gjs -m dist/run-tests.js ...`.
 - `npm test` membutuhkan `xvfb-run`, `Xvfb`, dan `xauth`; tes GUI dan mouse memakai display virtual sehingga tidak butuh sesi desktop dan tidak menggerakkan pointer pengguna. Runner GJS langsung masih bisa memakai sesi desktop; tanpa display, pakai `--no-gui`.
-- Sebelum menyatakan pekerjaan selesai, jalankan `npm test` (atau minimal `npm run typecheck` + `--no-gui` jika tidak ada display) dan laporkan hasilnya apa adanya.
+- **Selama pengembangan**, pakai `npm test` (Xvfb, tidak menggerakkan pointer pengguna) sebagai tes sehari-hari. Jika tidak ada display, minimal `npm run typecheck` + `--no-gui`.
+- **Di akhir pengembangan**, sebelum menyatakan pekerjaan selesai, jalankan juga `npm run test:ui` (di desktop X11 sungguhan; pointer akan bergerak, jadi beri tahu pengguna) dan laporkan hasil kedua perintah apa adanya.
+- **Log kedua tes harus bersih**, bukan hanya "0 gagal": periksa keluarannya dan pastikan tidak ada `Gjs-CRITICAL`, `Gjs-WARNING`, `Gtk-WARNING`, `GLib-*`, stack trace, atau baris galat/peringatan lain yang berasal dari kode kita. Telusuri dan perbaiki penyebabnya (sering kali tes yang memakai widget yang sudah dihancurkan), jangan disembunyikan atau diabaikan. Hanya peringatan lingkungan yang bukan dari kode kita (mis. `libEGL warning: DRI3`) boleh tersisa; sebutkan itu di laporan.
+- Tes yang gagal sesekali (flaky) tidak boleh dianggap lulus: ulangi, cari penyebabnya, dan laporkan jika belum terpecahkan.
 
 ## Pemeriksaan performa wajib
 
