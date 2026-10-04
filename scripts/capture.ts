@@ -16,6 +16,7 @@ import { DEFAULTS } from '../src/settings.js';
 import { MainWindow } from '../src/window.js';
 import { isKanban, moveCard, parseBoard } from '../src/markdown/kanban.js';
 import type { Provider } from '../src/agent/provider.js';
+import { listChats, saveChat } from '../src/agent/chatstore.js';
 
 // Naskah contoh untuk tangkapan panel Asisten (provider palsu; tanpa jaringan dan tanpa API key).
 const BOOK = {
@@ -488,6 +489,64 @@ function main(app: Gtk.Application): void {
         Gdk.pixbuf_get_from_window(zw, 0, 0, zw.get_width(), zw.get_height())!.savev(`${OUT}/zoom-gambar.png`, 'png', [], []);
         zoomWin.destroy();
     }
+
+    // ───────── Tab dokumen ─────────
+    w.setOption('sidebar', true);
+    w.sidebar.setPage('files');
+    w.openFolder(proj, false);
+    w.file = null;
+    ed.setText('');
+    w.setOption('autosave', false);   // supaya tanda • (belum disimpan) tampil di tab
+    for (const rel of ['naskah/bab-1.md', 'naskah/bab-2.md', 'tokoh/raka.md', 'riset/pelabuhan.md']) w.openFile(GLib.build_filenamev([proj, ...rel.split('/')]));
+    w.switchTab(-2);   // bab-2 aktif
+    w.editor.buffer.place_cursor(w.editor.buffer.get_end_iter());
+    w.editor.buffer.insert_at_cursor('\nRaka menatap layar yang robek diterpa angin.', -1);
+    w.editor.view.scroll_to_iter(w.editor.buffer.get_start_iter(), 0, false, 0, 0);
+    idle(600);
+    shot('tab');
+    // Bersihkan: simpan perubahan lalu tutup tab, kembali ke satu dokumen.
+    w.editor.buffer.set_modified(false);
+    w.setOption('autosave', true);
+    while (w.documentCount > 1) w.closeTab();
+    w.file = null;
+    ed.setText('');
+
+    // ───────── Riwayat percakapan ─────────
+    const earlier: [string, string, string, string][] = [
+        ['2026-10-02T21:05:00', 'Ide akhir bab 3 yang lebih mengejutkan', 'Ide akhir bab 3 yang lebih mengejutkan', 'Coba biarkan surat dari ayah Laras ternyata kosong: yang ia lindungi selama ini hanyalah harapan.'],
+        ['2026-10-03T08:40:00', 'Samakan gaya narasi bab 2 dengan bab 1', 'Samakan gaya narasi bab 2 dengan bab 1', 'Bab 1 memakai kalimat pendek dan sudut pandang Raka; bab 2 sebaiknya begitu juga.'],
+    ];
+    // Buang percakapan hasil adegan Asisten di atas supaya daftarnya hanya berisi contoh ini.
+    for (const old of listChats(bookDir)) GLib.unlink(old.path);
+    for (const [created, title, q, a] of earlier) saveChat(bookDir, { title, model: 'deepseek-flash', created, turns: [{ role: 'user', content: q }, { role: 'assistant', content: a }] }, null);
+    w.openFolder(bookDir, false);
+    w.load(GLib.build_filenamev([bookDir, 'bab-2.md']));
+    w.setOption('sidebar', true);
+    w.sidebar.setPage('files');
+    w.setOption('chat', true);
+    w.chat.reset();
+    void w.chat.ask('Adakah yang tidak konsisten antara bab 1 dan bab 2 soal Raka?');
+    idle(1500);
+    const popover = w.chat.historyButton.get_popover()!;
+    for (const dark of [false, true]) {
+        w.setDark(dark);
+        popover.popup();
+        idle(500);
+        const main = grab();
+        const pw = popover.get_window();
+        if (pw) {
+            const [, mx, my] = w.win.get_window()!.get_origin();
+            const [, px, py] = pw.get_origin();
+            const pop = Gdk.pixbuf_get_from_window(pw, 0, 0, pw.get_width(), pw.get_height())!;
+            const x = px - mx, y = py - my;
+            pop.composite(main, x, y, pop.get_width(), pop.get_height(), x, y, 1, 1, GdkPixbuf.InterpType.NEAREST, 255);
+        }
+        main.savev(`${OUT}/riwayat-percakapan${dark ? '-gelap' : ''}.png`, 'png', [], []);
+        popover.popdown();
+        idle(200);
+    }
+    w.setDark(false);
+    w.setOption('chat', false);
 
     finishGifs();
     print(`Selesai: ${OUT}`);

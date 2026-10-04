@@ -282,6 +282,7 @@ export class ChatPanel {
         this.stop();
         this.session.clear();
         this.chatPath = null;
+        this.stepLabels.clear();   // labelnya ikut dibuang di bawah; id alat yang sama tidak boleh memakainya lagi
         this.bubbles.length = 0;
         for (const child of this.messages.get_children()) if (child !== this.empty) this.messages.remove(child);
         this.empty.show();
