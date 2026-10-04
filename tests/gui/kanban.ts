@@ -148,16 +148,18 @@ export function kanbanBoardTests(c: GuiContext): void {
         const calls = stubDialogs();
         const moved = kb.cardTexts(0)[0];
         const source = kb.columns[0].cards[0], target = kb.columns[2].cards[0];
-        const before = Gtk.Window.list_toplevels().length;
+        // Jendela bayangan dilacak langsung: jumlah semua toplevel tidak stabil karena dialog lama bisa ikut dibuang GC.
+        const before = new Set(Gtk.Window.list_toplevels());
         kb.onCardPress(0, 0, source, ptr(10, 10, 100, 100));
         const top = inCard(source, target, 10, 4);   // di paruh atas kartu pertama daftar tujuan
         kb.onCardMotion(ptr(top[0], top[1], 500, 100));
         ok(kb.dragging, 'tidak mulai menyeret');
         eq(kb.columns[2].cardsBox.get_children().length, 3, 'penanda tujuan muncul di daftar tujuan');
-        eq(Gtk.Window.list_toplevels().length, before + 1, 'kartu bayangan');
+        const ghosts = Gtk.Window.list_toplevels().filter(t => !before.has(t));
+        eq(ghosts.length, 1, 'kartu bayangan');
         kb.onCardRelease(ptr(top[0], top[1], 500, 100)); settleK();
         ok(!kb.dragging, 'masih menyeret setelah dilepas');
-        eq(Gtk.Window.list_toplevels().length, before, 'kartu bayangan tidak dibersihkan');
+        ok(!Gtk.Window.list_toplevels().includes(ghosts[0]), 'kartu bayangan tidak dibersihkan');
         eq([kb.cardTexts(2)[0], kb.cardTexts(0).length, kb.cardTexts(2).length], [moved, 1, 3], 'kartu pindah ke atas daftar tujuan');
         ok(text().includes(`## Selesai\n\n- [ ] ${moved}\n`), 'teks dokumen');
         eq(calls, [], 'seret tidak membuka dialog sunting');
