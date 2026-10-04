@@ -157,3 +157,31 @@ baris pada mixed 100 blok, dari lapisan tabel) belum dioptimasi.
 Baseline: [baseline.json](baseline.json) (mixed, bawaan `bench:compare`) dan
 [baseline-buku.json](baseline-buku.json); bandingkan naskah buku dengan
 `gjs -m dist/bench.js --fixture=buku --size=400 --sizes=50,200,400 --timeout=400 --compare=bench/baseline-buku.json`.
+
+## Penyorotan bertahap saat membuka (2026-10-04)
+
+Profil membuka naskah 650 KB yang berbeda dari dokumen sebelumnya (outline ikut dibangun
+ulang): `set_text` GTK 29 ms, penguraian 31 ms, tag sintaks seluruh buffer 60 ms, outline
+440 baris 54 ms, marker tersembunyi 33 ms, sehingga ±207 ms tertahan. Skenario
+`buka: jeda terpanjang` kini bergantian antara dua dokumen dengan heading berbeda supaya
+biaya outline ikut terukur (sebelumnya dokumen yang sama dibuka ulang, outline tidak berubah).
+
+Perubahan: tag sintaks dan marker tersembunyi hanya dipasang untuk 200 baris pertama; sisanya
+dicicil per ≤8 ms di idle berprioritas di antara menggambar (120) dan penataan latar GTK (125),
+mendahulukan baris di sekitar kursor dan yang terlihat. Outline dibangun 50 baris per giliran. Penguraian tetap
+penuh dan sinkron.
+
+Hasil (median, Xvfb, 10 pengulangan; "sebelum" = baseline commit `472c298`, skenario lama
+yang membuka dokumen yang sama, jadi penurunannya sebenarnya lebih besar):
+
+| Dokumen | buka: jeda terpanjang sebelum | sesudah |
+| --- | ---: | ---: |
+| buku 81 KB | 18.47 | 13.01 |
+| buku 325 KB | 70.99 | 34.49 |
+| buku 651 KB | 162.41 | 71.45 (p95 79.50) |
+| mixed 30 KB | 134.41 | 46.75 |
+
+Skenario lain dalam rentang derau. Biaya: total sampai semua tag terpasang dan GTK selesai
+menata naik ±10% (buku 651 KB: 761 → 820 ms) karena kerja dicicil, dan `highlight() ulang`
+tanpa suntingan 0.41 → 0.6–0.9 ms karena pemeriksaan baris yang ditunda; keduanya tidak
+terasa saat mengetik. Sisa jeda membuka adalah `set_text` GTK dan penguraian penuh.

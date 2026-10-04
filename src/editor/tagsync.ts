@@ -81,6 +81,9 @@ const sameSpans = (a: LineSpan[], b: LineSpan[]): boolean =>
 
 export class LineTagger {
     private applied: (LineSpan[] | null)[] = [];   // null = belum diketahui, pasang ulang
+    // Baris tak dikenal mulai nomor ini ditunda: apply()/applyLines() melewatinya dan fill()
+    // mengisinya sedikit demi sedikit (penyorotan bertahap saat membuka dokumen panjang).
+    private deferFrom = Infinity;
 
     // allTags: semua tag yang dikelola, dihapus dari baris yang isinya tidak diketahui.
     constructor(private readonly buffer: Gtk.TextBuffer, private readonly allTags: Gtk.TextTag[]) {}
@@ -88,6 +91,16 @@ export class LineTagger {
     // Jumlah baris yang dikenal tagger (jumlah baris dokumen saat apply terakhir/edited).
     get lineCount(): number {
         return this.applied.length;
+    }
+
+    // true = masih ada baris yang ditunda.
+    get pending(): boolean {
+        return this.deferFrom < this.applied.length;
+    }
+
+    // Tunda pemasangan tag baris tak dikenal mulai baris `line`; Infinity = tidak ada yang ditunda.
+    defer(line: number): void {
+        this.deferFrom = line;
     }
 
     // Teks disunting di baris first..last (nomor baris sekarang), jumlah baris kini `count`.
@@ -102,38 +115,51 @@ export class LineTagger {
     // spans[i] = tag untuk baris i; starts[i] = offset awal baris i.
     apply(spans: LineSpan[][], starts: number[]): void {
         if (this.applied.length !== spans.length) this.applied = spans.map(() => null);
-        this.run(spans.length, k => k, i => spans[i], starts);
+        this.run(spans.length, k => k, i => spans[i], starts, true);
     }
 
     // Seperti apply(), tetapi hanya memeriksa baris di `lines` (urut naik, tanpa duplikat)
     // ditambah baris yang tagnya belum diketahui. Baris lain dianggap sudah benar, jadi
-    // pemanggil tidak perlu menyusun tag untuk seluruh dokumen.
-    applyLines(lines: number[], spansOf: (line: number) => LineSpan[], starts: number[]): void {
+    // pemanggil tidak perlu menyusun tag untuk seluruh dokumen. Baris di `lines` yang
+    // ditunda hanya dipasang jika forced(baris) (bawaan: semua, mis. baris yang terlihat).
+    applyLines(lines: number[], spansOf: (line: number) => LineSpan[], starts: number[], forced: (line: number) => boolean = () => true): void {
         const count = starts.length;
         if (this.applied.length !== count) this.applied = starts.map(() => null);
         const visit: number[] = [];
         let k = 0;
         for (let i = 0; i < count; i++) {
             while (k < lines.length && lines[k] < i) k++;
-            if (lines[k] === i || !this.applied[i]) visit.push(i);
+            const deferred = !this.applied[i] && i >= this.deferFrom;
+            if (lines[k] === i ? !deferred || forced(i) : !this.applied[i] && !deferred) visit.push(i);
         }
-        this.run(visit.length, n => visit[n], spansOf, starts);
+        this.run(visit.length, n => visit[n], spansOf, starts, false);
+    }
+
+    // Pasang `lines` baris berikutnya yang ditunda. true = tidak ada lagi yang ditunda.
+    fill(lines: number, spansOf: (line: number) => LineSpan[], starts: number[]): boolean {
+        const end = this.deferFrom + lines;
+        this.deferFrom = end >= starts.length ? Infinity : end;
+        this.applyLines([], spansOf, starts);
+        return !this.pending;
     }
 
     // Kunjungi baris lineAt(0..count-1) (urut naik) dan samakan tagnya dengan spansOf.
-    private run(count: number, lineAt: (k: number) => number, spansOf: (line: number) => LineSpan[], starts: number[]): void {
+    // skipDeferred: lewati baris tak dikenal yang ditunda (lihat defer()).
+    private run(count: number, lineAt: (k: number) => number, spansOf: (line: number) => LineSpan[], starts: number[], skipDeferred: boolean): void {
         const buf = this.buffer;
         const total = buf.get_char_count();
         const at = (line: number) => buf.get_iter_at_offset(starts[line] ?? total);
+        const deferred = (line: number) => skipDeferred && line >= this.deferFrom && !this.applied[line];
         for (let k = 0; k < count; k++) {
             const i = lineAt(k);
+            if (deferred(i)) continue;
             const want = spansOf(i);
             const prev = this.applied[i];
             if (prev && (prev === want || sameSpans(prev, want))) continue;
             if (!prev) {
                 // Baris tak dikenal yang berurutan dibersihkan sekaligus (mis. setelah setText).
                 let n = k;
-                while (n + 1 < count && lineAt(n + 1) === lineAt(n) + 1 && !this.applied[lineAt(n + 1)]) n++;
+                while (n + 1 < count && lineAt(n + 1) === lineAt(n) + 1 && !this.applied[lineAt(n + 1)] && !deferred(lineAt(n + 1))) n++;
                 const j = lineAt(n);
                 const s = at(i), e = at(j + 1);
                 for (const tag of this.allTags) buf.remove_tag(tag, s, e);

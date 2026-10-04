@@ -133,6 +133,58 @@ export function robustnessTests(c: GuiContext): void {
             pump();
         }
     });
+    // Penyorotan bertahap (MarkdownView.queueFill): dokumen panjang diberi tag sebagian dulu,
+    // sisanya dicicil. Hasil akhirnya harus sama persis dengan penyorotan penuh.
+    test('penyorotan bertahap dokumen panjang sama dengan penyorotan penuh', () => {
+        const long = Array.from({ length: 300 }, (_, i) =>
+            `## Bagian ${i}\n\nParagraf **tebal** dan *miring* ke-${i} 🎉 dengan \`kode\`.\n\n`).join('');
+        ed.setText(long);
+        const lastLine = buf.get_line_count() - 3;
+        const boldAt = (line: number) => {
+            const it = buf.get_iter_at_line(line);
+            it.forward_chars(12);
+            return it.has_tag(ed.tags.bold);
+        };
+        ok(boldAt(2), 'awal dokumen langsung diberi tag');
+        ok(!ed.highlightComplete && !boldAt(lastLine), 'akhir dokumen seharusnya masih dicicil');
+        eq(w.outline.list.get_children().length < 300, true, 'outline seharusnya dibangun bertahap');
+        // Menyunting selagi cicilan berjalan, termasuk menambah baris.
+        buf.insert(buf.get_iter_at_line(6), '**baru**\n\n', -1);
+        for (let i = 0; i < 1000 && !ed.highlightComplete; i++) pump();
+        ok(ed.highlightComplete, 'penyorotan bertahap tidak selesai');
+        ok(boldAt(lastLine + 2), 'akhir dokumen diberi tag setelah cicilan');
+        eq(w.outline.list.get_children().length, 300, 'jumlah baris outline');
+
+        const reference = new Gtk.TextBuffer();
+        const tags = createTags(reference);
+        reference.set_text(text(), -1);
+        highlight(reference, tags, new LineTagger(reference, SYNTAX_TAGS.map(n => tags[n])));
+        for (const name of SYNTAX_TAGS)
+            eq(JSON.stringify(tagRanges(buf, ed.tags[name])), JSON.stringify(tagRanges(reference, tags[name])), `tag ${name}`);
+        const line = buf.get_iter_at_mark(buf.get_insert()).get_line();
+        const hidden = normalize(ed.markers.filter(([, , r0, r1]) => r1 < line || r0 > line).map(([a, b]) => [a, b] as [number, number]));
+        eq(JSON.stringify(tagRanges(buf, ed.tags.hidden)), JSON.stringify(hidden), 'marker tersembunyi');
+        setText('');
+    });
+    test('penyorotan bertahap mendahulukan baris di sekitar kursor', () => {
+        const long = Array.from({ length: 3000 }, (_, i) => `Paragraf **tebal** ke-${i}.\n\n`).join('');
+        ed.setText(long);
+        const lastLine = buf.get_line_count() - 3;
+        buf.place_cursor(buf.get_iter_at_line(lastLine));
+        ed.view.scroll_to_mark(buf.get_insert(), 0, false, 0, 0);
+        const boldAt = (line: number) => {
+            const it = buf.get_iter_at_line(line);
+            it.forward_chars(12);
+            return it.has_tag(ed.tags.bold);
+        };
+        const ctx = GLib.MainContext.default();
+        for (let i = 0; i < 2000 && !boldAt(lastLine) && !ed.highlightComplete; i++) ctx.iteration(false);
+        ok(boldAt(lastLine), 'baris kursor di akhir dokumen tidak diberi tag');
+        ok(!ed.highlightComplete && !boldAt(3000), 'tengah dokumen seharusnya masih dicicil');
+        for (let i = 0; i < 5000 && !ed.highlightComplete; i++) pump();
+        ok(ed.highlightComplete && boldAt(3000), 'cicilan tidak selesai');
+        setText('');
+    });
     test('cache baris sama dengan parser baru setelah konteks blok dan Unicode berubah', () => {
         const reference = new Gtk.TextBuffer();
         const tags = createTags(reference);

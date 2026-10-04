@@ -212,8 +212,10 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
     group = `Editor GUI ${n} blok`;
     print(`\nEditor GUI (${n} blok, ${(text.length / 1024).toFixed(0)} KB)`);
     report('setText + sorot + layout', await measureAsync(async () => { ed.setText(text); await idle(); }), true);
-    // setText sendiri sinkron; sisa penataan baris dikerjakan GTK sedikit demi sedikit di latar.
-    // Yang terasa "membeku" adalah jeda terpanjang main loop sejak membuka sampai selesai.
+    // setText sendiri sinkron; sisa tag dan penataan baris dicicil di latar. Yang terasa
+    // "membeku" adalah jeda terpanjang main loop sejak membuka sampai semuanya selesai.
+    // Dokumen bergantian dengan heading berbeda, seperti membuka file lain: outline ikut dibangun ulang.
+    const other = text.replace(/^(#{1,6} )/gm, '$1Lain: ');
     const stalls: number[] = [];
     for (let i = 0; i <= RUNS; i++) {
         System.gc();
@@ -225,10 +227,11 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
             last = t;
             return GLib.SOURCE_CONTINUE;
         });
-        ed.setText(text);
+        ed.setText(i % 2 ? other : text);
         await idle();
         GLib.source_remove(tick);
         worst = Math.max(worst, now() - last);
+        if (!ed.highlightComplete) throw new Error('Penyorotan bertahap tidak selesai.');
         if (i > 0) stalls.push(worst);
     }
     report('buka: jeda terpanjang', stalls, true);

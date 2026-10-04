@@ -17,6 +17,7 @@ export class MarkerConcealer {
     private active: number[] = [];      // baris yang dipasang dalam keadaan aktif, urut naik
     private recheck: [number, number][] = [];
     private enabled: boolean | null = null;
+    private state: { starts: number[]; l0: number; l1: number; enabled: boolean } | null = null;   // apply() terakhir
 
     constructor(private readonly tagger: LineTagger, private readonly tag: Gtk.TextTag) {}
 
@@ -39,6 +40,7 @@ export class MarkerConcealer {
     }
 
     apply(starts: number[], l0: number, l1: number, enabled: boolean): void {
+        this.state = { starts, l0, l1, enabled };
         const count = starts.length;
         const visit = new Set<number>(this.active);
         const active: number[] = [];
@@ -49,24 +51,43 @@ export class MarkerConcealer {
         for (const l of active) visit.add(l);
         for (const [a, b] of this.recheck) for (let l = Math.max(0, a); l <= b && l < count; l++) visit.add(l);
         this.recheck = [];
-        const markers = this.markers;
-        const spansOf = (line: number): LineSpan[] => {
-            if (!enabled) return [];
-            const spans: LineSpan[] = [];
-            for (let k = lowerBound(markers, line); k < markers.length && markers[k][4] === line; k++) {
-                const [a, b, r0, r1] = markers[k];
-                if (r1 < l0 || r0 > l1) spans.push([this.tag, a - starts[line], b - starts[line]]);
-            }
-            return spans;
-        };
+        const spansOf = (line: number) => this.spansOf(line);
         if (enabled !== this.enabled) {
             // Mode source dihidupkan/dimatikan: keadaan bawaan setiap baris berubah.
             this.enabled = enabled;
             this.tagger.apply(starts.map((_, i) => spansOf(i)), starts);
         } else {
-            this.tagger.applyLines([...visit].sort((a, b) => a - b), spansOf, starts);
+            // Baris yang ditunda (lihat defer()) tetap dipasang jika aktif: kursor ada di sana.
+            const forced = new Set(active);
+            this.tagger.applyLines([...visit].sort((a, b) => a - b), spansOf, starts, line => forced.has(line));
         }
         this.active = [...new Set(active)].sort((a, b) => a - b);
+    }
+
+    // Penyorotan bertahap: lihat LineTagger.defer()/fill().
+    defer(line: number): void {
+        this.tagger.defer(line);
+    }
+
+    // Pasang baris `visible` (jika ditunda) dan `lines` baris berikutnya yang ditunda.
+    // true = tidak ada lagi yang ditunda.
+    fill(lines: number, visible: number[]): boolean {
+        if (!this.state) return true;
+        const spansOf = (line: number) => this.spansOf(line);
+        this.tagger.applyLines(visible, spansOf, this.state.starts);
+        return this.tagger.fill(lines, spansOf, this.state.starts);
+    }
+
+    private spansOf(line: number): LineSpan[] {
+        const { starts, l0, l1, enabled } = this.state!;
+        if (!enabled) return [];
+        const markers = this.markers;
+        const spans: LineSpan[] = [];
+        for (let k = lowerBound(markers, line); k < markers.length && markers[k][4] === line; k++) {
+            const [a, b, r0, r1] = markers[k];
+            if (r1 < l0 || r0 > l1) spans.push([this.tag, a - starts[line], b - starts[line]]);
+        }
+        return spans;
     }
 }
 

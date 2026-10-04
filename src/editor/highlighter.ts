@@ -13,6 +13,7 @@
 //   tables    rentang baris setiap tabel, untuk dirender sebagai grid (lihat tablelayer.ts)
 //   starts    offset (code point) awal setiap baris
 //   reparsed  rentang baris yang diurai ulang (baris lain hasilnya sama dengan sebelumnya)
+//   spans     tag sintaks per baris, untuk LineTagger
 //
 // Tag dipasang lewat LineTagger (tagsync.ts), jadi hanya baris yang berubah yang disentuh.
 
@@ -60,10 +61,10 @@ export interface HighlightResult {
     words: number;
     characters: number;
     reparsed: [first: number, last: number];
+    spans: LineSpan[][];   // tag sintaks per baris (offset relatif terhadap awal baris)
 }
 
 interface Parsed extends HighlightResult {
-    spans: LineSpan[][];
     checkpoints: number[];
     lineWords: number[];
 }

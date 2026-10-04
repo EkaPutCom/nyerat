@@ -40,10 +40,21 @@ import { cellStart, type TableRange } from '../markdown/table.js';
 import { enterInTable, tabInTable, runTableCommand, type TableCommand } from './tableedit.js';
 import { cpLength } from './offsets.js';
 import type { Tags } from './tags.js';
+import type { LineSpan } from './tagsync.js';
 import type { HighlightResult, Heading, Marker } from './highlighter.js';
 import type { Palette } from '../ui/theme.js';
 
 const TEXT_WIDTH = 780;  // lebar kolom teks maksimum, dalam piksel
+
+// Penyorotan bertahap saat membuka dokumen (lihat setText()): sebanyak ini baris dari awal
+// diberi tag langsung, sisanya dicicil per FILL_BUDGET_MS di idle. Prioritasnya di atas
+// penataan latar GtkTextView (GTK_TEXT_VIEW_PRIORITY_VALIDATE = 125) supaya baris ditata
+// sekali dengan tag akhirnya, dan di bawah menggambar (GDK_PRIORITY_REDRAW = 120) supaya
+// layar tetap diperbarui selama cicilan berjalan.
+const FILL_FIRST_LINES = 200;
+const FILL_CHUNK_LINES = 100;
+const FILL_BUDGET_MS = 8;
+const FILL_PRIORITY = GLib.PRIORITY_HIGH_IDLE + 22;
 
 export type Mode = 'source' | 'focus' | 'typewriter';
 
@@ -82,6 +93,7 @@ export class MarkdownView {
     lines: string[] = [];
     tables: TableRange[] = [];
     starts: number[] = [];
+    spans: LineSpan[][] = [];
     modes: Record<Mode, boolean> = { source: false, focus: false, typewriter: false };
 
     onHighlighted: (result: HighlightResult) => void = () => {};
@@ -97,6 +109,7 @@ export class MarkdownView {
     private resetHighlight = false;
     private highlightCache = new HighlightCache();
     private cursorQueued = 0;
+    private fillQueued = 0;
     private destroyed = false;
     private cursorForce = false;
     private syntaxTagger: LineTagger;
@@ -192,6 +205,8 @@ export class MarkdownView {
             this.highlightQueued = 0;
             if (this.cursorQueued) GLib.source_remove(this.cursorQueued);
             this.cursorQueued = 0;
+            if (this.fillQueued) GLib.source_remove(this.fillQueued);
+            this.fillQueued = 0;
         });
     }
 
@@ -206,6 +221,10 @@ export class MarkdownView {
     setText(text: string): void {
         const buf = this.buffer;
         this.resetHighlight = true;
+        // Dokumen panjang: tag sintaks dan marker tersembunyi dipasang bertahap (queueFill()).
+        // Penguraiannya tetap penuh karena struktur dokumen (baris, heading) dibutuhkan langsung.
+        this.syntaxTagger.defer(FILL_FIRST_LINES);
+        this.concealer.defer(FILL_FIRST_LINES);
         replaceAllText(this.view, () => {
             buf.begin_not_undoable_action();
             buf.set_text(text, -1);
@@ -344,6 +363,7 @@ export class MarkdownView {
         this.headings = result.headings;
         this.tables = result.tables;
         this.starts = result.starts;
+        this.spans = result.spans;
         const touches = (first: number, last: number) => edited !== null && last >= edited[0] && first <= edited[1];
         this.tableLayer.update(result.tables, result.lines, reset || result.tables.some(t => touches(t.start, t.end)));
         this.code.apply(result.codeBlocks, reset || result.codeBlocks.some(b => touches(b.startLine, b.endLine)));
@@ -351,6 +371,53 @@ export class MarkdownView {
         this.images.update(result.images);
         this.onHighlighted(result);
         this.updateCursor(true);
+        if (this.syntaxTagger.pending) this.queueFill();
+        else if (!this.fillQueued) {
+            // Dokumen pendek: tidak ada yang ditunda, jangan tunda baris yang ditambahkan nanti.
+            this.syntaxTagger.defer(Infinity);
+            this.concealer.defer(Infinity);
+        }
+    }
+
+    // true = semua baris sudah diberi tag (tidak ada cicilan penyorotan yang tersisa).
+    get highlightComplete(): boolean {
+        return !this.fillQueued && !this.syntaxTagger.pending;
+    }
+
+    // Cicil tag baris yang ditunda setText(). Baris di sekitar kursor dan yang sedang terlihat
+    // didahulukan, jadi melompat ke akhir dokumen sebelum cicilan selesai tetap menampilkan
+    // teks terformat. (Sebelum GTK selesai menata, area terlihat belum bisa dipercaya: baris
+    // yang belum ditata setinggi 0. Karena itu posisi kursor ikut dipakai.)
+    private queueFill(): void {
+        if (this.destroyed || this.fillQueued) return;
+        this.fillQueued = GLib.idle_add(FILL_PRIORITY, () => {
+            // Teks berubah tetapi belum disorot: offset baris basi. highlight() (HIGH_IDLE) dulu.
+            if (this.dirty) return GLib.SOURCE_CONTINUE;
+            const start = GLib.get_monotonic_time();
+            let done = false;
+            while (!done && GLib.get_monotonic_time() - start < FILL_BUDGET_MS * 1000) {
+                const visible = this.priorityLines();
+                const spans = this.spans;
+                this.syntaxTagger.applyLines(visible, i => spans[i], this.starts);
+                const syntaxDone = this.syntaxTagger.fill(FILL_CHUNK_LINES, i => spans[i], this.starts);
+                done = this.concealer.fill(FILL_CHUNK_LINES, visible) && syntaxDone;
+            }
+            if (!done) return GLib.SOURCE_CONTINUE;
+            this.fillQueued = 0;
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // Baris yang sedang terlihat dan FILL_CHUNK_LINES baris di sekitar kursor, urut naik.
+    private priorityLines(): number[] {
+        const rect = this.view.get_visible_rect();
+        const [top] = this.view.get_line_at_y(rect.y);
+        const [bottom] = this.view.get_line_at_y(rect.y + rect.height);
+        const cursor = this.buffer.get_iter_at_mark(this.buffer.get_insert()).get_line();
+        const lines = new Set<number>();
+        for (let l = top.get_line(); l <= bottom.get_line(); l++) lines.add(l);
+        for (let l = cursor - FILL_CHUNK_LINES; l <= cursor + FILL_CHUNK_LINES; l++) lines.add(l);
+        return [...lines].filter(l => l >= 0 && l < this.starts.length).sort((a, b) => a - b);
     }
 
     queueCursorUpdate(force = false): void {
