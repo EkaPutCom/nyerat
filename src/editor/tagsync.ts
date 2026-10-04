@@ -85,6 +85,11 @@ export class LineTagger {
     // allTags: semua tag yang dikelola, dihapus dari baris yang isinya tidak diketahui.
     constructor(private readonly buffer: Gtk.TextBuffer, private readonly allTags: Gtk.TextTag[]) {}
 
+    // Jumlah baris yang dikenal tagger (jumlah baris dokumen saat apply terakhir/edited).
+    get lineCount(): number {
+        return this.applied.length;
+    }
+
     // Teks disunting di baris first..last (nomor baris sekarang), jumlah baris kini `count`.
     // Baris sebelum dan sesudahnya tidak berubah, hanya bergeser.
     edited(first: number, last: number, count: number): void {
@@ -97,33 +102,56 @@ export class LineTagger {
     // spans[i] = tag untuk baris i; starts[i] = offset awal baris i.
     apply(spans: LineSpan[][], starts: number[]): void {
         if (this.applied.length !== spans.length) this.applied = spans.map(() => null);
+        this.run(spans.length, k => k, i => spans[i], starts);
+    }
+
+    // Seperti apply(), tetapi hanya memeriksa baris di `lines` (urut naik, tanpa duplikat)
+    // ditambah baris yang tagnya belum diketahui. Baris lain dianggap sudah benar, jadi
+    // pemanggil tidak perlu menyusun tag untuk seluruh dokumen.
+    applyLines(lines: number[], spansOf: (line: number) => LineSpan[], starts: number[]): void {
+        const count = starts.length;
+        if (this.applied.length !== count) this.applied = starts.map(() => null);
+        const visit: number[] = [];
+        let k = 0;
+        for (let i = 0; i < count; i++) {
+            while (k < lines.length && lines[k] < i) k++;
+            if (lines[k] === i || !this.applied[i]) visit.push(i);
+        }
+        this.run(visit.length, n => visit[n], spansOf, starts);
+    }
+
+    // Kunjungi baris lineAt(0..count-1) (urut naik) dan samakan tagnya dengan spansOf.
+    private run(count: number, lineAt: (k: number) => number, spansOf: (line: number) => LineSpan[], starts: number[]): void {
         const buf = this.buffer;
         const total = buf.get_char_count();
         const at = (line: number) => buf.get_iter_at_offset(starts[line] ?? total);
-        for (let i = 0; i < spans.length; i++) {
-            const want = spans[i];
+        for (let k = 0; k < count; k++) {
+            const i = lineAt(k);
+            const want = spansOf(i);
             const prev = this.applied[i];
             if (prev && (prev === want || sameSpans(prev, want))) continue;
             if (!prev) {
                 // Baris tak dikenal yang berurutan dibersihkan sekaligus (mis. setelah setText).
-                let j = i;
-                while (j + 1 < spans.length && !this.applied[j + 1]) j++;
+                let n = k;
+                while (n + 1 < count && lineAt(n + 1) === lineAt(n) + 1 && !this.applied[lineAt(n + 1)]) n++;
+                const j = lineAt(n);
                 const s = at(i), e = at(j + 1);
                 for (const tag of this.allTags) buf.remove_tag(tag, s, e);
                 // Saat membuka/paste dokumen, gabungkan rentang tag yang bertemu
                 // supaya GTK tidak menerima ribuan operasi untuk blok kode panjang.
                 const ranges = new Map<Gtk.TextTag, Range[]>();
-                for (let k = i; k <= j; k++) {
-                    for (const [tag, a, b] of spans[k]) {
+                for (let line = i; line <= j; line++) {
+                    const spans = line === i ? want : spansOf(line);
+                    for (const [tag, a, b] of spans) {
                         if (!ranges.has(tag)) ranges.set(tag, []);
-                        ranges.get(tag)!.push([starts[k] + a, starts[k] + b]);
+                        ranges.get(tag)!.push([starts[line] + a, starts[line] + b]);
                     }
-                    this.applied[k] = spans[k];
+                    this.applied[line] = spans;
                 }
                 for (const [tag, wanted] of ranges)
                     for (const [a, b] of normalize(wanted))
                         buf.apply_tag(tag, buf.get_iter_at_offset(a), buf.get_iter_at_offset(b));
-                i = j;
+                k = n;
                 continue;
             } else {
                 const s = at(i), e = at(i + 1);

@@ -36,6 +36,32 @@ export function fileTests(c: GuiContext): void {
         ok(!buf.get_modified(), 'status modified direset');
     });
 
+    test('auto save latar: suntingan selama menulis tetap ditandai berubah', () => {
+        const path = GLib.build_filenamev([tmp, 'otomatis.md']);
+        let finished = false;
+        ok(w.autosaveInBackground(undefined, () => { finished = true; }) === false, 'tidak ada perubahan, tidak menulis');
+        buf.insert_at_cursor(' A', -1);
+        pump();
+        ok(w.autosaveInBackground(undefined, () => { finished = true; }), 'penulisan latar tidak dimulai');
+        buf.insert_at_cursor('B', -1);   // diketik sebelum penulisan selesai
+        for (let i = 0; i < 500 && !finished; i++) { pump(); GLib.usleep(2000); }
+        ok(finished, 'penulisan latar tidak selesai');
+        eq(readTextFile(path), '# Halo A', 'isi yang ditulis adalah salinan saat dimulai');
+        ok(buf.get_modified(), 'B belum tersimpan, tetapi status modified direset');
+    });
+
+    test('simpan langsung setelah auto save latar tidak tertimpa isi lama', () => {
+        const path = GLib.build_filenamev([tmp, 'otomatis.md']);
+        ok(w.autosaveInBackground(), 'penulisan latar tidak dimulai');
+        buf.insert_at_cursor('C', -1);
+        ok(w.save(), 'save() gagal');   // menunggu penulisan latar, lalu menulis isi terbaru
+        for (let i = 0; i < 20; i++) { pump(); GLib.usleep(2000); }
+        eq(readTextFile(path), '# Halo ABC', 'isi file');
+        ok(!buf.get_modified(), 'status modified');
+        buf.delete(buf.get_iter_at_offset(6), buf.get_end_iter());
+        ok(w.save(), 'save() gagal');
+    });
+
     test('auto save menyimpan tanpa bertanya saat berpindah dokumen', () => {
         const path = GLib.build_filenamev([tmp, 'otomatis.md']);
         buf.insert_at_cursor('!', -1);

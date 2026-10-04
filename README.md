@@ -101,9 +101,11 @@ dan maksimum dalam milidetik; `--save=...` menyimpan sampel mentah, commit, sert
 GJS/GLib/GTK dan lingkungan. `--compare=...` hanya membandingkan format, ukuran,
 pengulangan, jenis dokumen, mode, dan lingkungan yang setara. Baseline format lama perlu dibuat ulang.
 
-Skenario GUI mencakup membuka teks, penyorotan ulang, mengetik (total 20 karakter dan
-latensi per karakter), perpindahan kursor, paste besar dengan emoji dan baris panjang,
-hapus, undo, serta redo. Setiap suntingan diverifikasi melalui callback penyorotan.
+Skenario GUI mencakup membuka teks (total sampai tata letak selesai dan jeda terpanjang
+main loop, yaitu yang terasa sebagai "membeku"), penyorotan ulang, mengetik (total 20
+karakter, latensi per karakter, dan lewat sinyal keybinding TextView di akhir paragraf
+panjang), Enter, perpindahan kursor, paste besar dengan emoji dan baris panjang,
+hapus, undo, redo, serta auto save (tulis sinkron dan bagian thread utama auto save latar). Setiap suntingan diverifikasi melalui callback penyorotan.
 `--budget=...` berlaku pada median operasi GUI; untuk mengetik, budget berlaku per
 karakter. Kegagalan pengukuran mengembalikan kode 1 dan mencegah penyimpanan hasil
 parsial; hasil lengkap yang melampaui budget tetap dapat disimpan untuk diagnosis.
@@ -111,7 +113,9 @@ Tiap proses GUI dibatasi 120 detik (`--timeout=...`), menggunakan `timeout` dari
 GNU coreutils, agar callback yang terblokir GC tidak membuat runner menunggu tanpa batas.
 Ukuran GUI dapat diatur dengan `--sizes=25,50,100`; `--size` mengatur ukuran modul
 Markdown. `--fixture=long --size=2000 --sizes=2000` menguji dokumen 20.000 baris
-tanpa grid tabel; jenis dokumen bawaan adalah `mixed`. Rendering gambar/diagram asinkron dan interaksi papan kanban belum diukur;
+tanpa grid tabel, dan `--fixture=buku --size=400 --sizes=50,200,400` menguji naskah buku
+(paragraf panjang yang dibungkus, dialog, *miring*/**tebal**, ±1,6 KB per blok; 400 blok ≈ 650 KB,
+sekitar 100.000 kata); jenis dokumen bawaan adalah `mixed`. Rendering gambar/diagram asinkron dan interaksi papan kanban belum diukur;
 kanban saat ini mencakup parsing dan serialisasi model.
 
 ### Mode pengembangan
@@ -170,7 +174,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 **Lainnya**
 - Cari teks, undo/redo, hitungan kata dan karakter, posisi kursor
 - Ekspor ke HTML dengan CSS disertakan. Gambar dan tautan tetap memakai URL/path aslinya; diagram Mermaid/DBML memerlukan internet untuk memuat Mermaid dari CDN
-- **Auto save** (menu ☰ → *Auto Save*, aktif bawaan): dokumen yang sudah punya file disimpan otomatis 1 detik setelah berhenti mengetik, dan disimpan tanpa bertanya saat menutup, membuat dokumen baru, atau membuka file lain. Dokumen yang belum pernah disimpan tetap butuh Ctrl+S
+- **Auto save** (menu ☰ → *Auto Save*, aktif bawaan): dokumen yang sudah punya file disimpan otomatis 1 detik setelah berhenti mengetik (penulisan ke disk berjalan di latar, jadi tidak menahan ketikan), dan disimpan tanpa bertanya saat menutup, membuat dokumen baru, atau membuka file lain. Dokumen yang belum pernah disimpan tetap butuh Ctrl+S
 - Peringatan sebelum menutup, membuat dokumen baru, atau membuka file lain jika ada perubahan yang belum disimpan (saat auto save mati atau dokumen belum punya file)
 
 ## Shortcut
@@ -471,6 +475,12 @@ Ukurannya **bukan 1** (satuan Pango, 1/1024 pt) melainkan 256 (`TINY` di `editor
 
 **Kolom teks di tengah (`editor/view.ts`).** Margin kiri/kanan dihitung dari lebar ScrolledWindow, dan ScrolledWindow memakai `hscrollbar_policy: EXTERNAL`, bukan `NEVER`. Lebar minimum GtkTextView yang dibungkus sama dengan lebarnya saat ini ditambah margin. Dengan `NEVER`, lebar minimum itu diteruskan ke jendela, sehingga jendela tidak bisa mengecil dan terus membesar setiap margin dihitung ulang.
 
+**Membuka dokumen panjang tanpa membeku (`replaceAllText()` di `editor/view.ts`).** GTK 3 memberi tinggi 0 pada baris yang belum ditata. Jika gambar pertama setelah teks diganti mencakup area di bawah baris yang sudah ditata (cache piksel TextView menggambar setengah layar ekstra, dan `bottom_margin` memperpanjang kanvas), GTK menata *semua* baris sampai akhir dokumen sekaligus di thread utama; naskah 650 KB dulu membeku ±0,6 detik saat dibuka. `replaceAllText()` menolkan posisi gulir lalu mengantre gulir ke kursor, sehingga GTK lebih dulu menata dua layar di sekitar kursor dan sisanya sedikit demi sedikit di latar. Pakai fungsi ini setiap kali mengganti seluruh isi TextView yang bisa panjang (editor, penampil riwayat). Jangan mengubah `bottom_margin` saat runtime: setiap perubahan membuat GTK menata ulang seluruh dokumen.
+
+**Marker tersembunyi bertahap (`MarkerConcealer` di `editor/decorations.ts`).** Tiap ketukan dan perpindahan kursor hanya memeriksa baris aktif lama dan baru, baris yang diurai ulang penyorot (`reparsed` di hasil `highlight()`), dan baris yang tagnya belum diketahui. Pembatas ``` baru bisa mengubah marker baris di bawahnya tanpa menyunting baris itu, karena itu rentang `reparsed` wajib diteruskan. Marker di hasil penyorot urut menurut barisnya (dicari dengan pencarian biner), dan marker/heading/gambar setelah suntingan digeser di tempat karena snapshot lama tidak dipakai lagi.
+
+**Auto save di latar (`writeTextFileAsync()` di `files.ts`).** Auto save dari timer menulis lewat Gio di thread pekerja (file sementara, fsync, lalu rename atomik), jadi jeda fsync di disk lambat tidak terasa saat pengguna lanjut mengetik. Semua penulisan sinkron, pemindahan, dan pembuangan file lewat `files.ts`/`fileops.ts` lebih dulu menunggu penulisan latar ke path yang sama (`waitForWrites()`), supaya isi lama tidak menimpa yang baru. Status *modified* hanya direset jika teks tidak berubah selama ditulis.
+
 ### Cara kerja gambar (`editor/images.ts`)
 
 Gambar tidak dimasukkan ke buffer teks. Jika memakai `GtkTextChildAnchor`, setiap gambar akan menambah karakter ke dokumen dan ke riwayat undo. Sebagai gantinya:
@@ -633,4 +643,4 @@ Nilai bawaan: sidebar terbuka pada tab Outline, panel Asisten tertutup dengan mo
 - Merapikan tabel (`Ctrl+Shift+T` dan semua perintah di menu Edit Tabel) membuang sel yang berlebih dibanding baris judul, sesuai aturan GFM
 - Tabel yang kursornya di dalamnya tampil mentah; jika seluruh dokumen hanya berisi satu tabel dan kursor ada di dalamnya, grid baru tampil setelah kursor keluar
 - Garis pemisah tampil sebagai teks `---` pudar di tengah, bukan garis
-- Parsing suntingan sudah bertahap, tetapi penyesuaian array offset/metadata dan pemeriksaan tag masih sebanding dengan jumlah baris. Membuka dokumen atau mengubah konteks fence sampai akhir tetap dapat mengurai seluruh dokumen; kenyamanan GUI pada puluhan ribu baris belum terverifikasi karena benchmark ekstrem masih menemui callback GJS yang terblokir saat GC.
+- Parsing suntingan sudah bertahap, tetapi penyesuaian array offset/metadata masih sebanding dengan jumlah baris (salinan array sekali per ketukan; ±0,4 ms pada naskah 650 KB). Membuka dokumen atau mengubah konteks fence sampai akhir tetap mengurai seluruh dokumen secara sinkron (±150 ms untuk naskah 650 KB); kenyamanan GUI pada puluhan ribu baris dengan banyak tabel belum terverifikasi karena benchmark ekstrem masih menemui callback GJS yang terblokir saat GC.

@@ -29,7 +29,7 @@ import type GdkPixbuf from 'gi://GdkPixbuf';
 import { createTags, paintTags, setTagMargins, SYNTAX_TAGS } from './tags.js';
 import { LineTagger } from './tagsync.js';
 import { highlight, HighlightCache } from './highlighter.js';
-import { concealMarkers, dimOutsideParagraph } from './decorations.js';
+import { MarkerConcealer, dimOutsideParagraph } from './decorations.js';
 import { continueBlock, indentListItem, isInCodeBlock } from './lists.js';
 import { toggleTaskAt, linkAt } from './clicks.js';
 import { ImageLayer } from './images.js';
@@ -50,6 +50,22 @@ export type Mode = 'source' | 'focus' | 'typewriter';
 // Bagian dari Gdk.Event yang dipakai onKey/onClick (memudahkan tes membuat event tiruan).
 export type KeyEvent = Pick<Gdk.Event, 'get_keyval' | 'get_state'>;
 export type ButtonEvent = Pick<Gdk.Event, 'get_button' | 'get_event_type' | 'get_coords' | 'get_state'>;
+
+// Ganti seluruh isi TextView (lewat `replace`), lalu tampilkan dari awal.
+//
+// GTK 3 memberi tinggi 0 pada baris yang belum ditata. Jika gambar pertama mencakup area di
+// bawah baris yang sudah ditata (cache piksel TextView menggambar setengah layar ekstra, dan
+// bottom_margin memperpanjang kanvas), GTK menata semua baris sampai akhir dokumen sekaligus
+// di thread utama: membuka naskah 650 KB membeku ±0,6 detik. Karena itu posisi gulir lama
+// dinolkan dulu, dan gulir ke kursor diantre: GTK lalu menata dua layar di sekitar kursor
+// sebelum menggambar (gtk_text_view_flush_scroll) dan sisanya sedikit demi sedikit di latar.
+export function replaceAllText(view: Gtk.TextView, replace: () => void): void {
+    view.get_vadjustment()?.set_value(0);
+    replace();
+    const buf = view.buffer;
+    buf.place_cursor(buf.get_start_iter());
+    view.scroll_to_mark(buf.get_insert(), 0, false, 0, 0);
+}
 
 export class MarkdownView {
     readonly buffer: GtkSource.Buffer;
@@ -84,7 +100,7 @@ export class MarkdownView {
     private destroyed = false;
     private cursorForce = false;
     private syntaxTagger: LineTagger;
-    private hiddenTagger: LineTagger;
+    private concealer: MarkerConcealer;
     // Rentang teks yang disunting sejak penyorotan terakhir. Memakai mark supaya ikut
     // bergeser jika ada suntingan lain sebelum penyorotan berjalan.
     private dirty = false;
@@ -103,7 +119,7 @@ export class MarkdownView {
         this.view.get_style_context().add_class('editor');
         this.tags = createTags(this.buffer);
         this.syntaxTagger = new LineTagger(this.buffer, SYNTAX_TAGS.map(n => this.tags[n]));
-        this.hiddenTagger = new LineTagger(this.buffer, [this.tags.hidden]);
+        this.concealer = new MarkerConcealer(new LineTagger(this.buffer, [this.tags.hidden]), this.tags.hidden);
         this.dirtyStart = this.buffer.create_mark(null, this.buffer.get_start_iter(), true);
         this.dirtyEnd = this.buffer.create_mark(null, this.buffer.get_start_iter(), false);
 
@@ -190,11 +206,12 @@ export class MarkdownView {
     setText(text: string): void {
         const buf = this.buffer;
         this.resetHighlight = true;
-        buf.begin_not_undoable_action();
-        buf.set_text(text, -1);
-        buf.end_not_undoable_action();
-        buf.set_modified(false);
-        buf.place_cursor(buf.get_start_iter());
+        replaceAllText(this.view, () => {
+            buf.begin_not_undoable_action();
+            buf.set_text(text, -1);
+            buf.end_not_undoable_action();
+            buf.set_modified(false);
+        });
         this.highlight();
     }
 
@@ -317,9 +334,11 @@ export class MarkdownView {
             this.dirty = false;
             const count = buf.get_line_count();
             this.syntaxTagger.edited(first, last, count);
-            this.hiddenTagger.edited(first, last, count);
+            this.concealer.edited(first, last, count);
         }
         const result = highlight(this.buffer, this.tags, this.syntaxTagger, this.highlightCache, reset ? undefined : edited);
+        // Tanpa suntingan, cache mengembalikan hasil yang sama: tidak ada baris yang diurai ulang.
+        if (result.markers !== this.markers) this.concealer.reparsed(result.markers, ...result.reparsed);
         this.markers = result.markers;
         this.lines = result.lines;
         this.headings = result.headings;
@@ -362,7 +381,7 @@ export class MarkdownView {
         const key = `${l0}:${l1}`;
         if (force || key !== this.cursorKey) {
             this.cursorKey = key;
-            concealMarkers(this.hiddenTagger, this.tags.hidden, this.markers, this.starts, l0, l1, !this.modes.source);
+            this.concealer.apply(this.starts, l0, l1, !this.modes.source);
             dimOutsideParagraph(buf, this.tags.dim, this.lines, l0, l1, this.modes.focus);
             this.tableLayer.setCursor(l0, l1);
             this.mermaid.setCursor(l0, l1);

@@ -7,6 +7,7 @@ import Gdk from 'gi://Gdk?version=3.0';
 import GLib from 'gi://GLib';
 import { commitContent, commitDiff, commitFile, workingDiff, type TextResult } from '../git.js';
 import { parseDiff, type Commit } from '../gitlog.js';
+import { replaceAllText } from '../editor/view.js';
 
 const DIFF_COLORS = {
     light: { add: '#dafbe1', del: '#ffebe9', hunk: '#0969da' },
@@ -159,7 +160,8 @@ export class HistoryViewer {
         if (!lines.length) return buffer.set_text(this.commit
             ? 'Tidak ada perubahan isi pada commit ini (misalnya hanya ganti nama)'
             : 'Tidak ada perubahan yang belum di-commit', -1);
-        buffer.set_text(lines.map(l => l.text).join('\n'), -1);
+        // Diff dan isi file bisa sepanjang satu buku.
+        replaceAllText(this.diffView, () => buffer.set_text(lines.map(l => l.text).join('\n'), -1));
         lines.forEach((line, i) => {
             if (line.kind === 'context') return;
             const start = buffer.get_iter_at_line(i);
@@ -171,6 +173,7 @@ export class HistoryViewer {
 
     private showContent(result: TextResult): void {
         if (this.closed) return;
-        this.contentView.buffer.set_text(result.ok ? result.text : `Gagal membaca isi file:\n${result.message}`, -1);
+        replaceAllText(this.contentView, () =>
+            this.contentView.buffer.set_text(result.ok ? result.text : `Gagal membaca isi file:\n${result.message}`, -1));
     }
 }

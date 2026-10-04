@@ -7,7 +7,7 @@ import { WELCOME } from '../../src/welcome.js';
 import { readTextFile } from '../../src/files.js';
 import { highlight } from '../../src/editor/highlighter.js';
 import { createTags, SYNTAX_TAGS } from '../../src/editor/tags.js';
-import { LineTagger, tagRanges } from '../../src/editor/tagsync.js';
+import { LineTagger, normalize, tagRanges } from '../../src/editor/tagsync.js';
 import { section, test, ok, eq, tmp, opt, DIM, RESET } from '../framework.js';
 import type { GuiContext } from './context.js';
 
@@ -81,6 +81,56 @@ export function robustnessTests(c: GuiContext): void {
             pump();
             if (round % 3 === 2) { buf.undo(); pump(); }
             compare(`suntingan ke-${round + 1}`);
+        }
+    });
+    // Marker disembunyikan bertahap (editor/decorations.ts): hanya baris aktif lama/baru dan
+    // baris yang diurai ulang yang diperiksa. Bandingkan dengan menghitung semua marker.
+    test('marker tersembunyi bertahap sama dengan perhitungan penuh', () => {
+        const expected = () => {
+            const ins = buf.get_iter_at_mark(buf.get_insert()).get_line();
+            const sel = buf.get_iter_at_mark(buf.get_selection_bound()).get_line();
+            const l0 = Math.min(ins, sel), l1 = Math.max(ins, sel);
+            if (ed.modes.source) return [];
+            const ranges = ed.markers.filter(([, , r0, r1]) => r1 < l0 || r0 > l1).map(([a, b]) => [a, b] as [number, number]);
+            return normalize(ranges);
+        };
+        let seed = 11;
+        const rand = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+        const pieces = ['x', '\n', '**b**', '`k`', '```\n', '# ', '> ', '🎉', '*m*', '\n\n', '![g](a.png)', '~~c~~'];
+        const check = (what: string) => eq(JSON.stringify(tagRanges(buf, ed.tags.hidden)), JSON.stringify(expected()), what);
+        // Pembatas ``` baru mengubah marker baris di bawahnya tanpa menyunting baris itu.
+        setText('awal\n\n**satu** dan *dua*\n\n# Judul\nakhir');
+        cursorTo(0);
+        check('sebelum pembatas');
+        buf.insert(buf.get_iter_at_line(1), '```\n', -1); pump();
+        check('setelah pembatas dibuka');
+        cursorTo(6);
+        check('kursor pindah setelah pembatas');
+        buf.undo(); pump();
+        check('setelah pembatas dibatalkan');
+        setText(readTextFile(samplePath));
+        try {
+            for (let round = 0; round < 60; round++) {
+                const n = buf.get_char_count();
+                const at = buf.get_iter_at_offset(rand(n + 1));
+                if (rand(4) === 0 && n > 0) {
+                    const end = at.copy();
+                    end.forward_chars(1 + rand(40));
+                    buf.delete(at, end);
+                } else if (rand(5) > 0) {
+                    buf.insert(at, pieces[rand(pieces.length)], -1);
+                }
+                const count = buf.get_char_count();
+                if (rand(4) === 0) buf.select_range(buf.get_iter_at_offset(rand(count + 1)), buf.get_iter_at_offset(rand(count + 1)));
+                else buf.place_cursor(buf.get_iter_at_offset(rand(count + 1)));
+                if (rand(15) === 0) ed.setMode('source', !ed.modes.source);
+                if (rand(10) === 0) buf.undo();
+                pump();
+                check(`marker tersembunyi pada langkah ${round + 1}`);
+            }
+        } finally {
+            ed.setMode('source', false);
+            pump();
         }
     });
     test('cache baris sama dengan parser baru setelah konteks blok dan Unicode berubah', () => {

@@ -5,13 +5,15 @@ import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import type { Heading } from '../editor/highlighter.js';
 
+type Label = Pick<Heading, 'level' | 'text'>;
+
 export class Outline {
     readonly list: Gtk.ListBox;
     readonly widget: Gtk.Box;
     onJump: (line: number) => void = () => {};  // heading diklik
 
     private headings: Heading[] = [];
-    private signature = '';
+    private labels: Label[] = [];   // isi baris yang sedang tampil
 
     constructor() {
         this.list = new Gtk.ListBox({ activate_on_single_click: true });
@@ -35,20 +37,19 @@ export class Outline {
 
     // headings dari editor/highlighter.ts
     update(headings: Heading[]): void {
-        // Daftar dibangun ulang hanya jika heading benar-benar berubah.
-        const signature = JSON.stringify(headings.map(({ level, text }) => [level, text]));
-        // Pergeseran baris mengubah tujuan klik, bukan tampilan label.
-        const previous = this.headings;
+        // Pergeseran baris mengubah tujuan klik, bukan tampilan label. Dipanggil tiap ketukan,
+        // jadi perbandingannya langsung per heading tanpa membuat string seluruh daftar.
+        const previous = this.labels;
         this.headings = headings;
-        if (signature === this.signature) return;
-        this.signature = signature;
 
         // Pertahankan awalan/akhiran yang sama: mengedit satu heading tidak
         // membangun ulang seluruh sidebar dan memicu layout ratusan label.
-        const same = (a: Heading, b: Heading) => a.level === b.level && a.text === b.text;
+        const same = (a: Label, b: Heading) => a.level === b.level && a.text === b.text;
         let first = 0, oldEnd = previous.length, newEnd = headings.length;
         while (first < oldEnd && first < newEnd && same(previous[first], headings[first])) first++;
+        if (first === oldEnd && first === newEnd) return;   // daftar tidak berubah
         while (oldEnd > first && newEnd > first && same(previous[oldEnd - 1], headings[newEnd - 1])) { oldEnd--; newEnd--; }
+        this.labels = [...previous.slice(0, first), ...headings.slice(first, newEnd).map(({ level, text }) => ({ level, text })), ...previous.slice(oldEnd)];
         const rows = this.list.get_children();
         for (let i = first; i < oldEnd; i++) rows[i].destroy();
         for (let i = first; i < newEnd; i++) {

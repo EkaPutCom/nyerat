@@ -7,6 +7,7 @@
 //   gjs -m dist/bench.js --budget=ms     gagal (kode keluar 1) bila median operasi GUI melebihi ms
 //   gjs -m dist/bench.js --sizes=100,400 ukuran dokumen untuk bagian GUI (bawaan: size/4, size/2, size)
 //   gjs -m dist/bench.js --fixture=long  dokumen panjang, 10 baris per blok tanpa grid tabel
+//   gjs -m dist/bench.js --fixture=buku  naskah buku: paragraf panjang, dialog, *miring*/**tebal**, ±1,6 KB per blok
 //   gjs -m dist/bench.js --timeout=120 batas waktu tiap proses GUI (detik)
 //   gjs -m dist/bench.js --save=f.json   simpan hasil ke f.json (untuk dibandingkan nanti)
 //   gjs -m dist/bench.js --compare=f.json  tampilkan selisih terhadap hasil tersimpan
@@ -32,7 +33,7 @@ import { findTables, parseTable, renderTable } from '../src/markdown/table.js';
 import { parseBoard, serializeBoard } from '../src/markdown/kanban.js';
 
 const FIXTURE = optVal('fixture') ?? 'mixed';
-if (!['mixed', 'long'].includes(FIXTURE)) { printerr('--fixture harus mixed atau long.'); System.exit(1); }
+if (!['mixed', 'long', 'buku'].includes(FIXTURE)) { printerr('--fixture harus mixed, long, atau buku.'); System.exit(1); }
 const SIZE = Number(optVal('size') ?? 100);
 const RUNS = Number(optVal('runs') ?? 10);
 const GUI_SIZES = (optVal('sizes') ?? [...new Set([SIZE / 4, SIZE / 2, SIZE].map(n => Math.max(1, Math.round(n))))].join(',')).split(',').map(Number);
@@ -117,7 +118,18 @@ const KANBAN = (cards: number): string =>
     `---\nkanban: true\n---\n\n` + ['Rencana', 'Dikerjakan', 'Selesai'].map(c =>
         `## ${c}\n\n` + Array.from({ length: cards }, (_, i) => `- [ ] Kartu ${i} #tag @due(2026-01-01)\n`).join('') + '\n').join('');
 
-const doc = (n: number): string => FIXTURE === 'mixed' ? BLOCK.repeat(n) : Array.from({ length: n }, (_, i) =>
+// Naskah buku: satu adegan per blok, bab baru tiap 10 adegan. Paragraf ditulis satu baris
+// panjang (dibungkus editor), seperti penulis prosa biasanya menulis.
+const SCENE = (i: number): string =>
+    (i % 10 === 0 ? `# Bab ${i / 10 + 1}: Pelayaran ke Timur\n\n` : '') + `## Adegan ${i}\n\n` +
+    `Angin pagi bertiup dari arah laut ketika Raka menuruni tangga dermaga untuk ke-${i} kalinya. Ia membawa *buku catatan* lusuh yang selalu terselip di saku jaketnya, dan di setiap halaman tertulis nama-nama pelabuhan yang ingin ia singgahi. Di kejauhan, kapal **Camar Putih** bergoyang pelan mengikuti ombak — lambungnya putih bersih, layarnya biru laut, dan benderanya berkibar seperti memanggil.\n\n` +
+    `“Kau terlambat lagi,” kata Laras tanpa menoleh. Tangannya sibuk merapikan tali tambat yang kusut.\n\n` +
+    `“Aku tidak terlambat. Kapalnya saja yang terlalu cepat,” jawab Raka sambil tersenyum. Ia tahu jawabannya tidak akan memuaskan siapa pun, tetapi pagi itu terlalu indah untuk dipakai berdebat.\n\n` +
+    `Nakhoda Hasan berdiri di haluan dengan tangan terlipat di dada. Ia lelaki tua bersuara berat yang sudah tiga puluh tahun memimpin pelayaran ke timur, dan konon belum pernah sekali pun kehilangan awak. Orang-orang di pelabuhan menyebutnya *Si Penjaga Arah*, julukan yang ia terima dengan diam. Ketika matahari mulai naik, ia memberi isyarat, dan para awak serentak menarik jangkar. Raka merasakan geladak bergetar di bawah kakinya; perjalanan yang sudah lama ia impikan akhirnya dimulai.\n\n` +
+    `> Laut tidak pernah berjanji apa-apa, tetapi ia selalu menepati yang tidak dijanjikannya.\n\n` +
+    `Malam itu mereka berlabuh di teluk kecil yang tidak tercantum di peta mana pun. Bintang-bintang tampak lebih dekat dari biasanya, dan suara jangkrik dari pulau terdengar seperti nyanyian. Raka duduk di buritan, menulis di bawah cahaya lentera, sementara Laras membaca ulang surat ayahnya untuk kesekian kalinya — surat yang sampai sekarang tidak mau ia tunjukkan kepada siapa pun.\n\n`;
+
+const doc = (n: number): string => FIXTURE === 'mixed' ? BLOCK.repeat(n) : FIXTURE === 'buku' ? Array.from({ length: n }, (_, i) => SCENE(i)).join('') : Array.from({ length: n }, (_, i) =>
     (i % 50 === 0 ? `## Bagian ${i}\n` : `Catatan ${i}\n`) +
     Array.from({ length: 8 }, (_, j) => `Paragraf ${i}.${j} dengan catatan yang berbeda dan cukup panjang untuk dokumen nyata.\n`).join('') + '\n').join('');
 
@@ -200,6 +212,26 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
     group = `Editor GUI ${n} blok`;
     print(`\nEditor GUI (${n} blok, ${(text.length / 1024).toFixed(0)} KB)`);
     report('setText + sorot + layout', await measureAsync(async () => { ed.setText(text); await idle(); }), true);
+    // setText sendiri sinkron; sisa penataan baris dikerjakan GTK sedikit demi sedikit di latar.
+    // Yang terasa "membeku" adalah jeda terpanjang main loop sejak membuka sampai selesai.
+    const stalls: number[] = [];
+    for (let i = 0; i <= RUNS; i++) {
+        System.gc();
+        await idle();
+        let worst = 0, last = now();
+        const tick = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1, () => {
+            const t = now();
+            worst = Math.max(worst, t - last);
+            last = t;
+            return GLib.SOURCE_CONTINUE;
+        });
+        ed.setText(text);
+        await idle();
+        GLib.source_remove(tick);
+        worst = Math.max(worst, now() - last);
+        if (i > 0) stalls.push(worst);
+    }
+    report('buka: jeda terpanjang', stalls, true);
     const sorot = measure(() => ed.highlight());
     report('highlight() ulang', sorot, true);
     // Hitung callback selesai; durasi saja tidak membuktikan penyorotan berjalan.
@@ -212,6 +244,17 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
         fn();
         await idle();
         if (highlights <= before) throw new Error('Perubahan teks tidak menyelesaikan penyorotan.');
+    };
+    const operation = async (setup: () => Promise<void>, action: () => Promise<void>): Promise<number[]> => {
+        const times: number[] = [];
+        for (let i = 0; i <= RUNS; i++) {
+            System.gc();
+            await setup();
+            const start = now();
+            await action();
+            if (i > 0) times.push(now() - start);
+        }
+        return times;
     };
     const characters: number[] = [];
     let typingRun = 0;
@@ -231,23 +274,41 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
     report('ketik 20 karakter', Array.from({ length: ketik.length }, (_, i) =>
         characters.slice(i * 20, (i + 1) * 20).reduce((a, b) => a + b, 0)));
     report('ketik per karakter', characters, true);
+    // Jalur yang sama dengan tombol sungguhan: sinyal keybinding TextView menyisipkan
+    // teks sebagai aksi pengguna (masuk undo) lalu menggulung ke kursor. Kursor di akhir
+    // paragraf panjang di tengah dokumen, tempat penulis prosa paling sering mengetik.
+    const paragraphEnd = (): void => {
+        const middle = Math.floor(buf.get_line_count() / 2);
+        let line = middle;
+        while (line < buf.get_line_count() - 1 && (ed.lines[line] ?? '').length < 200) line++;
+        if ((ed.lines[line] ?? '').length < 200) line = middle;
+        const it = buf.get_iter_at_line(line);
+        it.forward_to_line_end();
+        buf.place_cursor(it);
+    };
+    const viewTyping: number[] = [];
+    await measureAsync(async () => {
+        ed.setText(text);
+        paragraphEnd();
+        ed.view.scroll_to_mark(buf.get_insert(), 0, true, 0, 0.5);
+        await idle();
+        for (const ch of ' kata') {
+            const start = now();
+            await edit(() => ed.view.emit('insert-at-cursor', ch));
+            viewTyping.push(now() - start);
+        }
+    });
+    report('ketik lewat view (paragraf)', viewTyping.slice(5), true);
+    const enter = { get_keyval: () => [true, Gdk.KEY_Return], get_state: () => [true, 0 as Gdk.ModifierType] } as const;
+    report('Enter paragraf baru', await operation(async () => { ed.setText(text); paragraphEnd(); await idle(); }, () => edit(() => {
+        if (!ed.onKey(enter as never)) ed.view.emit('insert-at-cursor', '\n');
+    })), true);
     // Dokumen besar, Unicode, dan satu baris panjang menguji jalur suntingan berbeda.
     const paste = ('😀 catatan **tebal**\n'.repeat(100)) + 'x'.repeat(10000);
     const prepare = async (): Promise<void> => {
         ed.setText(text);
         buf.place_cursor(buf.get_iter_at_line(Math.floor(buf.get_line_count() / 2)));
         await idle();
-    };
-    const operation = async (setup: () => Promise<void>, action: () => Promise<void>): Promise<number[]> => {
-        const times: number[] = [];
-        for (let i = 0; i <= RUNS; i++) {
-            System.gc();
-            await setup();
-            const start = now();
-            await action();
-            if (i > 0) times.push(now() - start);
-        }
-        return times;
     };
     report('paste besar + Unicode', await operation(prepare, () => edit(() => buf.insert_at_cursor(paste, -1))), true);
     const inserted = async (): Promise<void> => {
@@ -281,6 +342,21 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
     report('auto save (tulis file)', await operation(() => edit(() => buf.insert_at_cursor('x', -1)), async () => {
         if (!w.autosave() || buf.get_modified()) throw new Error('Auto save tidak menyimpan dokumen.');
     }), true);
+    // Jalur timer: hanya bagian di thread utama (salin teks, mulai penulisan) yang diukur;
+    // fsync dan rename berjalan di thread pekerja Gio.
+    const background: number[] = [];
+    for (let i = 0; i <= RUNS; i++) {
+        System.gc();
+        await edit(() => buf.insert_at_cursor('x', -1));
+        let finished: () => void = () => {};
+        const written = new Promise<void>(resolve => { finished = resolve; });
+        const start = now();
+        if (!w.autosaveInBackground(undefined, () => finished())) throw new Error('Auto save latar tidak dimulai.');
+        if (i > 0) background.push(now() - start);
+        await written;
+        if (buf.get_modified()) throw new Error('Auto save latar tidak menyimpan dokumen.');
+    }
+    report('auto save latar (thread utama)', background, true);
     w.settings.autosave = false;
     GLib.unlink(w.file);
     GLib.rmdir(saveDir);

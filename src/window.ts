@@ -18,7 +18,7 @@ import GLib from 'gi://GLib';
 
 import { APP_NAME } from './config.js';
 import { saveSettings, type Settings } from './settings.js';
-import { readTextFile, writeTextFile, fileExists } from './files.js';
+import { readTextFile, writeTextFile, writeTextFileAsync, fileExists } from './files.js';
 import { markdownToHtml } from './markdown/html.js';
 import { WELCOME } from './welcome.js';
 import { MarkdownView, type Mode } from './editor/view.js';
@@ -71,6 +71,7 @@ interface Doc {
     reloadQueued: boolean;
     autosaveTimer: number;        // id timeout auto save, 0 = tidak ada
     lastChange: number;           // waktu (µs, monotonic) perubahan teks terakhir
+    changes: number;              // jumlah perubahan teks; menandai isi yang ditulis auto save latar
 }
 
 export class MainWindow {
@@ -291,7 +292,7 @@ export class MainWindow {
     // Buat dokumen kosong beserta editornya, tanpa mengaktifkannya.
     private addDoc(): Doc {
         const editor = new MarkdownView();
-        const doc: Doc = { id: this.nextId++, editor, file: null, textOverride: false, boardText: '', reloadQueued: false, autosaveTimer: 0, lastChange: 0 };
+        const doc: Doc = { id: this.nextId++, editor, file: null, textOverride: false, boardText: '', reloadQueued: false, autosaveTimer: 0, lastChange: 0, changes: 0 };
         // Callback editor hanya berlaku saat dokumennya aktif; yang di latar tidak menyentuh outline dan status bar.
         editor.onHighlighted = ({ headings, words, characters }) => {
             if (doc !== this.doc) return;
@@ -309,6 +310,7 @@ export class MainWindow {
         editor.buffer.connect('modified-changed', () => this.refreshTitle(doc));
         // Teks berubah selagi papan tampil dan bukan dari papan sendiri (undo/redo): baca ulang.
         editor.buffer.connect('changed', () => {
+            doc.changes++;
             this.queueBoardReload(doc);
             this.queueAutosave(doc);
         });
@@ -523,8 +525,28 @@ export class MainWindow {
             return GLib.SOURCE_REMOVE;
         }
         doc.autosaveTimer = 0;
-        this.autosave(doc);
+        this.autosaveInBackground(doc);
         return GLib.SOURCE_REMOVE;
+    }
+
+    // Auto save dari timer: file ditulis di thread pekerja (lihat writeTextFileAsync), jadi
+    // thread utama hanya menyalin teks. Penulisan sinkron berikutnya ke file yang sama
+    // menunggu yang ini selesai. true = penulisan dimulai.
+    autosaveInBackground(doc: Doc = this.doc, done: () => void = () => {}): boolean {
+        this.cancelAutosave(doc);
+        const path = doc.file;
+        if (!doc.editor.buffer.get_modified() || !this.settings.autosave || !path) return false;
+        const changes = doc.changes;
+        writeTextFileAsync(path, doc.editor.getText(), error => {
+            if (error) {
+                this.statusBar.toast(`Auto save gagal: ${errorMessage(error)}`);
+            } else if (this.docs.includes(doc) && doc.file === path && doc.changes === changes) {
+                // Teks tidak berubah selama ditulis: isi di disk sama dengan buffer.
+                doc.editor.buffer.set_modified(false);
+            }
+            done();
+        });
+        return true;
     }
 
     // Simpan diam-diam tanpa dialog atau toast. true = tidak ada perubahan yang tertinggal.

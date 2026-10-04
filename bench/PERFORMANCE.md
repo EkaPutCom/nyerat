@@ -91,3 +91,69 @@ jeda mengetik, bukan per ketukan. Skenario lain dalam `bench:compare` tetap dala
 rentang derau (mis. `hapus teks besar` 7 KB berfluktuasi 11–14 ms antar-run). Baseline
 belum diperbarui; skenario baru belum punya pembanding. Dokumen ≥1 MB belum diukur.
 
+
+## Menulis buku (2026-10-04)
+
+Fixture baru `buku` meniru naskah novel: paragraf satu baris panjang yang dibungkus editor,
+dialog, kutipan, `*miring*`/`**tebal**`, bab tiap 10 adegan. 400 blok ≈ 651 KB ≈ 100.000 kata
+(seukuran novel dalam satu file). Skenario baru: `buka: jeda terpanjang` (jeda main loop
+terpanjang sejak setText sampai GTK selesai menata, yaitu yang terasa sebagai membeku),
+`ketik lewat view (paragraf)` (sinyal keybinding TextView di akhir paragraf panjang, jalur
+yang sama dengan tombol sungguhan), `Enter paragraf baru`, dan `auto save latar (thread utama)`.
+
+Sebelum/sesudah pada 651 KB (Xvfb, 10 pengulangan, median; p95 dalam kurung). Kolom "sebelum"
+diukur dengan kode `src/` commit `ce74a34` dan bench yang sama.
+
+| Operasi | Sebelum | Sesudah |
+| --- | ---: | ---: |
+| buka: jeda terpanjang | 668.9 (671.0) | 162.4 (171.2) |
+| setText + sorot + layout | 1434.1 | 761.1 |
+| ketik per karakter | 2.91 (5.99) | 1.82 (5.00) |
+| ketik lewat view (paragraf) | 3.53 (12.94) | 2.61 (11.59) |
+| Enter paragraf baru | 6.05 (14.81) | 3.25 (12.62) |
+| pindah kursor 20 baris | 24.01 | 11.93 |
+| auto save, bagian thread utama | 9.59 (17.07)¹ | 5.33 (7.46) |
+
+¹ Sebelumnya auto save menulis dan fsync secara sinkron. Di NVMe mesin ini hanya ±4 ms,
+tetapi di disk lambat atau sibuk fsync bisa puluhan milidetik, tepat saat pengguna lanjut mengetik.
+
+Pada mixed 100 blok (`bench:compare`): ketik per karakter 2.55 → 1.39 ms, setText 360.74 →
+227.23 ms, pindah kursor 50 blok 151.04 → 71.80 ms; skenario lain dalam rentang derau.
+`markdownToHtml` sempat tercatat +37% pada satu run, padahal `src/markdown/` tidak berubah;
+tiga run ulang memberi 7.2–8.0 ms (baseline 7.26 ms), jadi itu derau.
+
+### Penyebab dan perbaikan
+
+- **Membuka dokumen membeku ±0,6 detik.** GTK 3 memberi tinggi 0 pada baris yang belum
+  ditata. Gambar pertama setelah `set_text` (cache piksel TextView menggambar setengah layar
+  ekstra; `bottom_margin` memperpanjang kanvas) mencakup area di bawah baris yang sudah ditata,
+  sehingga `gtk_text_layout_draw` menata semua baris sampai akhir dokumen sekaligus. Terbukti
+  dengan TextView polos (tanpa kode Nyerat): `bottom_margin` 1 px saja sudah cukup memicunya.
+  `replaceAllText()` menolkan gulir lalu mengantre gulir ke kursor, sehingga GTK lebih dulu
+  menata dua layar di sekitar kursor dan sisanya di latar. Sisa 162 ms adalah penyorotan
+  penuh yang sinkron (sekali saat membuka). Percobaan melepas `bottom_margin` sementara
+  ditolak: `set_bottom_margin()` membuat GTK menata ulang seluruh dokumen, dan paste 12 KB
+  di naskah 650 KB menjadi lebih dari 1 detik kerja latar.
+- **Marker tersembunyi dihitung untuk semua baris tiap ketukan/perpindahan kursor** (±1 ms dan
+  ribuan array baru di 650 KB). Kini `MarkerConcealer` hanya memeriksa baris aktif lama/baru,
+  baris yang diurai ulang, dan baris yang belum diketahui.
+- **Penggabungan cache penyorot** membuat beberapa salinan array seukuran dokumen dan satu
+  tuple baru per marker setelah suntingan (±1 ms). Kini satu salinan per array, pencarian
+  biner, dan pergeseran di tempat (±0,4 ms).
+- **Outline** membuat string JSON semua heading tiap ketukan; kini dibandingkan langsung.
+- **Auto save** dari timer menulis lewat Gio di thread pekerja; penulisan sinkron berikutnya
+  ke path yang sama menunggu penulisan latar (tesnya memastikan isi lama tidak menimpa isi baru).
+
+### Batas pengukuran
+
+Bench mengukur sampai main loop menganggur (penyorotan dan tata letak), tidak termasuk
+menggambar layar. Di Xvfb tanpa window manager, sinyal `draw` TextView tidak selalu muncul,
+jadi waktu menggambar tidak bisa diukur andal; lonjakan p95 ±10–12 ms pada `ketik lewat view`
+muncul juga di 50 blok (tidak sebanding panjang dokumen) dan cocok dengan frame clock yang
+menggambar di tengah pengukuran. Penyorotan penuh saat membuka masih sebanding panjang
+dokumen; dokumen ≥1 MB dan dokumen yang sangat banyak tabelnya (perpindahan kursor ±7 ms per
+baris pada mixed 100 blok, dari lapisan tabel) belum dioptimasi.
+
+Baseline: [baseline.json](baseline.json) (mixed, bawaan `bench:compare`) dan
+[baseline-buku.json](baseline-buku.json); bandingkan naskah buku dengan
+`gjs -m dist/bench.js --fixture=buku --size=400 --sizes=50,200,400 --timeout=400 --compare=bench/baseline-buku.json`.

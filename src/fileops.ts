@@ -3,6 +3,7 @@
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import { waitForWrites } from './files.js';
 
 const MARKDOWN_EXTENSION = /\.(md|markdown|mdown|mkd)$/i;
 
@@ -57,6 +58,7 @@ export function moveEntry(source: string, destDir: string): string | null {
     const target = join(destDir, name);
     if (exists(target)) throw new Error(`“${name}” sudah ada di folder tujuan.`);
     try {
+        waitForWrites(source);
         Gio.File.new_for_path(source).move(Gio.File.new_for_path(target), Gio.FileCopyFlags.NONE, null, null);
     } catch (e) {
         throw new Error(`Gagal memindahkan: ${(e as Error).message}`);
@@ -81,6 +83,7 @@ export function renameEntry(path: string, rawName: string): string | null {
     const target = join(GLib.path_get_dirname(path), name);
     if (exists(target)) throw new Error(`“${name}” sudah ada di folder ini.`);
     try {
+        waitForWrites(path);
         Gio.File.new_for_path(path).move(Gio.File.new_for_path(target), Gio.FileCopyFlags.NONE, null, null);
     } catch (e) {
         throw new Error(`Gagal mengganti nama: ${(e as Error).message}`);
@@ -91,6 +94,7 @@ export function renameEntry(path: string, rawName: string): string | null {
 // Buang ke Tempat Sampah (bisa dipulihkan), bukan hapus permanen.
 export function trashEntry(path: string): void {
     try {
+        waitForWrites(path);
         Gio.File.new_for_path(path).trash(null);
     } catch (e) {
         throw new Error(`Gagal menghapus: ${(e as Error).message}`);

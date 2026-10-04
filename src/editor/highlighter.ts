@@ -12,6 +12,7 @@
 //   codeBlocks isi blok kode beserta bahasanya, untuk diwarnai (lihat codehighlight.ts)
 //   tables    rentang baris setiap tabel, untuk dirender sebagai grid (lihat tablelayer.ts)
 //   starts    offset (code point) awal setiap baris
+//   reparsed  rentang baris yang diurai ulang (baris lain hasilnya sama dengan sebelumnya)
 //
 // Tag dipasang lewat LineTagger (tagsync.ts), jadi hanya baris yang berubah yang disentuh.
 
@@ -58,6 +59,7 @@ export interface HighlightResult {
     starts: number[];
     words: number;
     characters: number;
+    reparsed: [first: number, last: number];
 }
 
 interface Parsed extends HighlightResult {
@@ -66,11 +68,34 @@ interface Parsed extends HighlightResult {
     lineWords: number[];
 }
 
-const lowerBound = (items: number[], value: number): number => {
+// Indeks pertama dengan key(item) >= value pada array yang urut menurut key.
+const lowerBoundBy = <T>(items: T[], value: number, key: (item: T) => number): number => {
     let a = 0, b = items.length;
-    while (a < b) { const mid = (a + b) >>> 1; if (items[mid] < value) a = mid + 1; else b = mid; }
+    while (a < b) { const mid = (a + b) >>> 1; if (key(items[mid]) < value) a = mid + 1; else b = mid; }
     return a;
 };
+const lowerBound = (items: number[], value: number): number => lowerBoundBy(items, value, n => n);
+
+// Seperti splice() untuk daftar yang urut menurut `line`: item sebelum baris `from` tetap,
+// item mulai baris `to` digeser `shift` baris di tempat (snapshot lama tidak dipakai lagi).
+function spliceByLine<T extends { line: number }>(old: T[], from: number, to: number, shift: number, mid: T[]): T[] {
+    const tail = lowerBoundBy(old, to, item => item.line);
+    if (shift) for (let i = tail; i < old.length; i++) old[i].line += shift;
+    return splice(old, lowerBoundBy(old, from, item => item.line), tail, mid);
+}
+
+// old[0..from) + mid + old[to..) (opsional diubah dengan tail), disalin sekali ke array baru.
+// Dipanggil tiap ketukan untuk array seukuran dokumen; spread/slice/map membuat beberapa
+// salinan antara yang memperberat GC.
+function splice<T>(old: T[], from: number, to: number, mid: T[], tail?: (item: T) => T): T[] {
+    const out = new Array<T>(from + mid.length + Math.max(0, old.length - to));
+    let k = 0;
+    for (let i = 0; i < from; i++) out[k++] = old[i];
+    for (let i = 0; i < mid.length; i++) out[k++] = mid[i];
+    if (tail) for (let i = to; i < old.length; i++) out[k++] = tail(old[i]);
+    else for (let i = to; i < old.length; i++) out[k++] = old[i];
+    return out;
+}
 
 // Baris di luar kode/tabel tanpa pipa adalah batas netral. Ia tidak bisa
 // menjadi judul/lanjutan tabel. Fence baru boleh memperpanjang rentang parsing.
@@ -120,7 +145,7 @@ export class HighlightCache {
         const changed = (last + 1 < buffer.get_line_count() ? raw.slice(0, -1) : raw).split('\n');
         if (afterOldEdit < first || changed.length !== last - first + 1)
             return this.update(buffer, tags);  // delimiter yang tidak cocok dengan pemisahan baris JS
-        const lines = [...old.lines.slice(0, first), ...changed, ...old.lines.slice(afterOldEdit)];
+        const lines = splice(old.lines, first, afterOldEdit, changed);
         const before = lowerBound(old.checkpoints, first);
         const startLine = before > 0 ? old.checkpoints[before - 1] : 0;
         const after = lowerBound(old.checkpoints, afterOldEdit);
@@ -139,31 +164,34 @@ export class HighlightCache {
         const base = old.starts[startLine];
         const oldLength = (old.starts[afterOld] ?? old.characters) - base;
         const delta = part.characters + (afterOld < old.lines.length ? 1 : 0) - oldLength;
-        const starts = [...old.starts.slice(0, startLine), ...part.starts.map(n => n + base),
-            ...old.starts.slice(afterOld).map(n => n + delta)];
-        const lineWords = [...old.lineWords.slice(0, startLine), ...part.lineWords, ...old.lineWords.slice(afterOld)];
-        const oldWords = old.lineWords.slice(startLine, afterOld).reduce((a, b) => a + b, 0);
+        const starts = splice(old.starts, startLine, afterOld, part.starts.map(n => n + base), n => n + delta);
+        const lineWords = splice(old.lineWords, startLine, afterOld, part.lineWords);
+        let oldWords = 0;
+        for (let i = startLine; i < afterOld; i++) oldWords += old.lineWords[i];
+        // Marker urut menurut barisnya, jadi batas bagian lama dicari dengan pencarian biner.
+        // Marker setelah bagian yang diurai digeser di tempat: snapshot lama tidak dipakai lagi
+        // dan dokumen panjang bisa punya puluhan ribu marker.
+        const markerAt = (line: number) => lowerBoundBy(old.markers, line, m => m[4]);
+        const markerTail = markerAt(afterOld);
+        if (delta || shift) {
+            for (let i = markerTail; i < old.markers.length; i++) {
+                const m = old.markers[i];
+                m[0] += delta; m[1] += delta; m[2] += shift; m[3] += shift; m[4] += shift;
+            }
+        }
         let text: string | null = null;
         const result: Parsed = {
             get text() { return text ??= lines.join('\n'); },
-            lines, starts, lineWords,
+            lines, starts, lineWords, reparsed: [startLine, endLine + shift],
             words: old.words - oldWords + part.words,
             characters: old.characters + delta,
-            spans: [...old.spans.slice(0, startLine), ...part.spans, ...old.spans.slice(afterOld)],
-            checkpoints: [...old.checkpoints.slice(0, lowerBound(old.checkpoints, startLine)),
-                ...part.checkpoints.map(n => n + startLine),
-                ...old.checkpoints.slice(lowerBound(old.checkpoints, afterOld)).map(n => n + shift)],
-            markers: [
-                ...old.markers.filter(m => m[4] < startLine),
-                ...part.markers.map(([a, b, first, last, line]): Marker => [a + base, b + base, first + startLine, last + startLine, line + startLine]),
-                ...old.markers.filter(m => m[4] >= afterOld).map(([a, b, first, last, line]): Marker => [a + delta, b + delta, first + shift, last + shift, line + shift]),
-            ],
-            headings: [...old.headings.filter(h => h.line < startLine),
-                ...part.headings.map(h => ({ ...h, line: h.line + startLine })),
-                ...old.headings.filter(h => h.line >= afterOld).map(h => ({ ...h, line: h.line + shift }))],
-            images: [...old.images.filter(img => img.line < startLine),
-                ...part.images.map(img => ({ ...img, line: img.line + startLine })),
-                ...old.images.filter(img => img.line >= afterOld).map(img => ({ ...img, line: img.line + shift }))],
+            spans: splice(old.spans, startLine, afterOld, part.spans),
+            checkpoints: splice(old.checkpoints, lowerBound(old.checkpoints, startLine), lowerBound(old.checkpoints, afterOld),
+                part.checkpoints.map(n => n + startLine), n => n + shift),
+            markers: splice(old.markers, markerAt(startLine), markerTail,
+                part.markers.map(([a, b, first, last, line]): Marker => [a + base, b + base, first + startLine, last + startLine, line + startLine])),
+            headings: spliceByLine(old.headings, startLine, afterOld, shift, part.headings.map(h => ({ ...h, line: h.line + startLine }))),
+            images: spliceByLine(old.images, startLine, afterOld, shift, part.images.map(img => ({ ...img, line: img.line + startLine }))),
             tables: [...old.tables.filter(t => t.end < startLine),
                 ...part.tables.map(t => ({ start: t.start + startLine, end: t.end + startLine })),
                 ...old.tables.filter(t => t.start >= afterOld).map(t => ({ start: t.start + shift, end: t.end + shift }))],
@@ -339,7 +367,7 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
 
     cache?.end();
     const lineWords = lines.map(line => (line.match(/[^\s#>*_`~=|-]+/g) ?? []).length);
-    return { text, lines, markers, headings, images, codeBlocks, tables, starts, spans, lineWords,
+    return { text, lines, markers, headings, images, codeBlocks, tables, starts, spans, lineWords, reparsed: [0, lines.length - 1],
         words: lineWords.reduce((a, b) => a + b, 0), characters: cpLength(text),
         checkpoints: checkpoints(lines, codeBlocks, tables) };
 }
