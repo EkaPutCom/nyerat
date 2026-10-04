@@ -243,7 +243,10 @@ export function kanbanBoardTests(c: GuiContext): void {
         w.newBoardDocument(); settleK();
         ok(w.boardMode && w.file === null, 'mode atau nama file');
         eq(kbTitles(), ['Rencana', 'Dikerjakan', 'Selesai']);
-        ok(isKanban(text()), 'teks bukan papan kanban');
+        ok(isKanban(w.editor.getText()), 'teks bukan papan kanban');
+        // Papan baru dibuka di tab baru (dokumen sebelumnya berfile); tutup supaya tes lain memakai editor semula.
+        ok(w.closeTab(), 'closeTab() gagal'); settleK();
+        ok(w.editor === ed, 'editor semula tidak aktif lagi');
     });
     test('aksi yang menyunting teks ditolak saat papan tampil', () => {
         openBoard();

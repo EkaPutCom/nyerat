@@ -74,6 +74,7 @@ export class MermaidLayer {
     private signature = '';
     private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
     private relayoutQueued = false;
+    private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
 
     constructor(view: Gtk.TextView, private readonly hideTag: Gtk.TextTag) {
@@ -81,7 +82,10 @@ export class MermaidLayer {
         this.buffer = view.buffer;
         view.connect('size-allocate', () => this.queueRelayout());
         view.connect('notify::vadjustment', () => this.watchAdjustment());
-        view.connect('destroy', () => { for (const b of this.blocks) this.cancelTimer(b); });
+        view.connect('destroy', () => {
+            this.destroyed = true;
+            for (const b of this.blocks) this.cancelTimer(b);
+        });
         this.watchAdjustment();
     }
 
@@ -325,11 +329,11 @@ export class MermaidLayer {
     // ---------- Posisi widget ----------
 
     queueRelayout(): void {
-        if (this.relayoutQueued) return;
+        if (this.destroyed || this.relayoutQueued) return;
         this.relayoutQueued = true;
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this.relayoutQueued = false;
-            this.relayout();
+            if (!this.destroyed) this.relayout();   // tab bisa ditutup sebelum idle berjalan
             return GLib.SOURCE_REMOVE;
         });
     }

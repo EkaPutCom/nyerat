@@ -249,6 +249,7 @@ export class MarkdownView {
         this.buffer.place_cursor(it);
         this.view.grab_focus();
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            if (this.destroyed) return GLib.SOURCE_REMOVE;
             this.view.scroll_to_mark(this.buffer.get_insert(), 0, true, 0, 0.15);
             return GLib.SOURCE_REMOVE;
         });
@@ -262,6 +263,7 @@ export class MarkdownView {
         this.width = width;
         // Jangan ubah ukuran di dalam size-allocate; tunda ke idle.
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            if (this.destroyed) return GLib.SOURCE_REMOVE;
             this.view.set_left_margin(m);
             this.view.set_right_margin(m);
             setTagMargins(this.tags, m);

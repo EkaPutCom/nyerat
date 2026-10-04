@@ -23,8 +23,6 @@ const TEXT_ACTIONS = new Set([
 ]);
 
 export function registerActions(app: Gtk.Application, w: MainWindow): void {
-    const buf = w.editor.buffer;
-
     const action = (name: string, accels: string[] | null, run: () => void) => {
         const a = new Gio.SimpleAction({ name });
         a.connect('activate', () => {
@@ -47,14 +45,17 @@ export function registerActions(app: Gtk.Application, w: MainWindow): void {
 
     // File
     action('new', ['<Control>n'], () => w.newDocument());
+    action('close-tab', ['<Control>w'], () => w.closeTab());
+    action('next-tab', ['<Control>Page_Down', '<Control>Tab'], () => w.switchTab(1));
+    action('prev-tab', ['<Control>Page_Up', '<Control><Shift>Tab', '<Control><Shift>ISO_Left_Tab'], () => w.switchTab(-1));
     action('open', ['<Control>o'], () => w.open());
     action('open-folder', ['<Control><Shift>o'], () => w.chooseFolder());
     action('save', ['<Control>s'], () => w.save());
 
     // Undo/redo lewat aksi, supaya juga bekerja saat papan kanban tampil (editor teks tidak
     // berfokus). Di tampilan teks hasilnya sama dengan pintasan bawaan GtkSourceView.
-    action('undo', ['<Control>z'], () => buf.undo());
-    action('redo', ['<Control><Shift>z', '<Control>y'], () => buf.redo());
+    action('undo', ['<Control>z'], () => w.editor.buffer.undo());
+    action('redo', ['<Control><Shift>z', '<Control>y'], () => w.editor.buffer.redo());
 
     // Papan kanban
     action('kanban-new', null, () => w.newBoardDocument());
@@ -69,18 +70,18 @@ export function registerActions(app: Gtk.Application, w: MainWindow): void {
     action('find', ['<Control>f'], () => w.findBar.open());
 
     // Format inline
-    action('bold', ['<Control>b'], () => wrapSelection(buf, '**'));
-    action('italic', ['<Control>i'], () => wrapSelection(buf, '*'));
-    action('strike', ['<Alt><Shift>5', '<Control><Shift>x'], () => wrapSelection(buf, '~~'));
-    action('inline-code', ['<Control>grave'], () => wrapSelection(buf, '`'));
-    action('highlight', ['<Control><Shift>h'], () => wrapSelection(buf, '=='));
-    action('link', ['<Control>k'], () => insertLink(buf));
+    action('bold', ['<Control>b'], () => wrapSelection(w.editor.buffer, '**'));
+    action('italic', ['<Control>i'], () => wrapSelection(w.editor.buffer, '*'));
+    action('strike', ['<Alt><Shift>5', '<Control><Shift>x'], () => wrapSelection(w.editor.buffer, '~~'));
+    action('inline-code', ['<Control>grave'], () => wrapSelection(w.editor.buffer, '`'));
+    action('highlight', ['<Control><Shift>h'], () => wrapSelection(w.editor.buffer, '=='));
+    action('link', ['<Control>k'], () => insertLink(w.editor.buffer));
     action('image', ['<Control><Shift>i'], () => w.insertImage());
     action('zoom-image', null, () => w.editor.zoomImage());
 
     // Blok
-    action('codeblock', ['<Control><Shift>k'], () => insertBlock(buf, '```\n', '\n```'));
-    action('table', ['<Control>t'], () => insertBlock(buf, ...TABLE_TEMPLATE));
+    action('codeblock', ['<Control><Shift>k'], () => insertBlock(w.editor.buffer, '```\n', '\n```'));
+    action('table', ['<Control>t'], () => insertBlock(w.editor.buffer, ...TABLE_TEMPLATE));
 
     // Edit tabel di posisi kursor
     const tableActions: [string, TableCommand, string[] | null][] = [
@@ -90,11 +91,11 @@ export function registerActions(app: Gtk.Application, w: MainWindow): void {
         ['table-format', 'format', ['<Control><Shift>t']],
     ];
     for (const [name, command, accels] of tableActions) action(name, accels, () => w.editor.tableCommand(command));
-    action('quote', ['<Control><Shift>q'], () => togglePrefix(buf, /^>\s?/, '> '));
-    action('ulist', ['<Control><Shift>bracketright'], () => togglePrefix(buf, /^[-*+]\s+/, '- '));
-    action('olist', ['<Control><Shift>bracketleft'], () => togglePrefix(buf, /^\d+[.)]\s+/, '1. '));
+    action('quote', ['<Control><Shift>q'], () => togglePrefix(w.editor.buffer, /^>\s?/, '> '));
+    action('ulist', ['<Control><Shift>bracketright'], () => togglePrefix(w.editor.buffer, /^[-*+]\s+/, '- '));
+    action('olist', ['<Control><Shift>bracketleft'], () => togglePrefix(w.editor.buffer, /^\d+[.)]\s+/, '1. '));
     for (let n = 0; n <= 6; n++)
-        action(`heading${n}`, [`<Control>${n}`], () => setHeading(buf, n));
+        action(`heading${n}`, [`<Control>${n}`], () => setHeading(w.editor.buffer, n));
 
     // Tampilan
     const s = w.settings;

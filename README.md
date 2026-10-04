@@ -71,7 +71,7 @@ Setelah di-build, aplikasi bisa dijalankan langsung tanpa npm, termasuk untuk me
 gjs -m dist/nyerat.js catatan.md
 ```
 
-Aplikasi memakai argumen pertama yang bukan opsi sebagai path file atau folder. Setiap pemanggilan membuka proses dan jendela sendiri. Pada pembukaan pertama tanpa file, editor menampilkan dokumen contoh; pembukaan berikutnya dimulai dengan dokumen kosong.
+Aplikasi memakai argumen pertama yang bukan opsi sebagai path file atau folder. Setiap pemanggilan membuka proses dan jendela sendiri; di dalam jendela itu file lain dibuka sebagai tab. Pada pembukaan pertama tanpa file, editor menampilkan dokumen contoh; pembukaan berikutnya dimulai dengan dokumen kosong.
 
 Atau membuka sebuah folder, yang isinya tampil di tab Berkas:
 
@@ -148,6 +148,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 - Tab / Shift+Tab mengatur indentasi item daftar
 
 **Tampilan**
+- **Banyak dokumen dalam satu jendela (tab).** Baris tab muncul di atas editor begitu ada dua dokumen atau lebih. Mengklik file di pohon Berkas atau memilihnya di dialog *Buka File* membuka tab baru (atau pindah ke tabnya jika file itu sudah terbuka; dokumen kosong yang belum disimpan dipakai ulang), dan *Baru* (`Ctrl+N`) membuat tab kosong. Tiap tab punya riwayat undo, kursor, dan posisi gulirnya sendiri; mode Fokus/Typewriter/Source dan tema berlaku untuk semua tab. Tanda `•` pada judul tab berarti belum disimpan, `Ctrl+W` menutup tab (bertanya jika ada perubahan; menutup tab terakhir mengosongkan dokumennya), dan `Ctrl+Tab` / `Ctrl+Shift+Tab` (atau `Ctrl+PgDn` / `Ctrl+PgUp`) berpindah tab. Dengan auto save aktif, meninggalkan tab langsung menyimpannya. Outline, hitungan kata, pencarian, dan tab Riwayat mengikuti tab aktif, dan asisten membaca isi tab lain yang belum disimpan, bukan versi di disk
 - Sidebar dengan tiga tab:
   - **Berkas**: pohon folder yang dibuka (lewat tombol folder di header bar, `Ctrl+Shift+O`, atau dengan memilih folder di dialog Buka File), berisi subfolder dan file Markdown (`.md`, `.markdown`, `.mdown`, `.mkd`). Klik file untuk membukanya; file yang sedang dibuka ikut disorot. File/folder tersembunyi dan `node_modules` tidak ditampilkan. **Klik kanan** pada folder, file, atau area kosong membuka menu *File Baru…* dan *Folder Baru…* (pada folder/file ditambah *Ganti Nama…* dan *Hapus*; hapus meminta konfirmasi dan memindahkan ke Tempat Sampah, bukan menghapus permanen; jika dokumen yang terbuka dihapus, isinya tetap di editor dan ditandai belum disimpan; ganti nama file tetap berekstensi Markdown, dan dokumen yang terbuka mengikuti nama barunya): item dibuat di folder yang diklik (untuk file: di folder induknya; untuk area kosong: di folder root). Nama file tanpa ekstensi Markdown diberi `.md`, nama yang kosong, memuat `/`, diawali titik, atau sudah ada ditolak dengan pesan galat; file baru langsung dibuka di editor. **Seret dan lepas** memindahkan file atau folder: lepas di sebuah folder untuk memasukkannya ke sana (folder tertutup yang ditahan sebentar terbuka sendiri), lepas di file untuk memindahkannya ke folder file itu, atau lepas di judul pohon/area kosong untuk mengeluarkannya ke folder root. Folder tidak bisa dipindah ke dalam dirinya sendiri, dan nama yang bentrok di folder tujuan ditolak tanpa menimpa. Jika dokumen yang terbuka (atau folder induknya) dipindah, dokumen tetap terbuka dengan path barunya. Pohon diperbarui otomatis saat ada file yang ditambah atau dihapus di disk, dan folder terakhir dibuka lagi saat aplikasi dijalankan
   - **Outline**: daftar heading dokumen; klik untuk melompat
@@ -175,7 +176,9 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 
 | Shortcut | Fungsi |
 | --- | --- |
-| Ctrl+N / Ctrl+O | Dokumen baru / buka file |
+| Ctrl+N / Ctrl+O | Dokumen baru / buka file (keduanya di tab baru) |
+| Ctrl+W | Tutup tab |
+| Ctrl+Tab / Ctrl+Shift+Tab atau Ctrl+PgDn / Ctrl+PgUp | Tab berikutnya / sebelumnya |
 | Ctrl+Shift+O | Buka folder |
 | Ctrl+S / Ctrl+Shift+S | Simpan / simpan sebagai |
 | Ctrl+Shift+E | Ekspor HTML |
@@ -294,7 +297,7 @@ src/
 ├── main.ts               titik masuk: hanya memanggil main() dari app.ts
 ├── env.d.ts              tipe untuk GJS dan modul gi:// (dari paket @girs)
 ├── app.ts                membuat Gtk.Application dan jendela
-├── window.ts             MainWindow: menyusun komponen + buka/simpan/ekspor
+├── window.ts             MainWindow: menyusun komponen, mengelola dokumen/tab, buka/simpan/ekspor
 ├── actions.ts            semua aksi menu dan shortcut keyboard
 ├── config.ts             nama, ID, versi aplikasi, dan font
 ├── settings.ts           baca/tulis ~/.config/nyerat/settings.json
@@ -348,7 +351,8 @@ src/
     ├── outline.ts        tab Outline: daftar heading
     ├── history.ts        tab Riwayat: commit git untuk file aktif
     ├── historyviewer.ts  jendela baca satu commit: diff dan isi versi itu
-    ├── findbar.ts        bilah pencarian
+    ├── findbar.ts        bilah pencarian (targetnya berpindah mengikuti tab aktif)
+    ├── tabbar.ts         baris tab dokumen (tampil jika ada ≥ 2 dokumen)
     ├── statusbar.ts      hitungan kata, posisi kursor, pesan singkat
     ├── dialogs.ts        pilih file, konfirmasi simpan, error, tentang
     ├── imageviewer.ts    penampil gambar dengan zoom (cairo)
@@ -407,7 +411,7 @@ Kode dibagi menjadi lapisan. Setiap lapisan hanya boleh memakai lapisan di bawah
 - **`agent/`** juga tanpa GTK. `ui/chat.ts` memakainya, dan jendela hanya memberinya cara mengambil naskah (`ChatHost`: dokumen aktif, pilihan, berkas proyek). `agent/` tidak tahu soal editor atau widget.
 - **`markdown/`** tidak meng-import GTK sama sekali. Isinya hanya fungsi string → data, jadi paling mudah dipelajari dan diuji.
 - **`editor/`** tidak tahu apa-apa soal file, menu, atau sidebar. `MarkdownView` hanya memberi kabar lewat callback (`onHighlighted`, `onCursorMoved`, `onMessage`).
-- **`ui/`** berisi komponen yang berdiri sendiri. `Outline` tidak kenal editor; ia hanya menerima daftar heading dan memanggil `onJump(baris)` saat diklik. Begitu juga `FileTree`: ia hanya menampilkan folder dan memanggil `onOpenFile(path)`; yang memutuskan cara membuka file (termasuk bertanya dulu jika ada perubahan belum disimpan) adalah jendela.
+- **`ui/`** berisi komponen yang berdiri sendiri. `Outline` tidak kenal editor; ia hanya menerima daftar heading dan memanggil `onJump(baris)` saat diklik. Begitu juga `FileTree`: ia hanya menampilkan folder dan memanggil `onOpenFile(path)`; yang memutuskan cara membuka file (tab baru, pindah ke tab yang sudah ada, atau memakai ulang dokumen kosong) adalah jendela.
 - **`window.ts`** adalah satu-satunya tempat komponen saling dihubungkan. Contoh: setelah penyorotan, editor memanggil `onHighlighted`, lalu jendela meneruskan heading ke `Outline` dan teks ke `StatusBar`.
 
 ### Alur kerja editor
@@ -611,6 +615,7 @@ Nilai bawaan: sidebar terbuka pada tab Outline, panel Asisten tertutup dengan mo
 ## Keterbatasan
 
 - Asisten: hanya DeepSeek, hanya chat (belum bisa menyisipkan jawaban ke dokumen atau menjalankan pemeriksaan kontradiksi otomatis; kontradiksi bisa ditanyakan lewat chat dan model menelusurinya sendiri), dan riwayat percakapan tidak disimpan antar proses. Pencarian (`cari_naskah` dan potongan otomatis) berbasis kata kunci (BM25), bukan makna, jadi kualitas penelusuran bergantung pada kata kunci yang dipilih model; `cari_teks` mencari teks persis dan tidak mengenali sinonim atau ejaan berbeda. Penelusuran memakan putaran model sehingga pertanyaan yang luas lebih lambat dan memakai lebih banyak token. Nama model mengikuti dokumentasi DeepSeek saat ini; jika API menolak nama model, galatnya tampil di panel. Perkiraan token kasar (3 karakter per token). Jawaban tampil sebagai teks terformat, bukan Markdown penuh (tanpa tabel dan gambar)
+- Tab: daftar tab tidak dipulihkan saat aplikasi dibuka lagi (hanya folder terakhir), belum ada tampilan berdampingan atau pengurutan tab dengan seret, dan semua tab berbagi satu tampilan papan kanban (posisi gulir papan hilang saat berpindah tab). Baris perintah hanya membuka satu file atau folder
 - Gambar yang diubah di disk tidak dimuat ulang sampai aplikasi dibuka lagi (ada cache per URI); GIF animasi hanya menampilkan frame pertama, termasuk di penampil zoom
 - **Seret kartu telah diuji lewat input mouse X11/XTest.** `npm test` dan `npm run test:ui` memeriksa lima skenario melalui event yang benar-benar diterima GTK, termasuk perubahan Markdown, undo/redo, dan simpan. Jalur input ini berhasil di lingkungan pengembangan, sementara helper klik lama `Gdk.test_simulate_button` tidak meneruskan tombol dengan andal. Pengujian manual dengan mouse fisik dan sesi Wayland masih belum terverifikasi
 - Papan: hanya item daftar di tingkat atas yang menjadi kartu (daftar bersarang dipertahankan sebagai catatan kartu); baris biasa di antara dua kartu dipindahkan ke akhir daftar saat disimpan. Belum ada arsip, pemilih tanggal, atau penyuntingan label lewat antarmuka (tulis `#tag` dan `@{YYYY-MM-DD}` di judul kartu), dan memindahkan kartu dengan keyboard hanya lewat menu klik kanan

@@ -93,6 +93,15 @@ const buildCss = (p: Palette): string => `
     .kanban-tag-6 { background-color: #8a7a1c; } .kanban-tag-7 { background-color: #5e6c84; }
     .image-viewer, .image-viewer viewport { background-color: #1c1d20; }
     .image-note { color: ${p.faint}; font-style: italic; font-size: 14px; }
+    .tabbar { background-color: ${p.sideBg}; }
+    .tabbar .tab { border-radius: 5px; }
+    .tabbar .tab button { color: ${p.sideFg}; padding: 2px 8px; min-height: 0; min-width: 0; font-size: 12px; }
+    .tabbar .tab button.tab-close { padding: 2px; opacity: 0.5; }
+    .tabbar .tab:hover button.tab-close { opacity: 0.8; }
+    .tabbar .tab button.tab-close:hover { opacity: 1; }
+    .tabbar .tab button { background-image: none; box-shadow: none; border-color: transparent; }
+    .tabbar .tab button:checked { background-color: alpha(${p.accent}, 0.22); color: ${p.fg}; font-weight: bold; }
+    .tabbar .tab:hover { background-color: alpha(${p.accent}, 0.12); }
     .statusbar { background-color: ${p.bg}; color: ${p.faint}; font-size: 12px; padding: 4px 14px; }
 `;
 

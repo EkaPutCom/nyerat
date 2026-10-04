@@ -40,10 +40,15 @@ export function fileTests(c: GuiContext): void {
         const path = GLib.build_filenamev([tmp, 'otomatis.md']);
         buf.insert_at_cursor('!', -1);
         pump();
-        // Tanpa auto save, confirmDiscard() membuka dialog dan tes akan macet.
+        // Tanpa auto save, menutup dokumen membuka dialog dan tes akan macet. Berpindah tab
+        // adalah titik aman: dokumen yang ditinggalkan langsung disimpan.
         w.newDocument();
         eq(readTextFile(path), '# Halo!', 'isi file');
         eq(w.file, null, 'dokumen baru');
+        eq(w.documentCount, 2, 'dokumen baru dibuka di tab baru');
+        ok(w.closeTab(), 'closeTab() gagal');
+        ok(w.editor === c.ed, 'editor semula tidak aktif lagi');
+        w.file = null;
     });
 
     test('auto save tidak menyentuh dokumen tanpa file', () => {

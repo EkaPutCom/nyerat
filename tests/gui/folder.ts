@@ -9,7 +9,7 @@ import { section, test, eq, ok, tmp } from '../framework.js';
 import type { GuiContext } from './context.js';
 
 export function folderTests(c: GuiContext): void {
-    const { app, w, buf, pump, text } = c;
+    const { app, w, ed, buf, pump } = c;
 
     section('Folder');
     // Struktur uji:
@@ -67,12 +67,15 @@ export function folderTests(c: GuiContext): void {
         pump();
         eq(childNames(sub), ['dalam', 'c.md'], 'setelah dibuka');
     });
-    test('klik file di pohon membukanya di editor', () => {
+    test('klik file di pohon membukanya di editor (tab baru bila dokumen aktif sedang dipakai)', () => {
         const row = rowOf(null, 'a.md');
         ft.view.row_activated(ft.store.get_path(row)!, ft.view.get_column(0)!);
         pump();
         eq(w.file, GLib.build_filenamev([proj, 'a.md']), 'file');
-        eq(text(), '# A', 'isi editor');
+        eq(w.editor.getText(), '# A', 'isi editor');
+        // Kembali ke editor semula supaya tes berikutnya memakai buffer yang sama.
+        if (w.editor !== ed) ok(w.closeTab(), 'closeTab() gagal');
+        ok(w.editor === ed, 'editor semula tidak aktif lagi');
     });
     test('file yang dibuka disorot, folder induknya ikut dibuka', () => {
         ok(w.load(dPath), 'load() gagal');
@@ -167,6 +170,14 @@ export function folderTests(c: GuiContext): void {
         activate(ft.contextMenu(ft.store.get_path(row)!), 'File Baru…');
         pump();
         ok(GLib.file_test(GLib.build_filenamev([proj, 'sub', 'sebelah.md']), GLib.FileTest.EXISTS), 'file tidak di folder induk');
+    });
+    test('file baru dari menu terbuka di tabnya sendiri; dokumen pertama tetap ada', () => {
+        eq(w.documentCount, 3, 'jumlah tab');
+        eq(w.file, GLib.build_filenamev([proj, 'sub', 'sebelah.md']), 'file tab aktif');
+        eq(ed.getText(), '', 'isi dokumen pertama');
+        // Kembali ke editor semula supaya tes berikutnya memakai buffer yang sama.
+        while (w.editor !== ed) ok(w.closeTab(), 'closeTab() gagal');
+        eq(w.documentCount, 1, 'jumlah tab setelah ditutup');
     });
     test('Folder Baru membuat folder di root dan di dalam folder', () => {
         prompts.push('baru-root');

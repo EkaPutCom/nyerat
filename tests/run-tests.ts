@@ -48,6 +48,7 @@ import { sampleTests } from './gui/sample.js';
 import { windowSizeTests } from './gui/window.js';
 import { robustnessTests } from './gui/robust.js';
 import { historyTests } from './gui/history.js';
+import { tabTests } from './gui/tabs.js';
 
 setRoot(import.meta.url);
 
@@ -90,6 +91,7 @@ function runGuiTests(app: Gtk.Application): void {
     if (opt('with-kanban-mouse')) folderMouseTests(c);
     sampleTests(c);
     windowSizeTests(c);
+    tabTests(c);
     historyTests(c);
     chatTests(c);
     robustnessTests(c);

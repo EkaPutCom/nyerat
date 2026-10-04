@@ -115,11 +115,13 @@ export class ImageLayer {
 
     private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
     private relayoutQueued = false;
+    private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
 
     constructor(view: Gtk.TextView) {
         this.view = view;
         this.buffer = view.buffer;
+        view.connect('destroy', () => { this.destroyed = true; });
 
         // Tata letak berubah → posisi widget perlu dihitung ulang.
         view.connect('size-allocate', () => this.queueRelayout());
@@ -310,11 +312,11 @@ export class ImageLayer {
     // ---------- Posisi widget ----------
 
     queueRelayout(): void {
-        if (this.relayoutQueued) return;
+        if (this.destroyed || this.relayoutQueued) return;
         this.relayoutQueued = true;
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this.relayoutQueued = false;
-            this.relayout();
+            if (!this.destroyed) this.relayout();   // tab bisa ditutup sebelum idle berjalan
             return GLib.SOURCE_REMOVE;
         });
     }

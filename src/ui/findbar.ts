@@ -5,10 +5,10 @@ import Gtk from 'gi://Gtk?version=3.0';
 import GtkSource from 'gi://GtkSource?version=4';
 
 export class FindBar {
-    readonly buffer: Gtk.TextBuffer;
-    readonly view: Gtk.TextView;
+    buffer: GtkSource.Buffer;
+    view: Gtk.TextView;
     readonly settings: GtkSource.SearchSettings;
-    readonly context: GtkSource.SearchContext;
+    context: GtkSource.SearchContext;
     readonly entry: Gtk.SearchEntry;
     readonly widget: Gtk.SearchBar;
 
@@ -45,6 +45,14 @@ export class FindBar {
         this.widget.connect('notify::search-mode-enabled', () => {
             this.settings.search_text = this.widget.search_mode_enabled ? (this.entry.text || null) : null;
         });
+    }
+
+    // Pindah ke editor lain (berganti tab). Teks pencarian tetap; sorotan hasil di buffer lama dilepas.
+    setTarget(buffer: GtkSource.Buffer, view: Gtk.TextView): void {
+        if (buffer === this.buffer) return;
+        this.buffer = buffer;
+        this.view = view;
+        this.context = new GtkSource.SearchContext({ buffer, settings: this.settings });
     }
 
     open(): void {

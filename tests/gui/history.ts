@@ -8,7 +8,7 @@ import { section, test, eq, ok, tmp } from '../framework.js';
 import type { GuiContext } from './context.js';
 
 export function historyTests(c: GuiContext): void {
-    const { w, pump } = c;
+    const { w, pump, setText } = c;
 
     section('Riwayat git');
     const repo = GLib.build_filenamev([tmp, 'repo-riwayat']);
@@ -278,7 +278,7 @@ export function historyTests(c: GuiContext): void {
 
     test('tanpa file, folder yang dibuka tetap menampilkan file yang belum di-commit', () => {
         write(GLib.build_filenamev([repo, 'd.md']), '# D\n');
-        w.newDocument();
+        w.file = null; setText('');
         w.history.setFile(null, true, repo);
         ok(waitFor(() => w.history.changedList.get_children().length === 1), 'daftar kosong padahal folder punya file baru');
         ok(w.history.note.label.includes('Simpan dokumen'), 'petunjuk simpan hilang');
@@ -289,5 +289,5 @@ export function historyTests(c: GuiContext): void {
     // Kembalikan keadaan untuk tes berikutnya.
     w.history.onOpen = () => {};
     w.sidebar.setPage('outline');
-    w.newDocument();
+    w.file = null; setText('');
 }
