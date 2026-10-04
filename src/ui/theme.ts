@@ -45,6 +45,9 @@ const buildCss = (p: Palette): string => `
     .sidebar treeview.view:selected, .sidebar treeview.view:selected:focus { background-color: alpha(${p.accent}, 0.22); background-image: none; color: ${p.fg}; }
     .sidebar row:hover { background-color: alpha(${p.accent}, 0.12); }
     .side-title { font-size: 11px; font-weight: bold; letter-spacing: 1px; color: ${p.faint}; }
+    .sidebar-tabs button { padding: 3px 6px; min-width: 0; font-size: 12px; }
+    .side-meta { font-size: 11px; color: ${p.faint}; }
+    .history-text, .history-text text { background-color: ${p.bg}; color: ${p.fg}; font-size: 13px; }
     .md-table { border-top: 1px solid alpha(${p.fg}, 0.28); border-left: 1px solid alpha(${p.fg}, 0.28); }
     .md-table-cell { border-right: 1px solid alpha(${p.fg}, 0.28); border-bottom: 1px solid alpha(${p.fg}, 0.28); }
     .md-table-cell label { color: ${p.fg}; font-family: ${FONT_TEXT}; font-size: 15px; }

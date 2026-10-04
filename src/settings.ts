@@ -6,7 +6,7 @@ import { readTextFile, writeTextFile } from './files.js';
 export interface Settings {
     dark: boolean | null;
     sidebar: boolean;
-    sidebarPage: 'files' | 'outline';
+    sidebarPage: 'files' | 'outline' | 'history';
     folder: string | null;   // folder yang terakhir dibuka
     typewriter: boolean;
     focus: boolean;

@@ -3,9 +3,8 @@
 //
 //   ┌ HeaderBar ─────────────────────────────────────┐
 //   │ Sidebar   │ FindBar                            │
-//   │ ┌Berkas┬Outline┐ MarkdownView                  │
-//   │ FileTree  │                                    │
-//   │ / Outline │ StatusBar                          │
+//   │ ┌Berkas┬Outline┬Riwayat┐ MarkdownView         │
+//   │ FileTree / Outline / History │ StatusBar       │
 //   └───────────┴────────────────────────────────────┘
 
 import Gtk from 'gi://Gtk?version=3.0';
@@ -20,6 +19,8 @@ import { markdownToHtml } from './markdown/html.js';
 import { WELCOME } from './welcome.js';
 import { MarkdownView, type Mode } from './editor/view.js';
 import { Outline } from './ui/outline.js';
+import { History } from './ui/history.js';
+import { HistoryViewer } from './ui/historyviewer.js';
 import { FileTree, isDirectory } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
 import { FindBar } from './ui/findbar.js';
@@ -57,6 +58,7 @@ export class MainWindow {
     readonly settings: Settings;
     readonly editor: MarkdownView;
     readonly outline: Outline;
+    readonly history: History;
     readonly fileTree: FileTree;
     readonly sidebar: Sidebar;
     readonly findBar: FindBar;
@@ -83,8 +85,9 @@ export class MainWindow {
         // Komponen
         this.editor = new MarkdownView();
         this.outline = new Outline();
+        this.history = new History();
         this.fileTree = new FileTree();
-        this.sidebar = new Sidebar(this.fileTree.widget, this.outline.widget);
+        this.sidebar = new Sidebar(this.fileTree.widget, this.outline.widget, this.history.widget);
         this.findBar = new FindBar(this.editor.buffer, this.editor.view);
         this.statusBar = new StatusBar();
         this.board = new KanbanBoard();
@@ -108,9 +111,13 @@ export class MainWindow {
         this.editor.getBaseDir = () => this.file ? GLib.path_get_dirname(this.file) : GLib.get_home_dir();
         this.outline.onJump = line => this.editor.jumpToLine(line);
         this.fileTree.onOpenFile = file => this.openFile(file);
+        this.history.onOpen = commit => {
+            if (this.file) new HistoryViewer(this.win, this.file, commit, this.dark).show();
+        };
         this.sidebar.onPageChanged = page => {
             this.settings.sidebarPage = page;
             saveSettings(this.settings);
+            this.syncHistory();
         };
         this.editor.buffer.connect('modified-changed', () => this.updateTitle());
         // Teks berubah selagi papan tampil dan bukan dari papan sendiri (undo/redo): baca ulang.
@@ -140,6 +147,10 @@ export class MainWindow {
         main.pack_start(column, true, true, 0);
         this.win.add(main);
         this.win.connect('delete-event', () => !this.onClose());
+        // Commit baru biasanya dibuat di luar aplikasi; saat kembali ke jendela, muat ulang riwayat.
+        this.win.connect('notify::is-active', () => {
+            if (this.win.is_active) this.syncHistory(true);
+        });
 
         registerActions(app, this);
         this.setDark(this.dark);
@@ -160,6 +171,7 @@ export class MainWindow {
         this.updateTitle();
         this.win.show_all();
         this.sidebar.setVisible(settings.sidebar);
+        this.syncHistory();
         this.editor.view.grab_focus();
     }
 
@@ -220,6 +232,16 @@ export class MainWindow {
         this.syncMode();
         this.updateTitle();
         this.fileTree.reveal(null);
+        this.syncHistory();
+    }
+
+    // ---------- Riwayat git ----------
+
+    // Riwayat hanya dimuat saat tabnya terlihat, supaya git tidak dipanggil percuma.
+    // force = baca ulang walau file yang sama.
+    syncHistory(force = false): void {
+        if (!this.sidebar.visible || this.sidebar.page !== 'history') return;
+        this.history.setFile(this.file, force);
     }
 
     private showBoardCounts(board: Board): void {
@@ -256,7 +278,10 @@ export class MainWindow {
 
     // Ubah pilihan tampilan lalu terapkan. Semua kecuali mode source disimpan ke pengaturan.
     setOption(key: Option, value: boolean): void {
-        if (key === 'sidebar') this.sidebar.setVisible(value);
+        if (key === 'sidebar') {
+            this.sidebar.setVisible(value);
+            this.syncHistory();
+        }
         else if (key === 'dark') this.setDark(value);
         else if (key !== 'autosave') this.editor.setMode(key, value);
         if (key !== 'source') {
@@ -345,6 +370,7 @@ export class MainWindow {
         this.syncMode();
         this.updateTitle();
         this.fileTree.reveal(null);
+        this.syncHistory();
     }
 
     // Buka file di editor. Jika path ternyata folder (misalnya dipilih lewat dialog
@@ -364,6 +390,7 @@ export class MainWindow {
             this.syncMode();
             this.updateTitle();
             this.fileTree.reveal(absolute);
+            this.syncHistory();
             return true;
         } catch (e) {
             showError(this.win, `Gagal membuka file:\n${errorMessage(e)}`);
@@ -440,6 +467,7 @@ export class MainWindow {
         // Tampilkan file baru di pohon tanpa menunggu pemantau disk.
         this.fileTree.refresh(GLib.path_get_dirname(path));
         this.fileTree.reveal(path);
+        this.syncHistory();
         return true;
     }
 

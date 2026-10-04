@@ -26,6 +26,7 @@ import { kanbanModelTests } from './unit/kanban.js';
 import { codeLanguageTests } from './unit/codelang.js';
 import { htmlTests } from './unit/html.js';
 import { dbmlTests } from './unit/dbml.js';
+import { gitLogTests } from './unit/gitlog.js';
 import { syntaxHidingTests } from './gui/syntax.js';
 import { listTests } from './gui/lists.js';
 import { formatTests } from './gui/format.js';
@@ -41,6 +42,7 @@ import { folderTests } from './gui/folder.js';
 import { sampleTests } from './gui/sample.js';
 import { windowSizeTests } from './gui/window.js';
 import { robustnessTests } from './gui/robust.js';
+import { historyTests } from './gui/history.js';
 
 setRoot(import.meta.url);
 
@@ -53,6 +55,7 @@ function runUnitTests(): void {
     codeLanguageTests();
     htmlTests();
     dbmlTests();
+    gitLogTests();
 }
 
 function runGuiTests(app: Gtk.Application): void {
@@ -76,6 +79,7 @@ function runGuiTests(app: Gtk.Application): void {
     folderTests(c);
     sampleTests(c);
     windowSizeTests(c);
+    historyTests(c);
     robustnessTests(c);
 
     const shot = optVal('screenshot');
