@@ -52,6 +52,12 @@ export class ChatSession {
         this.history.length = 0;
     }
 
+    // Ganti riwayat dengan percakapan yang dimuat dari disk.
+    restore(turns: Turn[]): void {
+        this.history.length = 0;
+        this.history.push(...turns);
+    }
+
     // Melempar jika provider gagal; riwayat tidak berubah dalam kasus itu. Jawaban yang dibatalkan di tengah
     // tetap disimpan (potongannya), karena pengguna sudah membacanya.
     async ask(input: TurnInput, provider: Provider, model: string, handlers: TurnHandlers, cancellable?: Gio.Cancellable): Promise<TurnResult> {

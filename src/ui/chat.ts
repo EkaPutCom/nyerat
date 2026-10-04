@@ -14,6 +14,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { systemKeyStore, type KeySource, type KeyStore } from '../agent/apikey.js';
 import { buildContext, DEFAULT_BUDGET, findMentions, type BuiltContext, type ContextOptions, type SourceFile } from '../agent/context.js';
+import { deleteChat, listChats, loadChat, nowStamp, saveChat, titleFrom } from '../agent/chatstore.js';
 import { DEEPSEEK_MODELS, DeepSeek } from '../agent/deepseek.js';
 import type { Provider, Usage } from '../agent/provider.js';
 import { ChatSession, type ToolStep } from '../agent/session.js';
@@ -26,6 +27,7 @@ export interface ChatHost {
     active(): { name: string; text: string; cursorLine: number } | null;   // dokumen terbuka (isi buffer, bukan disk)
     selection(): string;
     files(): SourceFile[];                                                  // berkas lain di folder proyek
+    root(): string | null;                                                  // folder naskah; tempat riwayat percakapan disimpan
 }
 
 const SOURCE_TEXT: Record<KeySource, string> = {
@@ -61,17 +63,21 @@ export class ChatPanel {
     readonly scroller: Gtk.ScrolledWindow;
     readonly contextButton: Gtk.MenuButton;
     readonly settingsButton: Gtk.MenuButton;
+    readonly historyButton: Gtk.MenuButton;
+    readonly saveCheck: Gtk.CheckButton;
     readonly keyEntry: Gtk.Entry;
     readonly keyStatus: Gtk.Label;
     readonly session = new ChatSession();
 
-    host: ChatHost = { active: () => null, selection: () => '', files: () => [] };
+    host: ChatHost = { active: () => null, selection: () => '', files: () => [], root: () => null };
     // Diganti di tes dengan penyedia palsu.
     makeProvider: (key: string) => Provider = key => new DeepSeek(key);
     keyStore: KeyStore = systemKeyStore;
     model = DEEPSEEK_MODELS[0];   // model dikirim apa adanya ke API; setModel() menormalkannya
     onModelChanged: (model: string) => void = () => {};
     onThinkingChanged: (thinking: boolean) => void = () => {};
+    onSaveChanged: (save: boolean) => void = () => {};
+    saveChats = true;   // simpan tiap giliran ke <folder>/.nyerat/chats
     options: ContextOptions = { activeDocument: true, selection: true, project: true };
     budget = DEFAULT_BUDGET;
 
@@ -85,6 +91,12 @@ export class ChatPanel {
     private renderTimer = 0;
     private stick = true;            // tetap menempel di bawah selama pengguna tidak menggulir ke atas
     private summaryTimer = 0;
+    // Percakapan yang sedang tampil di disk: berkasnya (null = belum ditulis), folder asalnya, dan judulnya.
+    private chatPath: string | null = null;
+    private chatRoot: string | null = null;
+    private chatTitle = '';
+    private chatCreated = '';
+    private readonly chatList: Gtk.Box;
     private readonly stepLabels = new Map<string, Gtk.Label>();   // id panggilan alat → baris langkahnya
 
     constructor() {
@@ -94,11 +106,26 @@ export class ChatPanel {
         clear.set_relief(Gtk.ReliefStyle.NONE);
         clear.set_tooltip_text('Percakapan baru');
         clear.connect('clicked', () => this.reset());
+        this.chatList = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 });
+        const listScroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, min_content_width: 300, max_content_height: 280, propagate_natural_height: true });
+        listScroll.add(this.chatList);
+        const listBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin: 12 });
+        listBox.get_style_context().add_class('chat-pop');
+        listBox.set_size_request(320, -1);
+        listBox.pack_start(this.label('Percakapan sebelumnya'), false, false, 0);
+        listBox.pack_start(listScroll, false, false, 0);
+        const listPopover = new Gtk.Popover();
+        listPopover.add(listBox);
+        listBox.show_all();
+        this.historyButton = new Gtk.MenuButton({ relief: Gtk.ReliefStyle.NONE, tooltip_text: 'Percakapan sebelumnya', popover: listPopover });
+        this.historyButton.set_image(Gtk.Image.new_from_icon_name('document-open-recent-symbolic', Gtk.IconSize.MENU));
+        listPopover.connect('show', () => this.refreshChatList());
         this.settingsButton = new Gtk.MenuButton({ relief: Gtk.ReliefStyle.NONE, tooltip_text: 'Pengaturan asisten' });
         this.settingsButton.set_image(Gtk.Image.new_from_icon_name('emblem-system-symbolic', Gtk.IconSize.MENU));
         const header = new Gtk.Box({ margin_top: 4, margin_bottom: 8, margin_end: 6 });
         header.pack_start(title, true, true, 0);
         header.pack_start(clear, false, false, 0);
+        header.pack_start(this.historyButton, false, false, 0);
         header.pack_start(this.settingsButton, false, false, 0);
 
         // Pengaturan: API key dan model.
@@ -128,6 +155,14 @@ export class ChatPanel {
             this.session.thinking = this.thinkingCheck.active;
             this.onThinkingChanged(this.thinkingCheck.active);
         });
+        this.saveCheck = new Gtk.CheckButton({
+            label: 'Simpan riwayat percakapan di folder', active: this.saveChats,
+            tooltip_text: 'Tiap percakapan ditulis sebagai berkas Markdown di <folder naskah>/.nyerat/chats. Isinya memuat kutipan naskah; folder .nyerat tidak ikut Git kecuali Anda menghapus .nyerat/.gitignore',
+        });
+        this.saveCheck.connect('toggled', () => {
+            this.saveChats = this.saveCheck.active;
+            this.onSaveChanged(this.saveChats);
+        });
         const privacy = new Gtk.Label({
             label: 'Naskah yang disertakan sebagai konteks (atur lewat tombol Konteks) dikirim ke server DeepSeek setiap kali Anda bertanya.',
             xalign: 0, wrap: true, max_width_chars: 36,
@@ -141,6 +176,7 @@ export class ChatPanel {
         settings.pack_start(this.label('Model'), false, false, 0);
         settings.pack_start(this.modelCombo, false, false, 0);
         settings.pack_start(this.thinkingCheck, false, false, 0);
+        settings.pack_start(this.saveCheck, false, false, 0);
         settings.pack_start(privacy, false, false, 0);
         const settingsPopover = new Gtk.Popover();
         settingsPopover.add(settings);
@@ -231,6 +267,11 @@ export class ChatPanel {
         this.session.thinking = thinking;
     }
 
+    setSaveChats(save: boolean): void {
+        this.saveCheck.set_active(save);
+        this.saveChats = save;
+    }
+
     focusInput(): void {
         this.input.grab_focus();
     }
@@ -240,6 +281,7 @@ export class ChatPanel {
     reset(): void {
         this.stop();
         this.session.clear();
+        this.chatPath = null;
         this.bubbles.length = 0;
         for (const child of this.messages.get_children()) if (child !== this.empty) this.messages.remove(child);
         this.empty.show();
@@ -295,6 +337,7 @@ export class ChatPanel {
             if (result.cancelled) answer.footer.set_text(answer.bubble.text || result.toolCalls ? 'Dihentikan' : 'Dihentikan sebelum ada jawaban');
             else if (result.usage) answer.footer.set_text(usageText(result.usage, result.toolCalls));
             answer.footer.set_visible(!!answer.footer.get_text());
+            this.persist();
         } catch (e) {
             this.render(answer.bubble);
             answer.footer.set_markup(`<span foreground="#c9372c">${escapeMarkup(e instanceof Error ? e.message : String(e))}</span>`);
@@ -306,6 +349,103 @@ export class ChatPanel {
             this.sendButton.set_tooltip_text('Kirim (Enter)');
             this.updateContextSummary();
         }
+    }
+
+    // ---------- Riwayat di disk ----------
+
+    // Tulis percakapan ke <folder>/.nyerat/chats setelah tiap giliran. Tanpa folder, atau saat dimatikan, tidak menulis apa-apa.
+    private persist(): void {
+        const root = this.host.root();
+        const history = this.session.history;
+        if (!this.saveChats || !root || !history.length) return;
+        if (root !== this.chatRoot) {
+            // Pindah folder di tengah percakapan: lanjutannya ditulis sebagai berkas baru di folder yang baru.
+            this.chatRoot = root;
+            this.chatPath = null;
+        }
+        if (!this.chatPath) {
+            this.chatCreated = nowStamp();
+            this.chatTitle = titleFrom(history.find(t => t.role === 'user')?.content ?? '');
+        }
+        try {
+            this.chatPath = saveChat(root, { title: this.chatTitle, model: this.model, created: this.chatCreated, turns: [...history] }, this.chatPath);
+        } catch (e) {
+            this.addNote(`Riwayat percakapan tidak tersimpan: ${e instanceof Error ? e.message : e}`, true);
+        }
+    }
+
+    // Tampilkan percakapan tersimpan dan lanjutkan dari sana: giliran berikutnya ditambahkan ke berkas yang sama.
+    openChat(path: string): boolean {
+        const chat = loadChat(path);
+        if (!chat) {
+            this.addNote('Berkas percakapan tidak bisa dibaca.', true);
+            return false;
+        }
+        this.reset();
+        this.session.restore(chat.turns);
+        this.chatPath = path;
+        this.chatRoot = this.host.root();
+        this.chatTitle = chat.title;
+        this.chatCreated = chat.created;
+        this.empty.hide();
+        for (const turn of chat.turns) {
+            if (turn.role === 'user') {
+                this.addUser(turn.content);
+            } else {
+                const answer = this.addAssistant();
+                answer.bubble.text = turn.content;
+                this.render(answer.bubble);
+            }
+        }
+        this.stick = true;
+        this.updateContextSummary();
+        return true;
+    }
+
+    private refreshChatList(): void {
+        for (const child of this.chatList.get_children()) this.chatList.remove(child);
+        const note = (text: string) => {
+            const l = new Gtk.Label({ label: text, xalign: 0, wrap: true, max_width_chars: 36 });
+            l.get_style_context().add_class('side-meta');
+            l.show();
+            this.chatList.pack_start(l, false, false, 0);
+        };
+        const root = this.host.root();
+        if (!root) return note('Buka folder naskah untuk menyimpan dan membuka riwayat percakapan.');
+        const chats = listChats(root);
+        if (!chats.length) return note('Belum ada percakapan tersimpan di folder ini.');
+        const popover = this.historyButton.get_popover();
+        for (const chat of chats) {
+            const row = new Gtk.Box({ spacing: 2 });
+            const open = new Gtk.Button({ relief: Gtk.ReliefStyle.NONE, tooltip_text: `${chat.created.replace('T', ' ')} · ${chat.turns / 2 | 0} tanya-jawab` });
+            const text = new Gtk.Label({ label: chat.title, xalign: 0, ellipsize: 3, max_width_chars: 30 });
+            const date = new Gtk.Label({ label: chat.created.slice(0, 10), xalign: 0 });
+            date.get_style_context().add_class('side-meta');
+            const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
+            column.pack_start(text, false, false, 0);
+            column.pack_start(date, false, false, 0);
+            open.add(column);
+            open.connect('clicked', () => {
+                popover?.popdown();
+                this.openChat(chat.path);
+            });
+            const remove = Gtk.Button.new_from_icon_name('user-trash-symbolic', Gtk.IconSize.MENU);
+            remove.set_relief(Gtk.ReliefStyle.NONE);
+            remove.set_tooltip_text('Buang ke Tempat Sampah');
+            remove.connect('clicked', () => {
+                try {
+                    deleteChat(chat.path);
+                } catch (e) {
+                    this.addNote(e instanceof Error ? e.message : String(e), true);
+                }
+                if (chat.path === this.chatPath) this.chatPath = null;
+                this.refreshChatList();
+            });
+            row.pack_start(open, true, true, 0);
+            row.pack_start(remove, false, false, 0);
+            this.chatList.pack_start(row, false, false, 0);
+        }
+        this.chatList.show_all();
     }
 
     // ---------- Konteks ----------

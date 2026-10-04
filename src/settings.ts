@@ -10,6 +10,7 @@ export interface Settings {
     chat: boolean;           // panel asisten terbuka
     chatModel: string;       // model DeepSeek untuk asisten
     chatThinking: boolean;   // mode berpikir model (lebih teliti, lebih lambat)
+    chatSave: boolean;       // simpan riwayat percakapan di <folder>/.nyerat/chats
     folder: string | null;   // folder yang terakhir dibuka
     typewriter: boolean;
     focus: boolean;
@@ -26,6 +27,7 @@ export const DEFAULTS: Settings = {
     chat: false,
     chatModel: 'deepseek-flash',
     chatThinking: false,
+    chatSave: true,
     folder: null,
     typewriter: false,
     focus: false,

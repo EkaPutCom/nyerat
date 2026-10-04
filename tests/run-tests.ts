@@ -29,6 +29,7 @@ import { dbmlTests } from './unit/dbml.js';
 import { gitLogTests } from './unit/gitlog.js';
 import { fileOpsTests } from './unit/fileops.js';
 import { agentTests, apiKeyTests, toolTests } from './unit/agent.js';
+import { transcriptTests } from './unit/transcript.js';
 import { deepseekTests } from './unit/deepseek.js';
 import { chatTests } from './gui/chat.js';
 import { syntaxHidingTests } from './gui/syntax.js';
@@ -66,6 +67,7 @@ function runUnitTests(): void {
     agentTests();
     apiKeyTests();
     toolTests();
+    transcriptTests();
     deepseekTests();
 }
 

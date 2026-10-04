@@ -3,6 +3,8 @@
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=3.0';
 import type { KeyStore } from '../../src/agent/apikey.js';
+import { chatsDir, listChats } from '../../src/agent/chatstore.js';
+import { readTextFile } from '../../src/files.js';
 import type { ChatRequest, Provider } from '../../src/agent/provider.js';
 import { section, test, eq, ok, contains, settle, tmp } from '../framework.js';
 import type { GuiContext } from './context.js';
@@ -269,6 +271,108 @@ export function chatTests(c: GuiContext): void {
         eq(w.settings.chatThinking, true);
         panel.thinkingCheck.set_active(false);
         eq(w.settings.chatThinking, false);
+    });
+
+    // ---------- Riwayat di disk ----------
+    const savedFiles = () => listChats(book);
+    const rmChats = () => {
+        for (const chat of savedFiles()) GLib.unlink(chat.path);
+    };
+
+    test('percakapan tersimpan sebagai Markdown di .nyerat/chats dan folder itu tidak ikut Git', () => {
+        rmChats();
+        panel.reset();
+        settle(panel.ask('Pertanyaan riwayat satu'));
+        const chats = savedFiles();
+        eq(chats.length, 1, 'jumlah berkas');
+        eq(chats[0].title, 'Pertanyaan riwayat satu');
+        ok(chats[0].path.startsWith(chatsDir(book)), chats[0].path);
+        ok(chats[0].path.endsWith('-pertanyaan-riwayat-satu.md'), chats[0].path);
+        const text = readTextFile(chats[0].path);
+        contains(text, '## Anda\nPertanyaan riwayat satu');
+        contains(text, '## Asisten\n');
+        contains(text, 'model: deepseek-flash');
+        eq(readTextFile(GLib.build_filenamev([book, '.nyerat', '.gitignore'])), '*\n');
+    });
+
+    test('giliran berikutnya menambah ke berkas yang sama', () => {
+        settle(panel.ask('Lanjutan satu'));
+        eq(savedFiles().length, 1, 'jumlah berkas');
+        eq(savedFiles()[0].turns, 4);
+    });
+
+    test('riwayat tidak dibaca asisten sebagai naskah', () => {
+        w.openFolder(book, false);
+        ok(!w.chat.host.files().some(f => f.name.includes('.nyerat')), 'riwayat masuk daftar berkas naskah');
+    });
+
+    test('Percakapan baru membuat berkas baru; daftar memuat keduanya, terbaru dulu', () => {
+        panel.reset();
+        settle(panel.ask('Pertanyaan riwayat dua'));
+        const chats = savedFiles();
+        eq(chats.length, 2, 'jumlah berkas');
+        eq(chats.map(c => c.title).sort(), ['Pertanyaan riwayat dua', 'Pertanyaan riwayat satu']);
+    });
+
+    test('popover riwayat menampilkan judul tiap percakapan', () => {
+        const popover = panel.historyButton.get_popover()!;
+        popover.popup();
+        pump();
+        const texts: string[] = [];
+        const walk = (widget: Gtk.Widget) => {
+            if (widget instanceof Gtk.Label) texts.push(widget.get_text());
+            if (widget instanceof Gtk.Container) widget.get_children().forEach(walk);
+        };
+        walk(popover);
+        popover.popdown();
+        pump();
+        contains(texts.join('\n'), 'Pertanyaan riwayat satu');
+        contains(texts.join('\n'), 'Pertanyaan riwayat dua');
+    });
+
+    test('membuka percakapan lama memulihkan pesan dan riwayat, lalu melanjutkannya di berkas itu', () => {
+        const first = savedFiles().find(c => c.title === 'Pertanyaan riwayat satu')!;
+        ok(panel.openChat(first.path), 'openChat() gagal');
+        eq(panel.session.history.length, 4);
+        contains(all(), 'Pertanyaan riwayat satu');
+        contains(all(), 'Lanjutan satu');
+        contains(all(), 'Laras menyembunyikan surat itu.');
+        ok(!all().includes('Pertanyaan riwayat dua'), 'percakapan lain ikut tampil');
+        seen.length = 0;
+        settle(panel.ask('Lanjutan dua'));
+        eq(seen[0].messages.map(m => m.role), ['system', 'user', 'assistant', 'user', 'assistant', 'user']);   // riwayat lama ikut terkirim
+        eq(savedFiles().length, 2, 'berkas baru dibuat padahal melanjutkan');
+        eq(savedFiles().find(c => c.path === first.path)?.turns, 6);
+    });
+
+    test('berkas yang bukan percakapan diabaikan dan tidak bisa dibuka', () => {
+        const stray = GLib.build_filenamev([chatsDir(book), 'catatan.md']);
+        GLib.file_set_contents(stray, '# Catatan\n\nBukan percakapan.\n');
+        eq(savedFiles().length, 2, 'berkas asing masuk daftar');
+        ok(!panel.openChat(stray), 'openChat() seharusnya gagal');
+        GLib.unlink(stray);
+        panel.reset();
+    });
+
+    test('saklar simpan dimatikan: tidak ada yang ditulis, dan pilihan tersimpan di pengaturan', () => {
+        rmChats();
+        panel.saveCheck.set_active(false);
+        eq(w.settings.chatSave, false);
+        panel.reset();
+        settle(panel.ask('Tidak untuk disimpan'));
+        eq(savedFiles().length, 0, 'berkas tertulis padahal dimatikan');
+        panel.saveCheck.set_active(true);
+        eq(w.settings.chatSave, true);
+    });
+
+    test('tanpa folder naskah tidak ada yang ditulis', () => {
+        const rootBefore = panel.host.root;
+        panel.host.root = () => null;
+        panel.reset();
+        settle(panel.ask('Tanpa folder'));
+        eq(savedFiles().length, 0, 'berkas tertulis tanpa folder');
+        panel.host.root = rootBefore;
+        panel.reset();
     });
 
     test('menutup panel', () => {

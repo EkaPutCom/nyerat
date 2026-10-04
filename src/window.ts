@@ -175,6 +175,11 @@ export class MainWindow {
             this.settings.chatModel = model;
             saveSettings(this.settings);
         };
+        this.chat.setSaveChats(settings.chatSave);
+        this.chat.onSaveChanged = save => {
+            this.settings.chatSave = save;
+            saveSettings(this.settings);
+        };
         this.chat.onThinkingChanged = thinking => {
             this.settings.chatThinking = thinking;
             saveSettings(this.settings);
@@ -189,6 +194,7 @@ export class MainWindow {
                 const bounds = buf.get_selection_bounds();
                 return bounds[0] ? buf.get_text(bounds[1], bounds[2], false) : '';
             },
+            root: () => this.fileTree.root,
             files: () => {
                 const files = this.fileTree.root ? readProject(this.fileTree.root, this.file) : [];
                 // Tab lain yang belum disimpan: asisten membaca isi editor, bukan versi di disk.
