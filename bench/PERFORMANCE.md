@@ -185,3 +185,70 @@ Skenario lain dalam rentang derau. Biaya: total sampai semua tag terpasang dan G
 menata naik ±10% (buku 651 KB: 761 → 820 ms) karena kerja dicicil, dan `highlight() ulang`
 tanpa suntingan 0.41 → 0.6–0.9 ms karena pemeriksaan baris yang ditunda; keduanya tidak
 terasa saat mengetik. Sisa jeda membuka adalah `set_text` GTK dan penguraian penuh.
+
+## Perpindahan kursor pada dokumen bertabel (2026-10-04)
+
+Lapisan tabel kini mengubah tag hanya pada tabel yang berganti antara grid dan teks
+mentah saat kursor/seleksi berpindah. Tidak lagi menelusuri rentang tag semua tabel
+atau membuat string signature seluruh tabel pada setiap perpindahan. Perhitungan
+posisi `get_line_yrange()` dibatasi pada grid yang terlihat: grid di luar layar
+disembunyikan, ruangnya tetap dipertahankan oleh tag, dan posisinya diperbarui saat
+gulir berubah. Sebelumnya permintaan posisi semua grid memaksa GTK menata ulang
+baris sampai jauh di luar layar setelah tinggi satu tabel berubah.
+
+Pengukuran sebelum/sesudah dalam sesi yang sama, fixture `mixed`, X11/Xvfb,
+GJS 1.80.2, GTK 3.24.41, 10 pengulangan setelah pemanasan. Semua angka dalam ms;
+p95 dan maksimum sama karena skenario ini hanya memiliki 10 sampel.
+
+| Dokumen | Median sebelum → sesudah | p95 sebelum → sesudah | Maksimum sebelum → sesudah |
+| --- | ---: | ---: | ---: |
+| mixed 7 KB, pindah kursor 20 baris | 44.29 → 19.30 | 49.88 → 26.45 | 49.88 → 26.45 |
+| mixed 15 KB, pindah kursor 20 baris | 66.66 → 27.50 | 78.25 → 32.29 | 78.25 → 32.29 |
+| mixed 30 KB, pindah kursor 20 baris | 132.52 → 29.59 | 150.00 → 42.65 | 150.00 → 42.65 |
+
+Untuk mixed 30 KB, median turun 78% terhadap pengukuran sebelum dalam sesi ini,
+atau 80% terhadap baseline tersimpan (145.26 ms, p95/maksimum 155.38 ms).
+Ketik per karakter tetap 1.47 → 1.51 ms (p95 5.98 → 5.79, maksimum 23.42 → 15.27).
+Hapus teks besar 4.43 → 2.77 ms, undo 3.96 → 3.05 ms.
+
+Ada kenaikan yang dicatat: total membuka mixed 30 KB 245.42 → 264.53 ms
+(p95/maksimum 271.92 → 285.35), paste 135.67 → 148.99 ms
+(p95/maksimum 180.92 → 162.10), dan redo 155.49 → 165.72 ms
+(p95/maksimum 216.64 → 174.14). Pembuatan awal seluruh grid dan sinkronisasi tag
+setelah suntingan masih dilakukan; optimasi ini berfokus pada perpindahan kursor.
+Hasil tahap antara yang berjalan bersama tes GUI tidak dipakai untuk angka akhir.
+Baseline lama tetap dipertahankan agar kenaikan ini tetap terlihat dalam `bench:compare`.
+
+Validasi: `npm test` **383 lulus, 0 gagal**, termasuk pemeriksaan tag tabel lain
+tidak disentuh, seleksi lintas tabel, pemakaian ulang widget, serta gulir ke grid
+akhir dan kembali tanpa mengubah tinggi dokumen. Log lengkap diperiksa, tanpa
+peringatan/galat runtime. Typecheck dan pemeriksaan diff lolos. Screenshot tema
+terang dan gelap diperiksa saat kedua tabel bergantian menjadi teks mentah dan
+kembali ke grid; grid dan paragraf tidak bertumpuk. `test:ui` pada desktop tidak
+dijalankan karena mode tes yang ditampilkan tidak diminta (aturan lingkungan tes
+AGENT.md); tes mouse dijalankan pada Xvfb. Kasus ekstrem 500 grid dan dokumen
+20.000 baris belum diukur ulang; perbaikan ini tidak membuktikan masalah GC pada
+kasus tersebut selesai.
+
+Pemeriksaan regresi fixture `buku` juga selesai untuk 50/200/400 blok, 10
+pengulangan, X11/Xvfb dan lingkungan baseline yang sama. Pada buku 651 KB:
+
+| Operasi | Median baseline → sesudah | p95 baseline → sesudah | Maksimum baseline → sesudah |
+| --- | ---: | ---: | ---: |
+| pindah kursor 20 baris | 14.67 → 13.69 | 17.09 → 16.68 | 17.09 → 16.68 |
+| ketik per karakter | 2.03 → 2.08 | 4.65 → 4.99 | 15.46 → 16.07 |
+| buka: jeda terpanjang | 71.45 → 72.25 | 79.50 → 81.41 | 79.50 → 81.41 |
+| setText + sorot + layout | 820.16 → 843.38 | 869.32 → 889.24 | 869.32 → 889.24 |
+
+Perubahan utama buku berada dalam ±7% median; belum ada bukti regresi berarti
+untuk kursor/mengetik. Ini pembanding terhadap baseline tersimpan, bukan pengukuran
+sebelum baru untuk fixture buku. Log benchmark mixed dan buku bersih. Pengukuran
+tetap sampai main loop menganggur, bukan durasi lengkap menggambar layar.
+
+Run ulang terpisah mixed 100 blok (10 pengulangan, lingkungan sama) mengonfirmasi:
+kursor median **29.06 ms**, p95/maksimum **41.24 ms**; setText median **260.76 ms**,
+p95/maksimum **292.79 ms**; paste median **146.02 ms**, p95/maksimum **159.53 ms**.
+Dengan demikian perbaikan kursor konsisten, sedangkan kenaikan total membuka
+sekitar 7–9% terhadap baseline tersimpan tetap terlihat dan tidak dihapus lewat
+penggantian baseline. Kenaikan ini kecil tetapi belum dipisahkan antara biaya
+menyembunyikan grid awal dan derau lingkungan. Pemeriksaan log run ulang juga bersih.

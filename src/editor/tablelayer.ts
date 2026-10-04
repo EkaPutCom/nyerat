@@ -70,7 +70,6 @@ export class TableLayer {
     private lines: string[] = [];
     private cursor: [number, number] = [-1, -1];
     private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#4183c4', mark: '#fff3a3' };
-    private signature = '';
     private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
     private relayoutQueued = false;
     private destroyed = false;
@@ -90,6 +89,7 @@ export class TableLayer {
         if (!adj || adj === this.adjustment) return;
         this.adjustment = adj;
         adj.connect('changed', () => this.queueRelayout());
+        adj.connect('value-changed', () => this.queueRelayout());
     }
 
     setPalette(palette: Palette): void {
@@ -137,18 +137,40 @@ export class TableLayer {
         this.blocks = next;
         if (!changed && this.blocks.every(b => b.collapsed === this.isCollapsed(b))) {
             // Rentang tag ikut bergeser di GTK; cukup pindahkan widgetnya.
-            this.signature = this.stateSignature();
             if (moved) this.queueRelayout();
             return;
         }
-        this.signature = '';
         this.sync();
     }
 
     // Kursor (atau seleksi) berada di baris first..last.
     setCursor(first: number, last: number): void {
         this.cursor = [first, last];
-        if (this.stateSignature() !== this.signature) this.sync();
+        let changed = false;
+        for (const block of this.blocks) {
+            const collapsed = this.isCollapsed(block);
+            if (collapsed === block.collapsed) continue;
+            changed = true;
+            block.collapsed = collapsed;
+            if (collapsed && !block.widget) this.build(block);
+            block.widget?.set_visible(collapsed);
+
+            // Kursor tidak mengubah teks: tag tabel lain tetap benar. Jangan menelusuri
+            // seluruh buffer untuk mencari selisih tag setiap masuk/keluar satu tabel.
+            const start = this.buffer.get_iter_at_line(block.start);
+            const lastLine = this.buffer.get_iter_at_line(block.end);
+            const end = lastLine.copy();
+            end.forward_to_line_end();
+            const gap = this.gapTag(block.height + 2 * GAP);
+            if (collapsed) {
+                this.buffer.apply_tag(this.hideTag, start, end);
+                this.buffer.apply_tag(gap, lastLine, end);
+            } else {
+                this.buffer.remove_tag(this.hideTag, start, end);
+                this.buffer.remove_tag(gap, lastLine, end);
+            }
+        }
+        if (changed) this.queueRelayout();
     }
 
     // ---------- Keadaan ----------
@@ -158,13 +180,8 @@ export class TableLayer {
         return this.enabled && !(block.end >= first && block.start <= last);
     }
 
-    private stateSignature(): string {
-        return this.blocks.map(b => `${b.start}-${b.end}:${this.isCollapsed(b) ? 1 : 0}`).join(',');
-    }
-
     private rebuildAll(): void {
         for (const block of this.blocks) this.destroyWidget(block);
-        this.signature = '';
         this.sync();
     }
 
@@ -195,7 +212,6 @@ export class TableLayer {
         }
         setTagRanges(this.buffer, this.hideTag, hide);
         setTagGroup(this.buffer, this.gapTags.values(), gaps);
-        this.signature = this.stateSignature();
         this.queueRelayout();
     }
 
@@ -286,9 +302,20 @@ export class TableLayer {
     }
 
     relayout(): void {
+        if (!this.blocks.length) return;
         const x = this.view.get_left_margin();
+        const rect = this.view.get_visible_rect();
+        const [top] = this.view.get_line_at_y(rect.y);
+        const [bottom] = this.view.get_line_at_y(rect.y + rect.height);
+        const first = top.get_line(), last = bottom.get_line();
         for (const block of this.blocks) {
-            if (!block.widget || !block.collapsed || block.end >= this.buffer.get_line_count()) continue;
+            if (!block.widget) continue;
+            // get_line_yrange() untuk semua tabel memaksa GTK menata sampai akhir
+            // dokumen tiap kursor berpindah. Grid di luar layar menyimpan ruangnya
+            // lewat tag, tetapi baru diposisikan saat digulir ke layar.
+            const visible = block.collapsed && block.end >= first && block.start <= last;
+            block.widget.set_visible(visible);
+            if (!visible || block.end >= this.buffer.get_line_count()) continue;
             const [lineY, lineHeight] = this.view.get_line_yrange(this.buffer.get_iter_at_line(block.end));
             const y = lineY + lineHeight - block.height - GAP;
             // Hanya pindahkan jika berubah, supaya tidak memicu resize berulang.

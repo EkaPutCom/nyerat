@@ -69,6 +69,54 @@ export function tableGridTests(c: GuiContext): void {
         pump();
         eq(curLine(), 3, 'klik judul memakai baris tabel yang sudah bergeser');
     });
+    test('kursor dan seleksi hanya mengubah tag tabel yang berganti keadaan', () => {
+        setText(`${DOC}\n\n${DOC}\n\n${DOC}`); cursorTo(0); settleT();
+        const blocks = ed.tableLayer.blocks;
+        eq(blocks.length, 3);
+        const widgets = blocks.map(b => b.widget);
+        const touched: number[] = [];
+        const record = (_buf: Gtk.TextBuffer, tag: Gtk.TextTag, start: Gtk.TextIter) => {
+            if (tag === ed.tags.tablehide || tag.name?.startsWith('table-gap-')) touched.push(start.get_line());
+        };
+        const applied = buf.connect('apply-tag', record);
+        const removed = buf.connect('remove-tag', record);
+        try {
+            cursorTo(blocks[1].start);
+            ok(touched.length > 0 && touched.every(l => l >= blocks[1].start && l <= blocks[1].end), 'tag tabel lain disentuh');
+            eq(blocks.map(b => b.collapsed), [true, false, true]);
+            touched.length = 0;
+            cursorTo(blocks[1].end);
+            eq(touched.length, 0, 'perpindahan dalam tabel memasang ulang tag');
+            buf.select_range(buf.get_iter_at_line(blocks[0].start), buf.get_iter_at_line(blocks[2].end));
+            pump(); settleT();
+            eq(blocks.map(b => b.collapsed), [false, false, false]);
+            ok(blocks.every(b => !tableTag(b.start)), 'seleksi lintas tabel masih menyembunyikan teks');
+            cursorTo(0); settleT();
+            ok(blocks.every((b, i) => b.collapsed && b.widget === widgets[i] && b.widget?.get_visible()), 'grid tidak dipakai ulang');
+            ok(blocks.every(b => tableTag(b.start)), 'tag tidak kembali setelah seleksi dilepas');
+        } finally {
+            buf.disconnect(applied);
+            buf.disconnect(removed);
+        }
+    });
+    test('grid di luar layar diposisikan saat digulir tanpa mengubah ruang tabel', () => {
+        setText(`${DOC}\n\n`.repeat(40)); cursorTo(0); settleT();
+        const first = ed.tableLayer.blocks[0];
+        const last = ed.tableLayer.blocks[39];
+        ok(first.widget?.get_visible(), 'grid awal tidak tampil');
+        ok(!last.widget?.get_visible(), 'grid di luar layar masih tampil');
+        const height = ed.view.get_vadjustment()!.upper;
+        ed.view.scroll_to_iter(buf.get_iter_at_line(last.end), 0, true, 0, 0.5);
+        settleT();
+        ok(last.widget?.get_visible(), 'grid akhir tidak tampil setelah digulir');
+        ok(!first.widget?.get_visible(), 'grid awal tidak disembunyikan setelah digulir');
+        const [lineY, lineHeight] = ed.view.get_line_yrange(buf.get_iter_at_line(last.end));
+        eq(last.y, lineY + lineHeight - last.height - 12, 'posisi grid akhir salah');
+        eq(ed.view.get_vadjustment()!.upper, height, 'menyembunyikan grid mengubah tinggi dokumen');
+        ed.view.scroll_to_iter(buf.get_start_iter(), 0, true, 0, 0);
+        settleT();
+        ok(first.widget?.get_visible(), 'grid awal tidak kembali');
+    });
     test('Tab pindah ke sel berikutnya, lalu ke baris berikutnya', () => {
         setText(DOC); cursorTo(4, 2);
         key(Gdk.KEY_Tab); eq([curLine(), curCol()], [4, 1], 'sel kedua');
