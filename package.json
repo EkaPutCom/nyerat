@@ -1,7 +1,7 @@
 {
   "name": "nyerat",
   "version": "1.0.0",
-  "description": "Editor Markdown AI-native dengan GTK 4 dan GJS",
+  "description": "Personal workbench AI agent dengan GTK 4 dan GJS",
   "private": true,
   "type": "module",
   "license": "MIT",

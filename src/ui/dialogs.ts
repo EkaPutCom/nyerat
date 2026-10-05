@@ -131,7 +131,7 @@ export function showAbout(parent: Gtk.Window): void {
     const dialog = new Gtk.AboutDialog({
         transient_for: parent, modal: true, program_name: APP_NAME, version: APP_VERSION,
         logo_icon_name: 'accessories-text-editor',
-        comments: 'Editor Markdown AI-native dengan GTK 4 dan GJS.',
+        comments: 'Personal workbench AI agent untuk catatan, dokumen, riset, dan rencana, dengan GTK 4 dan GJS.',
     });
     dialog.present();
 }

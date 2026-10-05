@@ -155,14 +155,14 @@ export class ChatPanel {
         });
         this.saveCheck = new Gtk.CheckButton({
             label: 'Simpan riwayat percakapan di folder', active: this.saveChats,
-            tooltip_text: 'Tiap percakapan ditulis sebagai berkas Markdown di <folder naskah>/.nyerat/chats. Isinya memuat kutipan naskah; folder .nyerat tidak ikut Git kecuali Anda menghapus .nyerat/.gitignore',
+            tooltip_text: 'Tiap percakapan ditulis sebagai berkas Markdown di <folder kerja>/.nyerat/chats. Isinya memuat kutipan dokumen; folder .nyerat tidak ikut Git kecuali Anda menghapus .nyerat/.gitignore',
         });
         this.saveCheck.connect('toggled', () => {
             this.saveChats = this.saveCheck.active;
             this.onSaveChanged(this.saveChats);
         });
         const privacy = new Gtk.Label({
-            label: 'Naskah yang disertakan sebagai konteks (atur lewat tombol Konteks) dikirim ke server DeepSeek setiap kali Anda bertanya.',
+            label: 'Dokumen yang disertakan sebagai konteks (atur lewat tombol Konteks) dikirim ke server DeepSeek setiap kali Anda bertanya.',
             xalign: 0, wrap: true, max_width_chars: 36,
         });
         privacy.add_css_class('side-meta');
@@ -200,7 +200,7 @@ export class ChatPanel {
         const checks: [string, string, keyof ContextOptions][] = [
             ['Dokumen yang sedang dibuka', 'Isi lengkap dokumen aktif (bila terlalu panjang: bagian di sekitar kursor)', 'activeDocument'],
             ['Teks yang dipilih', 'Kalimat yang sedang disorot di editor', 'selection'],
-            ['Berkas lain di folder', 'Peta proyek, potongan relevan, berkas yang di-@mention, dan izin bagi asisten untuk mencari dan membaca naskah sendiri', 'project'],
+            ['Berkas lain di folder', 'Peta proyek, potongan relevan, berkas yang di-@mention, dan izin bagi asisten untuk mencari dan membaca dokumen sendiri', 'project'],
         ];
         for (const [text, tip, key] of checks) {
             const check = new Gtk.CheckButton({ label: text, active: this.options[key], tooltip_text: tip });
@@ -416,7 +416,7 @@ export class ChatPanel {
             this.chatList.append(l);
         };
         const root = this.host.root();
-        if (!root) return note('Buka folder naskah untuk menyimpan dan membuka riwayat percakapan.');
+        if (!root) return note('Buka folder kerja untuk menyimpan dan membuka riwayat percakapan.');
         const chats = listChats(root);
         if (!chats.length) return note('Belum ada percakapan tersimpan di folder ini.');
         const popover = this.historyButton.get_popover();
@@ -518,7 +518,7 @@ export class ChatPanel {
             l.show();
             this.contextList.append(l);
         };
-        if (!built.items.length) add('Tidak ada konteks naskah yang dikirim.', true);
+        if (!built.items.length) add('Tidak ada konteks dokumen yang dikirim.', true);
         for (const item of built.items) add(`${KIND_LABEL[item.kind]}: ${item.label} · ${fmtTokens(item.tokens)}`);
         add(`Total ≈${fmtTokens(built.tokens)} token dari anggaran ${fmtTokens(this.budget)}`, true);
         for (const m of built.unknownMentions) add(`Berkas @${m} tidak ditemukan di folder proyek.`, true);
@@ -560,7 +560,7 @@ export class ChatPanel {
     private buildEmptyState(): Gtk.Box {
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: 8 });
         const intro = new Gtk.Label({
-            label: 'Tanyakan apa saja tentang naskah Anda. Asisten membaca dokumen yang terbuka dan potongan relevan dari berkas lain di folder.',
+            label: 'Tanyakan atau minta bantuan apa saja soal pekerjaan Anda. Asisten membaca dokumen yang terbuka dan potongan relevan dari berkas lain di folder.',
             xalign: 0, wrap: true, max_width_chars: 38,
         });
         intro.add_css_class('side-meta');

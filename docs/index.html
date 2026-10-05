@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nyerat — Editor Markdown AI-native untuk Linux</title>
-<meta name="description" content="Nyerat adalah editor Markdown AI-native untuk desktop Linux. Asisten AI yang sudah membaca seluruh naskah Anda ada di dalam editor, dengan tampilan menulis yang langsung terformat. Dibuat dengan GTK 4, GJS, dan TypeScript.">
-<meta property="og:title" content="Nyerat — Editor Markdown AI-native untuk Linux">
-<meta property="og:description" content="Asisten AI yang sudah membaca seluruh naskah Anda, di dalam editor Markdown yang langsung terformat. Kanban, tabel, diagram, riwayat Git, mode gelap.">
+<title>Nyerat — Personal workbench AI agent untuk Linux</title>
+<meta name="description" content="Nyerat adalah personal workbench AI agent untuk desktop Linux: ruang kerja pribadi untuk catatan, dokumen, riset, dan rencana, dengan agent AI yang memahami konteks kerja Anda. Fondasinya editor Markdown yang langsung terformat. Dibuat dengan GTK 4, GJS, dan TypeScript.">
+<meta property="og:title" content="Nyerat — Personal workbench AI agent untuk Linux">
+<meta property="og:description" content="Ruang kerja pribadi dengan agent AI yang memahami konteks kerja Anda, di atas editor Markdown yang langsung terformat. Kanban, tabel, diagram, riwayat Git, mode gelap.">
 <meta property="og:image" content="https://nyerat.ekaput.com/assets/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="631">
@@ -180,8 +180,8 @@ footer a { color: var(--muted); }
 <div class="hero">
   <div class="wrap">
     <span class="pill">Sumber terbuka · Lisensi MIT · Untuk desktop Linux</span>
-    <h1>Editor Markdown yang<br><em>AI-native.</em></h1>
-    <p class="lead">Asisten AI di Nyerat sudah membaca seluruh naskah Anda: dokumen yang terbuka, pilihan, dan semua berkas di folder. Tanya apa saja tanpa salin-tempel, dan jawabannya datang dengan kutipan berkas dan nomor baris. Menulisnya tetap bersih, tanpa pratinjau terpisah.</p>
+    <h1>Personal workbench<br><em>AI agent.</em></h1>
+    <p class="lead">Nyerat adalah ruang kerja pribadi untuk catatan, dokumen, riset, rencana, dan tugas. Agent AI-nya sudah membaca konteks kerja Anda: dokumen yang terbuka, pilihan, dan semua berkas di folder. Tanya tanpa salin-tempel, dan jawabannya datang dengan kutipan berkas dan nomor baris. Saat ini agent hanya membaca; kemampuan bertindak sedang dikembangkan, dengan hasil yang bisa Anda tinjau dan setujui.</p>
     <figure class="shot">
       <img src="assets/asisten-terang.png" width="1332" height="867" alt="Jendela Nyerat dengan panel Asisten yang menelusuri dua bab dan menunjukkan ketidakkonsistenan usia tokoh">
     </figure>
@@ -193,12 +193,12 @@ footer a { color: var(--muted); }
   <div class="wrap">
     <div class="center">
       <p class="eyebrow">Fitur</p>
-      <h2>AI yang paham naskah, editor yang tidak mengganggu</h2>
-      <p class="sub">Semua yang dibutuhkan untuk menulis catatan, dokumentasi, dan rencana kerja, dalam satu jendela GTK yang ringan.</p>
+      <h2>Agent yang paham konteks kerja, ruang kerja yang tidak mengganggu</h2>
+      <p class="sub">Catatan, dokumentasi, riset, dan rencana kerja dalam satu folder dan satu jendela GTK yang ringan.</p>
     </div>
     <div class="grid">
-      <div class="card"><div class="ico">✦</div><h3>AI di inti editor (DeepSeek)</h3><p>Tanya soal naskah Anda di panel samping. Asisten sudah membaca naskah: ia menyusun konteks otomatis dan menelusuri berkas di folder untuk menemukan, misalnya, kontradiksi antarbab. Hanya membaca, tidak pernah mengubah berkas.</p></div>
-      <div class="card"><div class="ico">❏</div><h3>Riwayat percakapan per folder</h3><p>Percakapan dengan asisten disimpan sebagai berkas Markdown di <code>.nyerat/chats</code> dalam folder naskah. Buka lagi dan lanjutkan kapan saja; folder itu tidak ikut Git secara otomatis.</p></div>
+      <div class="card"><div class="ico">✦</div><h3>Agent AI di inti ruang kerja (DeepSeek)</h3><p>Tanya soal pekerjaan Anda di panel samping. Agent sudah membaca konteks kerja: ia menyusun konteks otomatis dan menelusuri berkas di folder untuk menemukan, misalnya, kontradiksi antarbab. Hanya membaca, tidak pernah mengubah berkas.</p></div>
+      <div class="card"><div class="ico">❏</div><h3>Riwayat percakapan per folder</h3><p>Percakapan dengan asisten disimpan sebagai berkas Markdown di <code>.nyerat/chats</code> dalam folder kerja. Buka lagi dan lanjutkan kapan saja; folder itu tidak ikut Git secara otomatis.</p></div>
       <div class="card"><div class="ico">✎</div><h3>Penulisan langsung terformat</h3><p>Heading, tebal, miring, coret, stabilo, kode inline, tautan, dan gambar langsung terformat. Sintaksnya muncul lagi saat kursor ada di baris itu.</p></div>
       <div class="card"><div class="ico">▦</div><h3>Papan kanban</h3><p>File Markdown dengan <code>kanban: true</code> dibuka sebagai papan ala Trello. Setiap perubahan ditulis kembali sebagai teks Markdown biasa.</p></div>
       <div class="card"><div class="ico">⊞</div><h3>Tabel sebagai grid</h3><p>Tabel digambar dengan garis sel dan rata kolom. <kbd>Tab</kbd> pindah antar sel, dan menu Edit Tabel menambah atau menghapus baris dan kolom.</p></div>
@@ -275,14 +275,14 @@ footer a { color: var(--muted); }
     <div class="row">
       <div class="text">
         <p class="eyebrow">Asisten</p>
-        <h2>Tanya naskah Anda, jawabannya berikut kutipan.</h2>
+        <h2>Tanya konteks kerja Anda, jawabannya berikut kutipan.</h2>
         <p class="sub" style="margin-bottom:18px">Panel Asisten (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd>) menyusun konteks dari dokumen, pilihan, dan berkas lain di folder, lalu menelusuri naskah sendiri dengan alat baca-saja sebelum menjawab.</p>
         <ul>
           <li>Jawaban mengalir dan menyebut berkas serta nomor barisnya</li>
           <li>Tiap jawaban memperlihatkan konteks dan pemakaian token</li>
           <li>Hanya membaca: tidak pernah mengubah berkas Anda</li>
           <li>Percakapan tersimpan per folder sebagai Markdown, bisa dilanjutkan lagi</li>
-          <li>Naskah yang disertakan dikirim ke DeepSeek; saklar konteks bisa dimatikan</li>
+          <li>Dokumen yang disertakan dikirim ke DeepSeek; saklar konteks bisa dimatikan</li>
         </ul>
       </div>
       <figure class="shot"><img src="assets/asisten.gif" width="900" height="586" loading="lazy" alt="Animasi panel Asisten menjawab pertanyaan tentang ketidakkonsistenan usia tokoh antara dua bab"><figcaption>Asisten menelusuri bab dan menunjukkan kontradiksi usia tokoh</figcaption></figure>
