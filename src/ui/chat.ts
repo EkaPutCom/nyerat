@@ -22,6 +22,7 @@ import type { Provider, Usage } from '../agent/provider.js';
 import { ChatSession, type ProposalResult, type ToolStep } from '../agent/session.js';
 import { diffPreview, describeChange, type Change } from '../agent/changes.js';
 import { ProposalViewer } from './proposalviewer.js';
+import { LogViewer } from './logviewer.js';
 import { chatMarkup } from '../markdown/chatmarkup.js';
 import { escapeMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from './theme.js';
@@ -97,6 +98,7 @@ export class ChatPanel {
     readonly modelCombo: Gtk.ComboBoxText;
     readonly thinkingCheck: Gtk.CheckButton;
     private generation = 0;
+    logViewer: LogViewer | null = null;   // jendela pemantau log agent, bila terbuka
     private cancellable: Gio.Cancellable | null = null;
     private renderTimer = 0;
     private dark = false;
@@ -132,10 +134,15 @@ export class ChatPanel {
         listPopover.set_child(listBox);
         this.historyButton = new Gtk.MenuButton({ has_frame: false, tooltip_text: 'Percakapan sebelumnya', popover: listPopover, icon_name: 'document-open-recent-symbolic' });
         listPopover.connect('show', () => this.refreshChatList());
+        const log = Gtk.Button.new_from_icon_name('utilities-terminal-symbolic');
+        log.set_has_frame(false);
+        log.set_tooltip_text('Log agent: penalaran, alat yang dipakai, dan hasilnya');
+        log.connect('clicked', () => this.showLog());
         this.settingsButton = new Gtk.MenuButton({ has_frame: false, tooltip_text: 'Pengaturan asisten', icon_name: 'emblem-system-symbolic' });
         const header = new Gtk.Box({ margin_top: 4, margin_bottom: 8, margin_end: 6 });
         pack(header, title, true);
         header.append(clear);
+        header.append(log);
         header.append(this.historyButton);
         header.append(this.settingsButton);
 
@@ -267,6 +274,7 @@ export class ChatPanel {
     // Jendela ditutup: hentikan permintaan dan timer yang masih berjalan.
     destroy(): void {
         this.stop();
+        this.logViewer?.window.destroy();
         if (this.renderTimer) GLib.source_remove(this.renderTimer);
         this.renderTimer = 0;
         if (this.summaryTimer) GLib.source_remove(this.summaryTimer);
@@ -322,6 +330,13 @@ export class ChatPanel {
 
     stop(): void {
         this.cancellable?.cancel();
+    }
+
+    // Buka (atau fokuskan) jendela pemantau log agent.
+    showLog(): void {
+        if (this.logViewer?.window.get_realized()) { this.logViewer.show(); return; }
+        this.logViewer = new LogViewer(this.host.window?.() ?? null, this.session.trace);
+        this.logViewer.show();
     }
 
     // Isi kotak masukan lalu (opsional) langsung kirim; dipakai tombol saran dan tes.

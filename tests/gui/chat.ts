@@ -119,6 +119,22 @@ export function chatTests(c: GuiContext): void {
         eq(panel.sendButton.get_tooltip_text(), 'Kirim (Enter)');
     });
 
+    test('jendela log agent menampilkan penalaran dan putaran model, lalu memperbarui diri', () => {
+        panel.showLog();
+        const viewer = panel.logViewer!;
+        ok(viewer, 'jendela log tidak terbuka');
+        const text = () => { const out: string[] = []; const walk = (x: Gtk.Widget) => { if (x instanceof Gtk.Label) out.push(x.get_text()); if (x instanceof Gtk.Expander && x.get_child()) walk(x.get_child()!); childrenOf(x).forEach(walk); }; walk(viewer.list); return out.join('\n'); };
+        for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
+        contains(text(), 'Memanggil model');
+        contains(text(), 'Penalaran model');
+        contains(text(), 'Mencari di naskah.');
+        panel.session.trace.add('note', 'Kejadian baru');
+        for (let i = 0; i < 30 && !text().includes('Kejadian baru'); i++) { pump(); GLib.usleep(10000); }
+        contains(text(), 'Kejadian baru');
+        viewer.window.destroy();
+        panel.logViewer = null;
+    });
+
     test('pertanyaan kedua membawa riwayat dan konteks tidak diulang di giliran lama', () => {
         seen.length = 0;
         settle(panel.ask('Dan ayahnya?'));

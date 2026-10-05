@@ -34,6 +34,7 @@ import { agentTests, apiKeyTests, toolTests } from './unit/agent.js';
 import { transcriptTests } from './unit/transcript.js';
 import { agenticTests } from './unit/agentic.js';
 import { workTests } from './unit/work.js';
+import { traceTests } from './unit/trace.js';
 import { changeTests } from './unit/changes.js';
 import { deepseekTests } from './unit/deepseek.js';
 import { chatTests } from './gui/chat.js';
@@ -74,6 +75,7 @@ function runUnitTests(): void {
     toolTests();
     transcriptTests();
     workTests();
+    traceTests();
     agenticTests();
     changeTests();
     deepseekTests();

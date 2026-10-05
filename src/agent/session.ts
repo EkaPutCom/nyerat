@@ -14,6 +14,7 @@ import type Gio from 'gi://Gio';
 import { buildContext, buildMessages, estimateTokens, type BuiltContext, type ContextInput, type SourceFile, type Turn } from './context.js';
 import type { ChatMessage, Provider, Usage } from './provider.js';
 import { describeCall, runTool, TOOLS } from './tools.js';
+import { AgentTrace, prettyArguments } from './trace.js';
 import { CHANGE_TOOLS, describeChange, isChangeTool, planChange, type Change } from './changes.js';
 
 // Bagian anggaran untuk riwayat percakapan, di luar konteks naskah.
@@ -63,6 +64,7 @@ export class ChatSession {
     private generation = 0;
     readonly history: Turn[] = [];
     readonly events: ActionEvent[] = [];
+    readonly trace = new AgentTrace();   // log kegiatan untuk pemantauan; tidak ikut ke model maupun berkas percakapan
     work: WorkState | null = null;
     thinking = false;      // mode berpikir model; diteruskan ke Provider
 
@@ -75,6 +77,7 @@ export class ChatSession {
         this.history.length = 0;
         this.work = null;
         this.events.length = 0;
+        this.trace.clear();
     }
 
     // Ganti riwayat dengan percakapan yang dimuat dari disk.
@@ -119,6 +122,13 @@ export class ChatSession {
             return event;
         };
         let toolBudget = input.budget * TOOL_SHARE;
+        const trace = this.trace;
+        let currentRound = 0;
+        const answerTool = (id: string, content: string, ok = true) => {
+            messages.push({ role: 'tool', toolCallId: id, content });
+            trace.finish('tool', `${currentRound}:${id}`, ok ? 'ok' : 'failed', `Hasil untuk model:\n${content}`);
+        };
+        trace.add('turn', `Giliran baru: ${input.question.split('\n')[0].slice(0, 120)}`, `Pertanyaan:\n${input.question}\n\nModel: ${model}${this.thinking ? ' · berpikir mendalam' : ''}\nKonteks: ≈${built.tokens} token${built.items.length ? ` (${built.items.map(i => i.label).join(', ')})` : ''}\nAlat tersedia: ${searchable.length > 0 || canPropose ? 'ya' : 'tidak'}`);
 
         let text = '';
         let usage = null as Usage | null;
@@ -132,28 +142,34 @@ export class ChatSession {
                 // Pisahkan teks antarputaran (mis. "Saya cek dulu…" lalu jawaban) dengan baris kosong.
                 const separate = () => { if (text && !text.endsWith('\n')) { text += '\n\n'; handlers.onText('\n\n'); } };
                 let roundText = '';
+                currentRound = round + 1;
+                const toolSpecs = useTools ? (canPropose ? [...TOOLS, ...CHANGE_TOOLS, WORK_TOOL, VERIFY_TOOL, ...(handlers.onBatchProposal ? [BATCH_TOOL] : [])] : [...TOOLS, WORK_TOOL, VERIFY_TOOL]) : undefined;
+                trace.begin('round', `${currentRound}`, `Memanggil model (putaran ${currentRound}/${MAX_ROUNDS})`, `${messages.length} pesan terkirim · alat: ${toolSpecs ? toolSpecs.map(t => t.name).join(', ') : 'tidak ditawarkan'}`, currentRound);
                 const result = await provider.chat({
                     model, messages, cancellable, thinking: this.thinking,
-                    tools: useTools ? (canPropose ? [...TOOLS, ...CHANGE_TOOLS, WORK_TOOL, VERIFY_TOOL, ...(handlers.onBatchProposal ? [BATCH_TOOL] : [])] : [...TOOLS, WORK_TOOL, VERIFY_TOOL]) : undefined,
+                    tools: toolSpecs,
                     onText: delta => {
                         if (generation !== this.generation) return;
                         if (!roundText) separate();
                         roundText += delta;
                         text += delta;
+                        trace.append('text', currentRound, delta);
                         handlers.onText(delta);
                     },
-                    onReasoning: delta => { if (generation === this.generation) handlers.onReasoning(delta); },
+                    onReasoning: delta => { if (generation !== this.generation) return; trace.append('reasoning', currentRound, delta); handlers.onReasoning(delta); },
                 });
                 if (generation !== this.generation) return { text: '', usage, cancelled: true, toolCalls, applied };
                 if (result.usage) {
                     usage = { prompt: (usage?.prompt ?? 0) + result.usage.prompt, cached: (usage?.cached ?? 0) + result.usage.cached, completion: (usage?.completion ?? 0) + result.usage.completion };
                 }
+                trace.finish('round', `${currentRound}`, 'ok', result.usage ? `Token: ${result.usage.prompt} masuk (${result.usage.cached} dari cache) · ${result.usage.completion} keluar\nHasil: ${result.cancelled ? 'dihentikan' : result.toolCalls.length ? `meminta ${result.toolCalls.length} alat` : 'jawaban akhir'}` : `Hasil: ${result.cancelled ? 'dihentikan' : result.toolCalls.length ? `meminta ${result.toolCalls.length} alat` : 'jawaban akhir'}`);
                 if (result.cancelled) { cancelled = true; break; }
                 if (!result.toolCalls.length) break;
 
                 messages.push({ role: 'assistant', content: roundText, reasoning: result.reasoning || undefined, toolCalls: result.toolCalls });
                 for (const call of result.toolCalls) {
                     if (cancellable?.is_cancelled()) { cancelled = true; break; }
+                    trace.begin('tool', `${currentRound}:${call.id}`, `Alat: ${call.name}`, `Argumen:\n${prettyArguments(call.arguments)}`, currentRound);
                     if (useTools && call.name === VERIFY_TOOL.name && input.options.project) {
                         const checked = verifyWork(call.arguments, handlers.currentFiles?.() ?? searchable);
                         const touched = new Set(this.events.slice(this.work?.actionStart ?? turnActionStart).filter(e => e.status === 'applied').flatMap(e => e.changes.map(c => c.file)));
@@ -166,7 +182,7 @@ export class ChatSession {
                         }
                         const content = checked.checks.map(c => `${c.passed ? 'LULUS' : 'GAGAL'} ${c.file}: ${c.label}`).join('\n');
                         const event = record(call.id, call.name); event.summary = content; handlers.onState?.();
-                        messages.push({ role: 'tool', toolCallId: call.id, content });
+                        answerTool(call.id, content);
                         handlers.onTool?.({ id: call.id, label: 'Verifikasi hasil aktual', summary: content });
                         continue;
                     }
@@ -193,7 +209,7 @@ export class ChatSession {
                             } else content = answer.error ? `Paket gagal diterapkan: ${answer.error}` : 'Pengguna menolak seluruh paket. Jangan ulangi usulan ini.';
                             handlers.onState?.();
                         }
-                        messages.push({ role: 'tool', toolCallId: call.id, content });
+                        answerTool(call.id, content);
                         handlers.onTool?.({ id: call.id, label: 'Paket perubahan', summary: content });
                         continue;
                     }
@@ -207,7 +223,7 @@ export class ChatSession {
                             }
                             this.work = work; handlers.onState?.();
                         }
-                        messages.push({ role: 'tool', toolCallId: call.id, content: work ? workText(work) : 'Rencana tidak valid: isi tujuan dan 1–20 langkah dengan status pending/done/blocked.' });
+                        answerTool(call.id, work ? workText(work) : 'Rencana tidak valid: isi tujuan dan 1–20 langkah dengan status pending/done/blocked.', !!work);
                         handlers.onTool?.({ id: call.id, label: 'Rencana pekerjaan', summary: work ? workText(work) : 'rencana tidak valid' });
                         continue;
                     }
@@ -216,7 +232,7 @@ export class ChatSession {
                         const id = call.id;
                         if (!plan.ok) {
                             handlers.onTool?.({ id, label: describeCall(call.name, call.arguments), summary: plan.summary });
-                            messages.push({ role: 'tool', toolCallId: id, content: plan.message });
+                            answerTool(id, plan.message, false);
                             continue;
                         }
                         const label = describeChange(plan.change);
@@ -249,7 +265,7 @@ export class ChatSession {
                         event.status = summary === 'diterapkan' ? 'applied' : summary === 'ditolak' ? 'rejected' : 'failed';
                         event.summary = content;
                         handlers.onState?.();
-                        messages.push({ role: 'tool', toolCallId: id, content });
+                        answerTool(id, content, summary !== 'gagal' && summary !== 'gagal diterapkan');
                         handlers.onTool?.({ id, label, summary });
                         continue;
                     }
@@ -264,7 +280,7 @@ export class ChatSession {
                         toolBudget -= cost;
                     }
                     const event = record(call.id, call.name); event.summary = outcome.summary; handlers.onState?.();
-                    messages.push({ role: 'tool', toolCallId: call.id, content: outcome.content });
+                    answerTool(call.id, outcome.content, outcome.summary !== 'anggaran habis');
                     handlers.onTool?.({ id: call.id, label, summary: outcome.summary });
                 }
                 if (cancelled) break;
@@ -272,11 +288,14 @@ export class ChatSession {
 
         } catch (e) {
             if (generation !== this.generation) return { text: '', usage, cancelled: true, toolCalls, applied };
+            trace.finish('round', `${currentRound}`, 'failed', String(e instanceof Error ? e.message : e));
+            trace.add('error', 'Giliran gagal', e instanceof Error ? e.message : String(e), { status: 'failed' });
             if (this.work) this.work.status = 'failed';
             handlers.onState?.();
             throw e;
         }
 
+        trace.add('note', cancelled ? 'Giliran dihentikan' : 'Giliran selesai', `${toolCalls} penelusuran · ${applied} perubahan diterapkan${usage ? ` · total ${usage.prompt} masuk, ${usage.completion} keluar` : ''}`);
         if (text.trim()) this.history.push({ role: 'user', content: input.question }, { role: 'assistant', content: text });
         if (this.work && this.work.status === 'running') this.work.status = 'paused';
         handlers.onState?.();
