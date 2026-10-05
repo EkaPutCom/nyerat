@@ -32,6 +32,12 @@ Bahasa: komentar kode, pesan commit, teks antarmuka, nama tes, dan dokumentasi d
 - **Fitur baru atau perubahan tampilan wajib dicek lewat screenshot.** Jalankan aplikasinya (mis. lewat `scripts/capture.ts` atau `npm start` di Xvfb/desktop), ambil screenshot keadaan yang relevan (tema terang dan gelap bila terkait), lalu lihat gambarnya dan nilai apakah tata letaknya sesuai: posisi dan lebar sidebar, perataan, jarak, teks terpotong, widget yang mengembang atau menumpuk. Tes hijau saja belum membuktikan tampilannya benar. Perbaiki yang janggal sebelum menyatakan selesai, dan sebutkan di laporan apa yang diperiksa.
 - Tes yang gagal sesekali (flaky) tidak boleh dianggap lulus: ulangi, cari penyebabnya, dan laporkan jika belum terpecahkan.
 
+## Perubahan tampilan wajib disertai tangkapan layar
+
+- **Setiap perubahan UI (widget, tata letak, CSS/tema, jendela, dialog) harus diperiksa lewat tangkapan layar sungguhan, lalu ditampilkan ke pengguna di percakapan.** Jangan menyatakan tampilan sudah benar hanya dari tes yang lulus atau dari membaca kode.
+- Cara: render widget atau jendelanya di Xvfb dengan `widgetPixbuf()` (`tests/widgets.ts`) dari sebuah tes GUI, simpan PNG ke direktori scratchpad sesi (bukan ke repo), buka sendiri dengan Read untuk memeriksa (teks terpotong, ukuran, kontras, tema terang dan gelap), perbaiki bila perlu, lalu kirim ke pengguna dengan SendUserFile (`display: render`) beserta keterangan singkat apa yang terlihat. Pola yang ada: `--screenshot=a.png` untuk jendela editor dan `--shot-proposal=<prefix>` untuk jendela tinjau usulan agent (lihat `tests/run-tests.ts` dan `tests/gui/chat.ts`). Untuk tampilan baru, tambahkan opsi serupa di tesnya supaya mudah diulang.
+- Tampilan yang tidak bisa dirender di Xvfb (mis. bergantung pada GPU atau portal) dilaporkan sebagai belum terverifikasi secara visual, bukan dianggap benar. Tangkapan layar tidak masuk commit kecuali untuk `docs/assets/` lewat `npm run docs`.
+
 ## Pemeriksaan performa wajib
 
 - **Selalu cek dampak performa setiap perubahan sebelum menyatakan pekerjaan selesai.** Tes kebenaran saja belum cukup untuk perubahan kode aplikasi.
