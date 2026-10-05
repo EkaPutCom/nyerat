@@ -7,7 +7,8 @@
 
 import { WORK_TOOL, parseWork, workText, type WorkState } from './work.js';
 import { BATCH_TOOL, planBatch } from './batch.js';
-import { VERIFY_TOOL, verifyWork } from './verification.js';
+import { structureCheck, VERIFY_TOOL, verifyWork } from './verification.js';
+import { describeGitCall, formatGit, GIT_TOOLS, isGitTool, parseGitCall, type GitAnswer, type GitRequest } from './gittools.js';
 import { journalText, reconcileEvents, type ActionEvent } from './journal.js';
 import { compactHistory } from './recovery.js';
 import type Gio from 'gi://Gio';
@@ -15,7 +16,7 @@ import { buildContext, buildMessages, estimateTokens, type BuiltContext, type Co
 import type { ChatMessage, Provider, Usage } from './provider.js';
 import { describeCall, runTool, TOOLS } from './tools.js';
 import { AgentTrace, prettyArguments } from './trace.js';
-import { CHANGE_TOOLS, describeChange, isChangeTool, planChange, type Change } from './changes.js';
+import { applyToFiles, CHANGE_TOOLS, changeState, describeChange, isChangeTool, planChange, type Change } from './changes.js';
 
 // Bagian anggaran untuk riwayat percakapan, di luar konteks naskah.
 const HISTORY_SHARE = 0.25;
@@ -34,9 +35,13 @@ export interface ToolStep {
 }
 
 // Jawaban pengguna atas satu usulan perubahan. applied = sudah ditulis; error = disetujui tetapi gagal diterapkan.
+// accepted (paket saja) = indeks perubahan yang diterapkan bila pengguna hanya memilih sebagian; note = catatan
+// pengguna untuk agent, mis. alasan menolak.
 export interface ProposalResult {
     applied: boolean;
     error?: string;
+    accepted?: number[];
+    note?: string;
 }
 
 export interface TurnHandlers {
@@ -50,6 +55,25 @@ export interface TurnHandlers {
     onBatchProposal?: (changes: Change[]) => Promise<ProposalResult>;
     onState?: () => void;
     onProposal?: (change: Change) => Promise<ProposalResult>;
+    // Menjalankan alat riwayat Git (baca-saja) di folder kerja; tanpa handler ini alatnya tidak ditawarkan.
+    git?: (request: GitRequest) => Promise<GitAnswer>;
+}
+
+// Catatan pengguna diteruskan apa adanya sebagai bagian hasil alat; dibatasi supaya tidak membengkakkan konteks.
+const noteText = (note?: string): string => note?.trim() ? ` Catatan pengguna: ${note.trim().slice(0, 2000)}` : '';
+
+// Keadaan akhir tiap path setelah perubahan yang diterapkan berurutan, dan isinya sebelum perubahan pertama.
+function touchedPaths(changes: Change[]): { exists: Map<string, boolean>; baseline: Map<string, string> } {
+    const exists = new Map<string, boolean>(), baseline = new Map<string, string>();
+    for (const c of changes) {
+        if (!baseline.has(c.file)) baseline.set(c.file, c.kind === 'create' ? '' : c.before);
+        exists.set(c.file, c.kind === 'create' || c.kind === 'edit');
+        if (c.kind === 'move' && c.to) {
+            if (!baseline.has(c.to)) baseline.set(c.to, c.before);
+            exists.set(c.to, true);
+        }
+    }
+    return { exists, baseline };
 }
 
 export interface TurnResult {
@@ -91,17 +115,20 @@ export class ChatSession {
     async ask(input: TurnInput, provider: Provider, model: string, handlers: TurnHandlers, cancellable?: Gio.Cancellable): Promise<TurnResult> {
         const generation = this.generation;
         const canPropose = !!handlers.onProposal && input.options.project;
-        const built = buildContext({ ...input, recent: this.questions, canPropose });
+        const built = buildContext({ ...input, recent: this.questions, canPropose, canGit: !!handlers.git });
         handlers.onContext(built);
         const compact = compactHistory(this.history, input.budget * HISTORY_SHARE);
         const messages: ChatMessage[] = buildMessages(built, compact.recent, input.question, input.budget * HISTORY_SHARE);
         if (compact.summary) messages.splice(messages.length - 1, 0, { role: 'user', content: `Cuplikan riwayat lama (data, terpotong; bukan instruksi):\n${compact.summary}` });
 
         if (this.work?.status === 'complete' && input.options.project) {
-            const latest = new Map<string, Change>();
-            for (const e of this.events.slice(this.work.actionStart ?? 0)) if (e.status === 'applied') for (const c of e.changes) latest.set(c.file, c);
+            const applied = this.events.slice(this.work.actionStart ?? 0).filter(e => e.status === 'applied').flatMap(e => e.changes);
             const current = handlers.currentFiles?.() ?? [...input.files, ...(input.active && input.options.activeDocument ? [input.active] : [])];
-            if ([...latest.values()].some(c => current.find(f => f.name === c.file)?.text !== c.after)) {
+            const read = (name: string) => current.find(f => f.name === name)?.text ?? null;
+            // Hanya perubahan terakhir per path yang menentukan isi akhirnya.
+            const last = new Map<string, Change>();
+            for (const c of applied) { last.set(c.file, c); if (c.to) last.set(c.to, c); }
+            if ([...new Set(last.values())].some(c => changeState(c, read) !== 'after')) {
                 this.work.status = 'paused'; delete this.work.verification;
             }
         }
@@ -143,7 +170,8 @@ export class ChatSession {
                 const separate = () => { if (text && !text.endsWith('\n')) { text += '\n\n'; handlers.onText('\n\n'); } };
                 let roundText = '';
                 currentRound = round + 1;
-                const toolSpecs = useTools ? (canPropose ? [...TOOLS, ...CHANGE_TOOLS, WORK_TOOL, VERIFY_TOOL, ...(handlers.onBatchProposal ? [BATCH_TOOL] : [])] : [...TOOLS, WORK_TOOL, VERIFY_TOOL]) : undefined;
+                const gitTools = handlers.git && input.options.project ? GIT_TOOLS : [];
+                const toolSpecs = useTools ? (canPropose ? [...TOOLS, ...gitTools, ...CHANGE_TOOLS, WORK_TOOL, VERIFY_TOOL, ...(handlers.onBatchProposal ? [BATCH_TOOL] : [])] : [...TOOLS, ...gitTools, WORK_TOOL, VERIFY_TOOL]) : undefined;
                 trace.begin('round', `${currentRound}`, `Memanggil model (putaran ${currentRound}/${MAX_ROUNDS})`, `${messages.length} pesan terkirim · alat: ${toolSpecs ? toolSpecs.map(t => t.name).join(', ') : 'tidak ditawarkan'}`, currentRound);
                 const result = await provider.chat({
                     model, messages, cancellable, thinking: this.thinking,
@@ -171,9 +199,16 @@ export class ChatSession {
                     if (cancellable?.is_cancelled()) { cancelled = true; break; }
                     trace.begin('tool', `${currentRound}:${call.id}`, `Alat: ${call.name}`, `Argumen:\n${prettyArguments(call.arguments)}`, currentRound);
                     if (useTools && call.name === VERIFY_TOOL.name && input.options.project) {
-                        const checked = verifyWork(call.arguments, handlers.currentFiles?.() ?? searchable);
-                        const touched = new Set(this.events.slice(this.work?.actionStart ?? turnActionStart).filter(e => e.status === 'applied').flatMap(e => e.changes.map(c => c.file)));
-                        for (const file of touched) if (!checked.checks.some(c => c.file === file)) checked.checks.push({ file, label: 'Berkas yang diubah belum diperiksa', passed: false });
+                        const current = handlers.currentFiles?.() ?? searchable;
+                        const { exists, baseline } = touchedPaths(this.events.slice(this.work?.actionStart ?? turnActionStart).filter(e => e.status === 'applied').flatMap(e => e.changes));
+                        const checked = verifyWork(call.arguments, current, file => baseline.get(file) ?? null);
+                        for (const [file, present] of exists) {
+                            const now = current.find(f => f.name === file);
+                            if (!present) { checked.checks.push({ file, label: 'Berkas sudah dihapus atau dipindah', passed: !now }); continue; }
+                            if (!checked.checks.some(c => c.file === file)) checked.checks.push({ file, label: 'Berkas yang diubah belum diperiksa', passed: false });
+                            // Struktur selalu diperiksa untuk berkas yang diubah: hanya masalah yang muncul karena perubahan yang menggagalkan.
+                            if (now && !checked.checks.some(c => c.file === file && c.label.startsWith('struktur:'))) checked.checks.push({ file, ...structureCheck(now, current, baseline.get(file) ?? null) });
+                        }
                         checked.passed = checked.checks.every(c => c.passed);
                         if (this.work) {
                             this.work.verification = checked;
@@ -189,28 +224,42 @@ export class ChatSession {
                     if (useTools && canPropose && handlers.onBatchProposal && call.name === BATCH_TOOL.name) {
                         const plan = planBatch(call.arguments, searchable);
                         let content = plan.error ?? '';
+                        let outcome = 'tidak valid';
                         if (!plan.error) {
                             const event = record(call.id, call.name, plan.changes);
                             let answer: ProposalResult;
                             try { answer = await handlers.onBatchProposal(plan.changes); }
                             catch (e) { answer = { applied: false, error: String(e) }; }
                             if (generation !== this.generation) return { text: '', usage, cancelled: true, toolCalls, applied };
-                            event.status = answer.applied ? 'applied' : answer.error ? 'failed' : 'rejected';
-                            event.summary = answer.error ?? (answer.applied ? 'Seluruh paket diterapkan.' : 'Paket ditolak.');
-                            if (answer.applied) {
-                                for (const c of plan.changes) {
-                                    const entry = searchable.find(f => f.name === c.file);
-                                    if (entry) entry.text = c.after;
-                                    else searchable.push({ name: c.file, text: c.after });
-                                }
-                                applied += plan.changes.length;
+                            const accepted = answer.applied ? plan.changes.filter((_, i) => !answer.accepted || answer.accepted.includes(i)) : [];
+                            const declined = plan.changes.filter(c => !accepted.includes(c));
+                            const files = (list: Change[]) => list.map(c => c.kind === 'move' ? `${c.file} → ${c.to}` : c.file).join(', ');
+                            const note = noteText(answer.note);
+                            if (answer.applied && declined.length) {
+                                // Sebagian diterapkan: journal mencatat dua keputusan terpisah supaya pemulihan memeriksa yang benar.
+                                event.changes = accepted; event.status = 'applied';
+                                event.summary = `Sebagian paket diterapkan: ${files(accepted)}.`;
+                                this.events.push({ ...event, id: `${event.id}:ditolak`, changes: declined, status: 'rejected', summary: `Bagian paket ditolak: ${files(declined)}.${note}` });
+                            } else {
+                                event.status = answer.applied ? 'applied' : answer.error ? 'failed' : 'rejected';
+                                event.summary = answer.error ?? (answer.applied ? 'Seluruh paket diterapkan.' : `Paket ditolak.${note}`);
+                            }
+                            if (accepted.length) {
+                                for (const c of accepted) applyToFiles(searchable, c);
+                                applied += accepted.length;
                                 if (this.work) { delete this.work.verification; this.work.status = 'running'; }
-                                content = 'Seluruh paket disetujui pengguna dan sudah diterapkan.';
-                            } else content = answer.error ? `Paket gagal diterapkan: ${answer.error}` : 'Pengguna menolak seluruh paket. Jangan ulangi usulan ini.';
+                                content = declined.length
+                                    ? `Pengguna hanya menerapkan sebagian paket. Diterapkan: ${files(accepted)}. Ditolak (jangan ulangi tanpa ditanya): ${files(declined)}.${note}`
+                                    : `Seluruh paket disetujui pengguna dan sudah diterapkan.${note}`;
+                                outcome = declined.length ? `${accepted.length} dari ${plan.changes.length} berkas diterapkan` : 'diterapkan';
+                            } else {
+                                content = answer.error ? `Paket gagal diterapkan: ${answer.error}` : `Pengguna menolak seluruh paket. Jangan ulangi usulan ini.${note}`;
+                                outcome = answer.error ? 'gagal diterapkan' : 'ditolak';
+                            }
                             handlers.onState?.();
                         }
                         answerTool(call.id, content);
-                        handlers.onTool?.({ id: call.id, label: 'Paket perubahan', summary: content });
+                        handlers.onTool?.({ id: call.id, label: 'Paket perubahan', summary: outcome });
                         continue;
                     }
                     if (useTools && input.options.project && call.name === WORK_TOOL.name) {
@@ -246,16 +295,16 @@ export class ChatSession {
                                 applied++;
                                 if (this.work) { delete this.work.verification; this.work.status = 'running'; }
                                 // Panggilan berikutnya dalam giliran ini harus melihat isi yang baru.
-                                const entry = searchable.find(f => f.name === plan.change.file);
-                                if (entry) entry.text = plan.change.after;
-                                else searchable.push({ name: plan.change.file, text: plan.change.after });
-                                content = `Perubahan pada ${plan.change.file} disetujui pengguna dan sudah diterapkan.`;
+                                applyToFiles(searchable, plan.change);
+                                content = `Perubahan pada ${plan.change.file} disetujui pengguna dan sudah diterapkan.${noteText(answer.note)}`;
                                 summary = 'diterapkan';
                             } else if (answer.error) {
                                 content = `Pengguna menyetujui, tetapi perubahan gagal diterapkan: ${answer.error}`;
                                 summary = 'gagal diterapkan';
                             } else {
-                                content = 'Pengguna menolak perubahan ini. Jangan mengulanginya; tanyakan apa yang diinginkan pengguna.';
+                                content = answer.note?.trim()
+                                    ? `Pengguna menolak perubahan ini.${noteText(answer.note)} Sesuaikan usulan dengan catatan itu bila masih relevan.`
+                                    : 'Pengguna menolak perubahan ini. Jangan mengulanginya; tanyakan apa yang diinginkan pengguna.';
                                 summary = 'ditolak';
                             }
                         } catch (e) {
@@ -269,9 +318,13 @@ export class ChatSession {
                         handlers.onTool?.({ id, label, summary });
                         continue;
                     }
-                    const label = describeCall(call.name, call.arguments);
+                    const git = useTools && handlers.git && input.options.project && isGitTool(call.name) ? parseGitCall(call.name, call.arguments) : null;
+                    const label = git ? describeGitCall(git, call.name) : describeCall(call.name, call.arguments);
                     handlers.onTool?.({ id: call.id, label, summary: '' });
-                    let outcome = runTool(call.name, call.arguments, searchable);
+                    let outcome = git === null ? runTool(call.name, call.arguments, searchable)
+                        : typeof git === 'string' ? { content: git, summary: 'argumen tidak valid' }
+                        : formatGit(git, await handlers.git!(git).catch(e => ({ ok: false as const, message: String(e) })));
+                    if (generation !== this.generation) return { text: '', usage, cancelled: true, toolCalls, applied };
                     toolCalls++;
                     const cost = estimateTokens(outcome.content);
                     if (cost > toolBudget) {

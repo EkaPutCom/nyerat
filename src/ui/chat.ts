@@ -20,7 +20,8 @@ import { deleteChat, listChats, loadChat, nowStamp, saveChat, titleFrom } from '
 import { DEEPSEEK_MODELS, DeepSeek } from '../agent/deepseek.js';
 import type { Provider, Usage } from '../agent/provider.js';
 import { ChatSession, type ProposalResult, type ToolStep } from '../agent/session.js';
-import { diffPreview, describeChange, type Change } from '../agent/changes.js';
+import { diffPreview, describeChange, invertChange, type Change } from '../agent/changes.js';
+import type { GitAnswer, GitRequest } from '../agent/gittools.js';
 import { ProposalViewer } from './proposalviewer.js';
 import { LogViewer } from './logviewer.js';
 import { chatMarkup } from '../markdown/chatmarkup.js';
@@ -37,6 +38,7 @@ export interface ChatHost {
     applyChange?(change: Change): string | null;
     applyBatch?(changes: Change[]): string | null;
     window?(): Gtk.Window | null;                                           // induk jendela tinjau usulan
+    git?(request: GitRequest): Promise<GitAnswer>;                          // alat riwayat Git baca-saja di folder kerja
     root(): string | null;                                                  // folder naskah; tempat riwayat percakapan disimpan
 }
 
@@ -395,6 +397,7 @@ export class ChatPanel {
                 onTool: step => this.showStep(answer.steps, step),
                 onBatchProposal: this.host.applyBatch ? changes => requestRoot === this.host.root() ? this.propose(changes) : Promise.resolve({ applied: false, error: 'Folder kerja berubah selama permintaan' }) : undefined,
                 onProposal: change => requestRoot === this.host.root() ? this.propose(change) : Promise.resolve({ applied: false, error: 'Folder kerja berubah selama permintaan' }),
+                git: this.host.git ? request => requestRoot === this.host.root() ? this.host.git!(request) : Promise.resolve({ ok: false, message: 'Folder kerja berubah selama permintaan' }) : undefined,
             }, this.cancellable);
             if (generation !== this.generation) return;
             this.render(answer.bubble);
@@ -469,9 +472,12 @@ export class ChatPanel {
         if (this.session.events.length) {
             this.addNote(journalText(this.session.events));
             for (const event of this.session.events.filter(e => e.changes.length).slice(-20)) {
-                const review = new Gtk.Button({ label: `Lihat diff · ${event.changes.length} berkas`, tooltip_text: event.changes.map(c => c.file).join('\n'), halign: Gtk.Align.START });
+                const row = new Gtk.Box({ spacing: 6, halign: Gtk.Align.START });
+                const review = new Gtk.Button({ label: `Lihat diff · ${event.changes.length} berkas`, tooltip_text: event.changes.map(c => c.file).join('\n') });
                 review.connect('clicked', () => new ProposalViewer(this.host.window?.() ?? null, event.changes, this.dark, () => 'Riwayat hanya dapat dibaca', true).show());
-                this.messages.append(review);
+                row.append(review);
+                if (event.status === 'applied' && this.host.applyBatch) row.append(this.undoButton(event.changes, null));
+                this.messages.append(row);
             }
         }
         if (this.session.work) {
@@ -782,9 +788,16 @@ export class ChatPanel {
                 const viewer = new ProposalViewer(this.host.window?.() ?? null, change, this.dark,
                     c => proposalRoot !== this.host.root() ? 'Folder kerja berubah sejak usulan dibuat' : Array.isArray(c) ? this.host.applyBatch ? this.host.applyBatch(c) : 'penerapan paket tidak tersedia' : this.host.applyChange ? this.host.applyChange(c) : 'penerapan tidak tersedia');
                 viewer.onDecision = applied => {
-                    if (applied) finish({ applied: true }, 'Diterapkan.');
-                    else if (viewer.error) finish({ applied: false, error: viewer.error }, `Gagal diterapkan: ${viewer.error}`, true);
-                    else finish({ applied: false }, 'Ditolak.');
+                    const note = viewer.note ? { note: viewer.note } : {};
+                    if (applied && viewer.accepted) {
+                        const kept = viewer.accepted.map(i => changes[i]);
+                        finish({ applied: true, accepted: viewer.accepted, ...note }, `Diterapkan ${kept.length} dari ${changes.length} berkas.`);
+                        if (this.host.applyBatch) card.append(this.undoButton(kept, status));
+                    } else if (applied) {
+                        finish({ applied: true, ...note }, 'Diterapkan.');
+                        if (this.host.applyBatch) card.append(this.undoButton(changes, status));
+                    } else if (viewer.error) finish({ applied: false, error: viewer.error, ...note }, `Gagal diterapkan: ${viewer.error}`, true);
+                    else finish({ applied: false, ...note }, viewer.note ? `Ditolak: ${viewer.note}` : 'Ditolak.');
                 };
                 this.viewer = viewer;
                 viewer.show();
@@ -797,6 +810,30 @@ export class ChatPanel {
             });
             open();
         });
+    }
+
+    // Tombol Urungkan untuk perubahan agent yang sudah diterapkan: menerapkan kebalikannya lewat preflight yang sama,
+    // jadi gagal (tanpa menimpa apa pun) bila berkasnya sudah disunting lagi sejak itu. Journal mencatatnya supaya
+    // agent tahu perubahan itu tidak berlaku lagi.
+    private undoButton(changes: Change[], status: Gtk.Label | null): Gtk.Button {
+        const button = new Gtk.Button({ label: 'Urungkan', halign: Gtk.Align.START, tooltip_text: 'Kembalikan berkas ke isi sebelum perubahan ini' });
+        button.connect('clicked', () => {
+            if (this.busy) { this.addNote('Tunggu agent selesai sebelum mengurungkan perubahan.', true); return; }
+            const root = this.host.root();
+            const error = this.host.applyBatch ? this.host.applyBatch([...changes].reverse().map(invertChange)) : 'penerapan tidak tersedia';
+            if (error) { this.addNote(`Tidak dapat diurungkan: ${error}`, true); return; }
+            button.hide();
+            status?.set_text('Diurungkan.');
+            for (const event of this.session.events) {
+                if (event.status !== 'applied' || !event.changes.some(c => changes.includes(c))) continue;
+                event.status = 'reverted';
+                event.summary = 'Diurungkan pengguna dari panel; berkas kembali ke isi sebelumnya.';
+            }
+            const work = this.session.work;
+            if (work) { delete work.verification; if (work.status === 'complete') work.status = 'paused'; }
+            if (root === this.host.root()) this.persist();
+        });
+        return button;
     }
 
     private addNote(text: string, error = false, cssClass = 'side-meta'): void {

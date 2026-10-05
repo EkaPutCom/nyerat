@@ -56,3 +56,41 @@ Pengukuran ini tidak menilai latensi API, ketepatan pilihan kriteria oleh model,
 kemampuan model menyusun rencana, atau durasi pengguna meninjau diff. Evaluasi model
 tersedia lewat `npm run test:live -- --agentic`; belum dijalankan pada sesi ini karena
 memakai kuota API.
+
+## Tindakan dan verifikasi tambahan — 5 Oktober 2026
+
+Perubahan: alat `sisip_teks`, `hapus_berkas`, `pindah_berkas`, `ubah_berkas` dengan `semua`,
+aksi kanban tambahan, persetujuan paket sebagian, Urungkan, alat riwayat Git, dan verifikasi
+struktur (`markdown/lint.ts`) serta pencarian sisa teks di seluruh folder (berkas `"*"`).
+
+`npm run bench:agentic`, 10 pengulangan setelah 3 pemanasan, 20 berkas per paket; bentuk fixture
+sama dengan bagian di atas (berkas tanpa tabel atau tautan, jadi seluruh biaya adalah penelusuran baris).
+Verifikasi struktur mengurai tiap berkas dua kali (isi sekarang dan isi sebelum pekerjaan).
+
+| Operasi | Ukuran per berkas | Median (ms) | p95 (ms) | Maksimum (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Verifikasi struktur (dengan baseline) | 30.000 karakter | 10,113 | 10,808 | 10,808 |
+| Cari sisa teks di seluruh folder (`*`) | 30.000 karakter | 0,279 | 0,621 | 0,621 |
+| Verifikasi struktur (dengan baseline) | 480.000 karakter | 157,345 | 160,572 | 160,572 |
+| Cari sisa teks di seluruh folder (`*`) | 480.000 karakter | 3,394 | 4,627 | 4,627 |
+
+Versi pertama pemeriksaan struktur menjalankan tiga penelusuran per dokumen (frontmatter/kode,
+tabel, tautan) dan memotong spasi setiap baris: 396,9 ms (p95 404,6) untuk 20 × 480.000 karakter,
+dan `"*"` memecah semua berkas menjadi baris walau teksnya tidak ada (66,6 ms). Setelah digabung
+menjadi satu penelusuran dengan saringan karakter sebelum regex, dan `"*"` hanya memecah berkas yang
+memuat teksnya, angkanya menjadi seperti tabel di atas. Ini optimasi atas kode baru dalam pekerjaan
+yang sama, bukan peningkatan fitur lama. Pemeriksaan berjalan di thread utama sekali per panggilan
+`verifikasi_pekerjaan`, bukan saat mengetik; 157 ms untuk ±19 juta karakter (dua kali 20 × 480.000) masih terasa sebagai jeda.
+
+Operasi lama pada pengukuran yang sama dibandingkan dengan snapshot HEAD sebelum perubahan
+(dibangun di worktree sementara, dependensi dan lingkungan sama): rencanakan paket 480.000 karakter
+115,9 → 110,4 ms, verifikasi hasil 3,48 → 3,49 ms, checkpoint dengan journal 198,4 → 215,6 ms
+(p95 215,4 → 244,8). Kode checkpoint tidak berubah; journal kini bisa memuat `to` untuk pindah,
+yang tidak dipakai fixture ini, sehingga selisihnya dianggap derau pengukuran tulis disk.
+
+Benchmark editor (`bench:compare`, fixture mixed, 25/50/100 blok, 10 pengulangan) dijalankan untuk
+snapshot sebelum dan sesudah. Kode editor tidak berubah. Satu pembacaan awal "hapus teks besar"
+25 blok 6,28 → 19,58 ms tidak terulang: dua pengulangan berikutnya 7,73/8,84 ms (sebelum) dan
+7,06/8,05 ms (sesudah). Enter paragraf baru berfluktuasi ke dua arah pada kedua snapshot
+(snapshot sebelum sendiri mencatat +119% pada 100 blok). Tidak ada regresi editor yang terulang;
+baseline tidak diganti.

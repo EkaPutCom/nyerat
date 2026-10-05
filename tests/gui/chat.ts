@@ -10,6 +10,7 @@ import { section, test, eq, ok, contains, settle, tmp, optVal } from '../framewo
 import { widgetPixbuf } from '../widgets.js';
 import type { GuiContext } from './context.js';
 import { childrenOf } from '../../src/gtkutil.js';
+import type { ProposalViewer } from '../../src/ui/proposalviewer.js';
 
 export function chatTests(c: GuiContext): void {
     const { w, setText, cursorTo, pump } = c;
@@ -409,7 +410,7 @@ export function chatTests(c: GuiContext): void {
     // Kirim pertanyaan, tunggu jendela tinjau terbuka, ambil teks selisihnya, lalu tekan tombolnya dan tunggu giliran selesai.
     let lastDiff = '';
     let shotCount = 0;
-    const proposeAndPress = (provider: Provider, button: 'apply' | 'reject' | 'close'): void => {
+    const proposeAndPress = (provider: Provider, button: 'apply' | 'reject' | 'close', prepare?: (viewer: ProposalViewer) => void): void => {
         panel.makeProvider = () => provider;
         panel.reset();
         const done = panel.ask('Tolong ubah');
@@ -436,6 +437,7 @@ export function chatTests(c: GuiContext): void {
             }
             w.setDark(oldDark);
         }
+        prepare?.(viewer);
         if (button === 'apply') viewer.applyButton.emit('clicked');
         else if (button === 'reject') viewer.rejectButton.emit('clicked');
         else viewer.window.destroy();
@@ -574,6 +576,101 @@ export function chatTests(c: GuiContext): void {
             w.setDark(oldDark);
         }
         panel.reset();
+    });
+
+    // Provider yang mencatat hasil alat yang dikirim balik, untuk memeriksa catatan pengguna.
+    const toolReplies: string[] = [];
+    const recording = (name: string, args: object): Provider => {
+        const inner = proposalProvider(name, args);
+        return { chat: req => { for (const m of req.messages) if (m.role === 'tool') toolReplies.push(m.content); return inner.chat(req); } };
+    };
+    const buttons = (): Gtk.Button[] => {
+        const out: Gtk.Button[] = [];
+        const walk = (widget: Gtk.Widget) => { if (widget instanceof Gtk.Button) out.push(widget); childrenOf(widget).forEach(walk); };
+        walk(panel.messages);
+        return out;
+    };
+
+    test('paket: hapus centang satu berkas → hanya yang dicentang diterapkan; Urungkan mengembalikannya', () => {
+        GLib.file_set_contents(GLib.build_filenamev([book, 'jadwal-a.md']), 'Rilis 15 November\n');
+        GLib.file_set_contents(GLib.build_filenamev([book, 'jadwal-b.md']), 'Rilis 15 November\n');
+        const tindakan = ['jadwal-a', 'jadwal-b'].map(nama => ({ alat: 'ubah_berkas', argumen: JSON.stringify({ nama, teks_lama: '15 November', teks_baru: '22 November', alasan: 'keputusan rapat' }) }));
+        toolReplies.length = 0;
+        proposeAndPress(recording('usulkan_paket', { tindakan }), 'apply', viewer => {
+            eq(viewer.checks.length, 2);
+            viewer.checks[1].set_active(false);
+            eq(viewer.applyButton.get_label(), 'Terapkan 1 dari 2');
+            viewer.noteEntry.set_text('jadwal-b menunggu konfirmasi');
+            const prefix = optVal('shot-proposal');
+            if (prefix) {
+                for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
+                widgetPixbuf(viewer.window)?.savev(`${prefix}-sebagian.png`, 'png', [], []);
+            }
+        });
+        contains(diskOf('jadwal-a.md'), '22 November');
+        contains(diskOf('jadwal-b.md'), '15 November');
+        contains(all(), 'Diterapkan 1 dari 2 berkas.');
+        ok(toolReplies.some(m => m.includes('Ditolak (jangan ulangi tanpa ditanya): jadwal-b.md') && m.includes('Catatan pengguna: jadwal-b menunggu konfirmasi')), toolReplies.join('\n'));
+        const undo = buttons().find(b => b.get_label() === 'Urungkan' && b.get_visible());
+        ok(undo, 'tombol Urungkan tidak ada');
+        const prefix = optVal('shot-proposal');
+        if (prefix) {
+            for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
+            widgetPixbuf(w.win)?.savev(`${prefix}-urungkan.png`, 'png', [], []);
+        }
+        undo.emit('clicked');
+        eq(diskOf('jadwal-a.md'), 'Rilis 15 November\n');
+        contains(all(), 'Diurungkan.');
+        eq(panel.session.events.map(e => e.status), ['reverted', 'rejected']);
+    });
+
+    test('Urungkan gagal tanpa menimpa bila berkas sudah disunting lagi', () => {
+        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'jadwal-a', teks_lama: '15 November', teks_baru: '23 November', alasan: 'x' }), 'apply');
+        GLib.file_set_contents(GLib.build_filenamev([book, 'jadwal-a.md']), 'Disunting pengguna\n');
+        buttons().find(b => b.get_label() === 'Urungkan')!.emit('clicked');
+        eq(diskOf('jadwal-a.md'), 'Disunting pengguna\n');
+        contains(all(), 'Tidak dapat diurungkan: jadwal-a.md berubah sejak diusulkan');
+        eq(panel.session.events[0].status, 'applied');
+    });
+
+    test('Tolak dengan catatan: catatan sampai ke model dan tampil di kartu', () => {
+        toolReplies.length = 0;
+        proposeAndPress(recording('ubah_berkas', { nama: 'bab-1.md', teks_lama: 'Raka bertemu Laras', teks_baru: 'Raka bertemu Hasan', alasan: 'x' }), 'reject', viewer => viewer.noteEntry.set_text('Namanya tetap Laras'));
+        contains(all(), 'Ditolak: Namanya tetap Laras');
+        ok(toolReplies.some(m => m.includes('Catatan pengguna: Namanya tetap Laras')), toolReplies.join('\n'));
+    });
+
+    test('pindah berkas yang terbuka: tab mengikuti path baru; Urungkan memindahkannya kembali', () => {
+        const from = GLib.build_filenamev([book, 'pindahan.md']);
+        GLib.file_set_contents(from, '# Pindahan\n');
+        w.openFile(from);
+        pump();
+        try {
+            proposeAndPress(proposalProvider('pindah_berkas', { nama: 'pindahan', tujuan: 'arsip/pindahan', alasan: 'arsipkan' }), 'apply');
+            contains(lastDiff, 'Pindah: pindahan.md → arsip/pindahan.md');
+            eq(diskOf('arsip/pindahan.md'), '# Pindahan\n');
+            ok(!GLib.file_test(from, GLib.FileTest.EXISTS), 'asal masih ada');
+            eq(w.file, GLib.build_filenamev([book, 'arsip', 'pindahan.md']));
+            buttons().find(b => b.get_label() === 'Urungkan')!.emit('clicked');
+            eq(w.file, from);
+            ok(GLib.file_test(from, GLib.FileTest.EXISTS), 'tidak kembali');
+        } finally {
+            w.editor.buffer.set_modified(false);
+            ok(w.closeTab(), 'closeTab() gagal');
+            pump();
+        }
+    });
+
+    test('hapus berkas: dibuang ke Tempat Sampah setelah Terapkan, ditolak tidak menyentuhnya', () => {
+        const path = GLib.build_filenamev([book, 'usang.md']);
+        GLib.file_set_contents(path, '# Usang\n');
+        proposeAndPress(proposalProvider('hapus_berkas', { nama: 'usang', alasan: 'duplikat' }), 'reject');
+        ok(GLib.file_test(path, GLib.FileTest.EXISTS), 'terhapus padahal ditolak');
+        proposeAndPress(proposalProvider('hapus_berkas', { nama: 'usang', alasan: 'duplikat' }), 'apply');
+        contains(lastDiff, 'Dibuang ke Tempat Sampah: usang.md');
+        contains(lastDiff, '-# Usang');
+        if (all().includes('Gagal diterapkan')) return;   // lingkungan tanpa Tempat Sampah
+        ok(!GLib.file_test(path, GLib.FileTest.EXISTS), 'berkas masih ada');
     });
 
     test('penerapan menolak isi yang berubah sejak diusulkan dan path di luar folder', () => {

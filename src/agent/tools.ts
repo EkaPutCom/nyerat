@@ -178,6 +178,9 @@ export function describeCall(name: string, rawArguments: string): string {
         case 'buat_berkas': return `Mengusulkan berkas baru ${asString(a.nama)}`;
         case 'ubah_berkas': return `Mengusulkan perubahan pada ${asString(a.nama)}`;
         case 'ubah_kanban': return `Mengusulkan perubahan papan ${asString(a.nama)}`;
+        case 'sisip_teks': return `Mengusulkan sisipan di ${asString(a.nama)}`;
+        case 'hapus_berkas': return `Mengusulkan menghapus ${asString(a.nama)}`;
+        case 'pindah_berkas': return `Mengusulkan memindah ${asString(a.nama)} ke ${asString(a.tujuan)}`;
         default: return name;
     }
 }

@@ -32,7 +32,8 @@ import { ChatPanel } from './ui/chat.js';
 import { readProject } from './agent/project.js';
 import { projectPath } from './agent/path.js';
 import { applyBatch } from './agent/batch.js';
-import { cleanNewName, type Change } from './agent/changes.js';
+import { changeFiles, cleanNewName, type Change } from './agent/changes.js';
+import { agentGit } from './git.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
 import { TabBar } from './ui/tabbar.js';
@@ -201,6 +202,7 @@ export class MainWindow {
             root: () => this.fileTree.root,
             applyChange: change => this.applyChange(change),
             applyBatch: changes => this.applyChangeBatch(changes),
+            git: request => this.fileTree.root ? agentGit(this.fileTree.root, request) : Promise.resolve({ ok: false, message: 'tidak ada folder kerja' }),
             window: () => this.win,
             files: fresh => {
                 const files = this.fileTree.root ? readProject(this.fileTree.root, this.file, fresh) : [];
@@ -448,58 +450,63 @@ export class MainWindow {
     // Terapkan perubahan usulan agent yang sudah disetujui pengguna. Mengembalikan pesan galat atau null.
     // Berkas yang terbuka diubah lewat editornya (satu langkah undo); yang lain ditulis ke disk. Dalam kedua
     // kasus isi harus masih sama dengan yang dilihat agent, supaya suntingan pengguna tidak tertimpa.
+    // Hapus membuang ke Tempat Sampah; dokumen yang terbuka tetap di editor seperti saat dihapus dari pohon.
     private applyChangeBatch(changes: Change[]): string | null {
         const root = this.fileTree.root;
         if (!root) return 'tidak ada folder kerja';
-        if (changes.some(c => cleanNewName(c.file) !== c.file)) return 'path paket tidak valid';
+        // Pertahanan berlapis: planChange() sudah menolak nama seperti ini, tetapi penulisan ke disk tidak boleh bergantung padanya.
+        if (changes.some(c => changeFiles(c).some(f => cleanNewName(f) !== f))) return 'path di luar folder kerja atau tidak valid';
         const pathOf = (file: string) => projectPath(root, file);
-        try { for (const c of changes) waitForWrites(pathOf(c.file)); } catch (e) { return errorMessage(e); }
+        try { for (const c of changes) for (const f of changeFiles(c)) waitForWrites(pathOf(f)); } catch (e) { return errorMessage(e); }
+        const openDoc = (path: string) => this.docs.find(d => d.file === path);
+        const writeText = (path: string, text: string) => {
+            const open = openDoc(path);
+            if (open) open.editor.replaceText(text);
+            else { GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755); writeTextFile(path, text); }
+        };
+        const relocate = (from: string, to: string) => {
+            GLib.mkdir_with_parents(GLib.path_get_dirname(to), 0o755);
+            Gio.File.new_for_path(from).move(Gio.File.new_for_path(to), Gio.FileCopyFlags.NONE, null, null);
+            const open = openDoc(from);
+            if (open) { open.file = to; this.refreshTitle(open); }
+        };
+        const detached = new Map<Change, Doc>();
         const error = applyBatch(changes, {
             read: file => {
-                const path = pathOf(file), open = this.docs.find(d => d.file === path);
+                const path = pathOf(file), open = openDoc(path);
                 return open ? open.editor.getText() : fileExists(path) ? readTextFile(path) : null;
             },
             write: c => {
-                const path = pathOf(c.file), open = this.docs.find(d => d.file === path);
-                if (open) open.editor.replaceText(c.after);
-                else { GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755); writeTextFile(path, c.after); }
+                const path = pathOf(c.file);
+                if (c.kind === 'delete') {
+                    Gio.File.new_for_path(path).trash(null);
+                    const open = openDoc(path);
+                    if (open) { open.file = null; open.editor.buffer.set_modified(true); this.refreshTitle(open); detached.set(c, open); }
+                } else if (c.kind === 'move') relocate(path, pathOf(c.to!));
+                else writeText(path, c.after);
             },
             rollback: c => {
-                const path = pathOf(c.file), open = this.docs.find(d => d.file === path);
+                const path = pathOf(c.file);
                 if (c.kind === 'create') { if (fileExists(path)) Gio.File.new_for_path(path).delete(null); }
-                else if (open) open.editor.replaceText(c.before);
-                else writeTextFile(path, c.before);
+                else if (c.kind === 'delete') {
+                    writeTextFile(path, c.before);
+                    const doc = detached.get(c);
+                    if (doc) { doc.file = path; doc.editor.buffer.set_modified(false); this.refreshTitle(doc); }
+                } else if (c.kind === 'move') relocate(pathOf(c.to!), path);
+                else writeText(path, c.before);
             },
         });
         this.fileTree.refresh(root);
+        if (changes.some(c => c.kind === 'delete' || c.kind === 'move')) { this.fileTree.reveal(this.file); this.syncHistory(true); }
         return error;
     }
 
     private applyChange(change: Change): string | null {
         const root = this.fileTree.root;
         if (!root) return 'tidak ada folder kerja yang terbuka';
-        // Pertahanan berlapis: planChange() sudah menolak nama seperti ini, tetapi penulisan ke disk tidak boleh bergantung padanya.
-        if (cleanNewName(change.file) !== change.file) return 'path di luar folder kerja atau tidak valid';
-        try {
-            const path = projectPath(root, change.file);
-            const open = this.docs.find(d => d.file === path);
-            if (change.kind === 'create') {
-                if (fileExists(path)) return `${change.file} sudah ada`;
-                GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
-                writeTextFile(path, change.after);
-                this.fileTree.refresh(GLib.path_get_dirname(path));
-                this.openInTab(path);
-                return null;
-            }
-            const current = open ? open.editor.getText() : fileExists(path) ? readTextFile(path) : null;
-            if (current === null) return `${change.file} tidak ada lagi`;
-            if (current !== change.before) return `${change.file} berubah sejak diusulkan; minta usulan baru`;
-            if (open) open.editor.replaceText(change.after);
-            else writeTextFile(path, change.after);
-            return null;
-        } catch (e) {
-            return errorMessage(e);
-        }
+        const error = this.applyChangeBatch([change]);
+        if (!error && change.kind === 'create') this.openInTab(projectPath(root, change.file));
+        return error;
     }
 
     // Nama berkas relatif terhadap folder proyek (sama dengan nama di agent/project.ts); null jika di luar folder atau belum disimpan.

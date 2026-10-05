@@ -122,7 +122,7 @@ export function changeTests(): void {
         contains(bad({ aksi: 'pindah', kartu: 'Pesan tempat', daftar: 'Selesai' }), 'sudah ada di daftar');
         contains(bad({ aksi: 'tandai', kartu: 'Pesan tempat', selesai: true }), 'sudah berstatus');
         contains(bad({ aksi: 'tandai', kartu: 'Pesan tempat' }), '"selesai"');
-        contains(bad({ aksi: 'hapus', kartu: 'Pesan tempat' }), 'salah satu dari');
+        contains(bad({ aksi: 'arsipkan', kartu: 'Pesan tempat' }), 'salah satu dari');
         contains(bad({ aksi: 'tambah', kartu: 'baris\nbaru', daftar: 'Rencana' }), 'satu baris');
         contains(bad({ aksi: 'tambah', kartu: '', daftar: 'Rencana' }), 'wajib');
     });
@@ -246,6 +246,6 @@ export function changeTests(): void {
         const off = buildContext({ ...input(), recent: [] }).system;
         contains(on, 'ubah_berkas');
         ok(!off.includes('ubah_berkas'), 'instruksi usulan ada tanpa izin');
-        eq(CHANGE_TOOLS.map(t => t.name), ['buat_berkas', 'ubah_berkas', 'ubah_kanban']);
+        eq(CHANGE_TOOLS.map(t => t.name), ['buat_berkas', 'ubah_berkas', 'sisip_teks', 'hapus_berkas', 'pindah_berkas', 'ubah_kanban']);
     });
 }

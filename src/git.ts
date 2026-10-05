@@ -4,6 +4,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { LOG_FORMAT, parseLog, parseStatus, type Commit, type FileChange } from './gitlog.js';
+import { AGENT_LOG_FORMAT, type GitAnswer, type GitRequest } from './agent/gittools.js';
 
 export type GitFailure = 'no-git' | 'no-repo' | 'failed';
 
@@ -151,4 +152,26 @@ export async function commitFiles(files: string[], message: string): Promise<Tex
     if (add?.status !== 0) return failure(add);
     const run = await runGit(dir, ['commit', '--only', '--no-verify', '-m', message, '--', ...specs]);
     return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
+}
+
+// Pathspec alat Git agent: hanya berkas Markdown, tanpa berkas/folder bertitik dan node_modules, relatif ke folder kerja.
+const AGENT_SPECS = ['*.md', '*.markdown', '*.mdown', '*.mkd', ':(exclude,glob)**/.*', ':(exclude,glob)**/.*/**', ':(exclude,glob)**/node_modules/**'];
+const AGENT_DATE = '--date=format:%Y-%m-%d %H:%M';
+
+// Menjalankan permintaan yang sudah divalidasi agent/gittools.ts (hash/HEAD~n dan path Markdown relatif) di folder kerja.
+export async function agentGit(root: string, request: GitRequest): Promise<GitAnswer> {
+    const specs = request.file ? [`:(literal)${request.file}`] : AGENT_SPECS;
+    let args: string[];
+    if (request.kind === 'log') {
+        args = ['log', '--relative', '--no-color', AGENT_DATE, '--name-status', `--format=${AGENT_LOG_FORMAT}`, '-n', String(request.limit),
+            ...(request.file ? ['--follow'] : []), '--', ...specs];
+    } else if (request.kind === 'show') {
+        args = ['show', '--relative', '--no-color', '--no-ext-diff', '--no-textconv', AGENT_DATE, '--format=%h %ad · %an · %s', request.commit, '--', ...specs];
+    } else {
+        args = ['show', '--no-textconv', `${request.commit}:./${request.file}`];
+    }
+    const run = await runGit(root, args);
+    if (run?.status === 0) return { ok: true, text: run.out };
+    if (run && request.kind === 'log' && /does not have any commits/i.test(run.err)) return { ok: true, text: '' };
+    return { ok: false, message: failure(run).message };
 }

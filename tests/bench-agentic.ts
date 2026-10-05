@@ -30,6 +30,12 @@ try {
         const changed = planned.changes.map(c => ({ name: c.file, text: c.after }));
         const checks = JSON.stringify({ pemeriksaan: changed.map(f => ({ berkas: f.name, jenis: 'ada', teks: '22 November' })) });
         measure('Verifikasi hasil', () => { if (!verifyWork(checks, changed).passed) throw Error('verifikasi gagal'); });
+        // Struktur dibandingkan dengan isi sebelum perubahan, jadi tiap berkas diurai dua kali.
+        const before = new Map(planned.changes.map(c => [c.file, c.before]));
+        const structure = JSON.stringify({ pemeriksaan: changed.map(f => ({ berkas: f.name, jenis: 'struktur' })) });
+        measure('Verifikasi struktur (dengan baseline)', () => { if (!verifyWork(structure, changed, f => before.get(f) ?? null).passed) throw Error('struktur gagal'); });
+        const leftover = JSON.stringify({ pemeriksaan: [{ berkas: '*', jenis: 'tidak_ada', teks: '15 November' }] });
+        measure('Cari sisa teks di seluruh folder (*)', () => { if (!verifyWork(leftover, changed).passed) throw Error('sisa ditemukan'); });
         measure('Checkpoint teks tanpa journal (kontrol)', () => { writeTextFile(checkpoint, serializeChat({ ...chat, events: [] })); if (!parseChat(readTextFile(checkpoint))) throw Error('checkpoint gagal'); });
         measure('Checkpoint dengan journal', () => { writeTextFile(checkpoint, serializeChat(chat)); if (parseChat(readTextFile(checkpoint))?.events?.[0].changes.length !== 20) throw Error('journal gagal'); });
     }

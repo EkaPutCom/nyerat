@@ -1,24 +1,40 @@
-// Jendela tinjau untuk satu usulan perubahan agent: selisihnya ditampilkan seperti diff riwayat Git, dengan
+// Jendela tinjau untuk usulan perubahan agent: selisihnya ditampilkan seperti diff riwayat Git, dengan
 // tombol Tolak dan Terapkan di bawah. Menutup jendela tanpa memilih sama dengan menolak. Keputusan dikembalikan
 // lewat `onDecision` tepat satu kali; penerapan ke berkas dilakukan pemanggil.
+//
+// Paket punya kotak centang per berkas: pengguna boleh menerapkan sebagian. Kotak catatan diteruskan ke agent
+// bersama keputusannya (mis. alasan menolak), supaya agent bisa memperbaiki usulannya.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import GLib from 'gi://GLib';
-import { describeChange, unifiedDiff, type Change } from '../agent/changes.js';
-import { parseDiff } from '../gitlog.js';
+import { describeChange, diffPreview, unifiedDiff, type Change } from '../agent/changes.js';
+import { parseDiff, type DiffLine } from '../gitlog.js';
 import { createDiffView, fillDiff, setupDiffTags } from './historyviewer.js';
 import { onKeyPress, pack } from '../gtkutil.js';
+
+// Baris diff satu perubahan; hapus dan pindah diberi keterangan karena selisih isinya saja tidak menjelaskannya.
+export function changeDiff(c: Change, inBatch: boolean): DiffLine[] {
+    const head: DiffLine[] = inBatch ? [{ kind: 'hunk', text: `Berkas: ${c.file}` }] : [];
+    if (c.kind === 'move') return [...head, { kind: 'hunk', text: `Pindah: ${c.file} → ${c.to} (isi tidak berubah)` }];
+    if (c.kind === 'delete') head.push({ kind: 'hunk', text: `Dibuang ke Tempat Sampah: ${c.file}` });
+    return [...head, ...parseDiff(unifiedDiff(c.before, c.after))];
+}
 
 export class ProposalViewer {
     readonly window: Gtk.Window;
     readonly diffView: Gtk.TextView;
     readonly applyButton: Gtk.Button;
     readonly rejectButton: Gtk.Button;
+    readonly noteEntry: Gtk.Entry;
+    readonly checks: Gtk.CheckButton[] = [];   // satu per berkas paket; kosong untuk usulan tunggal
     private readonly status: Gtk.Label;
     private decided = false;
     // Dipanggil sekali. applied=false tanpa error = ditolak (termasuk jendela ditutup).
     onDecision: (applied: boolean) => void = () => {};
+    error = '';
+    accepted: number[] | null = null;   // indeks yang diterapkan bila hanya sebagian paket
+    note = '';
 
     constructor(parent: Gtk.Window | null, readonly change: Change | Change[], dark: boolean, private apply: (change: Change | Change[]) => string | null, readOnly = false) {
         this.window = new Gtk.Window({ transient_for: parent, default_width: 860, default_height: 620 });
@@ -39,7 +55,7 @@ export class ProposalViewer {
 
         this.diffView = createDiffView();
         setupDiffTags(this.diffView, dark);
-        fillDiff(this.diffView, changes.flatMap(c => [...(Array.isArray(change) ? [{ kind: 'hunk' as const, text: `Berkas: ${c.file}` }] : []), ...parseDiff(unifiedDiff(c.before, c.after))]));
+        fillDiff(this.diffView, changes.flatMap(c => changeDiff(c, Array.isArray(change))));
         const scroll = new Gtk.ScrolledWindow();
         scroll.set_child(this.diffView);
 
@@ -48,23 +64,47 @@ export class ProposalViewer {
         this.rejectButton = new Gtk.Button({ label: 'Tolak' });
         this.applyButton = new Gtk.Button({ label: 'Terapkan' });
         this.applyButton.add_css_class('suggested-action');
-        if (readOnly) { this.applyButton.hide(); this.rejectButton.set_label('Tutup'); }
+        this.noteEntry = new Gtk.Entry({ placeholder_text: 'Catatan untuk agent (opsional), mis. alasan menolak', hexpand: true });
+        if (readOnly) { this.applyButton.hide(); this.rejectButton.set_label('Tutup'); this.noteEntry.hide(); }
         const bar = new Gtk.Box({ spacing: 8, margin_top: 10, margin_bottom: 10, margin_start: 10, margin_end: 10 });
-        pack(bar, this.status, true);
+        pack(bar, this.noteEntry, true);
         bar.append(this.rejectButton);
         bar.append(this.applyButton);
 
         const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
         body.append(info);
+        if (changes.length > 1 && !readOnly) {
+            const picks = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, margin_start: 12, margin_end: 12, margin_bottom: 8 });
+            const hint = new Gtk.Label({ label: 'Berkas yang diterapkan (hapus centang untuk menolak sebagian):', xalign: 0 });
+            hint.add_css_class('dim-label');
+            picks.append(hint);
+            for (const c of changes) {
+                const d = diffPreview(c.before, c.after);
+                const check = new Gtk.CheckButton({ label: `${describeChange(c)}${c.kind === 'move' ? '' : ` · +${d.added} −${d.removed}`}`, active: true });
+                check.connect('toggled', () => this.updateApplyLabel());
+                this.checks.push(check);
+                picks.append(check);
+            }
+            const pickScroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, propagate_natural_height: true, max_content_height: 160 });
+            pickScroll.set_child(picks);
+            body.append(pickScroll);
+        }
         body.append(new Gtk.Separator());
         pack(body, scroll, true);
         body.append(new Gtk.Separator());
+        body.append(this.status);
         body.append(bar);
         this.window.set_child(body);
+        this.status.set_margin_start(10);
+        this.status.set_margin_end(10);
+        this.status.set_margin_top(8);
 
         this.applyButton.connect('clicked', () => {
             if (readOnly) return;
-            const error = this.apply(change);
+            const chosen = this.checks.length ? changes.map((_, i) => i).filter(i => this.checks[i].active) : null;
+            if (chosen && !chosen.length) return;
+            const partial = chosen && chosen.length < changes.length ? chosen : null;
+            const error = this.apply(Array.isArray(change) ? changes.filter((_, i) => !chosen || chosen.includes(i)) : change);
             if (error) {
                 // Tetap terbuka supaya pengguna membaca sebabnya; Tolak/tutup menyelesaikan giliran.
                 this.status.set_text(`Gagal diterapkan: ${error}`);
@@ -72,6 +112,7 @@ export class ProposalViewer {
                 this.applyButton.set_sensitive(false);
                 this.finish(false, error);
             } else {
+                this.accepted = partial;
                 this.finish(true);
                 this.window.destroy();
             }
@@ -87,12 +128,17 @@ export class ProposalViewer {
         });
     }
 
-    error = '';
+    private updateApplyLabel(): void {
+        const n = this.checks.filter(c => c.active).length;
+        this.applyButton.set_label(n === this.checks.length ? 'Terapkan' : `Terapkan ${n} dari ${this.checks.length}`);
+        this.applyButton.set_sensitive(n > 0);
+    }
 
     private finish(applied: boolean, error = ''): void {
         if (this.decided) return;
         this.decided = true;
         this.error = error;
+        this.note = this.noteEntry.get_text().trim();
         this.onDecision(applied);
     }
 
