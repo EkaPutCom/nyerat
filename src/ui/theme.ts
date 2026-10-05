@@ -96,6 +96,7 @@ const buildCss = (p: Palette): string => `
     .kanban-agent { background-color: alpha(${p.fg}, 0.10); color: ${p.fg}; font-weight: bold; }
     .kanban-agent-queued { background-color: alpha(#d9a406, 0.25); color: ${p.fg}; }
     .kanban-agent-working { background-color: #1f8a70; color: #ffffff; }
+    .kanban-agent-waiting { background-color: #d9730d; color: #ffffff; }
     .kanban-agent-done { background-color: #3b7dd8; color: #ffffff; }
     .kanban-agent-failed { background-color: #c9372c; color: #ffffff; }
     .image-viewer, .image-viewer viewport { background-color: #1c1d20; }

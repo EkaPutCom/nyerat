@@ -39,13 +39,13 @@ import { StatusBar } from './ui/statusbar.js';
 import { TabBar } from './ui/tabbar.js';
 import { createHeaderBar, type HeaderBar } from './ui/headerbar.js';
 import { applyTheme, systemPrefersDark, type Palette } from './ui/theme.js';
-import { chooseFile, askSaveChanges, showError } from './ui/dialogs.js';
+import { chooseFile, askSaveChanges, showError, harnessAskDialog, harnessTextDialog } from './ui/dialogs.js';
 import { registerActions } from './actions.js';
 import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
 import { assignCard, cardMeta, countCards, isKanban, newBoard, parseBoard, serializeBoard, updateCard, type Board, type Card, type Position } from './markdown/kanban.js';
 import { Orchestrator } from './orchestrator.js';
-import { cardProject, checkProjectFolder, HARNESSES, PROJECT_NAME, type Run } from './agent/harness.js';
+import { cardProject, checkProjectFolder, HARNESSES, isActive, PROJECT_NAME, type HarnessAsk, type HarnessReply, type Run } from './agent/harness.js';
 import { LogViewer } from './ui/logviewer.js';
 import type { MenuEntry } from './ui/menu.js';
 
@@ -95,7 +95,11 @@ export class MainWindow {
     readonly board: KanbanBoard;
     readonly orchestrator: Orchestrator;
     // Dialog pemilih folder proyek menahan program, jadi bisa diganti di tes.
-    harnessDialogs = { chooseFolder: (title: string): string | null => chooseFile(this.win, { title, selectFolder: true }) };
+    harnessDialogs = {
+        chooseFolder: (title: string): string | null => chooseFile(this.win, { title, selectFolder: true }),
+        answer: (ask: HarnessAsk, agent: string): HarnessReply | null => harnessAskDialog(this.win, ask, agent),
+        text: (options: { title: string; label: string; context?: string }): string | null => harnessTextDialog(this.win, options),
+    };
     private readonly runLogs = new Map<number, LogViewer>();
     readonly chat: ChatPanel;
     readonly chatRevealer: Gtk.Revealer;
@@ -606,13 +610,16 @@ export class MainWindow {
     private harnessMenu(card: Card, at: Position): MenuEntry[] {
         const file = this.file;
         const run = file ? this.orchestrator.queue.find(file, card.text) : null;
-        const active = run && (run.status === 'working' || run.status === 'queued') ? run : null;
+        const active = run && isActive(run.status) ? run : null;
         const agent = cardMeta(card.text).agent;
         const entries: MenuEntry[] = Object.values(HARNESSES).map(spec => ({
             label: `Kerjakan dengan ${spec.label}`,
             enabled: !!file && !active && card.done !== true,
             run: () => this.runHarness(at, spec.name),
         }));
+        if (active?.status === 'waiting') entries.push({ label: `Jawab ${active.agent}…`, run: () => this.answerHarness(active) });
+        if (active?.status === 'working') entries.push({ label: `Beri Arahan ${active.agent}…`, run: () => this.steerHarness(active) });
+        if (run && !active && run.result?.sessionId) entries.push({ label: `Balas ${run.agent}…`, run: () => this.replyHarness(run) });
         if (active) entries.push({ label: active.status === 'queued' ? 'Batalkan Antrean' : `Hentikan ${active.agent}`, run: () => this.orchestrator.stop(active) });
         if (run) entries.push({ label: `Lihat Log ${run.agent}`, run: () => this.showRunLog(run) });
         if (agent && !active) entries.push({ label: 'Lepas Penugasan', run: () => this.board.commit(updateCard(this.board.getBoard(), at, { text: assignCard(card.text, null) })) });
@@ -652,6 +659,28 @@ export class MainWindow {
         this.settings.projects = { ...this.settings.projects, [project]: path };
         saveSettings(this.settings);
         return { name: project, path };
+    }
+
+    answerHarness(run: Run): void {
+        if (!run.ask) return;
+        const reply = this.harnessDialogs.answer(run.ask, run.agent);
+        if (!reply) return;   // Nanti: harness tetap menunggu
+        const error = this.orchestrator.answer(run, reply);
+        if (error) this.statusBar.toast(`Jawaban tidak terkirim: ${error}`);
+    }
+
+    private steerHarness(run: Run): void {
+        const text = this.harnessDialogs.text({ title: `Arahan untuk ${run.agent}`, label: `${run.agent} menerimanya sebelum langkah berikutnya, tanpa menghentikan pekerjaan.` });
+        if (!text) return;
+        const error = this.orchestrator.steer(run, text);
+        this.statusBar.toast(error ? `Arahan tidak terkirim: ${error}` : `Arahan dikirim ke ${run.agent}`);
+    }
+
+    private replyHarness(run: Run): void {
+        const text = this.harnessDialogs.text({ title: `Balas ${run.agent}`, label: `Sesi ${run.agent} dilanjutkan dengan balasan ini; kartu kembali dikerjakan.`, context: run.result?.summary || undefined });
+        if (!text) return;
+        const error = this.orchestrator.resume(run, text);
+        if (error) this.statusBar.toast(`Tidak bisa membalas ${run.agent}: ${error}`);
     }
 
     showRunLog(run: Run): LogViewer {

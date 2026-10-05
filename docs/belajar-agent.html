@@ -293,8 +293,8 @@ input[type=text] { width: 100%; }
   <p class="lede">Dalam dua hari, asisten Nyerat berkembang dari panel chat dengan <b>4 alat baca</b> menjadi agent dengan <b>16 alat</b>. Kini ia bisa merencanakan pekerjaan, mengusulkan paket perubahan, memeriksa hasilnya, dan melanjutkan pekerjaan setelah terputus. Satu prinsip dipegang sejak commit pertama: <b>agent boleh membaca dengan bebas, tetapi setiap perubahan berkas harus disetujui pengguna dulu</b>. Bab terakhir menunjukkan langkah berikutnya: Nyerat menugaskan kartu kanban ke agent lain (pi) yang bekerja di folder proyek terpisah, sementara Nyerat hanya memegang papannya. Halaman ini menjelaskan cara prinsip itu dijaga di setiap tahap. Isinya mencakup struktur data, alur loop, batas keamanan, biaya, dan simulasi kecil yang bisa Anda coba sendiri.</p>
   <div class="kpis">
     <div class="kpi"><div class="what">Alat yang ditawarkan ke model</div><div class="big">16</div><div class="from">dari 4 · f6a4cc7 → b1ab712</div></div>
-    <div class="kpi"><div class="what">Tes asisten (unit + GUI)</div><div class="big">178</div><div class="from">dari 65 · semuanya tanpa API berbayar</div></div>
-    <div class="kpi"><div class="what">Kode <code>src/agent/</code></div><div class="big">2.908 baris</div><div class="from">dari 1.099 baris di 8 berkas → 20 berkas</div></div>
+    <div class="kpi"><div class="what">Tes asisten (unit + GUI)</div><div class="big">185</div><div class="from">dari 65 · semuanya tanpa API berbayar</div></div>
+    <div class="kpi"><div class="what">Kode <code>src/agent/</code></div><div class="big">3.010 baris</div><div class="from">dari 1.099 baris di 8 berkas → 20 berkas</div></div>
     <div class="kpi"><div class="what">Penulisan folder kerja tanpa persetujuan</div><div class="big">0</div><div class="from">semua lewat <code>Change</code> + preflight; harness eksternal hanya di folder proyek lain (Bab 9)</div></div>
   </div>
   <nav class="toc" aria-label="Daftar isi">
@@ -334,6 +334,7 @@ input[type=text] { width: 100%; }
     <li><span class="h">1c90735</span><span><b>Bab 7</b> · Jendela Log agent untuk memantau putaran, penalaran, alat, dan hasilnya.</span></li>
     <li><span class="h">90c28bb</span><span><b>Bab 8</b> · Sisip, hapus, pindah, ganti semua, persetujuan sebagian, Urungkan, alat riwayat Git, dan verifikasi struktur.</span></li>
     <li><span class="h">b1ab712</span><span><b>Bab 9</b> · Orkestrator harness: kartu <code>@pi</code> dikerjakan pi di folder proyek lain, antrean per folder, Log pi, kartu pindah ke Dikerjakan/Review.</span></li>
+    <li><span class="h">baru</span><span><b>Bab 9d</b> · pi lewat mode RPC: status ⏸ menunggu saat pi bertanya atau extension meminta izin, dijawab dari Nyerat; arahan saat bekerja dan balasan yang melanjutkan sesi.</span></li>
   </ol>
 </section>
 
@@ -753,7 +754,7 @@ TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
       <tr><td data-k="Risiko">Kartu, catatan, atau agent Nyerat mengarahkan harness ke folder sembarang</td><td data-k="Pengaman">Markdown hanya menyebut <b>nama</b> proyek. Nama dipetakan ke folder di <code>settings.projects</code>, yang hanya diisi lewat dialog pilih folder oleh pengguna.</td></tr>
       <tr><td data-k="Risiko">Harness menulis ke folder kerja Nyerat tanpa jendela tinjau</td><td data-k="Pengaman"><code>checkProjectFolder()</code> menolak folder kerja, isinya, induknya, root, dan path relatif.</td></tr>
       <tr><td data-k="Risiko">Dua harness menimpa satu repo</td><td data-k="Pengaman"><code>RunQueue</code>: satu run <code>working</code> per folder, sisanya <code>queued</code> berurutan.</td></tr>
-      <tr><td data-k="Risiko">Harness menunggu masukan selamanya</td><td data-k="Pengaman">stdin ditutup sejak awal, sehingga permintaan masukan langsung mendapat EOF.</td></tr>
+      <tr><td data-k="Risiko">Harness menunggu masukan tanpa ada yang tahu</td><td data-k="Pengaman">Permintaan izin/masukan menjadi status ⏸ <i>menunggu</i> di kartu dan dijawab dari Nyerat (9d). Setelah giliran selesai tanpa pertanyaan, stdin ditutup supaya pi keluar.</td></tr>
       <tr><td data-k="Risiko">Cucu proses menahan pipe, run tidak pernah selesai</td><td data-k="Pengaman">Setelah proses keluar, sisa keluaran diberi tenggang 1,5 detik lalu dibatalkan. <i>Hentikan</i> = SIGTERM, lalu SIGKILL setelah 5 detik. Menutup jendela menghentikan semua run.</td></tr>
       <tr><td data-k="Risiko">Perubahan masuk tanpa ditinjau</td><td data-k="Pengaman">Prompt meminta pi tidak commit/push. Kartu berhenti di <i>Review</i>, dan diff ditinjau di repo proyek.</td></tr>
     </tbody>
@@ -771,8 +772,66 @@ TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
     <div class="runs" id="s6-runs"></div>
     <div class="msg" id="s6-msg">Belum ada kartu yang ditugaskan.</div>
   </div>
-  <h3>9d. Uji: proses sungguhan, harness tiruan</h3>
-  <p>Tes GUI menjalankan skrip shell yang berpura-pura menjadi pi, lewat jalur proses yang sama. Tes ini memeriksa cwd dan prompt, kartu yang berpindah ke <i>Dikerjakan</i> lalu <i>Review</i> dengan catatan, antrean yang benar-benar berurutan (skrip mencatat <code>mulai</code>/<code>selesai</code>), <i>Hentikan</i> pada proses yang macet 30 detik, kegagalan dengan pesan dari stderr, folder proyek yang ditanyakan sekali lalu diingat, dan papan tertutup yang diperbarui di disk. Tes unit mencakup penugasan <code>@nama</code> (bukan email atau <code>@{tanggal}</code>), proyek, penolakan folder, prompt, <code>PiReader</code>, catatan hasil, dan antrean. Ada 16 tes baru, semuanya tanpa pi atau API sungguhan.</p>
+  <h3>9d. Menunggu jawaban: dari aliran satu arah ke percakapan dua arah</h3>
+  <p><b>Gejala.</b> Versi pertama memakai <code>pi --mode json</code> dengan stdin langsung ditutup. Kalau pi bertanya ("Mau pakai SDK A atau B?"), kartu tetap masuk <i>Review</i> dan pertanyaannya hanya tertinggal di catatan. Kalau sebuah extension pi meminta izin (misalnya sebelum <code>rm -rf</code>), dialognya tidak punya penerima: <code>permission-gate</code> bawaan contoh pi justru <b>memblokir</b> perintah bila tidak ada UI.</p>
+  <p><b>Desain.</b> pi dijalankan dengan <code>--mode rpc</code>. Prosesnya hidup selama run, menerima perintah lewat stdin, dan mengirim event yang sama seperti mode JSON, ditambah dua hal baru:</p>
+  <div class="grid2">
+    <div class="panel">
+<pre><code>// stdout → Nyerat
+{"type":"extension_ui_request","id":"u1",
+ "method":"confirm","title":"Izinkan perintah bash?",
+ "message":"rm -rf build"}
+{"type":"agent_settled"}    // giliran selesai
+
+// Nyerat → stdin
+{"type":"extension_ui_response","id":"u1","confirmed":true}
+{"id":"nyerat-2","type":"prompt","message":"Pakai SDK A"}
+{"id":"nyerat-steer","type":"steer","message":"…"}</code></pre>
+    </div>
+    <div class="panel">
+<pre><code>PiSignal = { type: 'ask', ask: HarnessAsk }
+         | { type: 'settled' }
+         | { type: 'rejected', error }
+
+HarnessAsk {
+  kind: 'select' | 'confirm' | 'input'
+      | 'editor' | 'question'
+  id     // null untuk pertanyaan
+  title, message, options, prefill
+  timeout  // pi menjawab sendiri setelahnya
+}</code></pre>
+    </div>
+  </div>
+  <div class="flow" aria-label="Alur menunggu jawaban">
+    <span class="node pure">PiReader.line() → ask</span><span class="to">→</span>
+    <span class="node ctl">run.status = 'waiting' · chip ⏸</span><span class="to">→</span>
+    <span class="node user">Jawab pi… (Izinkan / Tolak / teks / Nanti)</span><span class="to">→</span>
+    <span class="node">extension_ui_response / prompt lewat stdin</span>
+  </div>
+  <p>Ada dua jenis "menunggu" dengan saluran jawaban yang berbeda. <b>Dialog extension</b> punya id dan dijawab dengan <code>extension_ui_response</code>. <b>Pertanyaan model</b> tidak punya protokol khusus: pi hanya berhenti dengan teks. Nyerat menganggapnya pertanyaan bila jawaban terakhir diakhiri <code>?</code>, dan balasannya dikirim sebagai <code>prompt</code> berikutnya ke proses yang sama. Pembaca membuang status giliran lama lewat <code>restart()</code> supaya galat atau jawaban sebelumnya tidak terbawa. Heuristik ini bisa meleset, jadi setiap run yang selesai tetap bisa dibalas lewat <i>Balas pi…</i>, yang menjalankan pi lagi dengan <code>--session &lt;id&gt;</code> dan log yang sama.</p>
+  <div class="sim" id="sim7">
+    <h3>Simulasi 7: apakah pi sedang bertanya? <span class="kind">Interaktif · logika nyata</span></h3>
+    <p>Tulis jawaban terakhir pi. Salinan <code>endsWithQuestion()</code> menentukan apakah kartu menunggu balasan Anda atau stdin ditutup sehingga kartu masuk Review.</p>
+    <textarea id="s7-text" rows="4" aria-label="Jawaban terakhir pi">Sudah saya cek struktur proyek.
+
+Mau pakai SDK resmi atau API langsung?</textarea>
+    <div class="msg" id="s7-out"></div>
+  </div>
+  <div class="scroll-x">
+  <table class="data cards">
+    <thead><tr><th>Batas</th><th>Alasan</th></tr></thead>
+    <tbody>
+      <tr><td data-k="Batas">Run yang menunggu tetap memegang antrean foldernya</td><td data-k="Alasan">Prosesnya masih hidup dan bisa melanjutkan pekerjaan begitu dijawab; harness lain di folder yang sama bisa bertabrakan.</td></tr>
+      <tr><td data-k="Batas"><i>Nanti</i> menutup dialog tanpa menjawab</td><td data-k="Alasan">Menjawab adalah keputusan. Menutup dialog tidak boleh diartikan sebagai "izinkan" atau "tolak".</td></tr>
+      <tr><td data-k="Batas"><code>timeout</code> dari extension diikuti</td><td data-k="Alasan">pi memakai jawaban bawaannya setelah batas waktu. Status di kartu ikut kembali ke <i>bekerja</i> supaya tidak menampilkan permintaan yang sudah basi.</td></tr>
+      <tr><td data-k="Batas">Satu perintah = satu baris JSON, byte dengan panjang eksplisit</td><td data-k="Alasan">Framing RPC pi dipisah LF. <code>write_chars()</code> dengan string dan panjang -1 di GJS memicu <code>GLib-WARNING: Invalid UTF-8</code>, dan arahan yang terkirim rusak.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="caveat"><b>Diukur dengan pi sungguhan (sekali):</b> kartu yang memintanya bertanya dulu masuk status menunggu dengan pertanyaan "Nama berkas catatannya apa?". Setelah dijawab, extension scratch meminta izin untuk <code>ls</code>, izin diberikan dari skrip, lalu pi membuat berkas dan kartu masuk Review (8.699 token, ±$0,0037). Itu satu run, bukan evaluasi. pi Anda sendiri belum punya extension izin, jadi tanpa memasangnya hanya pertanyaan yang akan muncul. Dialog <code>custom()</code> (khusus TUI) tidak didukung mode RPC, dan belum ada terminal interaktif.</div>
+  <div class="lesson"><b>Pelajaran</b>Delegasi yang baik tetap butuh saluran balik. Bedakan permintaan yang punya protokol (id + jawaban terstruktur) dari yang hanya tersirat dalam teks (pertanyaan model). Yang pertama dijawab persis. Yang kedua ditebak secara sederhana, lalu beri jalan keluar ketika tebakannya meleset (<i>Balas</i>).</div>
+  <h3>9e. Uji: proses sungguhan, harness tiruan</h3>
+  <p>Tes GUI menjalankan skrip shell yang berpura-pura menjadi pi, lewat jalur proses yang sama. Tes ini memeriksa cwd dan prompt, kartu yang berpindah ke <i>Dikerjakan</i> lalu <i>Review</i> dengan catatan, antrean yang benar-benar berurutan (skrip mencatat <code>mulai</code>/<code>selesai</code>), <i>Hentikan</i> pada proses yang macet 30 detik, kegagalan dengan pesan dari stderr, folder proyek yang ditanyakan sekali lalu diingat, dan papan tertutup yang diperbarui di disk. Untuk mode RPC, skrip tiruan membaca <code>get_state</code> dan <code>prompt</code> dari stdin, mengirim permintaan izin atau pertanyaan, lalu mencatat jawaban yang diterimanya. Tes memeriksa jawaban persis yang sampai (<code>{"type":"extension_ui_response","id":"ui-1","confirmed":true}</code>), <i>Nanti</i> yang tetap menunggu, <i>Akhiri tanpa membalas</i>, arahan yang tiba sebagai <code>steer</code>, dan balasan yang berjalan dengan <code>--session sesi-uji</code> di log yang sama. Tes unit mencakup penugasan <code>@nama</code> (bukan email atau <code>@{tanggal}</code>), proyek, penolakan folder, prompt, <code>PiReader</code>, catatan hasil, dan antrean. Ada 23 tes, semuanya tanpa pi atau API sungguhan.</p>
   <div class="caveat"><b>Yang diukur dan yang belum:</b> satu uji ujung-ke-ujung dengan pi 1.0.3 sungguhan (DeepSeek, tugas "buat HALO.txt" di repo contoh) berhasil. Berkas dibuat di repo proyek tanpa commit, folder kerja tetap kosong, kartu pindah ke Review, dan run memakai 4.248 token (±$0,0038). Itu satu run, bukan evaluasi. Mengurai <code>@nama</code> menambah ±0,35 ms per 500 kartu pada <code>cardMeta()</code> (±0,7 µs per kartu). Belum ada: status <i>menunggu</i> saat harness meminta izin, terminal interaktif, worktree per kartu (kartu di proyek yang sama mengantre), dan tampilan diff hasil harness di Nyerat. Status run hanya ada selama aplikasi terbuka; yang bertahan adalah posisi kartu dan catatan <code>↳</code>.</div>
   <div class="lesson"><b>Pelajaran</b>Saat mendelegasikan ke agent lain, jangan pura-pura bisa meninjau setiap langkahnya. Pindahkan batasnya ke tempat yang bisa dijaga: <b>di mana</b> ia boleh bekerja (nama → folder yang dipilih pengguna), <b>berapa banyak</b> sekaligus (antrean per folder), dan <b>kapan berhenti</b> (EOF, tenggang, SIGKILL). Lalu buat hasilnya terlihat di tempat pengguna sudah bekerja: kartu, catatan, dan log.</div>
 </section>
@@ -822,6 +881,7 @@ TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
       <tr><td data-k="Pola">Observabilitas terpisah dari konteks</td><td data-k="Struktur">log berbatas di memori</td><td data-k="Di Nyerat"><code>AgentTrace</code></td></tr>
       <tr><td data-k="Pola">Delegasi lewat kontrak proses</td><td data-k="Struktur">argumen → JSONL → kode keluar, dipetakan ke log yang sama</td><td data-k="Di Nyerat"><code>PiReader</code>, <code>spawnHarness</code></td></tr>
       <tr><td data-k="Pola">Nama, bukan path, untuk tempat berbahaya</td><td data-k="Struktur">nama di data, pemetaan hanya dari pengguna</td><td data-k="Di Nyerat"><code>settings.projects</code>, <code>checkProjectFolder</code></td></tr>
+      <tr><td data-k="Pola">Saluran balik untuk agent yang didelegasikan</td><td data-k="Struktur">permintaan ber-id dijawab persis; pertanyaan teks ditebak + jalan keluar</td><td data-k="Di Nyerat"><code>HarnessAsk</code>, <code>answer</code>, <code>resume</code></td></tr>
       <tr><td data-k="Pola">Satu penulis per sumber daya</td><td data-k="Struktur">antrean per kunci (folder)</td><td data-k="Di Nyerat"><code>RunQueue</code></td></tr>
     </tbody>
   </table>
@@ -836,7 +896,7 @@ TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
   <p>Sumber: <a href="https://github.com/EkaPutCom/nyerat/blob/main/README.md">README.md</a> (bagian "Cara kerja asisten"), <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/AGENTIC.md">AGENTIC.md</a>, <a href="https://github.com/EkaPutCom/nyerat/tree/main/src/agent">src/agent/</a>, dan riwayat git commit f6a4cc7 sampai 90c28bb, ditambah orkestrator harness (Bab 9). Lihat juga <a href="belajar-performa.html">belajar performa dari editor Nyerat</a>.</p>
 </section>
 
-<footer>Simulasi 1, 4, 5, dan 6 menjalankan salinan logika Nyerat di browser Anda (tokenizer dan BM25, preflight dan Urungkan, rekonsiliasi journal, antrean harness). Simulasi 2 adalah model sederhana tanpa hasil ukur penyedia. Simulasi 3 adalah peragaan dengan skenario tertulis, bukan keluaran model sungguhan.</footer>
+<footer>Simulasi 1, 4, 5, 6, dan 7 menjalankan salinan logika Nyerat di browser Anda (tokenizer dan BM25, preflight dan Urungkan, rekonsiliasi journal, antrean harness, deteksi pertanyaan). Simulasi 2 adalah model sederhana tanpa hasil ukur penyedia. Simulasi 3 adalah peragaan dengan skenario tertulis, bukan keluaran model sungguhan.</footer>
 </div>
 
 <script>
@@ -931,6 +991,7 @@ const journey = [
   { c: '1c90735', t: 'Log agent', read: 4, propose: 4, control: 2, tests: 137, lines: 2186, files: 18 },
   { c: '90c28bb', t: 'tindakan lebih luas', read: 7, propose: 7, control: 2, tests: 162, lines: 2619, files: 19 },
   { c: 'b1ab712', t: 'orkestrator pi', read: 7, propose: 7, control: 2, tests: 178, lines: 2908, files: 20 },
+  { c: 'baru', t: 'pi menunggu jawaban', read: 7, propose: 7, control: 2, tests: 185, lines: 3010, files: 20 },
 ];
 function toolsChart() {
   const svg = $('#chart-tools');
@@ -1373,6 +1434,22 @@ $('#s6-a').addEventListener('click', () => s6add('web-ecommerce'));
 $('#s6-b').addEventListener('click', () => s6add('toko-admin'));
 $('#s6-reset').addEventListener('click', () => { s6q = new RunQueue(); s6render(''); });
 
+/* ---------- Simulasi 7: endsWithQuestion (salinan agent/harness.ts) ---------- */
+function endsWithQuestion(text) {
+  const last = text.trim().split('\n').map(l => l.trim()).filter(Boolean).pop() || '';
+  return /\?[\s*_`)"'»”]*$/u.test(last.replace(/\p{Extended_Pictographic}/gu, '').trim());
+}
+function sim7() {
+  const text = $('#s7-text').value;
+  const q = endsWithQuestion(text);
+  const out = $('#s7-out');
+  out.className = 'msg' + (q ? ' ok' : '');
+  out.innerHTML = 'endsWithQuestion() = <code>' + q + '</code> → ' + (q
+    ? 'status <code>waiting</code>: kartu ⏸ menunggu, balasan Anda dikirim sebagai <code>prompt</code> ke proses yang sama.'
+    : 'stdin ditutup, pi keluar, kartu ke <i>Review</i>. Kalau ternyata pi bertanya, masih ada <i>Balas pi…</i> (<code>--session</code>).');
+}
+$('#s7-text').addEventListener('input', sim7);
+
 /* ---------- mulai ---------- */
 function drawAll() { toolsChart(); sim2(); }
 drawAll();
@@ -1382,6 +1459,7 @@ $('#s4-file').value = s4file;
 s4diff();
 s4msg('');
 sim5();
+sim7();
 let resizeTimer = 0;
 addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawAll, 120); });
 /* gambar ulang saat tema berubah supaya warna SVG mengikuti */

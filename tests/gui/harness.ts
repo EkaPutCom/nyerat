@@ -1,13 +1,15 @@
-// Tes GUI: kartu kanban dikerjakan harness eksternal (pi tiruan berupa skrip shell, dijalankan sungguhan lewat
-// Gio.Subprocess) di folder proyek terpisah. Tidak memanggil pi atau API sungguhan.
+// Tes GUI: kartu kanban dikerjakan harness eksternal (pi tiruan berupa skrip shell yang berbicara RPC, dijalankan
+// sungguhan sebagai proses) di folder proyek terpisah. Tidak memanggil pi atau API sungguhan.
 
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
 import { readTextFile } from '../../src/files.js';
 import { parseBoard } from '../../src/markdown/kanban.js';
 import { findEntry } from '../../src/ui/menu.js';
+import { harnessAskDialog } from '../../src/ui/dialogs.js';
 import { descendants, widgetPixbuf } from '../widgets.js';
 import { section, test, eq, ok, contains, tmp, optVal } from '../framework.js';
+import type { HarnessAsk, HarnessReply } from '../../src/agent/harness.js';
 import type { GuiContext } from './context.js';
 
 const PAPAN = `---
@@ -29,25 +31,39 @@ proyek: toko
 ## Selesai
 `;
 
-// MODE dibaca tiap kali dijalankan: ok (cepat), lambat (menunggu berkas lepas), gagal, atau macet.
+// Pi tiruan yang berbicara RPC lewat stdin/stdout. MODE dibaca tiap kali dijalankan: ok (cepat), lambat
+// (menunggu berkas lepas), gagal, macet, izin (dialog konfirmasi extension), atau tanya (pertanyaan di akhir giliran).
+// Setelah selesai ia menunggu stdin ditutup, seperti pi sungguhan; baris yang masih datang dicatat di "sisa".
 const fakePi = (dir: string) => `#!/bin/sh
 mode=$(cat "${dir}/mode")
-for a; do last="$a"; done
-printf '%s' "$last" > "${dir}/prompt"
+printf '%s\\n' "$*" >> "${dir}/args"
 printf '%s\\n' "$PWD" >> "${dir}/cwd"
 printf 'mulai %s\\n' "$4" >> "${dir}/urutan"
-echo '{"type":"session","version":3,"id":"sesi-uji","cwd":"x"}'
+read -r cmd
+echo '{"id":"nyerat-state","type":"response","command":"get_state","success":true,"data":{"sessionId":"sesi-uji"}}'
+read -r cmd
+printf '%s' "$cmd" > "${dir}/prompt"
+echo '{"type":"response","command":"prompt","success":true,"data":{"disposition":"started"}}'
 echo '{"type":"turn_start"}'
 echo '{"type":"tool_execution_start","toolCallId":"t1","toolName":"edit","args":{"path":"checkout.ts"}}'
 case "$mode" in
   lambat) while [ ! -e "${dir}/lepas" ]; do sleep 0.05; done ;;
   macet) sleep 30 ;;
+  izin) echo '{"type":"extension_ui_request","id":"ui-1","method":"confirm","title":"Izinkan perintah bash?","message":"rm -rf build"}'
+        read -r ans; printf '%s\\n' "$ans" >> "${dir}/jawaban" ;;
 esac
 echo '{"type":"tool_execution_end","toolCallId":"t1","toolName":"edit","result":{"content":[{"type":"text","text":"ok"}]},"isError":false}'
 if [ "$mode" = gagal ]; then echo "No API key found for deepseek" >&2; exit 1; fi
+if [ "$mode" = tanya ]; then
+  printf '%s\\n' '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Sudah saya cek.\\n\\nMau pakai SDK A atau B?"}],"stopReason":"stop"}}'
+  echo '{"type":"agent_settled"}'
+  read -r ans || { printf 'selesai %s\\n' "$4" >> "${dir}/urutan"; exit 0; }
+  printf '%s\\n' "$ans" >> "${dir}/jawaban"
+fi
 echo '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Checkout QRIS ditambahkan di checkout.ts"}],"stopReason":"stop","usage":{"totalTokens":120,"cost":{"total":0.002}}}}'
 echo '{"type":"agent_settled"}'
 printf 'selesai %s\\n' "$4" >> "${dir}/urutan"
+while read -r x; do printf '%s\\n' "$x" >> "${dir}/sisa"; done
 `;
 
 export function harnessTests(c: GuiContext): void {
@@ -69,7 +85,14 @@ export function harnessTests(c: GuiContext): void {
     w.orchestrator.program = () => script;
     const chosen: string[] = [];
     let pick: string | null = null;
-    w.harnessDialogs = { chooseFolder: title => { chosen.push(title); return pick; } };
+    let answers: (HarnessReply | null)[] = [];
+    let texts: (string | null)[] = [];
+    const asked: HarnessAsk[] = [];
+    w.harnessDialogs = {
+        chooseFolder: title => { chosen.push(title); return pick; },
+        answer: ask => { asked.push(ask); return answers.shift() ?? null; },
+        text: () => texts.shift() ?? null,
+    };
 
     const waitFor = (cond: () => boolean, ms = 5000) => {
         for (let i = 0; i < ms / 10 && !cond(); i++) { pump(); GLib.usleep(10000); }
@@ -78,7 +101,7 @@ export function harnessTests(c: GuiContext): void {
     };
     const open = () => {
         GLib.file_set_contents(papan, PAPAN);
-        for (const f of ['cwd', 'urutan', 'prompt', 'lepas']) GLib.unlink(GLib.build_filenamev([dir, f]));
+        for (const f of ['cwd', 'urutan', 'prompt', 'lepas', 'args', 'jawaban', 'sisa']) GLib.unlink(GLib.build_filenamev([dir, f]));
         w.load(papan);
         for (let i = 0; i < 20; i++) { pump(); GLib.usleep(5000); }
     };
@@ -234,6 +257,97 @@ export function harnessTests(c: GuiContext): void {
         ok(disk.columns[2].cards[0].notes.some(n => n.startsWith('↳ pi selesai')), 'catatan hasil di disk');
         w.load(papan);
         pump();
+    });
+
+    test('pi meminta izin: kartu menunggu, dijawab dari Nyerat, lalu pi melanjutkan', () => {
+        mode('izin');
+        w.settings.projects = { toko: project };
+        open();
+        run('Checkout');
+        ok(waitFor(() => runOf('Checkout')?.status === 'waiting'), `status: ${runOf('Checkout')?.status}`);
+        contains(badge('Checkout'), 'menunggu jawaban');
+        eq(titles(1), ['Checkout pakai QRIS @pi #fitur'], 'kartu menunggu di Dikerjakan');
+        eq(runOf('Checkout')?.ask?.kind, 'confirm');
+        eq(findEntry(kb.cardMenu(1, 0), 'Kerjakan dengan pi')?.enabled, false, 'tidak bisa dijalankan dua kali selagi menunggu');
+        const shot = optVal('shot-harness');
+        if (shot) {
+            for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
+            widgetPixbuf(w.win)?.savev(`${shot}-menunggu.png`, 'png', [], []);
+            // Dialog jawaban asli (modal): ditangkap dari timer selagi tampil, lalu ditutup ("Nanti").
+            const capture = (ask: HarnessAsk, name: string) => {
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+                    const dialog = Gtk.Window.list_toplevels().find(t => t instanceof Gtk.Window && t.title === 'Jawab pi') as Gtk.Window | undefined;
+                    if (dialog) { widgetPixbuf(dialog)?.savev(`${shot}-${name}.png`, 'png', [], []); dialog.close(); }
+                    return GLib.SOURCE_REMOVE;
+                });
+                harnessAskDialog(w.win, ask, 'pi');
+            };
+            capture(runOf('Checkout')!.ask!, 'jawab-izin');
+            capture({ kind: 'question', id: null, title: 'pi bertanya', message: 'Sudah saya cek struktur proyek.\n\nCheckout QRIS bisa memakai SDK resmi (lebih lengkap) atau API langsung (lebih ringan). Mau pakai yang mana?', options: [], prefill: '', timeout: null }, 'jawab-tanya');
+        }
+        answers = [null];
+        menu('Checkout', 'Jawab pi…').run!();
+        eq(asked.pop()?.message, 'rm -rf build', 'dialog menampilkan perintahnya');
+        eq(runOf('Checkout')?.status, 'waiting', '"Nanti" membiarkan pi tetap menunggu');
+        answers = [{ confirmed: true }];
+        menu('Checkout', 'Jawab pi…').run!();
+        ok(waitFor(() => runOf('Checkout')?.status === 'done'), `status: ${runOf('Checkout')?.status}`);
+        const reply = JSON.parse(read('jawaban').trim());
+        eq(reply, { type: 'extension_ui_response', id: 'ui-1', confirmed: true });
+        eq(titles(2), ['Checkout pakai QRIS @pi #fitur'], 'ke Review setelah selesai');
+        const log = runOf('Checkout')!.trace.text();
+        contains(log, 'pi menunggu: Izinkan perintah bash?');
+        contains(log, 'Jawaban: diizinkan');
+    });
+
+    test('pi bertanya di akhir giliran: dijawab dan dilanjutkan, atau diakhiri tanpa membalas', () => {
+        mode('tanya');
+        open();
+        run('Checkout');
+        ok(waitFor(() => runOf('Checkout')?.status === 'waiting'), `status: ${runOf('Checkout')?.status}`);
+        const ask = runOf('Checkout')!.ask!;
+        eq([ask.kind, ask.message], ['question', 'Sudah saya cek.\n\nMau pakai SDK A atau B?']);
+        answers = [{ value: 'Pakai SDK A' }];
+        menu('Checkout', 'Jawab pi…').run!();
+        ok(waitFor(() => runOf('Checkout')?.status === 'done'), `status: ${runOf('Checkout')?.status}`);
+        const sent = JSON.parse(read('jawaban').trim());
+        eq([sent.type, sent.message], ['prompt', 'Pakai SDK A']);
+        contains(kb.getBoard().columns[2].cards[0].notes.join('\n'), 'Checkout QRIS ditambahkan');
+        contains(runOf('Checkout')!.trace.text(), 'Jawaban Anda');
+
+        open();
+        run('Checkout');
+        ok(waitFor(() => runOf('Checkout')?.status === 'waiting'), 'tidak menunggu');
+        answers = [{ cancelled: true }];
+        menu('Checkout', 'Jawab pi…').run!();
+        ok(waitFor(() => runOf('Checkout')?.status === 'done'), `status: ${runOf('Checkout')?.status}`);
+        eq(read('jawaban'), '', 'tidak ada jawaban terkirim');
+        contains(kb.getBoard().columns[2].cards[0].notes.join('\n'), '↳ pi selesai');
+    });
+
+    test('arahan saat bekerja dan balasan setelah selesai melanjutkan sesi yang sama', () => {
+        mode('lambat');
+        open();
+        run('Checkout');
+        ok(waitFor(() => read('urutan').includes('mulai')), 'pi tidak berjalan');
+        texts = ['Pakai SDK versi 2'];
+        menu('Checkout', 'Beri Arahan pi…').run!();
+        GLib.file_set_contents(GLib.build_filenamev([dir, 'lepas']), '');
+        ok(waitFor(() => runOf('Checkout')?.status === 'done'), `status: ${runOf('Checkout')?.status}`);
+        const steer = JSON.parse(read('sisa').trim().split('\n')[0]);
+        eq([steer.type, steer.message], ['steer', 'Pakai SDK versi 2']);
+
+        mode('ok');
+        const first = runOf('Checkout')!;
+        texts = ['Tambahkan juga tesnya'];
+        menu('Checkout', 'Balas pi…').run!();
+        ok(waitFor(() => runOf('Checkout') !== first && runOf('Checkout')?.status === 'done'), `status: ${runOf('Checkout')?.status}`);
+        contains(read('args').trim().split('\n').pop()!, '--session sesi-uji');
+        eq(JSON.parse(read('prompt')).message, 'Tambahkan juga tesnya');
+        eq(runOf('Checkout')!.trace, first.trace, 'log yang sama dilanjutkan');
+        contains(first.trace.text(), 'Balasan Anda');
+        eq(titles(2), ['Checkout pakai QRIS @pi #fitur'], 'kembali ke Review');
+        eq(kb.getBoard().columns[2].cards[0].notes.filter(n => n.startsWith('↳ pi selesai')).length, 2, 'satu catatan per run');
     });
 
     w.settings.projects = savedProjects;

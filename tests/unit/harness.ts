@@ -1,7 +1,10 @@
 // Tes orkestrasi harness eksternal (murni): penugasan kartu, proyek, prompt, pembaca JSON pi, dan antrean.
 
 import { assignCard, cardMeta, composeCard, parseBoard, splitCard } from '../../src/markdown/kanban.js';
-import { boardProject, buildPrompt, cardProject, checkProjectFolder, locateCard, PiReader, resultNote, RunQueue, stageColumn } from '../../src/agent/harness.js';
+import {
+    boardProject, buildPrompt, cardProject, checkProjectFolder, describeReply, endsWithQuestion, HARNESSES, locateCard, PiReader, resultNote,
+    rpcPrompt, rpcSteer, rpcUiResponse, RunQueue, stageColumn, type HarnessAsk,
+} from '../../src/agent/harness.js';
 import { AgentTrace } from '../../src/agent/trace.js';
 import { section, test, eq, ok, contains } from '../framework.js';
 
@@ -120,7 +123,7 @@ export function harnessTests(): void {
         contains(tool.detail, 'a.ts');
         ok(trace.events.some(e => e.kind === 'reasoning' && e.detail === 'Cek dulu.'), 'penalaran tercatat');
         ok(trace.events.some(e => e.kind === 'note' && e.detail === 'bukan json'), 'baris bukan JSON dicatat');
-        contains(trace.events.find(e => e.title === 'Sesi pi dimulai')!.detail, 'pi --session sesi-1');
+        contains(trace.events.find(e => e.title === 'Sesi pi')!.detail, 'pi --session sesi-1');
     });
 
     test('PiReader: galat model, kode keluar, dan dihentikan', () => {
@@ -130,6 +133,57 @@ export function harnessTests(): void {
         eq(new PiReader(new AgentTrace()).finish(2, 'peringatan\nNo API key found\n').error, 'No API key found', 'baris stderr terakhir');
         eq(new PiReader(new AgentTrace()).finish(0, '').error, 'pi selesai tanpa jawaban');
         eq(new PiReader(new AgentTrace()).finish(143, '', true).error, 'dihentikan pengguna');
+    });
+
+    test('mode RPC: argumen, perintah stdin, dan id sesi dari get_state', () => {
+        eq(HARNESSES.pi.args('Checkout', null), ['--mode', 'rpc', '--name', 'Checkout']);
+        eq(HARNESSES.pi.args('Checkout', 'sesi-1'), ['--mode', 'rpc', '--name', 'Checkout', '--session', 'sesi-1']);
+        eq(JSON.parse(rpcPrompt('Halo\n"kutip"', 'p1')), { id: 'p1', type: 'prompt', message: 'Halo\n"kutip"' });
+        ok(!rpcPrompt('a\nb', 'p').includes('\n'), 'satu perintah = satu baris');
+        eq(JSON.parse(rpcSteer('belok')).type, 'steer');
+        eq(JSON.parse(rpcUiResponse('u1', { confirmed: false })), { type: 'extension_ui_response', id: 'u1', confirmed: false });
+        eq(JSON.parse(rpcUiResponse('u2', { cancelled: true })), { type: 'extension_ui_response', id: 'u2', cancelled: true });
+        const r = new PiReader(new AgentTrace());
+        eq(r.line(JSON.stringify({ id: 'nyerat-state', type: 'response', command: 'get_state', success: true, data: { sessionId: 's-9' } })), null);
+        eq(r.session, 's-9');
+        eq(r.line(JSON.stringify({ id: 'p', type: 'response', command: 'prompt', success: false, error: 'model tidak ada' })), { type: 'rejected', error: 'model tidak ada' });
+        eq(r.line(JSON.stringify({ type: 'agent_settled' })), { type: 'settled' });
+    });
+
+    test('permintaan extension menjadi ask; notify dan status TUI tidak menunggu', () => {
+        const trace = new AgentTrace();
+        const r = new PiReader(trace);
+        const sig = r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u1', method: 'select', title: 'Izinkan?', options: ['Ya', 'Tidak'], timeout: 10000 }));
+        eq(sig, { type: 'ask', ask: { kind: 'select', id: 'u1', title: 'Izinkan?', message: '', options: ['Ya', 'Tidak'], prefill: '', timeout: 10000 } });
+        const confirm = r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u2', method: 'confirm', title: 'Hapus?', message: 'rm -rf build' }));
+        eq(confirm?.type === 'ask' && confirm.ask.message, 'rm -rf build');
+        const input = r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u3', method: 'input', title: 'Nama cabang', placeholder: 'fitur/…' }));
+        eq(input?.type === 'ask' && input.ask.message, 'fitur/…', 'placeholder jadi petunjuk');
+        eq(r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u4', method: 'notify', message: 'Diblokir', notifyType: 'warning' })), null);
+        eq(r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u5', method: 'setStatus', statusKey: 'x', statusText: 'y' })), null);
+        ok(trace.events.some(e => e.title === 'Pesan pi' && e.detail === 'Diblokir'), 'notify dicatat');
+        ok(trace.events.some(e => e.title === 'pi menunggu: Izinkan?' && e.detail.includes('Ya / Tidak')), 'permintaan dicatat');
+    });
+
+    test('pertanyaan di akhir jawaban dan ringkasan jawaban pengguna', () => {
+        eq(['Mau pakai SDK A atau B?', 'Selesai.\n\nLanjutkan ke tes? 🙂', 'Pakai **A** atau **B?**', 'Sudah ditambahkan.', 'Apa? Sudah beres.', ''].map(endsWithQuestion),
+            [true, true, true, false, false, false]);
+        const ask: HarnessAsk = { kind: 'confirm', id: 'u', title: 't', message: '', options: [], prefill: '', timeout: null };
+        eq([describeReply(ask, { confirmed: true }), describeReply(ask, { confirmed: false }), describeReply(ask, { cancelled: true }),
+            describeReply({ ...ask, kind: 'question' }, { cancelled: true }), describeReply(ask, { value: 'Ya' })],
+        ['diizinkan', 'ditolak', 'dilewati', 'diakhiri tanpa membalas', 'Ya']);
+    });
+
+    test('PiReader.restart: galat dan status giliran lama tidak terbawa ke prompt berikutnya', () => {
+        const r = new PiReader(new AgentTrace());
+        r.line(JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Pilih A?' }], stopReason: 'stop' } }));
+        r.line(JSON.stringify({ type: 'agent_settled' }));
+        r.restart();
+        eq(r.settled, false);
+        r.line(JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Selesai pakai A' }], stopReason: 'stop' } }));
+        r.line(JSON.stringify({ type: 'agent_settled' }));
+        const result = r.finish(0, '');
+        eq([result.ok, result.summary], [true, 'Selesai pakai A']);
     });
 
     test('resultNote: satu baris ringkas', () => {
@@ -143,7 +197,7 @@ export function harnessTests(): void {
 
     test('RunQueue: satu run per folder, sisanya antre berurutan', () => {
         const q = new RunQueue();
-        const base = { board: '/p.md', title: 't', agent: 'pi', project: 'a', prompt: '' };
+        const base = { board: '/p.md', title: 't', agent: 'pi', project: 'a', prompt: '', session: null };
         const a = q.add({ ...base, card: 'A', folder: '/a' });
         const b = q.add({ ...base, card: 'B', folder: '/a' });
         const c = q.add({ ...base, card: 'C', folder: '/b' });
@@ -157,5 +211,10 @@ export function harnessTests(): void {
         eq(q.find('/p.md', 'B')?.status, 'failed');
         const again = q.add({ ...base, card: 'B', folder: '/a' });
         eq(q.find('/p.md', 'B'), again, 'run aktif didahulukan');
+        again.status = 'waiting';
+        eq(q.add({ ...base, card: 'E', folder: '/a' }).status, 'queued', 'run yang menunggu jawaban tetap memegang folder');
+        eq(q.active('/p.md', 'B'), again);
+        eq(q.end(again, 'done')?.card, 'E', 'selesai menunggu → giliran berikutnya');
+        eq(again.ask, null);
     });
 }

@@ -35,8 +35,8 @@ const DRAG_THRESHOLD = 6;     // piksel penunjuk bergerak sebelum klik dianggap 
 const EDGE = 48;              // jarak dari tepi (piksel) yang memicu gulir otomatis saat menyeret
 const SCROLL_SPEED = 14;
 const TAG_COLORS = 8;
-const RUN_ICON: Record<CardRunStatus, string> = { queued: '◌', working: '●', done: '✓', failed: '✕', stopped: '■' };
-const RUN_LABEL: Record<CardRunStatus, string> = { queued: 'antre', working: 'bekerja', done: 'selesai', failed: 'gagal', stopped: 'dihentikan' };
+const RUN_ICON: Record<CardRunStatus, string> = { queued: '◌', working: '●', waiting: '⏸', done: '✓', failed: '✕', stopped: '■' };
+const RUN_LABEL: Record<CardRunStatus, string> = { queued: 'antre', working: 'bekerja', waiting: 'menunggu jawaban', done: 'selesai', failed: 'gagal', stopped: 'dihentikan' };
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
 // Dialog bisa diganti (misalnya di tes) karena dialog asli menahan program sampai ditutup.
@@ -47,7 +47,7 @@ export interface BoardDialogs {
 }
 
 // Penugasan kartu ke harness eksternal (diisi jendela). Kartu dikenali dari teksnya.
-export type CardRunStatus = 'queued' | 'working' | 'done' | 'failed' | 'stopped';
+export type CardRunStatus = 'queued' | 'working' | 'waiting' | 'done' | 'failed' | 'stopped';
 export interface BoardHarness {
     status(card: Card): CardRunStatus | null;
     menu(card: Card, at: Position): MenuEntry[];
@@ -270,7 +270,7 @@ export class KanbanBoard {
         };
         if (agent) {
             const label = chip(`${status ? RUN_ICON[status] : '◇'} ${agent}${status ? ` · ${RUN_LABEL[status]}` : ''}`, 'kanban-agent', `kanban-agent-${status ?? 'idle'}`);
-            label.set_tooltip_text(status ? `${agent}: ${RUN_LABEL[status]} (klik kanan kartu untuk log)` : `Ditugaskan ke ${agent}; klik kanan kartu → Kerjakan dengan ${agent}`);
+            label.set_tooltip_text(status === 'waiting' ? `${agent} menunggu jawaban Anda: klik kanan kartu → Jawab ${agent}…` : status ? `${agent}: ${RUN_LABEL[status]} (klik kanan kartu untuk log)` : `Ditugaskan ke ${agent}; klik kanan kartu → Kerjakan dengan ${agent}`);
         }
         for (const tag of tags) chip(`#${tag}`, `kanban-tag-${this.tagColor(tag)}`);
         if (due) chip(`📅 ${this.formatDue(due)}`, 'kanban-due', `kanban-due-${dueStatus(due, this.today())}`);

@@ -1,7 +1,7 @@
 // Orkestrasi harness eksternal (murni, tanpa GTK): kartu kanban yang ditugaskan ke harness (mis. "@pi")
 // dikerjakan oleh program agent lain di folder proyek terpisah, bukan di folder kerja Nyerat. Modul ini
-// hanya menyusun perintah dan prompt, membaca aliran JSON keluarannya, dan mengatur antrean; menjalankan
-// proses dan menulis papan ada di orchestrator.ts.
+// hanya menyusun perintah dan prompt, membaca aliran JSON keluarannya (termasuk permintaan izin/masukan),
+// dan mengatur antrean; menjalankan proses dan menulis papan ada di orchestrator.ts.
 //
 // Papan menyebut proyeknya lewat frontmatter "proyek: nama" atau tag kartu "#proyek/nama" (tag menang).
 // Nama dipetakan ke folder di pengaturan, jadi isi Markdown tidak bisa mengarahkan harness ke path sembarang.
@@ -13,19 +13,60 @@ export interface HarnessSpec {
     name: string;          // nama penugasan di kartu, tanpa "@"
     label: string;
     program: string;       // dicari di PATH, lalu di ~/.local/bin
-    args(prompt: string, title: string): string[];
+    args(title: string, session: string | null): string[];
 }
 
-// Pi (pi.dev): mode JSON menulis satu event per baris lalu keluar setelah prompt selesai. Sesi tetap
-// disimpan pi, sehingga pekerjaan bisa dilanjutkan dengan "pi --session <id>" di folder proyek.
+// Pi (pi.dev) dalam mode RPC: proses hidup selama run, perintah (prompt, jawaban dialog, arahan) dikirim
+// lewat stdin dan event keluar per baris di stdout. Menutup stdin mengakhirinya. Sesi tetap disimpan pi,
+// sehingga run yang sudah selesai bisa dibalas lagi (--session) atau dilanjutkan dengan "pi --session <id>".
 export const HARNESSES: Record<string, HarnessSpec> = {
     pi: {
         name: 'pi',
         label: 'pi',
         program: 'pi',
-        args: (prompt, title) => ['--mode', 'json', '--name', title, '--', prompt],
+        args: (title, session) => ['--mode', 'rpc', '--name', title, ...(session ? ['--session', session] : [])],
     },
 };
+
+// ---------- Perintah RPC (stdin) ----------
+
+// Jawaban pengguna atas permintaan harness. cancelled = lewati (dialog) atau akhiri tanpa membalas (pertanyaan).
+export type HarnessReply = { value: string } | { confirmed: boolean } | { cancelled: true };
+
+export const rpcGetState = (): string => JSON.stringify({ id: 'nyerat-state', type: 'get_state' });
+export const rpcPrompt = (message: string, id: string): string => JSON.stringify({ id, type: 'prompt', message });
+export const rpcSteer = (message: string): string => JSON.stringify({ id: 'nyerat-steer', type: 'steer', message });
+export const rpcUiResponse = (id: string, reply: HarnessReply): string => JSON.stringify({ type: 'extension_ui_response', id, ...reply });
+
+// ---------- Permintaan dari harness ----------
+
+// Yang ditunggu harness dari pengguna: dialog extension (izin dan sejenisnya, dijawab lewat
+// extension_ui_response) atau pertanyaan di akhir giliran (dijawab dengan prompt berikutnya).
+export interface HarnessAsk {
+    kind: 'select' | 'confirm' | 'input' | 'editor' | 'question';
+    id: string | null;      // id extension_ui_request; null untuk pertanyaan
+    title: string;
+    message: string;
+    options: string[];
+    prefill: string;
+    timeout: number | null; // ms; harness menjawab sendiri dengan nilai bawaan setelah ini
+}
+
+const DIALOGS = new Set(['select', 'confirm', 'input', 'editor']);
+
+// Jawaban yang diakhiri tanda tanya dianggap menunggu masukan. Pertanyaan tanpa "?" tetap bisa dibalas
+// setelah run selesai lewat "Balas".
+export function endsWithQuestion(text: string): boolean {
+    const last = text.trim().split('\n').map(l => l.trim()).filter(Boolean).pop() ?? '';
+    return /\?[\s*_`)"'»”]*$/u.test(last.replace(/\p{Extended_Pictographic}/gu, '').trim());
+}
+
+// Ringkas sebuah jawaban untuk log dan catatan.
+export function describeReply(ask: HarnessAsk, reply: HarnessReply): string {
+    if ('cancelled' in reply) return ask.kind === 'question' ? 'diakhiri tanpa membalas' : 'dilewati';
+    if ('confirmed' in reply) return reply.confirmed ? 'diizinkan' : 'ditolak';
+    return reply.value;
+}
 
 export const harnessFor = (agent: string | null): HarnessSpec | null => (agent && HARNESSES[agent]) || null;
 
@@ -130,7 +171,18 @@ interface PiMessage {
 interface PiEvent {
     type?: string;
     id?: string;
-    message?: PiMessage;
+    command?: string;
+    success?: boolean;
+    error?: string;
+    data?: { sessionId?: string };
+    method?: string;
+    title?: string;
+    options?: string[];
+    placeholder?: string;
+    prefill?: string;
+    timeout?: number;
+    notifyType?: string;
+    message?: PiMessage | string;   // string pada extension_ui_request
     assistantMessageEvent?: { type?: string; delta?: string };
     toolCallId?: string;
     toolName?: string;
@@ -142,6 +194,9 @@ interface PiEvent {
 
 const contentText = (content: PiMessage['content']): string =>
     typeof content === 'string' ? content : (content ?? []).filter(c => c.type === 'text').map(c => c.text ?? '').join('');
+
+// Kejadian dari aliran yang perlu ditanggapi orkestrator.
+export type PiSignal = { type: 'ask'; ask: HarnessAsk } | { type: 'settled' } | { type: 'rejected'; error: string };
 
 // Mengubah aliran JSONL pi menjadi lini masa AgentTrace (ditampilkan LogViewer yang sama dengan agent Nyerat)
 // dan hasil akhir. Baris yang bukan JSON (mis. peringatan) dicatat apa adanya, tidak menggagalkan pembacaan.
@@ -157,16 +212,50 @@ export class PiReader {
 
     constructor(readonly trace: AgentTrace) {}
 
-    line(raw: string): void {
+    get session(): string | null {
+        return this.sessionId;
+    }
+
+    get answer(): string {
+        return this.summary;
+    }
+
+    // Prompt baru (jawaban atau balasan) dimulai: hasil giliran sebelumnya tidak boleh dianggap jawaban giliran ini.
+    restart(): void {
+        this.settled = false;
+        this.stopReason = '';
+        this.error = null;
+    }
+
+    line(raw: string): PiSignal | null {
         const text = raw.replace(/\r$/, '');
-        if (!text.trim()) return;
+        if (!text.trim()) return null;
         let e: PiEvent;
-        try { e = JSON.parse(text) as PiEvent; } catch { this.trace.add('note', 'Keluaran pi', text); return; }
+        try { e = JSON.parse(text) as PiEvent; } catch { this.trace.add('note', 'Keluaran pi', text); return null; }
         switch (e.type) {
-        case 'session':
-            this.sessionId = e.id ?? null;
-            this.trace.add('note', 'Sesi pi dimulai', this.sessionId ? `Lanjutkan di folder proyek dengan: pi --session ${this.sessionId}` : '');
+        case 'session':   // mode JSON; mode RPC memberi id sesi lewat get_state
+            this.setSession(e.id ?? null);
             break;
+        case 'response':
+            if (e.command === 'get_state' && e.success) this.setSession(e.data?.sessionId ?? null);
+            else if (e.success === false) {
+                this.error = e.error || `perintah ${e.command ?? ''} ditolak pi`;
+                this.trace.add('error', `pi menolak perintah ${e.command ?? ''}`, this.error, { round: this.turn });
+                return { type: 'rejected', error: this.error };
+            }
+            break;
+        case 'extension_ui_request': {
+            const message = typeof e.message === 'string' ? e.message : '';
+            if (e.method === 'notify') { this.trace.add(e.notifyType === 'error' ? 'error' : 'note', 'Pesan pi', message); break; }
+            if (!e.id || !DIALOGS.has(e.method ?? '')) break;   // setStatus, setWidget, ...: hanya untuk TUI
+            const ask: HarnessAsk = {
+                kind: e.method as HarnessAsk['kind'], id: e.id, title: e.title ?? 'pi meminta jawaban',
+                message: message || (e.placeholder ?? ''), options: e.options ?? [], prefill: e.prefill ?? '',
+                timeout: typeof e.timeout === 'number' ? e.timeout : null,
+            };
+            this.trace.add('note', `pi menunggu: ${ask.title}`, [ask.message, ask.options.length ? `Pilihan: ${ask.options.join(' / ')}` : ''].filter(Boolean).join('\n'), { round: this.turn });
+            return { type: 'ask', ask };
+        }
         case 'turn_start':
             this.turn++;
             this.trace.add('round', `Putaran ${this.turn}`, '', { round: this.turn });
@@ -178,7 +267,7 @@ export class PiReader {
             break;
         }
         case 'message_end': {
-            const m = e.message;
+            const m = typeof e.message === 'object' ? e.message : undefined;
             if (m?.role !== 'assistant') break;
             const answer = contentText(m.content).trim();
             if (answer) this.summary = answer;
@@ -202,8 +291,15 @@ export class PiReader {
             break;
         case 'agent_settled':
             this.settled = true;
-            break;
+            return { type: 'settled' };
         }
+        return null;
+    }
+
+    private setSession(id: string | null): void {
+        if (!id || id === this.sessionId) return;
+        this.sessionId = id;
+        this.trace.add('note', 'Sesi pi', `Lanjutkan di folder proyek dengan: pi --session ${id}`);
     }
 
     // exitStatus: kode keluar proses; stderr: ekor keluaran galat untuk pesan bila gagal.
@@ -234,7 +330,10 @@ export function resultNote(agent: string, result: HarnessResult, stamp: string):
 
 // ---------- Antrean ----------
 
-export type RunStatus = 'queued' | 'working' | 'done' | 'failed' | 'stopped';
+export type RunStatus = 'queued' | 'working' | 'waiting' | 'done' | 'failed' | 'stopped';
+
+// Run yang masih memegang folder proyeknya (menunggu jawaban pengguna juga, karena prosesnya masih hidup).
+export const isActive = (status: RunStatus): boolean => status === 'queued' || status === 'working' || status === 'waiting';
 
 export interface Run {
     id: number;
@@ -245,7 +344,9 @@ export interface Run {
     project: string;        // nama proyek
     folder: string;         // folder proyek; satu harness per folder dalam satu waktu
     prompt: string;
+    session: string | null; // sesi harness yang dilanjutkan (balasan setelah selesai), null = sesi baru
     status: RunStatus;
+    ask: HarnessAsk | null; // yang sedang ditunggu dari pengguna saat status 'waiting'
     trace: AgentTrace;
     result: HarnessResult | null;
 }
@@ -255,9 +356,9 @@ export class RunQueue {
     readonly runs: Run[] = [];
     private seq = 0;
 
-    add(run: Omit<Run, 'id' | 'status' | 'trace' | 'result'>, trace = new AgentTrace()): Run {
-        const busy = this.runs.some(r => r.folder === run.folder && (r.status === 'working' || r.status === 'queued'));
-        const added: Run = { ...run, id: ++this.seq, status: busy ? 'queued' : 'working', trace, result: null };
+    add(run: Omit<Run, 'id' | 'status' | 'ask' | 'trace' | 'result'>, trace = new AgentTrace()): Run {
+        const busy = this.runs.some(r => r.folder === run.folder && isActive(r.status));
+        const added: Run = { ...run, id: ++this.seq, status: busy ? 'queued' : 'working', ask: null, trace, result: null };
         this.runs.push(added);
         return added;
     }
@@ -265,18 +366,19 @@ export class RunQueue {
     // Run terakhir untuk kartu ini (yang aktif didahulukan).
     find(board: string, card: string): Run | null {
         const mine = this.runs.filter(r => r.board === board && r.card === card);
-        return mine.find(r => r.status === 'working' || r.status === 'queued') ?? mine[mine.length - 1] ?? null;
+        return mine.find(r => isActive(r.status)) ?? mine[mine.length - 1] ?? null;
     }
 
     active(board: string, card: string): Run | null {
         const run = this.find(board, card);
-        return run && (run.status === 'working' || run.status === 'queued') ? run : null;
+        return run && isActive(run.status) ? run : null;
     }
 
     // Tandai selesai lalu kembalikan run berikutnya di folder yang sama (sudah ditandai working), bila ada.
     end(run: Run, status: 'done' | 'failed' | 'stopped'): Run | null {
-        const wasWorking = run.status === 'working';
+        const wasWorking = run.status === 'working' || run.status === 'waiting';
         run.status = status;
+        run.ask = null;
         if (!wasWorking) return null;   // membatalkan antrean tidak memberi giliran: folder itu masih dikerjakan yang lain
         const next = this.runs.find(r => r.folder === run.folder && r.status === 'queued');
         if (next) next.status = 'working';
@@ -284,6 +386,6 @@ export class RunQueue {
     }
 
     get running(): Run[] {
-        return this.runs.filter(r => r.status === 'working');
+        return this.runs.filter(r => r.status === 'working' || r.status === 'waiting');
     }
 }
