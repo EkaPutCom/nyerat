@@ -15,6 +15,7 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
 import { createFile, createFolder, moveEntry, renameEntry, trashEntry } from '../fileops.js';
+import { newBoard, serializeBoard } from '../markdown/kanban.js';
 import { confirmDialog, promptDialog, showError } from './dialogs.js';
 import { onClick, pack } from '../gtkutil.js';
 import { popupMenu, separator, type MenuEntry } from './menu.js';
@@ -240,20 +241,22 @@ export class FileTree {
     }
 
     // Tanya nama lalu buat file/folder di dir. File baru langsung dibuka di editor.
-    create(kind: 'file' | 'folder', dir: string): string | null {
-        const label = kind === 'file' ? 'Nama file' : 'Nama folder';
-        const name = this.dialogs.prompt(kind === 'file' ? 'File Baru' : 'Folder Baru', label);
+    // `board`: file berisi papan kanban kosong, langsung tampil sebagai papan saat dibuka.
+    create(kind: 'file' | 'folder' | 'board', dir: string): string | null {
+        const title = kind === 'file' ? 'File Baru' : kind === 'board' ? 'Papan Kanban Baru' : 'Folder Baru';
+        const name = this.dialogs.prompt(title, kind === 'folder' ? 'Nama folder' : 'Nama file');
         if (name === null) return null;
         let path: string;
         try {
-            path = kind === 'file' ? createFile(dir, name) : createFolder(dir, name);
+            path = kind === 'folder' ? createFolder(dir, name)
+                : createFile(dir, name, kind === 'board' ? serializeBoard(newBoard()) : '');
         } catch (e) {
             this.dialogs.error((e as Error).message);
             return null;
         }
         this.refresh(dir);
         this.reveal(path);
-        if (kind === 'file') this.onOpenFile(path);
+        if (kind !== 'folder') this.onOpenFile(path);
         return path;
     }
 
@@ -299,6 +302,7 @@ export class FileTree {
         const entries: MenuEntry[] = [
             { label: 'File Baru…', enabled: dir !== null, run: () => { if (dir) this.create('file', dir); } },
             { label: 'Folder Baru…', enabled: dir !== null, run: () => { if (dir) this.create('folder', dir); } },
+            { label: 'Papan Kanban Baru…', enabled: dir !== null, run: () => { if (dir) this.create('board', dir); } },
         ];
         const rowPath = treePath ? this.pathOf(treePath) : null;
         if (rowPath) {
@@ -318,8 +322,16 @@ export class FileTree {
         if (row) this.view.get_selection().select_path(row);
         else this.view.get_selection().unselect_all();
 
-        popupMenu(this.view, this.contextMenu(row), x, y);
+        this.popupContextMenu(row, x, y);
         return true;
+    }
+
+    // Menu konteks di (x, y) koordinat TreeView. Popover dipasang di kotak luar, bukan di TreeView:
+    // TreeView menaruh simpul CSS anaknya di bawah simpul header, sehingga anak baru memicu
+    // Gtk-CRITICAL gtk_css_node_insert_after.
+    popupContextMenu(row: Gtk.TreePath | null, x: number, y: number): Gtk.PopoverMenu {
+        const [, px, py] = this.view.translate_coordinates(this.widget, x, y);
+        return popupMenu(this.widget, this.contextMenu(row), px, py);
     }
 
     private pathOf(treePath: Gtk.TreePath): string | null {

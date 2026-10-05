@@ -2,10 +2,12 @@
 
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
+import { isKanban, parseBoard } from '../../src/markdown/kanban.js';
 import { DEFAULTS, loadSettings } from '../../src/settings.js';
 import { listFolder } from '../../src/ui/filetree.js';
 import { MainWindow } from '../../src/window.js';
-import { section, test, eq, ok, tmp } from '../framework.js';
+import { widgetPixbuf } from '../widgets.js';
+import { section, test, eq, ok, tmp, optVal } from '../framework.js';
 import type { GuiContext } from './context.js';
 import type { MenuEntry } from '../../src/ui/menu.js';
 
@@ -144,8 +146,8 @@ export function folderTests(c: GuiContext): void {
     w.file = null;
     buf.set_modified(false);
 
-    test('menu klik kanan berisi File Baru dan Folder Baru', () => {
-        eq(menuLabels(ft.contextMenu(null)), ['File Baru…', 'Folder Baru…']);
+    test('menu klik kanan berisi File Baru, Folder Baru, dan Papan Kanban Baru', () => {
+        eq(menuLabels(ft.contextMenu(null)), ['File Baru…', 'Folder Baru…', 'Papan Kanban Baru…']);
     });
     test('klik kanan area kosong membuat file di root dan membukanya', () => {
         prompts.push('kosong-baru');
@@ -180,6 +182,43 @@ export function folderTests(c: GuiContext): void {
         while (w.editor !== ed) ok(w.closeTab(), 'closeTab() gagal');
         eq(w.documentCount, 1, 'jumlah tab setelah ditutup');
     });
+    test('Papan Kanban Baru membuat file papan di folder yang diklik dan membukanya sebagai papan', () => {
+        // --shot-tree-menu=<prefix>: simpan tangkapan menu klik kanan (<prefix>-menu.png) dan papan yang dibuat (<prefix>-papan.png).
+        const shot = optVal('shot-tree-menu');
+        if (shot) {
+            const popover = ft.popupContextMenu(ft.store.get_path(rowOf(null, 'sub'))!, 40, 40);
+            for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
+            widgetPixbuf(popover)?.savev(`${shot}-menu.png`, 'png', [], []);
+            popover.popdown();
+            // Popover dilepas dari TreeView di idle; tunggu sampai lepas sebelum pohon diubah.
+            ok(waitFor(() => !popover.get_parent()), 'popover tidak dilepas');
+        }
+        prompts.push('tugas');
+        activate(ft.contextMenu(ft.store.get_path(rowOf(null, 'sub'))!), 'Papan Kanban Baru…');
+        pump();
+        const path = GLib.build_filenamev([proj, 'sub', 'tugas.md']);
+        ok(GLib.file_test(path, GLib.FileTest.EXISTS), 'file papan tidak ada di disk');
+        const text = new TextDecoder().decode(GLib.file_get_contents(path)[1]);
+        ok(isKanban(text), 'isi file bukan papan kanban');
+        eq(parseBoard(text).columns.map(c => c.title), ['Rencana', 'Dikerjakan', 'Selesai'], 'daftar papan');
+        ok(childNames(rowOf(null, 'sub')).includes('tugas.md'), 'file papan tidak tampil di pohon');
+        eq(w.file, path, 'file tab aktif');
+        ok(w.boardMode, 'papan tidak tampil');
+        ok(!w.editor.buffer.get_modified(), 'papan baru ditandai belum disimpan');
+        if (shot) {
+            for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
+            widgetPixbuf(w.win)?.savev(`${shot}-papan.png`, 'png', [], []);
+        }
+        while (w.editor !== ed) ok(w.closeTab(), 'closeTab() gagal');
+    });
+    test('Papan Kanban Baru dengan nama bentrok menampilkan galat tanpa menimpa', () => {
+        errors.length = 0;
+        prompts.push('a');
+        const before = new TextDecoder().decode(GLib.file_get_contents(GLib.build_filenamev([proj, 'a.md']))[1]);
+        activate(ft.contextMenu(null), 'Papan Kanban Baru…');
+        eq(errors.length, 1, 'galat bentrok');
+        eq(new TextDecoder().decode(GLib.file_get_contents(GLib.build_filenamev([proj, 'a.md']))[1]), before, 'isi a.md');
+    });
     test('Folder Baru membuat folder di root dan di dalam folder', () => {
         prompts.push('baru-root');
         activate(ft.contextMenu(null), 'Folder Baru…');
@@ -206,8 +245,8 @@ export function folderTests(c: GuiContext): void {
     const abs = (...p: string[]) => GLib.build_filenamev([proj, ...p]);
     test('menu baris menambah Ganti Nama dan Hapus; area kosong tidak', () => {
         const row = ft.store.get_path(rowOf(null, 'a.md'))!;
-        eq(menuLabels(ft.contextMenu(row)).filter(l => l), ['File Baru…', 'Folder Baru…', 'Ganti Nama…', 'Hapus']);
-        eq(menuLabels(ft.contextMenu(null)), ['File Baru…', 'Folder Baru…']);
+        eq(menuLabels(ft.contextMenu(row)).filter(l => l), ['File Baru…', 'Folder Baru…', 'Papan Kanban Baru…', 'Ganti Nama…', 'Hapus']);
+        eq(menuLabels(ft.contextMenu(null)), ['File Baru…', 'Folder Baru…', 'Papan Kanban Baru…']);
     });
     test('ganti nama file dan folder memperbarui pohon dan disk', () => {
         write('lama.md');

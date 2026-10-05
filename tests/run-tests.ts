@@ -7,6 +7,7 @@
 //   gjs -m dist/run-tests.js --screenshot=a.png      simpan tangkapan layar jendela editor
 //   gjs -m dist/run-tests.js --shot-proposal=/tmp/p  simpan tangkapan jendela tinjau usulan agent (/tmp/p-<n>-tinjau.png dan -utama.png)
 //   gjs -m dist/run-tests.js --shot-harness=/tmp/h   simpan tangkapan papan dengan kartu pi bekerja/antre dan log pi (/tmp/h-papan.png, -log.png)
+//   gjs -m dist/run-tests.js --shot-tree-menu=/tmp/m  simpan tangkapan menu klik kanan pohon berkas dan papan kanban baru (/tmp/m-menu.png, -papan.png)
 //
 // Tes GUI membuka jendela sungguhan, jadi perlu sesi desktop (X11/Wayland).
 

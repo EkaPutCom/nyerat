@@ -21,14 +21,16 @@ function cleanName(raw: string): string {
     return name;
 }
 
-// Buat file kosong; ekstensi .md ditambahkan jika bukan ekstensi Markdown, supaya tampil di pohon.
-export function createFile(dir: string, rawName: string): string {
+// Buat file (kosong, atau berisi `content`); ekstensi .md ditambahkan jika bukan ekstensi Markdown, supaya tampil di pohon.
+export function createFile(dir: string, rawName: string, content = ''): string {
     let name = cleanName(rawName);
     if (!MARKDOWN_EXTENSION.test(name)) name += '.md';
     const path = join(dir, name);
     if (exists(path)) throw new Error(`“${name}” sudah ada di folder ini.`);
     try {
-        Gio.File.new_for_path(path).create(Gio.FileCreateFlags.NONE, null).close(null);
+        const stream = Gio.File.new_for_path(path).create(Gio.FileCreateFlags.NONE, null);
+        if (content) stream.write_all(new TextEncoder().encode(content), null);
+        stream.close(null);
     } catch (e) {
         throw new Error(`Gagal membuat file: ${(e as Error).message}`);
     }
