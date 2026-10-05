@@ -32,6 +32,8 @@ import { gitLogTests } from './unit/gitlog.js';
 import { fileOpsTests } from './unit/fileops.js';
 import { agentTests, apiKeyTests, toolTests } from './unit/agent.js';
 import { transcriptTests } from './unit/transcript.js';
+import { agenticTests } from './unit/agentic.js';
+import { workTests } from './unit/work.js';
 import { changeTests } from './unit/changes.js';
 import { deepseekTests } from './unit/deepseek.js';
 import { chatTests } from './gui/chat.js';
@@ -71,12 +73,20 @@ function runUnitTests(): void {
     apiKeyTests();
     toolTests();
     transcriptTests();
+    workTests();
+    agenticTests();
     changeTests();
     deepseekTests();
 }
 
 function runGuiTests(app: Gtk.Application): void {
     const c = createContext(app);
+    if (opt('only-chat')) {
+        chatTests(c);
+        c.buf.set_modified(false);
+        c.w.win.destroy();
+        return;
+    }
     const { w, ed, buf, pump, setText, cursorTo } = c;
     pump();
 

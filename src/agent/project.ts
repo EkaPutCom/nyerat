@@ -15,13 +15,13 @@ const cache = new Map<string, { stamp: string; text: string }>();
 
 // Semua berkas Markdown di bawah root (tanpa yang bertitik dan folder bawaan alat), kecuali `except`.
 // Nama dikembalikan relatif terhadap root.
-export function readProject(root: string, except: string | null): SourceFile[] {
+export function readProject(root: string, except: string | null, fresh = false): SourceFile[] {
     const files: SourceFile[] = [];
     const walk = (dir: string, prefix: string) => {
         if (files.length >= MAX_FILES) return;
         let children: Gio.FileInfo[] = [];
         try {
-            const enumerator = Gio.File.new_for_path(dir).enumerate_children('standard::name,standard::type,standard::size,time::modified', Gio.FileQueryInfoFlags.NONE, null);
+            const enumerator = Gio.File.new_for_path(dir).enumerate_children('standard::name,standard::type,standard::size,time::modified,time::modified-usec', Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, null);
             for (let info = enumerator.next_file(null); info; info = enumerator.next_file(null)) children.push(info);
             enumerator.close(null);
         } catch (e) {
@@ -37,9 +37,9 @@ export function readProject(root: string, except: string | null): SourceFile[] {
                 if (!SKIPPED_DIRS.has(name)) walk(path, `${prefix}${name}/`);
             } else if (type === Gio.FileType.REGULAR && path !== except && MARKDOWN_FILE.test(name)) {
                 if (info.get_size() > MAX_FILE_BYTES) continue;
-                const stamp = `${info.get_size()}:${info.get_modification_date_time()?.to_unix() ?? 0}`;
+                const stamp = `${info.get_size()}:${info.get_modification_date_time()?.to_unix() ?? 0}:${info.get_attribute_uint32('time::modified-usec')}`;
                 let entry = cache.get(path);
-                if (entry?.stamp !== stamp) {
+                if (fresh || entry?.stamp !== stamp) {
                     try {
                         entry = { stamp, text: readTextFile(path) };
                     } catch (e) {

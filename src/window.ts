@@ -18,7 +18,7 @@ import GLib from 'gi://GLib';
 
 import { APP_NAME } from './config.js';
 import { saveSettings, type Settings } from './settings.js';
-import { readTextFile, writeTextFile, writeTextFileAsync, fileExists } from './files.js';
+import { readTextFile, writeTextFile, writeTextFileAsync, waitForWrites, fileExists } from './files.js';
 import { markdownToHtml } from './markdown/html.js';
 import { WELCOME } from './welcome.js';
 import { MarkdownView, type Mode } from './editor/view.js';
@@ -30,6 +30,8 @@ import { FileTree, isDirectory } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
 import { ChatPanel } from './ui/chat.js';
 import { readProject } from './agent/project.js';
+import { projectPath } from './agent/path.js';
+import { applyBatch } from './agent/batch.js';
 import { cleanNewName, type Change } from './agent/changes.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
@@ -198,9 +200,10 @@ export class MainWindow {
             },
             root: () => this.fileTree.root,
             applyChange: change => this.applyChange(change),
+            applyBatch: changes => this.applyChangeBatch(changes),
             window: () => this.win,
-            files: () => {
-                const files = this.fileTree.root ? readProject(this.fileTree.root, this.file) : [];
+            files: fresh => {
+                const files = this.fileTree.root ? readProject(this.fileTree.root, this.file, fresh) : [];
                 // Tab lain yang belum disimpan: asisten membaca isi editor, bukan versi di disk.
                 for (const doc of this.docs) {
                     if (doc === this.doc || !doc.file || !doc.editor.buffer.get_modified()) continue;
@@ -445,13 +448,40 @@ export class MainWindow {
     // Terapkan perubahan usulan agent yang sudah disetujui pengguna. Mengembalikan pesan galat atau null.
     // Berkas yang terbuka diubah lewat editornya (satu langkah undo); yang lain ditulis ke disk. Dalam kedua
     // kasus isi harus masih sama dengan yang dilihat agent, supaya suntingan pengguna tidak tertimpa.
+    private applyChangeBatch(changes: Change[]): string | null {
+        const root = this.fileTree.root;
+        if (!root) return 'tidak ada folder kerja';
+        if (changes.some(c => cleanNewName(c.file) !== c.file)) return 'path paket tidak valid';
+        const pathOf = (file: string) => projectPath(root, file);
+        try { for (const c of changes) waitForWrites(pathOf(c.file)); } catch (e) { return errorMessage(e); }
+        const error = applyBatch(changes, {
+            read: file => {
+                const path = pathOf(file), open = this.docs.find(d => d.file === path);
+                return open ? open.editor.getText() : fileExists(path) ? readTextFile(path) : null;
+            },
+            write: c => {
+                const path = pathOf(c.file), open = this.docs.find(d => d.file === path);
+                if (open) open.editor.replaceText(c.after);
+                else { GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755); writeTextFile(path, c.after); }
+            },
+            rollback: c => {
+                const path = pathOf(c.file), open = this.docs.find(d => d.file === path);
+                if (c.kind === 'create') { if (fileExists(path)) Gio.File.new_for_path(path).delete(null); }
+                else if (open) open.editor.replaceText(c.before);
+                else writeTextFile(path, c.before);
+            },
+        });
+        this.fileTree.refresh(root);
+        return error;
+    }
+
     private applyChange(change: Change): string | null {
         const root = this.fileTree.root;
         if (!root) return 'tidak ada folder kerja yang terbuka';
         // Pertahanan berlapis: planChange() sudah menolak nama seperti ini, tetapi penulisan ke disk tidak boleh bergantung padanya.
         if (cleanNewName(change.file) !== change.file) return 'path di luar folder kerja atau tidak valid';
-        const path = GLib.build_filenamev([root, ...change.file.split('/')]);
         try {
+            const path = projectPath(root, change.file);
             const open = this.docs.find(d => d.file === path);
             if (change.kind === 'create') {
                 if (fileExists(path)) return `${change.file} sudah ada`;

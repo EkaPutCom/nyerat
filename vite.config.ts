@@ -29,6 +29,7 @@ export default defineConfig({
                 'run-tests': 'tests/run-tests.ts',
                 capture: 'scripts/capture.ts',
                 bench: 'tests/bench.ts',
+                'bench-agentic': 'tests/bench-agentic.ts',
                 'live-test': 'tests/live.ts',
             },
             formats: ['es'],

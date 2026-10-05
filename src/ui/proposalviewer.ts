@@ -20,9 +20,10 @@ export class ProposalViewer {
     // Dipanggil sekali. applied=false tanpa error = ditolak (termasuk jendela ditutup).
     onDecision: (applied: boolean) => void = () => {};
 
-    constructor(parent: Gtk.Window | null, readonly change: Change, dark: boolean, private apply: (change: Change) => string | null) {
+    constructor(parent: Gtk.Window | null, readonly change: Change | Change[], dark: boolean, private apply: (change: Change | Change[]) => string | null, readOnly = false) {
         this.window = new Gtk.Window({ transient_for: parent, default_width: 860, default_height: 620 });
-        const title = describeChange(change);
+        const changes = Array.isArray(change) ? change : [change];
+        const title = changes.length > 1 ? `Paket: ${changes.length} berkas` : describeChange(changes[0]);
         const header = new Gtk.HeaderBar({ show_title_buttons: true });
         this.window.set_titlebar(header);
         this.window.set_title(`Usulan agent: ${title}`);
@@ -31,14 +32,14 @@ export class ProposalViewer {
         subject.set_markup(`<b>${GLib.markup_escape_text(title, -1)}</b>`);
         const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, margin_top: 12, margin_start: 12, margin_end: 12, margin_bottom: 8 });
         info.append(subject);
-        const reason = change.reason.trim();
+        const reason = changes.map(c => `${changes.length > 1 ? c.file + ': ' : ''}${c.reason.trim()}`).join('\n');
         const meta = new Gtk.Label({ label: reason || 'Agent tidak memberi alasan.', xalign: 0, wrap: true });
         meta.add_css_class('dim-label');
         info.append(meta);
 
         this.diffView = createDiffView();
         setupDiffTags(this.diffView, dark);
-        fillDiff(this.diffView, parseDiff(unifiedDiff(change.before, change.after)));
+        fillDiff(this.diffView, changes.flatMap(c => [...(Array.isArray(change) ? [{ kind: 'hunk' as const, text: `Berkas: ${c.file}` }] : []), ...parseDiff(unifiedDiff(c.before, c.after))]));
         const scroll = new Gtk.ScrolledWindow();
         scroll.set_child(this.diffView);
 
@@ -47,6 +48,7 @@ export class ProposalViewer {
         this.rejectButton = new Gtk.Button({ label: 'Tolak' });
         this.applyButton = new Gtk.Button({ label: 'Terapkan' });
         this.applyButton.add_css_class('suggested-action');
+        if (readOnly) { this.applyButton.hide(); this.rejectButton.set_label('Tutup'); }
         const bar = new Gtk.Box({ spacing: 8, margin_top: 10, margin_bottom: 10, margin_start: 10, margin_end: 10 });
         pack(bar, this.status, true);
         bar.append(this.rejectButton);
@@ -61,6 +63,7 @@ export class ProposalViewer {
         this.window.set_child(body);
 
         this.applyButton.connect('clicked', () => {
+            if (readOnly) return;
             const error = this.apply(change);
             if (error) {
                 // Tetap terbuka supaya pengguna membaca sebabnya; Tolak/tutup menyelesaikan giliran.
@@ -91,6 +94,10 @@ export class ProposalViewer {
         this.decided = true;
         this.error = error;
         this.onDecision(applied);
+    }
+
+    setDark(dark: boolean): void {
+        setupDiffTags(this.diffView, dark);
     }
 
     show(): void {

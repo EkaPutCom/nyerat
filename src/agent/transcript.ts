@@ -16,6 +16,9 @@
 // Jawaban asisten sendiri bisa memuat baris "## Anda"; baris seperti itu diberi garis miring terbalik
 // di depannya saat disimpan dan dikembalikan saat dibaca.
 
+import { parseEvents, type ActionEvent } from './journal.js';
+import type { WorkState } from './work.js';
+import { parseWork } from './work.js';
 import type { Turn } from './context.js';
 
 export interface SavedChat {
@@ -23,6 +26,8 @@ export interface SavedChat {
     model: string;
     created: string;   // ISO lokal tanpa zona, mis. 2026-10-04T14:20:00
     turns: Turn[];
+    events?: ActionEvent[];
+    work?: WorkState | null;
 }
 
 const HEADINGS: Record<Turn['role'], string> = { user: 'Anda', assistant: 'Asisten' };
@@ -51,6 +56,8 @@ export function chatFileName(created: string, title: string): string {
 
 export function serializeChat(chat: SavedChat): string {
     const head = ['---', `judul: ${JSON.stringify(chat.title)}`, `model: ${chat.model}`, `dibuat: ${chat.created}`, '---'];
+    if (chat.work) head.splice(4, 0, `pekerjaan: ${JSON.stringify(chat.work)}`);
+    if (chat.events?.length) head.splice(head.length - 1, 0, `tindakan: ${JSON.stringify(chat.events)}`);
     const body = chat.turns.map(t => `## ${HEADINGS[t.role]}\n${t.content.replace(/\n+$/, '').split('\n').map(escapeLine).join('\n')}`);
     return `${head.join('\n')}\n\n${body.join('\n\n')}\n`;
 }
@@ -85,7 +92,22 @@ export function parseChat(text: string): SavedChat | null {
         }
     }
     close();
-    if (!turns.length) return null;
+    let work: WorkState | null = null;
+    try {
+        const a = JSON.parse(meta.pekerjaan ?? 'null');
+        if (a) {
+            work = parseWork(JSON.stringify({ tujuan: a.goal, langkah: a.steps.map((s: any) => ({ teks: s.text, status: s.status })), catatan: a.note }));
+            if (work && Number.isInteger(a.actionStart) && a.actionStart >= 0) work.actionStart = a.actionStart;
+            if (work && a.verification && typeof a.verification.passed === 'boolean' && Array.isArray(a.verification.checks)) {
+                const checks = a.verification.checks.filter((c: any) => c && typeof c.file === 'string' && typeof c.label === 'string' && typeof c.passed === 'boolean');
+                if (checks.length === a.verification.checks.length) work.verification = { passed: checks.length > 0 && checks.every((c: any) => c.passed), checks };
+            }
+            if (work && ['running', 'paused', 'failed', 'complete'].includes(a.status)) work.status = a.status === 'running' || a.status === 'complete' && (!work.verification?.passed || !work.steps.every(s => s.status === 'done')) ? 'paused' : a.status;
+        }
+    } catch { /* Metadata rusak tidak menghalangi teks percakapan. */ }
+    let events: ActionEvent[] = [];
+    try { events = parseEvents(JSON.parse(meta.tindakan ?? '[]')); } catch { /* Journal rusak dilewati. */ }
+    if (!turns.length && !work && !events.length) return null;
     let title = meta.judul ?? '';
     try {
         if (title.startsWith('"')) title = JSON.parse(title);
@@ -98,5 +120,7 @@ export function parseChat(text: string): SavedChat | null {
         model: meta.model ?? '',
         created: meta.dibuat ?? '',
         turns,
+        ...(work ? { work } : {}),
+        ...(events.length ? { events } : {}),
     };
 }

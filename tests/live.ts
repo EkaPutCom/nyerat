@@ -8,6 +8,7 @@
 // kapal putih vs hitam) dan menjalankan ChatSession + DeepSeek + alat penelusuran yang sama dengan aplikasi.
 // Key tidak pernah dicetak.
 
+import { liveAgentic } from './live-agentic.js';
 import GLib from 'gi://GLib';
 import System from 'system';
 import { systemKeyStore } from '../src/agent/apikey.js';
@@ -101,6 +102,7 @@ async function main(): Promise<boolean> {
         }
     }
     print(`\n${failures ? RED : GREEN}${SCENARIOS.length - failures}/${SCENARIOS.length} skenario lulus${RESET}`);
+    if (opt('agentic')) failures += await liveAgentic(provider, model, thinking);
     return failures === 0;
 }
 

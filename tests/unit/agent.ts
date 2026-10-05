@@ -412,7 +412,7 @@ export function toolTests(): void {
         const streamed: string[] = [];
         const r = settle(session.ask(turn(), provider, 'm', { ...nohandlers, onText: d => streamed.push(d), onTool: s => steps.push({ ...s }) }));
         eq(calls.length, 2);
-        ok(calls[0].tools && calls[0].tools.length === 4, 'alat tidak diberikan');
+        ok(calls[0].tools && calls[0].tools.some(t => t.name === 'baca_berkas'), 'alat tidak diberikan');
         eq(calls[0].thinking, true);
         const second = snapshots[1];
         const assistant = second[second.length - 2];

@@ -409,6 +409,17 @@ export function chatTests(c: GuiContext): void {
             widgetPixbuf(viewer.window)?.savev(`${prefix}-${n}-tinjau.png`, 'png', [], []);
             widgetPixbuf(w.win)?.savev(`${prefix}-${n}-utama.png`, 'png', [], []);
         }
+        const agenticShot = optVal('shot-agentic');
+        if (agenticShot && Array.isArray(viewer.change)) {
+            const oldDark = w.dark;
+            for (const dark of [false, true]) {
+                w.setDark(dark);
+                // Jendela tinjau yang terbuka harus mengikuti perubahan tema.
+                for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
+                widgetPixbuf(viewer.window)?.savev(`${agenticShot}-paquet-${dark ? 'dark' : 'light'}.png`, 'png', [], []);
+            }
+            w.setDark(oldDark);
+        }
         if (button === 'apply') viewer.applyButton.emit('clicked');
         else if (button === 'reject') viewer.rejectButton.emit('clicked');
         else viewer.window.destroy();
@@ -505,6 +516,48 @@ export function chatTests(c: GuiContext): void {
             ok(w.closeTab(), 'closeTab() gagal');
             pump();
         }
+    });
+
+    test('paket beberapa berkas: satu keputusan menerapkan semua diff dan journal dipulihkan', () => {
+        const tindakan = ['rencana/paket-a', 'rencana/paket-b'].map(nama => ({ alat: 'buat_berkas', argumen: JSON.stringify({ nama, isi: '# Jadwal rilis\n\nRilis: 22 November\n', alasan: 'Sinkronkan keputusan rapat dalam satu paket' }) }));
+        proposeAndPress(proposalProvider('usulkan_paket', { tindakan }), 'apply');
+        contains(lastDiff, 'Berkas: rencana/paket-a.md');
+        contains(lastDiff, 'Berkas: rencana/paket-b.md');
+        eq(diskOf('rencana/paket-a.md'), diskOf('rencana/paket-b.md'));
+        contains(all(), 'Diterapkan.');
+        const saved = listChats(book).find(chat => readTextFile(chat.path).includes('usulkan_paket'));
+        ok(saved, 'checkpoint paket tidak tersimpan');
+        ok(panel.openChat(saved.path), 'pemulihan gagal');
+        eq(panel.session.events.find(e => e.tool === 'usulkan_paket')?.status, 'applied');
+        contains(all(), 'Diterapkan: usulkan_paket');
+        const prefix = optVal('shot-agentic');
+        if (prefix) {
+            for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
+            widgetPixbuf(w.win)?.savev(`${prefix}-journal.png`, 'png', [], []);
+        }
+    });
+
+    test('checkpoint rencana terbuka lagi dengan tombol lanjutkan, tema terang dan gelap', () => {
+        panel.reset();
+        panel.makeProvider = () => proposalProvider('atur_pekerjaan', { tujuan: 'Sinkronkan jadwal rilis', langkah: [{ teks: 'Baca keputusan rapat', status: 'done' }, { teks: 'Periksa rencana dan kartu tugas', status: 'pending' }], catatan: 'Tanggal rilis: 22 November' });
+        settle(panel.ask('Sinkronkan jadwal rilis'));
+        const saved = listChats(book).find(chat => readTextFile(chat.path).includes('pekerjaan:'));
+        ok(saved, 'rencana tidak disimpan');
+        ok(panel.openChat(saved.path), 'rencana tidak dibuka');
+        eq(panel.session.work?.status, 'paused');
+        const resume = childrenOf(panel.messages).find(w => w instanceof Gtk.Button && w.get_label() === 'Lanjutkan pekerjaan');
+        ok(resume, 'tombol lanjutkan hilang');
+        const prefix = optVal('shot-agentic');
+        if (prefix) {
+            const oldDark = w.dark;
+            for (const dark of [false, true]) {
+                w.setDark(dark);
+                for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
+                widgetPixbuf(w.win)?.savev(`${prefix}-rencana-${dark ? 'dark' : 'light'}.png`, 'png', [], []);
+            }
+            w.setDark(oldDark);
+        }
+        panel.reset();
     });
 
     test('penerapan menolak isi yang berubah sejak diusulkan dan path di luar folder', () => {

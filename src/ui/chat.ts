@@ -8,6 +8,8 @@
 //   │ [ketik pertanyaan…     ] [➤] │
 //   └──────────────────────────────┘
 
+import { journalText } from '../agent/journal.js';
+import { workText } from '../agent/work.js';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
@@ -29,9 +31,10 @@ import { childrenOf, onKeyPress, pack } from '../gtkutil.js';
 export interface ChatHost {
     active(): { name: string; text: string; cursorLine: number } | null;   // dokumen terbuka (isi buffer, bukan disk)
     selection(): string;
-    files(): SourceFile[];                                                  // berkas lain di folder proyek
+    files(fresh?: boolean): SourceFile[];                                                  // berkas lain di folder proyek
     // Terapkan perubahan yang sudah disetujui pengguna. Mengembalikan pesan galat, atau null bila berhasil.
     applyChange?(change: Change): string | null;
+    applyBatch?(changes: Change[]): string | null;
     window?(): Gtk.Window | null;                                           // induk jendela tinjau usulan
     root(): string | null;                                                  // folder naskah; tempat riwayat percakapan disimpan
 }
@@ -93,6 +96,7 @@ export class ChatPanel {
     private readonly contextList: Gtk.Box;
     readonly modelCombo: Gtk.ComboBoxText;
     readonly thinkingCheck: Gtk.CheckButton;
+    private generation = 0;
     private cancellable: Gio.Cancellable | null = null;
     private renderTimer = 0;
     private dark = false;
@@ -277,6 +281,7 @@ export class ChatPanel {
 
     setPalette(palette: Palette): void {
         this.dark = palette.dark;
+        this.viewer?.setDark(palette.dark);
         this.colors = { code: palette.codeFg, codeBg: palette.codeBg, link: palette.accent, mark: palette.markBg };
         for (const b of this.bubbles) this.render(b);
     }
@@ -304,6 +309,7 @@ export class ChatPanel {
     // ---------- Percakapan ----------
 
     reset(): void {
+        this.generation++;
         this.stop();
         this.session.clear();
         this.chatPath = null;
@@ -327,7 +333,9 @@ export class ChatPanel {
     async send(): Promise<void> {
         const question = this.input.buffer.text.trim();
         if (!question || this.busy) return;
+        const generation = this.generation;
         const found = await this.keyStore.get();
+        if (generation !== this.generation || this.busy) return;
         if (!found) {
             this.addNote('Belum ada API key DeepSeek. Buka pengaturan (ikon roda gigi), tempel key-nya, lalu kirim lagi.', true);
             this.settingsButton.get_popover()?.popup();
@@ -344,6 +352,7 @@ export class ChatPanel {
         this.sendButton.set_tooltip_text('Hentikan');
         this.stick = true;
 
+        const requestRoot = this.host.root();
         let reasoning = '';
         try {
             const result = await this.session.ask(this.turnInput(question), this.makeProvider(found.key), this.model, {
@@ -358,15 +367,30 @@ export class ChatPanel {
                     answer.thinking.show();
                     answer.thinkingLabel.set_text(reasoning.trim());
                 },
+                currentFiles: () => {
+                    if (requestRoot !== this.host.root()) throw Error('Folder kerja berubah selama permintaan');
+                    const active = this.options.activeDocument ? this.host.active() : null;
+                    return [...this.host.files(true).filter(f => f.name !== active?.name), ...(active ? [{ name: active.name, text: active.text }] : [])];
+                },
+                onState: () => {
+                    if (generation !== this.generation) return;
+                    this.persist();
+                    if (this.session.work) { answer.work.set_text(workText(this.session.work)); answer.work.show(); }
+                },
                 onTool: step => this.showStep(answer.steps, step),
-                onProposal: change => this.propose(change),
+                onBatchProposal: this.host.applyBatch ? changes => requestRoot === this.host.root() ? this.propose(changes) : Promise.resolve({ applied: false, error: 'Folder kerja berubah selama permintaan' }) : undefined,
+                onProposal: change => requestRoot === this.host.root() ? this.propose(change) : Promise.resolve({ applied: false, error: 'Folder kerja berubah selama permintaan' }),
             }, this.cancellable);
+            if (generation !== this.generation) return;
             this.render(answer.bubble);
             if (result.cancelled) answer.footer.set_text(answer.bubble.text || result.toolCalls ? 'Dihentikan' : 'Dihentikan sebelum ada jawaban');
             else if (result.usage) answer.footer.set_text(usageText(result.usage, result.toolCalls, result.applied));
             answer.footer.set_visible(!!answer.footer.get_text());
             this.persist();
         } catch (e) {
+            if (generation !== this.generation) return;
+            if (this.session.work) this.session.work.status = 'failed';
+            this.persist();
             this.render(answer.bubble);
             answer.footer.set_markup(`<span foreground="#c9372c">${escapeMarkup(e instanceof Error ? e.message : String(e))}</span>`);
             answer.footer.show();
@@ -385,7 +409,7 @@ export class ChatPanel {
     private persist(): void {
         const root = this.host.root();
         const history = this.session.history;
-        if (!this.saveChats || !root || !history.length) return;
+        if (!this.saveChats || !root || !history.length && !this.session.work && !this.session.events.length) return;
         if (root !== this.chatRoot) {
             // Pindah folder di tengah percakapan: lanjutannya ditulis sebagai berkas baru di folder yang baru.
             this.chatRoot = root;
@@ -393,10 +417,10 @@ export class ChatPanel {
         }
         if (!this.chatPath) {
             this.chatCreated = nowStamp();
-            this.chatTitle = titleFrom(history.find(t => t.role === 'user')?.content ?? '');
+            this.chatTitle = titleFrom(history.find(t => t.role === 'user')?.content ?? this.session.work?.goal ?? this.session.events[0]?.question ?? '');
         }
         try {
-            this.chatPath = saveChat(root, { title: this.chatTitle, model: this.model, created: this.chatCreated, turns: [...history] }, this.chatPath);
+            this.chatPath = saveChat(root, { title: this.chatTitle, model: this.model, created: this.chatCreated, turns: [...history], work: this.session.work, events: this.session.events }, this.chatPath);
         } catch (e) {
             this.addNote(`Riwayat percakapan tidak tersimpan: ${e instanceof Error ? e.message : e}`, true);
         }
@@ -411,6 +435,8 @@ export class ChatPanel {
         }
         this.reset();
         this.session.restore(chat.turns);
+        this.session.work = chat.work ?? null;
+        this.session.events.push(...chat.events ?? []);
         this.chatPath = path;
         this.chatRoot = this.host.root();
         this.chatTitle = chat.title;
@@ -423,6 +449,22 @@ export class ChatPanel {
                 const answer = this.addAssistant();
                 answer.bubble.text = turn.content;
                 this.render(answer.bubble);
+            }
+        }
+        if (this.session.events.length) {
+            this.addNote(journalText(this.session.events));
+            for (const event of this.session.events.filter(e => e.changes.length).slice(-20)) {
+                const review = new Gtk.Button({ label: `Lihat diff · ${event.changes.length} berkas`, tooltip_text: event.changes.map(c => c.file).join('\n'), halign: Gtk.Align.START });
+                review.connect('clicked', () => new ProposalViewer(this.host.window?.() ?? null, event.changes, this.dark, () => 'Riwayat hanya dapat dibaca', true).show());
+                this.messages.append(review);
+            }
+        }
+        if (this.session.work) {
+            this.addNote(workText(this.session.work), false, 'chat-work');
+            if (this.session.work.status !== 'complete') {
+                const resume = new Gtk.Button({ label: 'Lanjutkan pekerjaan', halign: Gtk.Align.START });
+                resume.connect('clicked', () => { resume.set_sensitive(false); void this.ask('Lanjutkan pekerjaan yang tersimpan. Baca isi aktual, periksa journal, dan jangan ulangi perubahan yang sudah diterapkan.'); });
+                this.messages.append(resume);
             }
         }
         this.stick = true;
@@ -635,6 +677,8 @@ export class ChatPanel {
         const bubble = this.bubble(true, 'chat-assistant');
         const meta = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, visible: false });
         meta.add_css_class('side-meta');
+        const work = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, selectable: true, visible: false });
+        work.add_css_class('chat-work');
         const steps = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, visible: false });
         // Kartu usulan perubahan agent: di antara langkah penelusuran dan jawaban, sesuai urutan kejadiannya.
         const cards = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, visible: false });
@@ -646,6 +690,7 @@ export class ChatPanel {
         footer.add_css_class('side-meta');
         const row = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 });
         row.append(meta);
+        row.append(work);
         row.append(steps);
         row.append(cards);
         row.append(thinking);
@@ -655,7 +700,7 @@ export class ChatPanel {
         thinking.hide();
         footer.hide();
         this.messages.append(row);
-        return { bubble, meta, steps, cards, thinking, thinkingLabel, footer };
+        return { bubble, meta, work, steps, cards, thinking, thinkingLabel, footer };
     }
 
     // Satu baris per penelusuran asisten: "Mencari “surat”…" lalu, setelah selesai, "… → 5 potongan".
@@ -676,18 +721,22 @@ export class ChatPanel {
     // Usulan perubahan: jendela tinjau (seperti diff riwayat Git) terbuka otomatis; di panel tertinggal kartu
     // ringkas dengan status dan tombol untuk membukanya lagi. Berkas tidak disentuh sebelum Terapkan; menutup
     // jendela, Tolak, atau menghentikan giliran sama dengan menolak.
-    private propose(change: Change): Promise<ProposalResult> {
+    private propose(change: Change | Change[]): Promise<ProposalResult> {
+        const proposalRoot = this.host.root();
+        const changes = Array.isArray(change) ? change : [change];
+        const description = Array.isArray(change) ? `Paket perubahan · ${changes.length} berkas` : describeChange(change);
+        const reasonText = changes.map(c => `${c.file}: ${c.reason}`).join('\n');
         const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
         card.add_css_class('chat-proposal');
         const title = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, use_markup: true, selectable: true });
-        title.set_markup(`<b>${escapeMarkup(describeChange(change))}</b>`);
+        title.set_markup(`<b>${escapeMarkup(description)}</b>`);
         card.append(title);
-        if (change.reason.trim()) {
-            const reason = new Gtk.Label({ label: change.reason.trim(), xalign: 0, wrap: true, max_width_chars: 44, selectable: true });
+        if (reasonText.trim()) {
+            const reason = new Gtk.Label({ label: reasonText.trim(), xalign: 0, wrap: true, max_width_chars: 44, selectable: true });
             reason.add_css_class('side-meta');
             card.append(reason);
         }
-        const diff = diffPreview(change.before, change.after);
+        const diff = changes.map(c => diffPreview(c.before, c.after)).reduce((a, b) => ({ added: a.added + b.added, removed: a.removed + b.removed }), { added: 0, removed: 0 });
         const status = new Gtk.Label({ label: `+${diff.added} −${diff.removed} · menunggu keputusan Anda`, xalign: 0, wrap: true, max_width_chars: 44 });
         status.add_css_class('side-meta');
         const review = new Gtk.Button({ label: 'Tinjau perubahan', halign: Gtk.Align.START });
@@ -716,7 +765,7 @@ export class ChatPanel {
                 if (done) return;
                 if (this.viewer) { this.viewer.show(); return; }
                 const viewer = new ProposalViewer(this.host.window?.() ?? null, change, this.dark,
-                    c => this.host.applyChange ? this.host.applyChange(c) : 'penerapan tidak tersedia');
+                    c => proposalRoot !== this.host.root() ? 'Folder kerja berubah sejak usulan dibuat' : Array.isArray(c) ? this.host.applyBatch ? this.host.applyBatch(c) : 'penerapan paket tidak tersedia' : this.host.applyChange ? this.host.applyChange(c) : 'penerapan tidak tersedia');
                 viewer.onDecision = applied => {
                     if (applied) finish({ applied: true }, 'Diterapkan.');
                     else if (viewer.error) finish({ applied: false, error: viewer.error }, `Gagal diterapkan: ${viewer.error}`, true);
@@ -735,9 +784,9 @@ export class ChatPanel {
         });
     }
 
-    private addNote(text: string, error = false): void {
+    private addNote(text: string, error = false, cssClass = 'side-meta'): void {
         const l = new Gtk.Label({ label: text, xalign: 0, wrap: true, max_width_chars: 40, selectable: true });
-        l.add_css_class(error ? 'chat-error' : 'side-meta');
+        l.add_css_class(error ? 'chat-error' : cssClass);
         l.show();
         this.empty.hide();
         this.messages.append(l);

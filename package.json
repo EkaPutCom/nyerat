@@ -15,6 +15,7 @@
     "test": "npm run build && xvfb-run -a -s '-screen 0 1280x800x24' env GDK_BACKEND=x11 LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 gjs -m dist/run-tests.js --with-kanban-mouse",
     "test:ui": "npm run build && env GDK_BACKEND=x11 gjs -m dist/run-tests.js --with-kanban-mouse",
     "bench": "npm run build && xvfb-run -a -s '-screen 0 1280x800x24' env GDK_BACKEND=x11 gjs -m dist/bench.js",
+    "bench:agentic": "npm run build && gjs -m dist/bench-agentic.js",
     "bench:save": "npm run build && xvfb-run -a -s '-screen 0 1280x800x24' env GDK_BACKEND=x11 gjs -m dist/bench.js --save=bench/$(date +%Y%m%d-%H%M%S).json",
     "bench:compare": "npm run build && xvfb-run -a -s '-screen 0 1280x800x24' env GDK_BACKEND=x11 gjs -m dist/bench.js --compare=bench/baseline.json",
     "test:live": "npm run build && set -a && . ./.env && set +a && gjs -m dist/live-test.js",

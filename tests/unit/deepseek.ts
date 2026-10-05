@@ -16,10 +16,21 @@ export function deepseekTests(): void {
     System.gc();
 
     let auth = '', requested = '';
-    let mode: 'stream' | 'unauthorized' | 'tools' = 'stream';
+    let mode: 'stream' | 'unauthorized' | 'tools' | 'busy' | 'truncated' = 'stream';
     let body: any = null;
+    let requests = 0;
     const server = new Soup.Server();
     server.add_handler('/chat/completions', (_server, msg) => {
+        requests++;
+        if (mode === 'busy') {
+            if (requests === 1) { msg.set_status(503, null); msg.get_response_body().append(enc.encode('{}')); return; }
+            mode = 'stream';
+        }
+        if (mode === 'truncated') {
+            msg.set_status(200, null);
+            msg.get_response_body().append(enc.encode('data: {"choices":[{"delta":{"content":"sebagian"}}]}\n\n'));
+            return;
+        }
         auth = msg.get_request_headers().get_one('Authorization') ?? '';
         requested = msg.get_method();
         try {
@@ -100,6 +111,27 @@ export function deepseekTests(): void {
         eq(body.tools, [{ type: 'function', function: { name: 'cari_teks', description: 'cari', parameters: { type: 'object', properties: {} } } }]);
         eq(body.messages[2], { role: 'assistant', content: '', reasoning_content: 'pikir', tool_calls: [{ id: 'x', type: 'function', function: { name: 'daftar_berkas', arguments: '{}' } }] });
         eq(body.messages[3], { role: 'tool', tool_call_id: 'x', content: 'hasil' });
+    });
+
+    test('503 sebelum keluaran dicoba ulang; aliran terpotong setelah teks tidak diulang', () => {
+        mode = 'busy'; requests = 0;
+        let text = '';
+        settle(client('sk-uji').chat({ ...request, onText: d => { text += d; } }));
+        eq(requests, 2); eq(text, 'Halo penulis');
+        mode = 'truncated'; requests = 0; text = '';
+        let failed = false;
+        try { settle(client('sk-uji').chat({ ...request, onText: d => { text += d; } })); } catch (e) { failed = true; contains(String(e), 'penanda selesai'); }
+        eq(failed, true); eq(requests, 1); eq(text, 'sebagian');
+    });
+
+    test('pembatalan selama jeda retry selesai tanpa mengirim permintaan kedua', () => {
+        mode = 'busy'; requests = 0;
+        const cancellable = new Gio.Cancellable();
+        const timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { cancellable.cancel(); return GLib.SOURCE_REMOVE; });
+        const r = settle(client('sk-uji').chat({ ...request, cancellable, onText: () => {} }));
+        eq(r.cancelled, true); eq(requests, 1);
+        // Timer sudah dijalankan ketika settle selesai.
+        ok(timer > 0, 'timer tidak dibuat');
     });
 
     test('status 401 menjadi galat berbahasa Indonesia dengan pesan server', () => {

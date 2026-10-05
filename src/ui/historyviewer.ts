@@ -20,9 +20,10 @@ export function setupDiffTags(view: Gtk.TextView, dark: boolean): void {
     const colors = DIFF_COLORS[dark ? 'dark' : 'light'];
     const table = view.buffer.get_tag_table();
     const add = (name: string, props: Record<string, string>) => {
-        const tag = new Gtk.TextTag({ name });
+        const existing = table.lookup(name);
+        const tag = existing ?? new Gtk.TextTag({ name });
         for (const [key, value] of Object.entries(props)) tag.set_property(key, value);
-        table.add(tag);
+        if (!existing) table.add(tag);
     };
     add('add', { paragraph_background: colors.add });
     add('del', { paragraph_background: colors.del });
