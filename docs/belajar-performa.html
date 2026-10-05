@@ -252,7 +252,7 @@ footer { color: var(--text-3); font-size: .82rem; padding: 30px 0 60px; }
     <li><span class="h">44cbc11</span><span><b>Bab 5</b> · Lapisan tabel hanya mengubah tabel yang berganti keadaan dan hanya menghitung posisi grid yang terlihat.</span></li>
     <li><span class="h">7080c4e</span><span><b>Bab 7</b> · Diagnosis callback GJS yang ditolak saat GC.</span></li>
     <li><span class="h">8d976da</span><span><b>Bab 5</b> · Grid tabel dibuat saat masuk layar, ukuran diambil dari cache pengukur.</span></li>
-    <li><span class="h">GTK 4</span><span><b>Bab 7</b> · Migrasi ke GTK 4.14: lingkungan bench berganti, baseline diganti. Regresinya dicatat di <a href="#bab7">Bab 7</a>.</span></li>
+    <li><span class="h">295d7b9</span><span><b>Bab 7</b> · Migrasi ke GTK 4.14: lingkungan bench berganti, baseline diganti. Regresinya dicatat di <a href="#bab7">Bab 7</a>.</span></li>
   </ol>
 </section>
 
@@ -720,7 +720,14 @@ cellSizes: Map&lt;markupSel, [w, h]&gt;      // ≤1.024 sel</code></pre>
     ["Buku 651 KB: ketik lewat view", 6.24, 4.20, "ms"],
     ["Mixed 30 KB: pindah kursor 20 baris", 41.35, 29.17, "ms"]]'></div>
   <p><b>Kedua, <code>set_text()</code> GTK 4.</b> Jeda terpanjang saat membuka buku seluruhnya ada di <code>setText()</code> sinkron. Dipecah: <code>highlight()</code> kita setara (±40–45 ms di kedua versi), tetapi <code>GtkTextBuffer.set_text()</code> yang menggantikan isi lama naik dari ±27 ms menjadi ±45–58 ms. Mematikan undo tidak membantu. Melepas buffer dari view selama <code>set_text()</code> memberi hasil tidak stabil dan menambah jeda ±25–46 ms sesudahnya, jadi eksperimen itu dibuang.</p>
-  <div class="caveat"><b>Yang belum diukur:</b> desktop dengan GPU (GTK 4 lalu memakai OpenGL perangkat keras, jadi angka Xvfb di atas adalah kasus terburuk) dan Wayland. Baseline baru (<code>bench/baseline.json</code>, <code>bench/baseline-buku.json</code>) memakai GTK 4 di Xvfb supaya <code>bench:compare</code> kembali membandingkan lingkungan yang setara.</div>
+  <p><b>Di desktop dengan GPU</b> (Intel UHD, OpenGL perangkat keras) sebagian besar selisih itu hilang. Yang tersisa terutama biaya <code>set_text()</code>:</p>
+  <div class="legend"><span style="--c:var(--before)">GTK 3</span><span style="--c:var(--after)">GTK 4 (GPU)</span></div>
+  <div class="cmp" data-rows='[
+    ["Buku 651 KB: jeda terpanjang membuka", 71.03, 85.09, "ms"],
+    ["Buku 651 KB: total membuka", 799.29, 920.37, "ms"],
+    ["Buku 651 KB: Enter paragraf baru", 3.70, 3.83, "ms"],
+    ["Mixed 30 KB: pindah kursor 20 baris", 18.97, 19.94, "ms"]]'></div>
+  <div class="caveat"><b>Yang belum diukur:</b> Wayland. Angka Xvfb di atas adalah kasus terburuk (setara mesin tanpa GPU). Baseline baru (<code>bench/baseline.json</code>, <code>bench/baseline-buku.json</code>) memakai GTK 4 di Xvfb supaya <code>bench:compare</code> kembali membandingkan lingkungan yang setara.</div>
   <div class="lesson"><b>Pelajaran</b>Mengganti toolkit mengganti lingkungan pengukuran. Bandingkan kedua versi berdampingan pada sesi yang sama, lalu pisahkan biaya toolkit (renderer, <code>set_text</code>) dari biaya kode sendiri sebelum menyimpulkan apa pun.</div>
 </section>
 

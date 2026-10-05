@@ -454,6 +454,39 @@ Baseline lama memakai GTK 3.24.41, sehingga `bench:compare` sudah menganggapnya 
 setara dan melewati selisihnya; baseline baru menjaga regresi berikutnya di GTK 4.
 Regresi di atas tetap tercatat sebagai keterbatasan migrasi, bukan disembunyikan.
 
-Keterbatasan: belum diukur di desktop dengan GPU (renderer OpenGL perangkat keras) dan
-belum diukur di Wayland. Validasi fungsi: `npm test` **391 lulus, 0 gagal**, dua kali
+Keterbatasan: belum diukur di Wayland (desktop dengan GPU: lihat subbagian berikut). Validasi fungsi: `npm test` **391 lulus, 0 gagal**, dua kali
 berturut-turut, log lengkap bersih dari peringatan, critical, dan galat.
+
+### Desktop dengan GPU (X11, Intel UHD, OpenGL perangkat keras)
+
+Diukur berdampingan di desktop XFCE/X11 (bukan Xvfb); renderer bawaan GTK 4 memakai
+OpenGL perangkat keras (Mesa Intel UHD CML GT2). 10 pengulangan, `--timeout=600`:
+
+| Operasi (mixed 100 blok, 30 KB) | GTK 3 | GTK 4 | p95/maks GTK 3 → GTK 4 |
+| --- | ---: | ---: | ---: |
+| setText + sorot + layout | 202.22 | 207.55 | 223.16/223.16 → 220.06/220.06 |
+| buka: jeda terpanjang | 36.84 | 42.03 | 50.57/50.57 → 48.24/48.24 |
+| ketik per karakter | 1.22 | 1.51 | 3.66/10.41 → 3.70/6.50 |
+| ketik lewat view (paragraf) | 2.13 | 2.52 | 10.51/15.12 → 6.96/13.79 |
+| Enter paragraf baru | 2.62 | 2.90 | 10.92/10.92 → 5.70/5.70 |
+| paste besar + Unicode | 137.82 | 134.04 | 139.49/139.49 → 143.97/143.97 |
+| redo paste besar | 154.06 | 165.13 | 167.35/167.35 → 178.09/178.09 |
+| pindah kursor 20 baris | 18.97 | 19.94 | 24.48/24.48 → 23.22/23.22 |
+
+| Operasi (buku 400 blok, 651 KB) | GTK 3 | GTK 4 | p95/maks GTK 3 → GTK 4 |
+| --- | ---: | ---: | ---: |
+| setText + sorot + layout | 799.29 | 920.37 | 834.25/834.25 → 972.52/972.52 |
+| buka: jeda terpanjang | 71.03 | 85.09 | 80.98/80.98 → 95.93/95.93 |
+| ketik per karakter | 1.92 | 2.23 | 5.07/13.28 → 5.66/9.76 |
+| ketik lewat view (paragraf) | 2.69 | 3.63 | 7.26/11.67 → 8.03/9.18 |
+| Enter paragraf baru | 3.70 | 3.83 | 9.80/9.80 → 6.06/6.06 |
+| paste besar + Unicode | 148.61 | 137.94 | 151.61/151.61 → 151.00/151.00 |
+| redo paste besar | 166.45 | 164.58 | 180.00/180.00 → 177.19/177.19 |
+| pindah kursor 20 baris | 14.13 | 22.34 | 15.01/15.01 → 24.31/24.31 |
+
+Dengan GPU, sebagian besar regresi Xvfb hilang: dokumen campuran setara GTK 3 (p95
+mengetik dan Enter bahkan lebih rendah), dan buku 651 KB tinggal **jeda membuka
+71.03 → 85.09 ms** (sumbernya `set_text()` GTK 4, lihat di atas), total membuka +15%,
+serta pindah kursor 20 baris 14.13 → 22.34 ms (±1,1 ms per gerakan). Baseline tetap
+dari Xvfb (lingkungan `npm run bench:compare`); angka desktop ini hanya pembanding.
+Validasi: `npm run test:ui` di desktop **391 lulus, 0 gagal**, log bersih.
