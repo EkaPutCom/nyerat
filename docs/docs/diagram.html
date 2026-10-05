@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagram Mermaid dan DBML · Dokumentasi Nyerat</title>
+<meta name="description" content="Blok mermaid dan dbml di Nyerat dirender sebagai diagram secara lokal dan ikut berubah selagi Anda mengetik.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Ruang kerja</p>
+<h1>Diagram Mermaid dan DBML</h1>
+<p class="lead">Blok <code>```mermaid</code> dan <code>```dbml</code> digambar sebagai diagram langsung di dokumen, dirender lokal tanpa internet.</p>
+
+<figure><img src="../assets/diagram.gif" width="900" height="586" loading="lazy" alt="Animasi diagram Mermaid yang bertambah kotaknya setiap baris kode baru diketik"><figcaption>Menambah baris kode, diagram ikut tumbuh</figcaption></figure>
+
+<h2 id="mermaid">Mermaid</h2>
+<pre><code>```mermaid
+flowchart LR
+  Rencana --&gt; Dikerjakan --&gt; Review --&gt; Selesai
+```</code></pre>
+<ul>
+  <li>Flowchart, sequence, class, state, ER, gantt, pie, dan jenis lain yang didukung Mermaid.</li>
+  <li>Saat kursor di luar blok, hanya diagram yang terlihat. Saat kursor masuk, kodenya muncul dan diagram menjadi pratinjau di bawahnya yang ikut berubah selagi mengetik.</li>
+  <li>Galat sintaks tampil di bawah blok; kodenya tidak disembunyikan.</li>
+  <li>Klik ganda memperbesar diagram. Warnanya mengikuti mode terang atau gelap.</li>
+</ul>
+
+<h2 id="dbml">DBML (dbdiagram.io)</h2>
+<pre><code>```dbml
+Table pengguna {
+  id int [pk]
+  email varchar [unique]
+}
+Table catatan {
+  id int [pk]
+  pengguna_id int [ref: &gt; pengguna.id]
+}
+```</code></pre>
+<p>Skema DBML digambar sebagai diagram ER dengan perilaku yang sama seperti Mermaid. Yang didukung: <code>Table</code> (alias, <code>pk</code>, <code>unique</code>, <code>note</code>, <code>ref:</code> di dalam kolom, <code>indexes</code>), <code>Ref</code> satu baris maupun blok dengan relasi <code>&gt;</code> <code>&lt;</code> <code>-</code> <code>&lt;&gt;</code>. <code>Enum</code>, <code>TableGroup</code>, <code>Project</code>, dan <code>Note</code> dilewati. Kolom di sisi “banyak” relasi otomatis bertanda FK.</p>
+<figure><img src="../assets/dbml.png" width="1332" height="867" loading="lazy" alt="Skema DBML digambar sebagai diagram ER dengan tabel pengguna dan catatan"><figcaption>Skema DBML menjadi diagram ER</figcaption></figure>
+
+<h2 id="kebutuhan">Kebutuhan</h2>
+<p>Diagram membutuhkan WebKitGTK 6.0 (<code>gir1.2-webkit-6.0</code>). Tanpanya, blok diagram menampilkan pesan galat dan bagian lain aplikasi tetap berjalan.</p>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

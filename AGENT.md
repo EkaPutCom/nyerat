@@ -55,6 +55,12 @@ Bahasa: komentar kode, pesan commit, teks antarmuka, nama tes, dan dokumentasi d
 - Tambahkan simulasi bila alur atau struktur datanya bisa diperagakan, dan sebutkan jenisnya: logika nyata (salinan kode Nyerat), model, atau peragaan skenario tertulis. Bila kode yang disalin ke simulasi berubah (mis. `preflight`, `changeState`, `invertChange`, `reconcileEvents`, tokenizer/BM25, `RunQueue`), samakan salinannya.
 - Setelah mengubahnya, buka halaman itu di browser lewat server lokal (gambar `assets/` tidak termuat dari `file://`), jalankan simulasinya, dan pastikan tidak ada error console dan tidak ada gulir horizontal di lebar 375 px.
 
+## Dokumentasi pengguna
+
+- `docs/index.html` adalah landing page yang **hanya menampilkan fitur agent**. Fitur editor dan ruang kerja lainnya tidak ditambahkan ke sana, melainkan ke halaman dokumentasi.
+- `docs/docs/*.html` adalah dokumentasi fitur lengkap per topik. Navigasi (sidebar, daftar isi, sebelumnya/berikutnya) dibangun `docs/docs/nav.js` dari daftar `PAGES`; halaman baru harus ditambahkan ke daftar itu. Gaya bersama ada di `docs/docs/docs.css`.
+- **Setiap fitur baru atau perubahan perilaku yang terlihat pengguna wajib memperbarui halaman docs yang relevan** (dan `keterbatasan.html` bila batasnya berubah). Fitur agent baru juga ditambahkan sebagai kartu di landing page dan ke `docs/docs/alat.html` bila berupa alat. Setelah mengubahnya, buka halaman lewat server lokal dan pastikan tidak ada error console dan tidak ada gulir horizontal di lebar 375 px.
+
 ## Struktur dan aturan lapisan
 
 ```

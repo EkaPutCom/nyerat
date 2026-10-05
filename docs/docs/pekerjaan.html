@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rencana dan verifikasi · Dokumentasi Nyerat</title>
+<meta name="description" content="Pekerjaan beberapa langkah di Nyerat: agent mencatat rencana dengan atur_pekerjaan lalu memeriksa hasil aktual dengan verifikasi_pekerjaan sebelum menyatakan selesai.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Agent</p>
+<h1>Rencana dan verifikasi</h1>
+<p class="lead">Untuk permintaan yang butuh beberapa langkah, agent menyusun rencana yang terlihat di panel, mengerjakannya lewat usulan, lalu memeriksa hasil sungguhan sebelum menyatakan selesai.</p>
+
+<figure><img src="../assets/pekerjaan.gif" width="900" height="548" loading="lazy" alt="Animasi agent mencatat rencana tiga langkah, mengusulkan paket perubahan, lalu memverifikasi hasil dan menandai semua langkah selesai"><figcaption>Rencana, paket perubahan, verifikasi, lalu selesai dan terverifikasi</figcaption></figure>
+
+
+<h2 id="rencana">Rencana pekerjaan</h2>
+<p>Agent memanggil <code>atur_pekerjaan</code> untuk mencatat tujuan dan sampai 20 langkah, masing-masing berstatus <code>pending</code>, <code>done</code>, atau <code>blocked</code>. Rencana tampil di panel dan diperbarui saat ada kemajuan.</p>
+<p>Status pekerjaan: <em>berjalan</em>, <em>tertunda</em>, <em>gagal</em>, atau <em>selesai dan terverifikasi</em>. Status selesai hanya bisa dicapai bila semua langkah <code>done</code> dan verifikasi lulus.</p>
+
+<h2 id="verifikasi">Verifikasi hasil</h2>
+<p>Setelah perubahan diterapkan, agent memanggil <code>verifikasi_pekerjaan</code> dengan kriteria dari permintaan Anda. Verifikasi membaca ulang isi disk atau editor (bukan cache), lalu memeriksa:</p>
+<div class="table-wrap"><table>
+  <tr><th>Jenis</th><th>Memeriksa</th></tr>
+  <tr><td><code>ada</code> / <code>tidak_ada</code></td><td>Teks persis wajib ada atau tidak ada di sebuah berkas, atau di seluruh folder dengan berkas <code>"*"</code>, mis. memastikan tanggal lama tidak tersisa di mana pun</td></tr>
+  <tr><td><code>kanban</code></td><td>Kartu berada di daftar tertentu dengan status selesai/belum tertentu</td></tr>
+  <tr><td><code>struktur</code></td><td>Jumlah sel tabel, heading kosong atau melompat level, blok kode yang tidak ditutup, dan tautan ke berkas Markdown yang tidak ada</td></tr>
+</table></div>
+<p>Untuk tiap berkas yang diubah, verifikasi otomatis menambahkan pemeriksaan struktur, memastikan berkas yang dihapus atau dipindah memang tidak ada di tempat lamanya, dan mewajibkan setidaknya satu kriteria dari agent.</p>
+<figure><img src="../assets/pekerjaan.png" width="1280" height="780" loading="lazy" alt="Panel Asisten berisi hasil verifikasi LULUS per pemeriksaan, rencana dengan semua langkah tercentang, dan kartu paket dengan tombol Urungkan"><figcaption>Hasil verifikasi per pemeriksaan, rencana yang selesai, dan tombol Urungkan pada paket</figcaption></figure>
+<div class="callout"><strong>Hanya masalah baru yang menggagalkan</strong><p>Struktur dibandingkan dengan isi sebelum pekerjaan dimulai. Masalah lama disebut di hasil, tetapi tidak menggagalkan pekerjaan.</p></div>
+
+<h2 id="melanjutkan">Melanjutkan pekerjaan</h2>
+<p>Rencana, journal tindakan, dan hasil verifikasi tersimpan bersama percakapan. Bila aplikasi ditutup atau koneksi terputus di tengah jalan, buka lagi percakapannya: tombol <em>Lanjutkan pekerjaan</em> muncul dan agent meneruskan dari langkah terakhir. Lihat <a href="riwayat.html#pemulihan">Pemulihan</a>.</p>
+
+<h2 id="batas">Yang belum dibuktikan</h2>
+<p>Verifikasi membuktikan kriteria konkret, bukan seluruh konsistensi makna dokumen. Mutu pemeriksaan masih bergantung pada kriteria yang dipilih agent; belum ada pemeriksaan kontradiksi otomatis.</p>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

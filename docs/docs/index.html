@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mulai cepat · Dokumentasi Nyerat</title>
+<meta name="description" content="Pasang dan jalankan Nyerat, personal workbench AI agent untuk desktop Linux, lalu mulai bekerja dengan agent di folder Anda.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Memulai</p>
+<h1>Mulai cepat</h1>
+<p class="lead">Nyerat adalah personal workbench AI agent untuk desktop Linux. Anda dan agent bekerja di folder yang sama: agent menelusuri catatan, rencana, dan papan tugas Anda, lalu mengusulkan perubahan yang baru ditulis setelah Anda menyetujui selisihnya.</p>
+
+<h2 id="pasang">Pasang</h2>
+<p>Nyerat dijalankan oleh GJS, bukan Node.js. Node.js hanya dibutuhkan sekali untuk membangun kodenya. Di Ubuntu atau Debian:</p>
+<pre><span class="c"># wajib: GJS, GTK 4, dan GtkSourceView 5</span>
+sudo apt install gjs gir1.2-gtk-4.0 gir1.2-gtksource-5
+
+<span class="c"># agent AI: libsoup 3 dan (opsional) keyring untuk API key</span>
+sudo apt install gir1.2-soup-3.0 gir1.2-secret-1
+
+<span class="c"># opsional: diagram Mermaid dan DBML</span>
+sudo apt install gir1.2-webkit-6.0</pre>
+<p>Tanpa libsoup hanya agent yang tidak berfungsi. Tanpa libsecret, API key disimpan di berkas berizin 0600. Tanpa WebKitGTK, diagram menampilkan pesan galat dan bagian lain tetap berjalan.</p>
+
+<h2 id="build">Ambil kode dan jalankan</h2>
+<p>Perlu Node.js 20.19+ atau 22.12+ untuk build.</p>
+<pre>git clone https://github.com/EkaPutCom/nyerat.git
+cd nyerat
+npm install
+npm start</pre>
+<p>Setelah di-build, aplikasi bisa dibuka langsung dengan sebuah berkas atau folder:</p>
+<pre>gjs -m dist/nyerat.js ~/catatan          <span class="c"># buka folder kerja</span>
+gjs -m dist/nyerat.js rencana.md         <span class="c"># buka satu berkas</span></pre>
+
+<h2 id="api-key">Sambungkan agent</h2>
+<ol>
+  <li>Buka panel Asisten dengan <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> atau tombol gelembung di header bar.</li>
+  <li>Klik ikon roda gigi, lalu isi API key DeepSeek. Key disimpan di keyring sistem, tidak di <code>settings.json</code>. Variabel lingkungan <code>DEEPSEEK_API_KEY</code> juga dikenali.</li>
+  <li>Buka sebuah folder kerja (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>) supaya agent bisa menelusuri berkas lain dan mengusulkan perubahan.</li>
+</ol>
+
+<h2 id="coba">Coba alur pertama</h2>
+<p>Misalkan folder kerja Anda berisi rencana peluncuran, catatan rapat, dan papan tugas. Ketik di panel Asisten:</p>
+<ol>
+  <li><strong>Tanya.</strong> “Adakah keputusan rapat yang belum masuk ke rencana peluncuran?” Agent mencari sendiri dan menjawab dengan kutipan berkas dan nomor baris.</li>
+  <li><strong>Minta bertindak.</strong> “Perbarui tanggal rilisnya dan pindahkan kartu materi rilis ke Dikerjakan.” Agent mengusulkan perubahan teks dan perpindahan kartu.</li>
+  <li><strong>Tinjau.</strong> Jendela tinjau menampilkan selisihnya seperti diff Git. Tekan <em>Terapkan</em> atau <em>Tolak</em>.</li>
+</ol>
+<figure><img src="../assets/agent.gif" width="900" height="548" loading="lazy" alt="Animasi agent mengusulkan perubahan rencana dan papan tugas; pengguna menerapkan keduanya"><figcaption>Agent mengusulkan, Anda menerapkan</figcaption></figure>
+
+<h2 id="berikutnya">Langkah berikutnya</h2>
+<div class="cards">
+  <a href="konsep.html"><strong>Konsep dasar</strong><span>Folder kerja, Markdown biasa, dan agent yang hanya mengusulkan.</span></a>
+  <a href="usulan.html"><strong>Usulan dan persetujuan</strong><span>Jendela tinjau, paket perubahan, persetujuan sebagian, dan Urungkan.</span></a>
+  <a href="pekerjaan.html"><strong>Rencana dan verifikasi</strong><span>Pekerjaan beberapa langkah yang diperiksa sebelum dinyatakan selesai.</span></a>
+  <a href="orkestrator.html"><strong>Orkestrator pi</strong><span>Tugaskan kartu kanban ke harness pi di repo proyek lain.</span></a>
+</div>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

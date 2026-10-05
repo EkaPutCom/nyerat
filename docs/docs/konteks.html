@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Konteks dan privasi · Dokumentasi Nyerat</title>
+<meta name="description" content="Apa yang dikirim Nyerat ke model, cara konteks disusun otomatis, lampiran @berkas, dan saklar untuk membatasi dokumen yang dikirim.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Agent</p>
+<h1>Konteks dan privasi</h1>
+<p class="lead">Model hanya tahu apa yang dikirim. Nyerat menyusun konteks otomatis dari ruang kerja, memperlihatkannya kepada Anda, dan memberi saklar untuk membatasinya.</p>
+
+<h2 id="otomatis">Konteks yang disusun otomatis</h2>
+<p>Setiap pertanyaan membangun konteks baru, karena naskah bisa berubah di antara pertanyaan. Urutan prioritasnya:</p>
+<div class="table-wrap"><table>
+  <tr><th>Bagian</th><th>Isi</th><th>Batas anggaran</th></tr>
+  <tr><td>Pilihan</td><td>Teks yang sedang dipilih</td><td>8%</td></tr>
+  <tr><td>Dokumen aktif</td><td>Isi editor, termasuk yang belum disimpan; bila panjang, jendela di sekitar kursor</td><td>40%</td></tr>
+  <tr><td>Lampiran <code>@berkas</code></td><td>Berkas utuh yang Anda sebut</td><td>20% per berkas</td></tr>
+  <tr><td>Peta proyek</td><td>Nama, jumlah kata, dan heading tiap berkas Markdown di folder</td><td>6%</td></tr>
+  <tr><td>Potongan relevan</td><td>Bagian berkas lain yang paling cocok dengan pertanyaan (paling banyak 10)</td><td>40%</td></tr>
+</table></div>
+<p>Anggaran totalnya 48.000 token. Potongan relevan dicari dengan BM25 dari kata kunci pertanyaan, pilihan, dan dua pertanyaan sebelumnya. Tidak ada embedding, jadi tidak ada model yang diunduh dan naskah tidak dikirim hanya untuk pencarian.</p>
+<p>Setiap baris naskah diberi nomor baris aslinya, sehingga kutipan agent menunjuk baris yang benar.</p>
+
+<h2 id="mention">Melampirkan berkas dengan @</h2>
+<p>Tulis <code>@namaberkas</code> di pesan untuk melampirkan berkas utuh sejak pesan pertama. Agent tidak perlu satu putaran penelusuran untuk membacanya. Tanpa <code>@</code> pun agent tetap bisa mencari dan membaca berkas sendiri.</p>
+
+<h2 id="tombol-konteks">Tombol Konteks</h2>
+<p>Tombol <em>Konteks</em> di bawah panel merinci apa yang akan dikirim beserta perkiraan tokennya, dan punya tiga saklar:</p>
+<ul>
+  <li><strong>Dokumen yang sedang dibuka</strong></li>
+  <li><strong>Pilihan</strong></li>
+  <li><strong>Berkas lain di folder</strong>: dimatikan, agent tidak mendapat alat baca maupun alat usulan sama sekali</li>
+</ul>
+<figure><img src="../assets/konteks.png" width="1280" height="780" loading="lazy" alt="Popover Konteks di panel Asisten: tiga saklar dan rincian pilihan, dokumen, peta proyek, dan potongan beserta perkiraan token"><figcaption>Rincian konteks: teks yang dipilih ikut dikirim, lengkap dengan perkiraan tokennya</figcaption></figure>
+
+
+<h2 id="privasi">Yang dikirim ke DeepSeek</h2>
+<div class="callout warn"><strong>Dokumen yang disertakan dikirim ke server DeepSeek.</strong><p>Matikan saklar <em>Berkas lain di folder</em> dan <em>Dokumen yang sedang dibuka</em> untuk bertanya tanpa mengirim dokumen.</p></div>
+<ul>
+  <li>Folder bertitik (termasuk <code>.nyerat/</code>) dan <code>node_modules</code> tidak dibaca sebagai naskah.</li>
+  <li>Log agent dan proses berpikir model tidak dikirim ulang ke model dan tidak disimpan ke berkas.</li>
+  <li>API key tidak ditulis ke <code>settings.json</code>.</li>
+</ul>
+
+<h2 id="cache">Cache prefiks</h2>
+<p>Konteks dibagi supaya cache prefiks DeepSeek terpakai: instruksi, peta proyek, dan dokumen aktif berada di pesan system yang stabil; pilihan, kursor, lampiran, dan potongan relevan berada di pesan pengguna. Bagian yang dilayani dari cache tampil di rincian token tiap jawaban.</p>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

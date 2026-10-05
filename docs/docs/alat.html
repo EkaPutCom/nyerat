@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daftar alat agent · Dokumentasi Nyerat</title>
+<meta name="description" content="Referensi semua alat agent Nyerat: alat baca, alat Git, alat usulan perubahan, dan alat kendali pekerjaan, beserta kapan persetujuan dibutuhkan.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Referensi</p>
+<h1>Daftar alat agent</h1>
+<p class="lead">Semua alat yang bisa dipanggil agent Nyerat. Alat baca langsung dijalankan; alat usulan selalu menunggu persetujuan Anda di jendela tinjau.</p>
+
+<h2 id="baca">Alat baca</h2>
+<div class="table-wrap"><table>
+  <tr><th>Alat</th><th>Fungsi</th><th>Persetujuan</th></tr>
+  <tr><td><code>daftar_berkas</code></td><td>Daftar berkas Markdown beserta jumlah kata dan heading</td><td>Tidak</td></tr>
+  <tr><td><code>cari_dokumen</code></td><td>Cari bagian berkas menurut topik (BM25)</td><td>Tidak</td></tr>
+  <tr><td><code>cari_teks</code></td><td>Cari teks persis</td><td>Tidak</td></tr>
+  <tr><td><code>baca_berkas</code></td><td>Baca isi berkas per rentang baris</td><td>Tidak</td></tr>
+</table></div>
+
+<h2 id="git">Alat Git</h2>
+<p>Hanya ada bila folder kerja adalah repositori Git.</p>
+<div class="table-wrap"><table>
+  <tr><th>Alat</th><th>Fungsi</th><th>Persetujuan</th></tr>
+  <tr><td><code>riwayat_git</code></td><td>Commit terbaru folder atau satu berkas</td><td>Tidak</td></tr>
+  <tr><td><code>lihat_commit</code></td><td>Diff satu commit</td><td>Tidak</td></tr>
+  <tr><td><code>isi_versi</code></td><td>Isi berkas pada commit lama</td><td>Tidak</td></tr>
+</table></div>
+
+<h2 id="usulan">Alat usulan</h2>
+<div class="table-wrap"><table>
+  <tr><th>Alat</th><th>Fungsi</th><th>Persetujuan</th></tr>
+  <tr><td><code>buat_berkas</code></td><td>Berkas Markdown baru</td><td>Ya</td></tr>
+  <tr><td><code>ubah_berkas</code></td><td>Ganti teks persis (sekali atau semua kemunculan)</td><td>Ya</td></tr>
+  <tr><td><code>sisip_teks</code></td><td>Sisipkan teks di awal, akhir, atau setelah baris tertentu</td><td>Ya</td></tr>
+  <tr><td><code>hapus_berkas</code></td><td>Buang berkas ke Tempat Sampah</td><td>Ya</td></tr>
+  <tr><td><code>pindah_berkas</code></td><td>Ganti nama atau pindah folder</td><td>Ya</td></tr>
+  <tr><td><code>ubah_kanban</code></td><td>Kartu dan daftar papan kanban</td><td>Ya</td></tr>
+  <tr><td><code>usulkan_paket</code></td><td>1–20 tindakan di atas dalam satu tinjauan, boleh diterapkan sebagian</td><td>Ya</td></tr>
+</table></div>
+
+<h2 id="kendali">Alat kendali pekerjaan</h2>
+<div class="table-wrap"><table>
+  <tr><th>Alat</th><th>Fungsi</th><th>Persetujuan</th></tr>
+  <tr><td><code>atur_pekerjaan</code></td><td>Catat tujuan dan sampai 20 langkah beserta statusnya</td><td>Tidak</td></tr>
+  <tr><td><code>verifikasi_pekerjaan</code></td><td>Periksa hasil aktual: teks ada/tidak ada, kartu kanban, struktur Markdown</td><td>Tidak</td></tr>
+</table></div>
+
+<h2 id="harness">Harness eksternal</h2>
+<div class="table-wrap"><table>
+  <tr><th>Harness</th><th>Dipicu dari</th><th>Bekerja di</th></tr>
+  <tr><td><code>pi</code></td><td>Kartu kanban bertanda <code>@pi</code></td><td>Folder proyek yang Anda pilih, bukan folder kerja Nyerat</td></tr>
+</table></div>
+
+<h2 id="syarat">Syarat ketersediaan</h2>
+<ul>
+  <li>Alat baca dan usulan hanya ditawarkan bila saklar <em>Berkas lain di folder</em> menyala dan sebuah folder kerja dibuka.</li>
+  <li>Satu pertanyaan menjalankan paling banyak 10 putaran model; putaran terakhir tanpa alat.</li>
+</ul>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

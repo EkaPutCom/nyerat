@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keterbatasan · Dokumentasi Nyerat</title>
+<meta name="description" content="Yang belum bisa dilakukan Nyerat saat ini: batas agent, harness eksternal, papan kanban, editor, dan ekspor.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Referensi</p>
+<h1>Keterbatasan</h1>
+<p class="lead">Daftar jujur tentang yang belum tersedia, supaya Anda tahu batasnya sebelum mengandalkannya.</p>
+
+<h2 id="agent">Agent</h2>
+<ul>
+  <li>Penyedia model baru DeepSeek.</li>
+  <li>Belum ada pemeriksaan kontradiksi otomatis; kontradiksi bisa ditanyakan lewat chat.</li>
+  <li>Agent Nyerat hanya menyentuh berkas Markdown di folder kerja. Menjalankan perintah hanya dilakukan harness eksternal dari kartu kanban.</li>
+  <li>Paket maksimal 20 tindakan. Memindah berkas tidak memperbarui tautan di berkas lain; agent harus mengusulkannya terpisah.</li>
+  <li>Pencarian berbasis kata kunci (BM25), bukan makna; <code>cari_teks</code> tidak mengenali sinonim.</li>
+  <li>Alat Git hanya membaca yang sudah di-commit.</li>
+  <li>Urungkan memulihkan berkas yang dihapus dari snapshot journal, bukan dari Tempat Sampah.</li>
+  <li>Riwayat percakapan belum bisa dicari dari panel; cari lewat berkasnya di <code>.nyerat/chats/</code>.</li>
+  <li>Perkiraan token kasar (3 karakter per token).</li>
+</ul>
+
+<h2 id="harness">Harness eksternal</h2>
+<ul>
+  <li>Baru pi. Status run (antre, bekerja, log) hanya ada selama aplikasi terbuka.</li>
+  <li>Kartu dikenali dari teksnya, jadi menyunting judul kartu yang sedang dikerjakan memutus statusnya.</li>
+  <li>Pertanyaan dikenali dari tanda <code>?</code> di akhir jawaban.</li>
+  <li>Tanpa extension izin seperti <code>permission-gate</code>, semua alat pi langsung berjalan.</li>
+  <li>Belum ada worktree per kartu, terminal interaktif, atau tampilan diff hasil harness di Nyerat.</li>
+</ul>
+
+<h2 id="kanban">Papan kanban</h2>
+<ul>
+  <li>Hanya item daftar tingkat atas yang menjadi kartu.</li>
+  <li>Belum ada arsip atau penyuntingan label lewat antarmuka; tulis <code>#tag</code> di judul kartu.</li>
+  <li>Memindah kartu dengan keyboard hanya lewat menu klik kanan.</li>
+</ul>
+
+<h2 id="editor">Editor dan ekspor</h2>
+<ul>
+  <li>GIF animasi hanya menampilkan frame pertama; gambar yang diubah di disk dimuat ulang setelah aplikasi dibuka lagi.</li>
+  <li>Teks sel tabel yang panjang dipotong dengan “…”, dan isi sel hanya satu baris.</li>
+  <li>Belum ada tampilan berdampingan atau pengurutan tab dengan seret.</li>
+  <li>Ekspor HTML tidak menyematkan gambar lokal dan belum menyertakan warna blok kode.</li>
+</ul>
+<p>Daftar lengkap ada di bagian <em>Keterbatasan</em> pada <a href="https://github.com/EkaPutCom/nyerat#keterbatasan">README</a>.</p>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

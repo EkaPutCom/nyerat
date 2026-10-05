@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Berkas, tab, dan sidebar · Dokumentasi Nyerat</title>
+<meta name="description" content="Kelola folder kerja di Nyerat: pohon berkas dengan klik kanan dan seret-lepas, banyak dokumen sebagai tab yang dipulihkan, dan outline dokumen.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Ruang kerja</p>
+<h1>Berkas, tab, dan sidebar</h1>
+<p class="lead">Buka sebuah folder sebagai ruang kerja, kelola berkasnya dari pohon, dan kerjakan beberapa dokumen sekaligus sebagai tab.</p>
+
+<h2 id="sidebar">Sidebar</h2>
+<p><kbd>Ctrl</kbd>+<kbd>\</kbd> menampilkan atau menyembunyikan sidebar. Ada tiga tab:</p>
+<ul>
+  <li><strong>Berkas</strong>: pohon folder kerja berisi subfolder dan berkas Markdown</li>
+  <li><strong>Outline</strong>: daftar heading dokumen; klik untuk melompat</li>
+  <li><strong>Riwayat</strong>: commit Git untuk berkas yang dibuka (<a href="git.html">Riwayat Git</a>)</li>
+</ul>
+<figure><img src="../assets/berkas.png" width="1332" height="867" loading="lazy" alt="Tab Berkas menampilkan pohon folder kerja: catatan, rencana, dan riset"><figcaption>Pohon berkas dengan folder dan berkas Markdown</figcaption></figure>
+
+<h2 id="pohon">Pohon berkas</h2>
+<ul>
+  <li>Buka folder lewat tombol folder di header bar atau <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>. Folder terakhir dibuka lagi saat aplikasi dijalankan.</li>
+  <li>Klik kanan untuk <em>File Baru…</em>, <em>Folder Baru…</em>, <em>Papan Kanban Baru…</em>, <em>Ganti Nama…</em>, dan <em>Hapus</em> (ke Tempat Sampah, dengan konfirmasi).</li>
+  <li>Seret dan lepas untuk memindahkan berkas atau folder. Nama yang bentrok ditolak tanpa menimpa, dan dokumen yang terbuka mengikuti path barunya.</li>
+  <li>Pohon diperbarui otomatis saat ada berkas yang ditambah atau dihapus di disk.</li>
+  <li>Berkas dan folder tersembunyi serta <code>node_modules</code> tidak ditampilkan.</li>
+</ul>
+
+<h2 id="tab">Banyak dokumen sebagai tab</h2>
+<ul>
+  <li>Membuka berkas dari pohon atau dialog <em>Buka File</em> membuat tab baru, atau pindah ke tabnya bila sudah terbuka.</li>
+  <li>Tiap tab punya riwayat undo, kursor, dan posisi gulir sendiri. Tanda <code>•</code> berarti belum disimpan.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>W</kbd> menutup tab; <kbd>Ctrl</kbd>+<kbd>Tab</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> berpindah tab.</li>
+  <li>Saat aplikasi dibuka lagi tanpa argumen, tab berfile dipulihkan dengan urutan, tab aktif, dan posisi kursornya.</li>
+  <li>Agent membaca isi tab yang belum disimpan, bukan versi di disk.</li>
+</ul>
+<figure><img src="../assets/tab.png" width="1332" height="867" loading="lazy" alt="Empat dokumen terbuka sebagai tab, satu bertanda belum disimpan"><figcaption>Banyak dokumen sebagai tab dalam satu jendela</figcaption></figure>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

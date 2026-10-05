@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Papan kanban · Dokumentasi Nyerat</title>
+<meta name="description" content="Papan kanban Nyerat ala Trello yang tetap tersimpan sebagai berkas Markdown biasa: kartu, daftar, tag, tenggat dengan pemilih kalender, dan penugasan ke agent.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Ruang kerja</p>
+<h1>Papan kanban</h1>
+<p class="lead">Berkas Markdown dengan <code>kanban: true</code> dibuka sebagai papan. Setiap perubahan ditulis kembali sebagai teks Markdown biasa yang bisa di-diff dan di-commit.</p>
+
+<figure><img src="../assets/kanban.gif" width="900" height="586" loading="lazy" alt="Animasi kartu kanban berpindah antar daftar Rencana, Dikerjakan, Review, dan Selesai"><figcaption>Kartu berpindah dari Rencana ke Dikerjakan hingga Review</figcaption></figure>
+
+<h2 id="format">Format berkas</h2>
+<pre><code>---
+kanban: true
+---
+
+## Rencana
+
+- [ ] Tulis laporan #penting @{2026-10-20}
+  catatan kartu (baris yang diindentasi)
+- [ ] Kirim undangan
+
+## Selesai
+
+- [x] Pesan tempat</code></pre>
+<ul>
+  <li>Heading <code>##</code> menjadi daftar, item <code>- [ ]</code> menjadi kartu, <code>[x]</code> berarti selesai.</li>
+  <li>Baris yang diindentasi di bawah kartu adalah catatannya.</li>
+  <li><code>#tag</code> tampil sebagai label berwarna; <code>@{2026-10-20}</code> sebagai tanggal tenggat, merah bila lewat batas.</li>
+  <li>Penanda <code>kanban-plugin:</code> dari plugin Kanban Obsidian tetap dikenali, dan hal yang tidak dikenali dipertahankan apa adanya.</li>
+</ul>
+
+<h2 id="membuat">Membuat papan</h2>
+<ul>
+  <li>Menu ☰ → <em>Papan Kanban Baru</em> membuat papan kosong yang belum bernama.</li>
+  <li>Klik kanan di pohon berkas → <em>Papan Kanban Baru…</em> langsung membuatnya sebagai berkas di folder itu, berisi daftar <em>Rencana</em>, <em>Dikerjakan</em>, dan <em>Selesai</em>.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> beralih antara tampilan papan dan teks.</li>
+</ul>
+
+<h2 id="kartu">Bekerja dengan kartu</h2>
+<ul>
+  <li>Seret kartu antar daftar atau ke posisi lain di daftar yang sama; dekat tepi, papan bergulir otomatis.</li>
+  <li>Klik kartu untuk menyunting judul, catatan, tenggat, dan <em>Dikerjakan oleh</em>.</li>
+  <li>Tenggat bisa diketik (boleh dengan jam, mis. <code>2026-10-20 09:00</code>) atau dipilih lewat tombol kalender, dengan <em>Hari ini</em> dan <em>Kosongkan</em>. Memilih tanggal mempertahankan jam yang sudah diketik.</li>
+</ul>
+<figure class="narrow-fig"><img src="../assets/kanban-kartu.png" width="440" height="519" loading="lazy" alt="Dialog sunting kartu dengan kolom judul, tag, tenggat beserta tombol kalender, dikerjakan oleh, dan catatan"><figcaption>Dialog sunting kartu: tenggat dengan tombol kalender dan kolom Dikerjakan oleh</figcaption></figure>
+<ul>
+  <li>Klik kanan untuk pindahkan, naik/turun, dan hapus; centang untuk menandai selesai.</li>
+  <li>Undo dan redo berlaku untuk perubahan di papan.</li>
+</ul>
+
+<h2 id="agent">Papan dan agent</h2>
+<ul>
+  <li>Agent Nyerat mengubah papan lewat <code>ubah_kanban</code>: menambah, memindah, menandai, mengubah, atau menghapus kartu dan daftar, selalu lewat <a href="usulan.html">jendela tinjau</a>.</li>
+  <li>Kartu bertanda <code>@pi</code> dikerjakan harness pi di folder proyek lain. Lihat <a href="orkestrator.html">Orkestrator pi</a>.</li>
+</ul>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

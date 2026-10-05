@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orkestrator pi · Dokumentasi Nyerat</title>
+<meta name="description" content="Tugaskan kartu kanban Nyerat ke harness pi yang bekerja di folder proyek lain, jawab pertanyaan dan permintaan izinnya dari kartu, dan pantau lognya.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Agent</p>
+<h1>Orkestrator pi</h1>
+<p class="lead">Nyerat bisa menjadi orkestrator harness eksternal: kartu kanban yang ditugaskan ke <code>@pi</code> dikerjakan <a href="https://pi.dev">pi</a> di folder proyek lain, misalnya repo kode, bukan di folder kerja Nyerat.</p>
+
+<figure><img src="../assets/pi.gif" width="900" height="548" loading="lazy" alt="Animasi papan kanban: kartu @pi ditugaskan, satu bekerja dan satu antre, keduanya selesai ke Review, lalu kartu ketiga menunggu jawaban"><figcaption>Kartu @pi: ditugaskan, bekerja dan antre, selesai ke Review, lalu menunggu jawaban</figcaption></figure>
+
+
+<h2 id="menugaskan">Menugaskan kartu</h2>
+<pre><code>---
+kanban: true
+proyek: web-ecommerce          <span class="c">← proyek bawaan papan</span>
+---
+
+## Rencana
+- [ ] Checkout pakai QRIS @pi #fitur
+- [ ] Tes keranjang @pi #proyek/toko-admin     <span class="c">← tag proyek menang atas frontmatter</span></code></pre>
+<ol>
+  <li>Tulis <code>@pi</code> di judul kartu, atau isi <em>Dikerjakan oleh</em> di dialog sunting kartu.</li>
+  <li>Klik kanan kartu → <em>Kerjakan dengan pi</em>.</li>
+  <li>Proyek diambil dari tag <code>#proyek/nama</code> atau frontmatter papan <code>proyek: nama</code>. Folder proyek ditanyakan sekali lalu diingat di pengaturan; kartu tanpa proyek diberi tag dari nama foldernya.</li>
+</ol>
+<p>Saat mulai, kartu pindah ke daftar <em>Dikerjakan</em>. Saat selesai, ke <em>Review</em> dengan catatan <code>↳ pi selesai …: ringkasan</code>. Bila gagal, kartu tetap di tempatnya dengan catatan <code>↳ pi gagal …: alasan</code>.</p>
+
+<h2 id="status">Status kartu</h2>
+<div class="table-wrap"><table>
+  <tr><th>Chip</th><th>Arti</th></tr>
+  <tr><td>◇</td><td>Ditugaskan</td></tr>
+  <tr><td>◌</td><td>Antre: proyek yang sama sedang dikerjakan kartu lain</td></tr>
+  <tr><td>●</td><td>Bekerja</td></tr>
+  <tr><td>⏸</td><td>Menunggu jawaban Anda</td></tr>
+  <tr><td>✓ / ✕ / ■</td><td>Selesai / gagal / dihentikan</td></tr>
+</table></div>
+<p>Satu folder proyek dikerjakan satu harness sekaligus; kartu lain mengantre dan mulai otomatis.</p>
+<figure><img src="../assets/pi-papan.png" width="1280" height="780" loading="lazy" alt="Papan kanban dengan kartu Checkout pakai QRIS berstatus pi bekerja di Dikerjakan dan Tes keranjang berstatus pi antre di Rencana"><figcaption>Satu kartu bekerja, kartu lain di proyek yang sama mengantre</figcaption></figure>
+
+
+<h2 id="menjawab">Menjawab pi</h2>
+<p>Pi dijalankan dalam mode RPC, jadi percakapannya bisa dilanjutkan dari Nyerat:</p>
+<ul>
+  <li><strong>Pertanyaan.</strong> Bila jawaban pi diakhiri <code>?</code>, kartu menjadi ⏸ dan tetap di <em>Dikerjakan</em>. Klik kanan → <em>Jawab pi…</em> membuka pertanyaannya beserta kotak jawaban.</li>
+  <li><strong>Izin dan masukan.</strong> Extension pi yang meminta izin (mis. konfirmasi sebelum <code>rm -rf</code>) tampil di dialog yang sama: <em>Izinkan</em>/<em>Tolak</em>, pilihan, atau isian.</li>
+  <li><strong>Nanti</strong> membiarkan pi tetap menunggu; <strong>Akhiri tanpa membalas</strong> menutup sesinya.</li>
+  <li><strong>Beri Arahan pi…</strong> selagi pi bekerja: arahan diterima sebelum langkah berikutnya, tanpa menghentikan pekerjaan.</li>
+  <li><strong>Balas pi…</strong> setelah selesai: melanjutkan sesi pi yang sama sehingga kartu dikerjakan lagi.</li>
+</ul>
+<figure><img src="../assets/pi-menunggu.png" width="1280" height="780" loading="lazy" alt="Papan kanban: kartu Rapikan README berstatus pi menunggu jawaban di Dikerjakan, dua kartu lain selesai di Review"><figcaption>Kartu menunggu jawaban tetap di Dikerjakan</figcaption></figure>
+<figure class="narrow-fig"><img src="../assets/pi-jawab.png" width="520" height="322" loading="lazy" alt="Dialog Jawab pi berisi pertanyaan pi tentang README, kotak jawaban, dan tombol Nanti, Akhiri tanpa membalas, serta Kirim"><figcaption>Dialog Jawab pi</figcaption></figure>
+
+
+<h2 id="log">Log dan kendali</h2>
+<p>Menu kartu juga punya:</p>
+<ul>
+  <li><em>Lihat Log pi</em>: alat, penalaran, jawaban, permintaan dan jawaban Anda, token, biaya, dan id sesi untuk <code>pi --session &lt;id&gt;</code></li>
+  <li><em>Hentikan pi</em> / <em>Batalkan Antrean</em></li>
+  <li><em>Lepas Penugasan</em> dan <em>Ganti Folder Proyek…</em></li>
+</ul>
+<figure><img src="../assets/pi-log.png" width="760" height="640" loading="lazy" alt="Jendela Log pi berisi prompt yang dikirim ke pi, sesi, penalaran model, panggilan alat bash dan edit, dan ringkasan selesai"><figcaption>Log pi: prompt dari kartu, penalaran, alat, dan ringkasan</figcaption></figure>
+
+
+<h2 id="batas">Batas akses</h2>
+<div class="callout warn"><strong>Pi menulis bebas di folder proyek, tanpa jendela tinjau Nyerat.</strong><p>Tinjau hasilnya di repo proyek itu sendiri (pi diminta tidak commit). Pi tidak meminta izin alat sendiri; permintaan izin datang dari extension pi yang Anda pasang, seperti <code>permission-gate</code>.</p></div>
+<ul>
+  <li>Isi Markdown hanya menyebut <em>nama</em> proyek. Nama dipetakan ke folder yang hanya bisa diisi lewat dialog pilih folder, jadi kartu atau agent tidak bisa mengarahkan harness ke folder sembarang.</li>
+  <li>Folder kerja Nyerat, isinya, induknya, root, dan path relatif ditolak sebagai folder proyek.</li>
+  <li>Nyerat sendiri tidak menulis ke folder proyek. Menutup jendela menghentikan semua harness yang berjalan.</li>
+</ul>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

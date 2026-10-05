@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor Markdown · Dokumentasi Nyerat</title>
+<meta name="description" content="Editor Markdown Nyerat yang langsung terformat: sintaks tersembunyi, tabel sebagai grid, blok kode berwarna, gambar dengan zoom, mode fokus, typewriter, source, dan ekspor HTML.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Ruang kerja</p>
+<h1>Editor Markdown</h1>
+<p class="lead">Tidak ada panel pratinjau terpisah. Teks langsung tampil terformat, dan sintaks Markdown muncul hanya di baris tempat kursor berada.</p>
+
+<figure><img src="../assets/mengetik.gif" width="900" height="586" loading="lazy" alt="Animasi mengetik Markdown: heading, teks tebal dan miring, serta daftar tugas langsung tampil terformat"><figcaption>Mengetik Markdown, langsung jadi</figcaption></figure>
+
+<h2 id="format">Format langsung</h2>
+<ul>
+  <li>Heading, <strong>tebal</strong>, <em>miring</em>, coret (<code>~~</code>), stabilo (<code>==</code>), kode inline, tautan, dan gambar langsung terformat.</li>
+  <li>Sintaks seperti <code>**</code>, <code>==</code>, atau <code>[]()</code> muncul lagi saat kursor masuk ke barisnya.</li>
+  <li>Kutipan bersarang <code>&gt;&gt;</code> makin menjorok sampai tiga tingkat.</li>
+  <li>Tautan dibuka dengan <kbd>Ctrl</kbd>+klik; path relatif dihitung dari folder berkas.</li>
+</ul>
+<figure><img src="../assets/sintaks.gif" width="900" height="586" loading="lazy" alt="Animasi kursor berpindah antar baris; sintaks Markdown muncul di baris aktif dan tersembunyi di baris lain"><figcaption>Sintaks hanya terlihat di baris tempat kursor berada</figcaption></figure>
+
+<h2 id="daftar">Daftar dan tugas</h2>
+<ul>
+  <li><kbd>Enter</kbd> melanjutkan daftar, daftar bernomor, daftar tugas, dan kutipan; <kbd>Enter</kbd> di item kosong mengakhirinya.</li>
+  <li><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> mengatur indentasi item.</li>
+  <li>Kotak <code>- [ ]</code> bisa dicentang dengan klik.</li>
+</ul>
+
+<h2 id="tabel">Tabel sebagai grid</h2>
+<p>Tabel digambar dengan garis sel, header tebal, dan rata kiri/tengah/kanan. Saat kursor masuk, teks mentahnya muncul untuk disunting; klik sebuah sel untuk langsung menyunting sel itu.</p>
+<ul>
+  <li><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> pindah antar sel; di sel terakhir, <kbd>Tab</kbd> menambah baris.</li>
+  <li><kbd>Enter</kbd> pindah ke baris berikutnya; di baris kosong terakhir, keluar dari tabel.</li>
+  <li>Menu ☰ → <em>Edit Tabel</em> menambah/menghapus baris dan kolom, mengatur rata, dan merapikan kolom (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>).</li>
+  <li>Tabel yang lebih lebar dari kolom teks dipersempit, dan teks terpotong diberi “…” dengan isi lengkap sebagai tooltip.</li>
+</ul>
+<figure><img src="../assets/tabel.png" width="1332" height="867" loading="lazy" alt="Tabel anggaran proyek dirender sebagai grid dengan rata kolom kiri, tengah, dan kanan"><figcaption>Tabel sebagai grid, dengan rata kolom</figcaption></figure>
+
+<h2 id="kode">Blok kode berwarna</h2>
+<p>Isi blok kode diwarnai sesuai bahasanya (<code>```js</code>, <code>```python</code>, <code>```rust</code>, dan ratusan bahasa lain dari GtkSourceView), dengan skema warna yang mengikuti mode terang atau gelap.</p>
+
+<h2 id="gambar">Gambar dan zoom</h2>
+<p>Gambar <code>![alt](url)</code> tampil di bawah barisnya, dari berkas lokal maupun internet. Klik ganda (atau menu ☰ → <em>Perbesar Gambar</em>) membuka penampil: roda mouse memperbesar di titik penunjuk, <kbd>+</kbd>/<kbd>−</kbd>, <kbd>0</kbd> untuk 100%, <kbd>F</kbd> untuk pas layar, geser dengan drag, <kbd>Esc</kbd> menutup.</p>
+
+<h2 id="mode">Mode tampilan</h2>
+<div class="table-wrap"><table>
+  <tr><th>Mode</th><th>Fungsi</th><th>Shortcut</th></tr>
+  <tr><td>Fokus</td><td>Redupkan paragraf selain yang sedang disunting</td><td><kbd>F8</kbd></td></tr>
+  <tr><td>Typewriter</td><td>Baris aktif selalu di tengah layar</td><td><kbd>F9</kbd></td></tr>
+  <tr><td>Source</td><td>Tampilkan semua sintaks; gambar, grid tabel, dan diagram disembunyikan</td><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td></tr>
+  <tr><td>Gelap</td><td>Otomatis mengikuti tema sistem saat pertama dibuka</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></td></tr>
+</table></div>
+
+<h2 id="simpan">Simpan dan ekspor</h2>
+<ul>
+  <li><strong>Auto save</strong> (aktif bawaan): dokumen yang sudah punya berkas disimpan 1 detik setelah berhenti mengetik, di latar sehingga tidak menahan ketikan.</li>
+  <li>Peringatan muncul sebelum menutup bila ada perubahan yang belum tersimpan.</li>
+  <li><strong>Ekspor HTML</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>): satu berkas HTML mandiri dengan CSS. Diagram di hasil ekspor memuat Mermaid dari CDN.</li>
+</ul>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>
