@@ -9,7 +9,7 @@ import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import { onKeyPress, runModal } from '../gtkutil.js';
 import { APP_NAME, APP_VERSION } from '../config.js';
-import { AGENT_NAME, composeCard, DUE_INPUT, splitCard } from '../markdown/kanban.js';
+import { AGENT_NAME, composeCard, DUE_INPUT, splitCard, withDueDate } from '../markdown/kanban.js';
 import type { HarnessAsk, HarnessReply } from '../agent/harness.js';
 
 type FilterSetup = [label: string, setup: (filter: Gtk.FileFilter) => void];
@@ -151,14 +151,62 @@ export interface CardDraft {
     notes: string[];
 }
 
+// Kolom tenggat: teks (tetap bisa diketik, mis. dengan jam) dan tombol kalender di sebelahnya.
+// Kalender dibuka pada tanggal di kolom (atau hari ini); memilih tanggal mengisi kolom lalu menutup kalender.
+export interface DueField {
+    widget: Gtk.Widget;
+    entry: Gtk.Entry;
+    button: Gtk.MenuButton;
+    calendar: Gtk.Calendar;
+}
+
+export function dueField(text: string): DueField {
+    const entry = new Gtk.Entry({ text, activates_default: true, hexpand: true, placeholder_text: 'YYYY-MM-DD' });
+    entry.connect('changed', () => entry.remove_css_class('error'));
+    const calendar = new Gtk.Calendar();
+    const today = new Gtk.Button({ label: 'Hari ini', hexpand: true });
+    const clear = new Gtk.Button({ label: 'Kosongkan', hexpand: true });
+    const actions = new Gtk.Box({ spacing: 6 });
+    actions.append(today);
+    actions.append(clear);
+    const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
+    content.append(calendar);
+    content.append(actions);
+    const popover = new Gtk.Popover({ child: content });
+    const button = new Gtk.MenuButton({ icon_name: 'x-office-calendar-symbolic', tooltip_text: 'Pilih tanggal', popover });
+
+    // Saat membuka, kalender menunjuk tanggal di kolom; `syncing` mencegah pilihan itu menulis balik ke kolom.
+    let syncing = false;
+    popover.connect('show', () => {
+        const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(entry.text.trim());
+        const date = match ? GLib.DateTime.new_local(+match[1], +match[2], +match[3], 0, 0, 0) : null;
+        syncing = true;
+        calendar.select_day(date ?? GLib.DateTime.new_now_local());
+        syncing = false;
+    });
+    const pick = (date: GLib.DateTime) => {
+        entry.text = withDueDate(entry.text, date.format('%Y-%m-%d')!);
+        popover.popdown();
+    };
+    calendar.connect('day-selected', () => { if (!syncing) pick(calendar.get_date()); });
+    today.connect('clicked', () => pick(GLib.DateTime.new_now_local()));
+    clear.connect('clicked', () => { entry.text = ''; popover.popdown(); });
+
+    const widget = new Gtk.Box({ spacing: 0 });
+    widget.add_css_class('linked');
+    widget.append(entry);
+    widget.append(button);
+    return { widget, entry, button, calendar };
+}
+
 // Dialog sunting kartu: judul (satu baris) dan catatan (banyak baris).
 // Mengembalikan isi baru, atau null jika dibatalkan.
 export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, heading = 'Sunting Kartu'): CardDraft | null {
     const parts = splitCard(card.text);
     const title = new Gtk.Entry({ text: parts.title, activates_default: true, hexpand: true });
     const tags = new Gtk.Entry({ text: parts.tags.join(' '), activates_default: true, hexpand: true, placeholder_text: 'tag1 tag2' });
-    const due = new Gtk.Entry({ text: parts.due, activates_default: true, hexpand: true, placeholder_text: 'YYYY-MM-DD' });
-    due.connect('changed', () => due.remove_css_class('error'));
+    const dueInput = dueField(parts.due);
+    const due = dueInput.entry;
     const agent = new Gtk.Entry({ text: parts.agent ?? '', activates_default: true, hexpand: true, placeholder_text: 'mis. pi (kosong = tidak ditugaskan)' });
     agent.connect('changed', () => agent.remove_css_class('error'));
     const notes = new Gtk.TextView({ wrap_mode: Gtk.WrapMode.WORD_CHAR, left_margin: 6, right_margin: 6, top_margin: 6, bottom_margin: 6 });
@@ -172,7 +220,7 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
     box.append(new Gtk.Label({ label: 'Tag (pisahkan dengan spasi)', xalign: 0 }));
     box.append(tags);
     box.append(new Gtk.Label({ label: 'Tenggat', xalign: 0 }));
-    box.append(due);
+    box.append(dueInput.widget);
     box.append(new Gtk.Label({ label: 'Dikerjakan oleh', xalign: 0 }));
     box.append(agent);
     box.append(new Gtk.Label({ label: 'Catatan', xalign: 0 }));

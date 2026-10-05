@@ -1,6 +1,6 @@
 // Tes model papan kanban.
 
-import { addCard, addColumn, cardMeta, countCards, deleteCard, deleteColumn as deleteList, dropIndex, dueStatus, isKanban, moveCard, moveColumn, newBoard, parseBoard, renameColumn, serializeBoard, toggleDone, updateCard, type Board } from '../../src/markdown/kanban.js';
+import { addCard, addColumn, cardMeta, countCards, deleteCard, deleteColumn as deleteList, dropIndex, dueStatus, isKanban, moveCard, moveColumn, newBoard, parseBoard, renameColumn, serializeBoard, toggleDone, updateCard, withDueDate, type Board } from '../../src/markdown/kanban.js';
 import { section, test, eq, ok } from '../framework.js';
 import { BOARD } from '../fixtures.js';
 
@@ -102,5 +102,11 @@ export function kanbanModelTests(): void {
     test('dueStatus dan dropIndex', () => {
         eq(['2026-10-01', '2026-10-03', '2026-10-05', '2026-10-09'].map(d => dueStatus(d, '2026-10-03')), ['overdue', 'today', 'soon', 'later']);
         eq([dropIndex([10, 50, 90], 0), dropIndex([10, 50, 90], 60), dropIndex([10, 50, 90], 200), dropIndex([], 5)], [0, 2, 3, 0]);
+    });
+    test('withDueDate mengganti tanggal tenggat dan mempertahankan jam', () => {
+        eq(withDueDate('', '2026-10-20'), '2026-10-20');
+        eq(withDueDate('2026-10-01', '2026-10-20'), '2026-10-20');
+        eq(withDueDate(' 2026-10-01 09:30 ', '2026-10-20'), '2026-10-20 09:30', 'jam dipertahankan');
+        eq(withDueDate('besok', '2026-10-20'), '2026-10-20', 'teks tidak valid diganti');
     });
 }

@@ -5,10 +5,11 @@ import Gtk from 'gi://Gtk?version=4.0';
 import { readTextFile } from '../../src/files.js';
 import { addCard, isKanban, parseBoard } from '../../src/markdown/kanban.js';
 import { KanbanBoard } from '../../src/ui/kanban.js';
+import { dueField, editCardDialog } from '../../src/ui/dialogs.js';
 import { findEntry, type MenuEntry } from '../../src/ui/menu.js';
 import { childrenOf } from '../../src/gtkutil.js';
-import { descendants } from '../widgets.js';
-import { section, test, eq, ok, tmp } from '../framework.js';
+import { descendants, widgetPixbuf } from '../widgets.js';
+import { section, test, eq, ok, tmp, optVal } from '../framework.js';
 import { BOARD } from '../fixtures.js';
 import type { GuiContext } from './context.js';
 
@@ -317,4 +318,59 @@ export function kanbanBoardTests(c: GuiContext): void {
     stubDialogs();
     w.file = null;
     buf.set_modified(false);
+
+    test('kolom tenggat: kalender mengisi tanggal, menjaga jam, dan bisa dikosongkan', () => {
+        const field = dueField('2026-10-05 09:30');
+        const host = new Gtk.Window({ child: field.widget, default_width: 400 });
+        host.present();
+        pump();
+        const popover = field.button.popover!;
+        field.button.popup();
+        pump();
+        const date = field.calendar.get_date();
+        eq([date.get_year(), date.get_month(), date.get_day_of_month()], [2026, 10, 5], 'kalender menunjuk tanggal di kolom');
+        eq(field.entry.text, '2026-10-05 09:30', 'membuka kalender tidak mengubah kolom');
+        const shot = optVal('shot-due');
+        if (shot) {
+            for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
+            widgetPixbuf(popover)?.savev(`${shot}-kalender.png`, 'png', [], []);
+        }
+        // Klik hari = select_day lalu day-selected (select_day sendiri tidak memancarkannya).
+        field.calendar.select_day(GLib.DateTime.new_local(2026, 10, 20, 0, 0, 0));
+        field.calendar.emit('day-selected');
+        pump();
+        eq(field.entry.text, '2026-10-20 09:30', 'tanggal diganti, jam tetap');
+        ok(!popover.get_visible(), 'kalender tertutup setelah memilih');
+
+        field.entry.text = 'bukan tanggal';
+        field.button.popup();
+        pump();
+        const today = GLib.DateTime.new_now_local();
+        eq(field.calendar.get_date().format('%Y-%m-%d'), today.format('%Y-%m-%d'), 'teks tidak valid: kalender di hari ini');
+        const buttons = descendants(popover).filter((b): b is Gtk.Button => b instanceof Gtk.Button);
+        buttons.find(b => b.label === 'Kosongkan')!.emit('clicked');
+        pump();
+        eq(field.entry.text, '', 'dikosongkan');
+        field.button.popup();
+        pump();
+        buttons.find(b => b.label === 'Hari ini')!.emit('clicked');
+        pump();
+        eq(field.entry.text, today.format('%Y-%m-%d'), 'hari ini');
+        host.destroy();
+        pump();
+        // Dialog sunting kartu asli (modal), terang dan gelap: ditangkap dari timer selagi tampil, lalu ditutup.
+        if (shot) {
+            for (const dark of [false, true]) {
+                w.setOption('dark', dark);
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+                    const dialog = Gtk.Window.list_toplevels().find(t => t instanceof Gtk.Window && t.title === 'Tambah Kartu') as Gtk.Window | undefined;
+                    if (dialog) { widgetPixbuf(dialog)?.savev(`${shot}-dialog${dark ? '-gelap' : ''}.png`, 'png', [], []); dialog.close(); }
+                    return GLib.SOURCE_REMOVE;
+                });
+                editCardDialog(w.win, { text: 'Tulis laporan #kerja @{2026-10-20}', notes: [] }, 'Tambah Kartu');
+            }
+            w.setOption('dark', false);
+            pump();
+        }
+    });
 }

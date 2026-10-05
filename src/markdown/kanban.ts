@@ -253,6 +253,12 @@ export interface CardParts {
 const DUE_FULL = /\s*@\{(\d{4}-\d{2}-\d{2}(?:[ T]\d{1,2}:\d{2})?)\}/;
 export const DUE_INPUT = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{1,2}:\d{2})?$/;
 
+// Ganti bagian tanggal tenggat dengan `date` (YYYY-MM-DD) dari pemilih tanggal; jam yang sudah diketik dipertahankan.
+export function withDueDate(due: string, date: string): string {
+    const trimmed = due.trim();
+    return DUE_INPUT.test(trimmed) ? date + trimmed.slice(10) : date;
+}
+
 export function splitCard(text: string): CardParts {
     const meta = cardMeta(text);
     return { title: meta.title, tags: meta.tags, due: DUE_FULL.exec(text)?.[1] ?? '', agent: meta.agent ?? '' };
