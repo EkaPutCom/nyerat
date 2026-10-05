@@ -30,6 +30,23 @@ export function imageTests(c: GuiContext): void {
         const [lineY] = ed.view.get_line_yrange(iterAtLine(buf, 2));
         ok(block.y > lineY, `gambar (y=${block.y}) tidak di bawah barisnya (y=${lineY})`);
     });
+    test('gambar di bawah dokumen panjang tampil di tempatnya setelah digulir', () => {
+        try {
+            setText(`${'paragraf\n\n'.repeat(80)}![uji](gambar/uji.png)\n\nakhir`);
+            waitImages();
+            const block = images()[0];
+            ed.view.scroll_to_iter(iterAtLine(buf, block.line), 0, true, 0, 0.5);
+            for (let i = 0; i < 30; i++) { pump(); GLib.usleep(10000); }
+            ok(ed.view.get_vadjustment()!.get_value() > 500, 'dokumen tidak tergulir');
+            const [, gx, gy] = block.box.translate_coordinates(ed.view, 0, 0);
+            eq([gx, gy], ed.view.buffer_to_window_coords(Gtk.TextWindowType.WIDGET, block.x, block.y), 'letak gambar');
+            ok(gy >= 0 && gy < ed.view.get_height(), `gambar di luar layar (y=${gy})`);
+        } finally {
+            // Tes berikutnya memakai dokumen pendek ini.
+            setText('judul\n\n![uji](gambar/uji.png)\n\nakhir');
+            waitImages();
+        }
+    });
     test('isi dokumen tidak berubah karena gambar', () => {
         eq(text(), 'judul\n\n![uji](gambar/uji.png)\n\nakhir');
     });

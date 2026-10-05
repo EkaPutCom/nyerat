@@ -133,6 +133,7 @@ export class ImageLayer {
     // Editor ditutup: hentikan pekerjaan tertunda (lihat MarkdownView.destroy()).
     destroy(): void {
         this.destroyed = true;
+        this.slots.destroy();
         for (const block of this.blocks) block.destroyed = true;
     }
 
@@ -332,7 +333,7 @@ export class ImageLayer {
             if (x === block.x && y === block.y) continue;
             block.x = x;
             block.y = y;
-            this.view.move_overlay(block.box, x, y);
+            this.slots.place(block.box, x, y);
         }
     }
 }

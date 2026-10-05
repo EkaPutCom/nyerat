@@ -109,6 +109,9 @@ export function tableGridTests(c: GuiContext): void {
         ed.view.scroll_to_iter(iterAtLine(buf, last.end), 0, true, 0, 0.5);
         settleT();
         ok(last.widget?.get_visible(), 'grid akhir tidak tampil setelah digulir');
+        // Letak widget sebenarnya (bukan angka yang disimpan lapisan) harus ikut bergulir.
+        const [, gx, gy] = last.widget!.translate_coordinates(ed.view, 0, 0);
+        eq([gx, gy], ed.view.buffer_to_window_coords(Gtk.TextWindowType.WIDGET, last.x, last.y), 'letak grid setelah digulir');
         eq(last.widget!.measure(Gtk.Orientation.VERTICAL, -1)[1], last.height, 'tinggi cadangan berbeda dari grid sebenarnya');
         ok(!first.widget?.get_visible(), 'grid awal tidak disembunyikan setelah digulir');
         const [lineY, lineHeight] = ed.view.get_line_yrange(iterAtLine(buf, last.end));

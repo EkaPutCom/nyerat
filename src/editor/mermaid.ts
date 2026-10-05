@@ -90,6 +90,7 @@ export class MermaidLayer {
     // Editor ditutup: hentikan pekerjaan tertunda (lihat MarkdownView.destroy()).
     destroy(): void {
         this.destroyed = true;
+        this.slots.destroy();
         for (const b of this.blocks) this.cancelTimer(b);
     }
 
@@ -353,7 +354,7 @@ export class MermaidLayer {
             if (x === block.x && y === block.y) continue;
             block.x = x;
             block.y = y;
-            this.view.move_overlay(block.widget, x, y);
+            this.slots.place(block.widget, x, y);
         }
     }
 }

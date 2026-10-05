@@ -103,6 +103,7 @@ export class TableLayer {
     // Editor ditutup: hentikan pekerjaan tertunda (lihat MarkdownView.destroy()).
     destroy(): void {
         this.destroyed = true;
+        this.slots.destroy();
         this.probe = null;
         this.probeCells = [];
     }
@@ -404,7 +405,7 @@ export class TableLayer {
             if (x === block.x && y === block.y) continue;
             block.x = x;
             block.y = y;
-            this.view.move_overlay(block.widget!, x, y);
+            this.slots.place(block.widget!, x, y);
         }
     }
 }
