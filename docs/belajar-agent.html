@@ -292,7 +292,7 @@ input[type=text] { width: 100%; }
   <h1>Belajar membangun agent dari Nyerat</h1>
   <p class="lede">Dalam dua hari, asisten Nyerat berkembang dari panel chat dengan <b>4 alat baca</b> menjadi agent dengan <b>16 alat</b>. Kini ia bisa merencanakan pekerjaan, mengusulkan paket perubahan, memeriksa hasilnya, dan melanjutkan pekerjaan setelah terputus. Satu prinsip dipegang sejak commit pertama: <b>agent boleh membaca dengan bebas, tetapi setiap perubahan berkas harus disetujui pengguna dulu</b>. Bab terakhir menunjukkan langkah berikutnya: Nyerat menugaskan kartu kanban ke agent lain (pi) yang bekerja di folder proyek terpisah, sementara Nyerat hanya memegang papannya. Halaman ini menjelaskan cara prinsip itu dijaga di setiap tahap. Isinya mencakup struktur data, alur loop, batas keamanan, biaya, dan simulasi kecil yang bisa Anda coba sendiri.</p>
   <div class="kpis">
-    <div class="kpi"><div class="what">Alat yang ditawarkan ke model</div><div class="big">16</div><div class="from">dari 4 · f6a4cc7 → 90c28bb</div></div>
+    <div class="kpi"><div class="what">Alat yang ditawarkan ke model</div><div class="big">16</div><div class="from">dari 4 · f6a4cc7 → b1ab712</div></div>
     <div class="kpi"><div class="what">Tes asisten (unit + GUI)</div><div class="big">178</div><div class="from">dari 65 · semuanya tanpa API berbayar</div></div>
     <div class="kpi"><div class="what">Kode <code>src/agent/</code></div><div class="big">2.908 baris</div><div class="from">dari 1.099 baris di 8 berkas → 20 berkas</div></div>
     <div class="kpi"><div class="what">Penulisan folder kerja tanpa persetujuan</div><div class="big">0</div><div class="from">semua lewat <code>Change</code> + preflight; harness eksternal hanya di folder proyek lain (Bab 9)</div></div>
@@ -333,7 +333,7 @@ input[type=text] { width: 100%; }
     <li><span class="h">6c47266</span><span><b>Bab 5, 6</b> · Rencana (<code>atur_pekerjaan</code>), paket (<code>usulkan_paket</code>), verifikasi, journal tindakan, retry, dan ringkasan riwayat.</span></li>
     <li><span class="h">1c90735</span><span><b>Bab 7</b> · Jendela Log agent untuk memantau putaran, penalaran, alat, dan hasilnya.</span></li>
     <li><span class="h">90c28bb</span><span><b>Bab 8</b> · Sisip, hapus, pindah, ganti semua, persetujuan sebagian, Urungkan, alat riwayat Git, dan verifikasi struktur.</span></li>
-    <li><span class="h">baru</span><span><b>Bab 9</b> · Orkestrator harness: kartu <code>@pi</code> dikerjakan pi di folder proyek lain, antrean per folder, Log pi, kartu pindah ke Dikerjakan/Review.</span></li>
+    <li><span class="h">b1ab712</span><span><b>Bab 9</b> · Orkestrator harness: kartu <code>@pi</code> dikerjakan pi di folder proyek lain, antrean per folder, Log pi, kartu pindah ke Dikerjakan/Review.</span></li>
   </ol>
 </section>
 
@@ -709,7 +709,7 @@ TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
 
 <!-- ============================================================ -->
 <section class="chapter" id="bab9">
-  <div class="chapnum">Bab 9 · belum di-commit · <code>agent/harness.ts</code>, <code>orchestrator.ts</code></div>
+  <div class="chapnum">Bab 9 · commit b1ab712 · <code>agent/harness.ts</code>, <code>orchestrator.ts</code></div>
   <h2>Nyerat sebagai orkestrator: agent lain bekerja, Nyerat memegang papan</h2>
   <p><b>Kebutuhan.</b> Kode proyek (misalnya <code>~/web-ecommerce</code>) tidak tinggal di folder kerja Nyerat, dan pekerjaannya butuh agent yang bisa menjalankan perintah, mengedit kode, dan menjalankan tes. Itu bukan tugas agent Nyerat, yang sengaja tidak pernah menulis sendiri. Jawabannya: biarkan agent lain (<a href="https://pi.dev">pi</a>) yang bekerja, dan jadikan papan kanban Nyerat <b>bidang kendali</b>. Kartu menyatakan tugas, <code>@pi</code> menyatakan siapa yang mengerjakannya, dan daftar menyatakan statusnya.</p>
   <div class="grid2">
@@ -930,7 +930,7 @@ const journey = [
   { c: '6c47266', t: 'rencana, paket, verifikasi', read: 4, propose: 4, control: 2, tests: 132, lines: 2063, files: 17 },
   { c: '1c90735', t: 'Log agent', read: 4, propose: 4, control: 2, tests: 137, lines: 2186, files: 18 },
   { c: '90c28bb', t: 'tindakan lebih luas', read: 7, propose: 7, control: 2, tests: 162, lines: 2619, files: 19 },
-  { c: 'baru', t: 'orkestrator pi', read: 7, propose: 7, control: 2, tests: 178, lines: 2908, files: 20 },
+  { c: 'b1ab712', t: 'orkestrator pi', read: 7, propose: 7, control: 2, tests: 178, lines: 2908, files: 20 },
 ];
 function toolsChart() {
   const svg = $('#chart-tools');
