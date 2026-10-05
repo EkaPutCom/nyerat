@@ -26,6 +26,7 @@ export interface Settings {
     width: number;
     height: number;
     welcomed: boolean;
+    projects: Record<string, string>;   // nama proyek → folder, untuk harness eksternal yang mengerjakan kartu kanban
 }
 
 export const DEFAULTS: Settings = {
@@ -45,6 +46,7 @@ export const DEFAULTS: Settings = {
     width: 1100,
     height: 760,
     welcomed: false,     // dokumen contoh sudah pernah ditampilkan
+    projects: {},
 };
 
 // Dihitung saat dipanggil (bukan saat import) supaya tes bisa mengganti XDG_CONFIG_HOME.

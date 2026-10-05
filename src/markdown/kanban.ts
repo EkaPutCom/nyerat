@@ -12,6 +12,7 @@
 //   - [ ] Tulis laporan #penting    ← item daftar = kartu; [x] = selesai
 //     catatan kartu (diindentasi)   ← baris yang diindentasi = catatan kartu
 //   - [ ] Kirim undangan @{2026-10-20}
+//   - [ ] Perbaiki checkout @pi     ← @nama = harness yang ditugasi mengerjakan kartu
 //
 //   ## Selesai
 //
@@ -221,19 +222,23 @@ export function moveColumn(board: Board, from: number, to: number): Board {
 // ---------- Isi kartu ----------
 
 export interface CardMeta {
-    title: string;       // teks tanpa #tag dan @{tanggal}, untuk ditampilkan
+    title: string;         // teks tanpa #tag, @{tanggal}, dan @penugasan, untuk ditampilkan
     tags: string[];
-    due: string | null;  // "YYYY-MM-DD"
+    due: string | null;    // "YYYY-MM-DD"
+    agent: string | null;  // harness yang ditugasi ("@pi" → "pi"); yang pertama bila lebih dari satu
 }
 
 const TAG = /(^|\s)#([\p{L}\p{N}_/-]+)/gu;
 const DUE = /\s*@\{(\d{4}-\d{2}-\d{2})(?:[ T]\d{1,2}:\d{2})?\}/;
+// Harus berdiri sendiri (diawali spasi), jadi alamat email dan @{tanggal} tidak ikut.
+const AGENT = /(^|\s)@([a-z][a-z0-9_-]*)(?=\s|$)/g;
 
 export function cardMeta(text: string): CardMeta {
     const tags = [...text.matchAll(TAG)].map(m => m[2]);
     const due = DUE.exec(text)?.[1] ?? null;
-    const title = text.replace(TAG, '$1').replace(DUE, '').replace(/\s{2,}/g, ' ').trim();
-    return { title: title || text.trim(), tags, due };
+    const agent = [...text.matchAll(AGENT)][0]?.[2] ?? null;
+    const title = text.replace(TAG, '$1').replace(DUE, '').replace(AGENT, '$1').replace(/\s{2,}/g, ' ').trim();
+    return { title: title || text.trim(), tags, due, agent };
 }
 
 // Pecah teks kartu menjadi judul, tag, dan tenggat (tanggal dengan jam bila ada) untuk
@@ -242,19 +247,35 @@ export interface CardParts {
     title: string;
     tags: string[];
     due: string;
+    agent?: string;   // kosong = tidak ditugaskan
 }
 
 const DUE_FULL = /\s*@\{(\d{4}-\d{2}-\d{2}(?:[ T]\d{1,2}:\d{2})?)\}/;
 export const DUE_INPUT = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{1,2}:\d{2})?$/;
 
 export function splitCard(text: string): CardParts {
-    return { title: cardMeta(text).title, tags: cardMeta(text).tags, due: DUE_FULL.exec(text)?.[1] ?? '' };
+    const meta = cardMeta(text);
+    return { title: meta.title, tags: meta.tags, due: DUE_FULL.exec(text)?.[1] ?? '', agent: meta.agent ?? '' };
 }
 
-export function composeCard({ title, tags, due }: CardParts): string {
+export function composeCard({ title, tags, due, agent = '' }: CardParts): string {
     const tagText = tags.map(t => t.replace(/^#+/, '')).filter(Boolean).map(t => `#${t}`);
     const dueText = due.trim() ? `@{${due.trim()}}` : '';
-    return [title.trim(), ...tagText, dueText].filter(Boolean).join(' ');
+    const name = agent.trim().replace(/^@+/, '').toLowerCase();
+    const agentText = AGENT_NAME.test(name) ? `@${name}` : '';
+    return [title.trim(), agentText, ...tagText, dueText].filter(Boolean).join(' ');
+}
+
+export const AGENT_NAME = /^[a-z][a-z0-9_-]*$/;
+
+// Tugaskan kartu ke harness `agent` (ganti penugasan lama, atau hapus bila null) tanpa menyentuh bagian lain teksnya.
+export function assignCard(text: string, agent: string | null): string {
+    const rest = text.replace(AGENT, '$1').replace(/\s{2,}/g, ' ').trim();
+    if (!agent) return rest;
+    const meta = cardMeta(rest);
+    // Sisipkan tepat setelah judul supaya urutannya sama dengan composeCard.
+    const at = rest.indexOf(meta.title);
+    return at < 0 ? `${rest} @${agent}` : `${rest.slice(0, at + meta.title.length)} @${agent}${rest.slice(at + meta.title.length)}`;
 }
 
 export type DueStatus = 'overdue' | 'today' | 'soon' | 'later';

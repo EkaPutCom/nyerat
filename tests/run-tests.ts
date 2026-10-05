@@ -6,6 +6,7 @@
 //   gjs -m dist/run-tests.js --mouse                 tambah klik mouse sungguhan (pointer akan bergerak)
 //   gjs -m dist/run-tests.js --screenshot=a.png      simpan tangkapan layar jendela editor
 //   gjs -m dist/run-tests.js --shot-proposal=/tmp/p  simpan tangkapan jendela tinjau usulan agent (/tmp/p-<n>-tinjau.png dan -utama.png)
+//   gjs -m dist/run-tests.js --shot-harness=/tmp/h   simpan tangkapan papan dengan kartu pi bekerja/antre dan log pi (/tmp/h-papan.png, -log.png)
 //
 // Tes GUI membuka jendela sungguhan, jadi perlu sesi desktop (X11/Wayland).
 
@@ -38,6 +39,8 @@ import { workTests } from './unit/work.js';
 import { traceTests } from './unit/trace.js';
 import { changeTests } from './unit/changes.js';
 import { deepseekTests } from './unit/deepseek.js';
+import { harnessTests as harnessModelTests } from './unit/harness.js';
+import { harnessTests } from './gui/harness.js';
 import { chatTests } from './gui/chat.js';
 import { syntaxHidingTests } from './gui/syntax.js';
 import { listTests } from './gui/lists.js';
@@ -81,6 +84,7 @@ function runUnitTests(): void {
     agentActionTests();
     changeTests();
     deepseekTests();
+    harnessModelTests();
 }
 
 function runGuiTests(app: Gtk.Application): void {
@@ -104,6 +108,7 @@ function runGuiTests(app: Gtk.Application): void {
     tableGridTests(c);
     mermaidTests(c);
     kanbanBoardTests(c);
+    harnessTests(c);
     // Tes folder membuat jendela lain dan mengganti aksi aplikasi. Periksa undo/redo
     // mouse selagi aksi masih terhubung ke jendela konteks ini.
     if (opt('with-kanban-mouse')) kanbanMouseTests(c);

@@ -94,8 +94,8 @@ export function kanbanModelTests(): void {
         eq(b.footer, parseBoard(BOARD).footer, 'footer tetap');
     });
     test('cardMeta: #tag dan @{tanggal} dipisahkan dari judul', () => {
-        eq(cardMeta('Tulis laporan #penting #kerja/besar @{2026-10-20}'), { title: 'Tulis laporan', tags: ['penting', 'kerja/besar'], due: '2026-10-20' });
-        eq(cardMeta('Tanpa meta'), { title: 'Tanpa meta', tags: [], due: null });
+        eq(cardMeta('Tulis laporan #penting #kerja/besar @{2026-10-20}'), { title: 'Tulis laporan', tags: ['penting', 'kerja/besar'], due: '2026-10-20', agent: null });
+        eq(cardMeta('Tanpa meta'), { title: 'Tanpa meta', tags: [], due: null, agent: null });
         eq(cardMeta('http://x.y/#bagian').tags, [], 'tanda # di dalam URL bukan tag');
         eq(cardMeta('#saja').title, '#saja', 'teks yang hanya tag tetap tampil');
     });

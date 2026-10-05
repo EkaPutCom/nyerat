@@ -93,6 +93,11 @@ const buildCss = (p: Palette): string => `
     .kanban-tag-2 { background-color: #8e5bd6; } .kanban-tag-3 { background-color: #d6602e; }
     .kanban-tag-4 { background-color: #c2417a; } .kanban-tag-5 { background-color: #2f8f99; }
     .kanban-tag-6 { background-color: #8a7a1c; } .kanban-tag-7 { background-color: #5e6c84; }
+    .kanban-agent { background-color: alpha(${p.fg}, 0.10); color: ${p.fg}; font-weight: bold; }
+    .kanban-agent-queued { background-color: alpha(#d9a406, 0.25); color: ${p.fg}; }
+    .kanban-agent-working { background-color: #1f8a70; color: #ffffff; }
+    .kanban-agent-done { background-color: #3b7dd8; color: #ffffff; }
+    .kanban-agent-failed { background-color: #c9372c; color: #ffffff; }
     .image-viewer, .image-viewer viewport { background-color: #1c1d20; }
     .image-note { color: ${p.faint}; font-style: italic; font-size: 14px; }
     .tabbar { background-color: ${p.sideBg}; }

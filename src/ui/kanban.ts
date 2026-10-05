@@ -22,7 +22,7 @@ import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import {
     addCard, addColumn, cardMeta, deleteCard, deleteColumn, dropIndex, dueStatus, moveCard, moveColumn,
-    newBoard, renameColumn, toggleDone, updateCard, type Board, type Position,
+    newBoard, renameColumn, toggleDone, updateCard, type Board, type Card, type Position,
 } from '../markdown/kanban.js';
 import { cellMarkup, type MarkupColors } from '../markdown/pango.js';
 import { confirmDialog, editCardDialog, promptDialog, type CardDraft } from './dialogs.js';
@@ -35,6 +35,8 @@ const DRAG_THRESHOLD = 6;     // piksel penunjuk bergerak sebelum klik dianggap 
 const EDGE = 48;              // jarak dari tepi (piksel) yang memicu gulir otomatis saat menyeret
 const SCROLL_SPEED = 14;
 const TAG_COLORS = 8;
+const RUN_ICON: Record<CardRunStatus, string> = { queued: '◌', working: '●', done: '✓', failed: '✕', stopped: '■' };
+const RUN_LABEL: Record<CardRunStatus, string> = { queued: 'antre', working: 'bekerja', done: 'selesai', failed: 'gagal', stopped: 'dihentikan' };
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
 // Dialog bisa diganti (misalnya di tes) karena dialog asli menahan program sampai ditutup.
@@ -42,6 +44,13 @@ export interface BoardDialogs {
     editCard(parent: Gtk.Window | null, card: CardDraft, title?: string): CardDraft | null;
     prompt(parent: Gtk.Window | null, options: { title: string; label: string; value?: string }): string | null;
     confirm(parent: Gtk.Window | null, message: string, detail?: string): boolean;
+}
+
+// Penugasan kartu ke harness eksternal (diisi jendela). Kartu dikenali dari teksnya.
+export type CardRunStatus = 'queued' | 'working' | 'done' | 'failed' | 'stopped';
+export interface BoardHarness {
+    status(card: Card): CardRunStatus | null;
+    menu(card: Card, at: Position): MenuEntry[];
 }
 
 export interface ColumnView {
@@ -81,6 +90,7 @@ export class KanbanBoard {
     onChange: (board: Board) => void = () => {};
     dialogs: BoardDialogs = { editCard: editCardDialog, prompt: promptDialog, confirm: confirmDialog };
     today: () => string = () => GLib.DateTime.new_now_local().format('%Y-%m-%d') ?? '';
+    harness: BoardHarness | null = null;
 
     private board: Board = newBoard([]);
     private readonly row: Gtk.Box;
@@ -226,7 +236,7 @@ export class KanbanBoard {
 
         const inner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
         inner.append(top);
-        const badges = this.buildBadges(card.notes.length > 0, meta.tags, meta.due);
+        const badges = this.buildBadges(card.notes.length > 0, meta.tags, meta.due, meta.agent, this.harness?.status(card) ?? null);
         if (badges) inner.append(badges);
         widget.append(inner);
 
@@ -249,14 +259,19 @@ export class KanbanBoard {
         return widget;
     }
 
-    private buildBadges(hasNotes: boolean, tags: string[], due: string | null): Gtk.Box | null {
-        if (!hasNotes && !tags.length && !due) return null;
+    private buildBadges(hasNotes: boolean, tags: string[], due: string | null, agent: string | null = null, status: CardRunStatus | null = null): Gtk.Box | null {
+        if (!hasNotes && !tags.length && !due && !agent) return null;
         const row = new Gtk.Box({ spacing: 4 });
         const chip = (text: string, ...classes: string[]) => {
             const label = new Gtk.Label({ label: text });
             for (const cls of ['kanban-chip', ...classes]) label.add_css_class(cls);
             row.append(label);
+            return label;
         };
+        if (agent) {
+            const label = chip(`${status ? RUN_ICON[status] : '◇'} ${agent}${status ? ` · ${RUN_LABEL[status]}` : ''}`, 'kanban-agent', `kanban-agent-${status ?? 'idle'}`);
+            label.set_tooltip_text(status ? `${agent}: ${RUN_LABEL[status]} (klik kanan kartu untuk log)` : `Ditugaskan ke ${agent}; klik kanan kartu → Kerjakan dengan ${agent}`);
+        }
         for (const tag of tags) chip(`#${tag}`, `kanban-tag-${this.tagColor(tag)}`);
         if (due) chip(`📅 ${this.formatDue(due)}`, 'kanban-due', `kanban-due-${dueStatus(due, this.today())}`);
         if (hasNotes) chip('≡', 'kanban-notes');
@@ -393,6 +408,7 @@ export class KanbanBoard {
             { label: 'Pindahkan ke', enabled: this.board.columns.length > 1, submenu: move },
             { label: 'Naik', enabled: index > 0, run: () => this.commit(moveCard(this.board, at, { column, index: index - 1 })) },
             { label: 'Turun', enabled: index < col.cards.length - 1, run: () => this.commit(moveCard(this.board, at, { column, index: index + 1 })) },
+            ...(this.harness ? [separator(), ...this.harness.menu(card, at)] : []),
             separator(),
             { label: 'Hapus', run: () => this.commit(deleteCard(this.board, at)) },
         ];

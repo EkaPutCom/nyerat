@@ -8,7 +8,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { onKeyPress, runModal } from '../gtkutil.js';
 import { APP_NAME, APP_VERSION } from '../config.js';
-import { composeCard, DUE_INPUT, splitCard } from '../markdown/kanban.js';
+import { AGENT_NAME, composeCard, DUE_INPUT, splitCard } from '../markdown/kanban.js';
 
 type FilterSetup = [label: string, setup: (filter: Gtk.FileFilter) => void];
 
@@ -157,6 +157,8 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
     const tags = new Gtk.Entry({ text: parts.tags.join(' '), activates_default: true, hexpand: true, placeholder_text: 'tag1 tag2' });
     const due = new Gtk.Entry({ text: parts.due, activates_default: true, hexpand: true, placeholder_text: 'YYYY-MM-DD' });
     due.connect('changed', () => due.remove_css_class('error'));
+    const agent = new Gtk.Entry({ text: parts.agent ?? '', activates_default: true, hexpand: true, placeholder_text: 'mis. pi (kosong = tidak ditugaskan)' });
+    agent.connect('changed', () => agent.remove_css_class('error'));
     const notes = new Gtk.TextView({ wrap_mode: Gtk.WrapMode.WORD_CHAR, left_margin: 6, right_margin: 6, top_margin: 6, bottom_margin: 6 });
     notes.buffer.set_text(card.notes.join('\n'), -1);
     const frame = new Gtk.ScrolledWindow({ min_content_height: 140, has_frame: true, hexpand: true, vexpand: true });
@@ -169,6 +171,8 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
     box.append(tags);
     box.append(new Gtk.Label({ label: 'Tenggat', xalign: 0 }));
     box.append(due);
+    box.append(new Gtk.Label({ label: 'Dikerjakan oleh', xalign: 0 }));
+    box.append(agent);
     box.append(new Gtk.Label({ label: 'Catatan', xalign: 0 }));
     box.append(frame);
 
@@ -181,6 +185,12 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
 
     // Tenggat harus kosong atau berformat tanggal; selain itu dialog tetap terbuka.
     const accepted = formDialog(parent, heading, 440, box, 'Simpan', () => {
+        const name = agent.text.trim().replace(/^@+/, '').toLowerCase();
+        if (name && !AGENT_NAME.test(name)) {
+            agent.add_css_class('error');
+            agent.grab_focus();
+            return false;
+        }
         if (!due.text.trim() || DUE_INPUT.test(due.text.trim())) return true;
         due.add_css_class('error');
         due.grab_focus();
@@ -189,7 +199,7 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
     if (!accepted) return null;
     const [start, end] = notes.buffer.get_bounds();
     return {
-        text: composeCard({ title: title.text, tags: tags.text.split(/[\s,]+/), due: due.text }),
+        text: composeCard({ title: title.text, tags: tags.text.split(/[\s,]+/), due: due.text, agent: agent.text }),
         notes: notes.buffer.get_text(start, end, true).replace(/\s+$/, '').split('\n').filter((l, i, all) => all.length > 1 || l !== ''),
     };
 }

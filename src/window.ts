@@ -43,7 +43,11 @@ import { chooseFile, askSaveChanges, showError } from './ui/dialogs.js';
 import { registerActions } from './actions.js';
 import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
-import { countCards, isKanban, newBoard, parseBoard, serializeBoard, type Board } from './markdown/kanban.js';
+import { assignCard, cardMeta, countCards, isKanban, newBoard, parseBoard, serializeBoard, updateCard, type Board, type Card, type Position } from './markdown/kanban.js';
+import { Orchestrator } from './orchestrator.js';
+import { cardProject, checkProjectFolder, HARNESSES, PROJECT_NAME, type Run } from './agent/harness.js';
+import { LogViewer } from './ui/logviewer.js';
+import type { MenuEntry } from './ui/menu.js';
 
 const UNTITLED = 'Tanpa Judul';
 // Jeda tanpa ketikan sebelum auto save menulis ke disk.
@@ -89,6 +93,10 @@ export class MainWindow {
     readonly statusBar: StatusBar;
     readonly tabBar: TabBar;
     readonly board: KanbanBoard;
+    readonly orchestrator: Orchestrator;
+    // Dialog pemilih folder proyek menahan program, jadi bisa diganti di tes.
+    harnessDialogs = { chooseFolder: (title: string): string | null => chooseFile(this.win, { title, selectFolder: true }) };
+    private readonly runLogs = new Map<number, LogViewer>();
     readonly chat: ChatPanel;
     readonly chatRevealer: Gtk.Revealer;
     private readonly content: Gtk.Stack;
@@ -126,6 +134,18 @@ export class MainWindow {
 
         // Komponen tidak saling kenal; jendela inilah yang menghubungkan mereka.
         this.board.onChange = board => this.writeBoard(board);
+        this.orchestrator = new Orchestrator({
+            workspace: () => this.fileTree.root,
+            updateBoard: (file, edit) => this.updateBoardFile(file, edit),
+            changed: (run, message) => {
+                if (this.boardMode && this.file === run.board) this.board.queueRender();
+                if (message) this.statusBar.toast(message);
+            },
+        });
+        this.board.harness = {
+            status: card => (this.file && this.orchestrator.queue.find(this.file, card.text)?.status) || null,
+            menu: (card, at) => this.harnessMenu(card, at),
+        };
         this.outline.onJump = line => this.editor.jumpToLine(line);
         this.tabBar.onSelect = id => {
             const doc = this.docs.find(d => d.id === id);
@@ -580,6 +600,90 @@ export class MainWindow {
         this.showBoardCounts(board);
     }
 
+    // ---------- Harness eksternal ----------
+
+    // Entri menu kartu untuk menugaskan, menghentikan, dan memantau harness.
+    private harnessMenu(card: Card, at: Position): MenuEntry[] {
+        const file = this.file;
+        const run = file ? this.orchestrator.queue.find(file, card.text) : null;
+        const active = run && (run.status === 'working' || run.status === 'queued') ? run : null;
+        const agent = cardMeta(card.text).agent;
+        const entries: MenuEntry[] = Object.values(HARNESSES).map(spec => ({
+            label: `Kerjakan dengan ${spec.label}`,
+            enabled: !!file && !active && card.done !== true,
+            run: () => this.runHarness(at, spec.name),
+        }));
+        if (active) entries.push({ label: active.status === 'queued' ? 'Batalkan Antrean' : `Hentikan ${active.agent}`, run: () => this.orchestrator.stop(active) });
+        if (run) entries.push({ label: `Lihat Log ${run.agent}`, run: () => this.showRunLog(run) });
+        if (agent && !active) entries.push({ label: 'Lepas Penugasan', run: () => this.board.commit(updateCard(this.board.getBoard(), at, { text: assignCard(card.text, null) })) });
+        const project = cardProject(this.board.getBoard(), card);
+        if (project && this.settings.projects[project]) entries.push({ label: 'Ganti Folder Proyek…', run: () => this.chooseProjectFolder(project) });
+        return entries;
+    }
+
+    // Jalankan harness untuk kartu di papan aktif. Folder proyek ditanyakan sekali lalu diingat di pengaturan.
+    runHarness(at: Position, agent: string): void {
+        const file = this.file;
+        if (!file) { this.statusBar.toast('Simpan papan dulu sebelum menugaskan kartu'); return; }
+        const card = this.board.getBoard().columns[at.column]?.cards[at.index];
+        if (!card) return;
+        let project = cardProject(this.board.getBoard(), card);
+        if (!project || !this.settings.projects[project]) {
+            const folder = this.chooseProjectFolder(project);
+            if (!folder) return;
+            if (!project) {
+                // Belum ada nama proyek: pakai nama foldernya dan catat di kartu supaya giliran berikutnya tidak bertanya lagi.
+                project = folder.name;
+                const tagged = `${card.text} #proyek/${project}`;
+                this.board.commit(updateCard(this.board.getBoard(), at, { text: tagged }));
+            }
+        }
+        const error = this.orchestrator.start(file, this.board.getBoard(), at, agent, project, this.settings.projects[project], GLib.path_get_basename(file));
+        if (error) this.statusBar.toast(`Tidak bisa menjalankan ${agent}: ${error}`);
+    }
+
+    // Pilih folder untuk proyek `name` (atau proyek baru bila null) dan simpan pemetaannya.
+    private chooseProjectFolder(name: string | null): { name: string; path: string } | null {
+        const path = this.harnessDialogs.chooseFolder(name ? `Folder proyek “${name}”` : 'Pilih folder proyek');
+        if (!path) return null;
+        const project = name ?? GLib.path_get_basename(path).replace(/\s+/g, '-');
+        const problem = !PROJECT_NAME.test(project) ? `nama folder "${project}" tidak bisa dipakai sebagai nama proyek` : checkProjectFolder(path, this.fileTree.root);
+        if (problem) { this.statusBar.toast(`Folder proyek ditolak: ${problem}`); return null; }
+        this.settings.projects = { ...this.settings.projects, [project]: path };
+        saveSettings(this.settings);
+        return { name: project, path };
+    }
+
+    showRunLog(run: Run): LogViewer {
+        const open = this.runLogs.get(run.id);
+        if (open?.window.get_realized()) { open.show(); return open; }
+        const viewer = new LogViewer(this.win, run.trace, `Log ${run.agent} — ${run.title}`);
+        this.runLogs.set(run.id, viewer);
+        viewer.show();
+        return viewer;
+    }
+
+    // Ubah papan di `file` untuk orkestrator: lewat editornya bila terbuka (satu langkah undo), selain itu langsung di disk.
+    private updateBoardFile(file: string, edit: (board: Board) => Board): string | null {
+        const doc = this.docs.find(d => d.file === file);
+        try {
+            if (!doc) waitForWrites(file);
+            const text = doc ? doc.editor.getText() : readTextFile(file);
+            if (!isKanban(text)) return 'berkas papan bukan papan kanban lagi';
+            const board = parseBoard(text);
+            const next = edit(board);
+            if (next === board) return null;
+            if (doc === this.doc && this.boardMode) {
+                this.board.setBoard(next);
+                this.writeBoard(next);
+            } else if (doc) doc.editor.replaceText(serializeBoard(next));
+            else writeTextFile(file, serializeBoard(next));
+            return null;
+        } catch (e) {
+            return errorMessage(e);
+        }
+    }
+
     private queueBoardReload(doc: Doc): void {
         if (doc !== this.doc || !this.boardMode || doc.reloadQueued) return;
         doc.reloadQueued = true;
@@ -917,6 +1021,7 @@ export class MainWindow {
             this.cancelAutosave(doc);
             doc.editor.destroy();
         }
+        this.orchestrator.dispose();
         this.statusBar.destroy();
         this.outline.destroy();
         this.chat.destroy();

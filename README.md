@@ -17,7 +17,9 @@ Tujuan Nyerat adalah menjadi ruang kerja pribadi tempat pengguna dan agent AI be
 
 Keadaan sekarang: editor Markdown, kanban, riwayat Git, dan agent berbasis DeepSeek yang menelusuri dokumen, menjawab dengan kutipan berkas dan nomor baris, membaca riwayat Git folder kerja (`riwayat_git`, `lihat_commit`, `isi_versi`), serta mengusulkan tindakan yang disetujui lewat jendela tinjau: berkas baru (`buat_berkas`), penggantian teks (`ubah_berkas`, satu kemunculan atau semuanya), sisipan teks (`sisip_teks`), membuang dan memindah berkas (`hapus_berkas`, `pindah_berkas`), dan perubahan papan kanban (`ubah_kanban`: kartu dan daftar). Agent tidak menulis berkas kerja tanpa persetujuan Anda; paket boleh diterapkan sebagian, keputusan bisa disertai catatan untuk agent, dan perubahan yang sudah diterapkan bisa diurungkan dari panel. Rencana pekerjaan (`atur_pekerjaan`), paket perubahan (`usulkan_paket`), pemeriksaan hasil (`verifikasi_pekerjaan`), dan journal tindakan tersimpan bersama percakapan. Pekerjaan tertunda dapat dilanjutkan setelah aplikasi dibuka lagi.
 
-Arah pengembangan berikutnya: memperluas sumber konteks dan menambah tindakan lain yang tetap dapat ditinjau dan dikendalikan. Belum tersedia: pemeriksaan konsistensi otomatis, tindakan di luar Markdown (misalnya menjalankan perintah), dan penyedia model selain DeepSeek (lihat *Keterbatasan*).
+Nyerat juga bisa menjadi **orkestrator harness eksternal**: kartu kanban yang ditugaskan ke `@pi` dikerjakan [pi](https://pi.dev) di folder proyek lain (misalnya repo `~/web-ecommerce`), bukan di folder kerja Nyerat. Nyerat menyusun prompt dari kartu, menjalankan harness, memindahkan kartu ke *Dikerjakan* lalu *Review*, mencatat ringkasan hasilnya di kartu, dan menampilkan log alat yang dipanggil. Satu proyek dikerjakan satu harness sekaligus; kartu lain mengantre.
+
+Arah pengembangan berikutnya: memperluas sumber konteks dan menambah tindakan lain yang tetap dapat ditinjau dan dikendalikan. Belum tersedia: pemeriksaan konsistensi otomatis, tindakan agent Nyerat sendiri di luar Markdown (misalnya menjalankan perintah; itu hanya dilakukan harness eksternal yang dijalankan pengguna dari kartu), dan penyedia model selain DeepSeek (lihat *Keterbatasan*).
 
 ### Contoh alur kerja
 
@@ -154,6 +156,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 - Heading, **tebal**, *miring*, ~~coret~~, ==stabilo==, `kode inline`, tautan, dan gambar langsung tampil terformat
 - Blok kode, kutipan, dan garis pemisah diberi gaya (kutipan bersarang `>>` makin menjorok, sampai tiga tingkat); baris pembatas ```` ``` ```` disembunyikan di luar blok
 - **Papan kanban ala Trello.** File Markdown yang frontmatter-nya memuat `kanban: true` dibuka sebagai papan: heading `##` menjadi daftar, item `- [ ]` menjadi kartu. Seret kartu antar daftar (atau ke posisi lain di daftar yang sama), klik kartu untuk menyunting judul dan catatannya, klik kanan untuk menu (pindahkan, naik/turun, hapus), centang untuk menandai selesai, dan tambah kartu/daftar langsung di papan. `#tag` tampil sebagai label berwarna dan `@{2026-10-20}` sebagai tanggal (merah jika lewat batas). Semua perubahan ditulis ke teks Markdown-nya, dan penanda lama `kanban-plugin:` dari plugin Kanban Obsidian tetap dikenali. `Ctrl+Shift+B` beralih ke tampilan teks dan kembali; menu ☰ → *Papan Kanban Baru* membuat papan kosong
+- **Kartu dikerjakan harness eksternal (pi).** Tulis `@pi` di judul kartu (atau isi *Dikerjakan oleh* di dialog sunting), lalu klik kanan → *Kerjakan dengan pi*. Proyeknya diambil dari tag kartu `#proyek/nama` atau frontmatter papan `proyek: nama`; folder proyek ditanyakan sekali lalu diingat di pengaturan (kartu tanpa proyek diberi tag dari nama foldernya). Chip kartu menunjukkan status: ◇ ditugaskan, ◌ antre, ● bekerja, ✓ selesai, ✕ gagal, ■ dihentikan. Saat mulai, kartu pindah ke daftar *Dikerjakan*; saat selesai, ke *Review* dengan catatan `↳ pi selesai …: ringkasan` (gagal: `↳ pi gagal …: alasan`, kartu tetap). Menu kartu juga punya *Lihat Log pi* (alat, penalaran, jawaban, token, biaya, dan id sesi untuk `pi --session <id>`), *Hentikan pi*/*Batalkan Antrean*, *Lepas Penugasan*, dan *Ganti Folder Proyek…*. Nyerat tidak menulis ke folder proyek; perubahannya ditinjau di repo itu sendiri (pi diminta tidak commit)
 - **Tabel dirender sebagai grid** (garis sel, header tebal, rata kiri/tengah/kanan, dan **tebal**/*miring*/`kode`/tautan di dalam sel). Saat kursor masuk ke tabel, teks mentahnya muncul untuk disunting; klik sebuah sel di grid untuk langsung menyunting sel itu. Tabel yang lebih lebar dari kolom teks dipersempit dan teks yang terpotong diberi "…" (isi lengkapnya muncul sebagai tooltip)
 - Di dalam tabel: `Tab` / `Shift+Tab` pindah antar sel (di sel terakhir, `Tab` menambah baris), `Enter` pindah ke baris berikutnya (di baris kosong terakhir, `Enter` keluar dari tabel). Menu ☰ → **Edit Tabel** untuk tambah/hapus baris dan kolom, rata kiri/tengah/kanan, dan merapikan kolom
 - Isi blok kode diwarnai sesuai bahasanya (```` ```js ````, ```` ```python ````, ```` ```rust ````, dan ratusan bahasa lain dari GtkSourceView), dengan skema warna yang mengikuti mode terang/gelap
@@ -259,6 +262,7 @@ Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `di
 - **Unit**: konversi Markdown → HTML, pengurai format inline, simpan/baca pengaturan, model tabel dan kanban, alias bahasa kode, DBML, operasi berkas (buat/ganti nama/hapus/pindah), pengurai keluaran git, serta asisten, tanpa GUI
 - **Editor**: membuka jendela sungguhan, lalu memeriksa sintaks yang disembunyikan/ditampilkan, Enter dan Tab di daftar, shortcut format, undo, klik kotak tugas, serta simpan dan buka file
 - **Tabel**: aturan pengenalan tabel (pemisah satu strip, tanpa pipa di tepi, berhenti di blok lain), pemecahan sel, perataan, merapikan kolom (termasuk lebar CJK dan emoji), operasi baris/kolom, konversi format inline ke markup Pango, lebar kolom; lalu di editor: grid yang muncul dan hilang mengikuti kursor, letak grid di antara paragraf, klik sel, Tab/Shift+Tab/Enter, semua perintah menu, satu perintah = satu langkah undo, mode source, serta tabel beremoji yang tidak membuat GTK gagal menggambar
+- **Harness eksternal**: penugasan `@nama` (bukan email/`@{tanggal}`), proyek dari frontmatter atau tag, penolakan folder kerja, prompt, pembaca JSON pi (alat, penalaran, biaya, sesi, galat), catatan hasil, antrean per folder; di GUI dengan pi tiruan (skrip shell) sungguhan: cwd dan prompt, kartu ke *Dikerjakan* lalu *Review* dengan catatan, log, antrean berurutan, hentikan, gagal, folder proyek yang ditanyakan dan diingat, dan papan yang tidak terbuka diperbarui di disk
 - **Kanban**: model (mengenali papan, membaca dan menulis dengan hasil yang stabil, operasi kartu dan daftar, tag dan tanggal); di editor: dokumen dibuka sebagai papan, menambah/mencentang/menyunting/memindahkan lewat menu, seret kartu (jatuh di posisi yang ditunjuk, kartu bayangan dan penanda tujuan dibersihkan, tempat asal tidak mengubah apa pun), gulir otomatis di tepi, undo/redo satu langkah per perubahan, beralih ke tampilan teks dan kembali, aksi pengeditan teks ditolak saat papan tampil, dan simpan
 - **Diagram Mermaid**: blok dirender menjadi gambar, kode disembunyikan di luar blok dan tampil dengan pratinjau di dalamnya, galat sintaks ditampilkan tanpa menyembunyikan kode, render ulang saat kode diubah, widget dipakai ulang saat baris bergeser, blok kosong/tidak ditutup/bukan mermaid diabaikan, mode source, dan tema gelap (warna latar gambar); serta ekspor HTML-nya
 - **Diagram DBML**: penerjemah DBML → Mermaid (tabel, kolom, ref, alias, skema, galat berikut nomor barisnya), blok dbml dirender dan galatnya tampil tanpa menyembunyikan kode, serta ekspor HTML-nya
@@ -290,6 +294,7 @@ Lima skenario memeriksa perpindahan antar daftar beserta catatan/emoji, urutan d
 | `--mouse` | Tambah klik mouse sungguhan lewat XTest (pointer akan bergerak sendiri). Dilewati dengan keterangan jika lingkungan Anda tidak meneruskan tombol mouse XTest ke GTK (terjadi di XFCE/X11 yang dipakai mengembangkan ini); gerak pointer saja tidak dihitung sebagai tes |
 | `--with-kanban-mouse` | Tambahkan lima tes input mouse kanban ke seluruh tes unit dan GUI; dipakai oleh `npm test` di Xvfb dan `npm run test:ui` di desktop. Tidak bisa digabung dengan `--no-gui` |
 | `--screenshot=file.png` | Simpan tangkapan layar jendela editor |
+| `--shot-harness=prefix` | Simpan tangkapan papan dengan kartu pi bekerja/antre (terang dan gelap) dan jendela log pi (`prefix-papan.png`, `-papan-gelap.png`, `-log.png`) |
 
 Tes memakai folder pengaturan sementara, jadi pengaturan Anda tidak tersentuh.
 
@@ -327,6 +332,7 @@ src/
 ├── settings.ts           baca/tulis ~/.config/nyerat/settings.json
 ├── files.ts              baca/tulis file teks UTF-8
 ├── fileops.ts            buat, ganti nama, hapus (ke sampah), dan pindahkan file/folder di disk (tanpa GTK; dipakai pohon berkas)
+├── orchestrator.ts       menjalankan harness eksternal (pi) untuk kartu kanban di folder proyek: proses, antrean, pembaruan papan
 ├── git.ts                riwayat git sebuah file dan daftar file yang belum di-commit lewat perintah `git` (async; hanya membaca, kecuali commit file terpilih); juga menjalankan alat Git agent
 ├── gitlog.ts             pengurai keluaran git: log, diff, waktu relatif (murni, tanpa GTK)
 ├── welcome.ts            dokumen contoh saat pertama dibuka
@@ -338,6 +344,7 @@ src/
 │   ├── changes.ts        murni: alat usulan (buat, ubah, sisip, hapus, pindah, kanban), validasi menjadi `Change`, kebalikan dan preflight perubahan, pratinjau selisih; tidak pernah menulis
 │   ├── gittools.ts       murni: alat riwayat Git agent (riwayat_git, lihat_commit, isi_versi): validasi argumen dan perapian keluaran
 │   ├── work.ts           murni: tujuan, rencana, status pekerjaan dan alat atur_pekerjaan
+│   ├── harness.ts        murni: harness eksternal untuk kartu kanban: proyek, prompt, pembaca JSON pi, antrean per folder
 │   ├── trace.ts          murni: log kegiatan agent (putaran, penalaran, alat, hasil) untuk jendela Log agent
 │   ├── batch.ts          murni: perencanaan paket, preflight semua berkas, dan rollback melalui host
 │   ├── verification.ts   murni: pemeriksaan teks (per berkas atau seluruh folder), status kartu kanban, dan struktur Markdown tanpa masalah baru pada isi aktual
@@ -356,7 +363,7 @@ src/
 │   ├── syntax.ts         regex untuk heading, daftar, kutipan, tabel, penekanan
 │   ├── inline.ts         parseInline(): format di dalam satu baris
 │   ├── table.ts          tabel: mengenali blok, memecah sel, rapikan, tambah/hapus baris dan kolom
-│   ├── kanban.ts         papan kanban: membaca/menulis Markdown, operasi kartu dan daftar, tag dan tanggal
+│   ├── kanban.ts         papan kanban: membaca/menulis Markdown, operasi kartu dan daftar, tag, tanggal, dan penugasan @harness
 │   ├── pango.ts          isi sel tabel (Markdown inline) → markup Pango untuk Gtk.Label
 │   ├── chatmarkup.ts     jawaban asisten (heading, daftar, kutipan, blok kode, inline) → markup Pango
 │   ├── dbml.ts           penerjemah DBML (dbdiagram.io) → diagram ER Mermaid
@@ -405,7 +412,7 @@ tests/
 ├── widgets.ts            pembantu tes GUI: tangkapan layar widget, anak widget, klik tiruan lewat GestureClick, posisi layar X11
 ├── unit/                 tes tanpa jendela: inline, HTML, settings, tabel, kanban, bahasa kode, DBML, operasi berkas, asisten (konteks, SSE, sesi), format berkas percakapan, klien DeepSeek (server tiruan)
 │   └── helpers.ts        helper untuk mengambil isi body HTML hasil konversi
-├── gui/                  tes editor, file/folder, gambar, tabel, diagram, kanban, riwayat, asisten, ukuran, ketahanan
+├── gui/                  tes editor, file/folder, gambar, tabel, diagram, kanban, harness eksternal, riwayat, asisten, ukuran, ketahanan
 │   ├── context.ts        konteks jendela/editor dan helper tes GUI
 │   ├── kanban-mouse.ts   lima tes seret/klik lewat input mouse X11
 │   └── mouse-input.ts    klien X11/XTest TypeScript melalui Gio
@@ -609,6 +616,33 @@ buffer teks ──parseBoard()──► KanbanBoard (model + tampilan)
 
 **Dialog** (`editCardDialog`, `promptDialog`, `confirmDialog`) menahan program sampai ditutup, jadi `KanbanBoard.dialogs` bisa diganti, dan tes memakai pengganti.
 
+### Cara kerja orkestrator harness (`agent/harness.ts`, `orchestrator.ts`)
+
+```markdown
+---
+kanban: true
+proyek: web-ecommerce          ← proyek bawaan papan
+---
+
+## Rencana
+- [ ] Checkout pakai QRIS @pi #fitur          ← @pi = harness yang ditugasi
+- [ ] Tes keranjang @pi #proyek/toko-admin     ← tag proyek menang atas frontmatter
+```
+
+```
+kartu ──buildPrompt()──► pi --mode json --name <judul> -- <prompt>   (cwd = folder proyek)
+  ▲                            │ JSONL per baris
+  │                        PiReader ──► AgentTrace (Log pi) + HarnessResult
+  └── updateBoard(): pindah ke Dikerjakan / Review, catatan ↳ hasil
+```
+
+1. **Proyek, bukan path.** Isi Markdown hanya menyebut *nama* proyek; nama dipetakan ke folder di `settings.projects`, yang hanya diisi lewat dialog pilih folder. Jadi kartu atau agent tidak bisa mengarahkan harness ke folder sembarang. `checkProjectFolder()` menolak folder kerja Nyerat, isinya, induknya, root, dan path relatif, karena harness menulis bebas tanpa jendela tinjau.
+2. **Menjalankan.** `Orchestrator.start()` menambahkan `@pi` bila belum ada, memasukkan run ke `RunQueue`, lalu `launch()` mencari program (PATH, lalu `~/.local/bin` dan sejenisnya, karena aplikasi dari menu desktop sering tidak mewarisi PATH shell) dan menjalankannya lewat `spawnHarness()`. Pipe dibaca dengan `GLib.IOChannel` per baris (framing JSONL pi), bukan `Gio.Subprocess.get_stdout_pipe()`: setelah Gtk dimuat, GJS membungkus pipe itu sebagai `Gio.UnixInputStream` dan mencetak Gjs-WARNING. stdin langsung ditutup supaya harness yang meminta masukan mendapat EOF, bukan menggantung.
+3. **Antrean.** Satu folder proyek hanya dikerjakan satu run (`working`); kartu lain `queued` dan mulai saat run sebelumnya selesai. Membatalkan antrean tidak memberi giliran.
+4. **Membaca hasil.** `PiReader` memetakan event (`session`, `turn_start`, `message_update` teks/penalaran, `tool_execution_start/end`, `message_end` asisten dengan `stopReason`/`usage.cost`, `agent_settled`) ke `AgentTrace`, sehingga `LogViewer` agent dipakai ulang. Gagal bila `stopReason` error/aborted, kode keluar bukan 0 (pesan = baris stderr terakhir), atau tidak ada jawaban.
+5. **Selesai dan berhenti.** Setelah proses keluar, sisa keluaran diberi tenggang 1,5 detik: cucu proses (perintah dari alat `bash` harness) bisa menahan pipe tetap terbuka. *Hentikan* mengirim SIGTERM, lalu SIGKILL setelah 5 detik. Menutup jendela menghentikan semua harness yang berjalan.
+6. **Menulis papan.** Kartu dicari ulang menurut teksnya di papan terkini (`locateCard()`, harus unik). Papan yang terbuka diubah lewat editornya (satu langkah undo); yang tidak terbuka ditulis langsung ke disk. Daftar tujuan dikenali dari judulnya (*Dikerjakan*/*Doing*/*In Progress*, *Review*/*Tinjau*); bila tidak ada, kartu tidak dipindah.
+
 ### Cara kerja asisten (`agent/*`, `ui/chat.ts`)
 
 Model hanya tahu apa yang dikirim, jadi mutu jawaban ditentukan oleh `agent/context.ts`. Tiap pertanyaan membangun konteks baru (naskah bisa berubah di antara pertanyaan) dalam anggaran token (`DEFAULT_BUDGET` = 48.000 token; 1 token ≈ 3 karakter, sengaja boros). Konteks dibagi dua supaya cache prefiks DeepSeek terpakai:
@@ -679,7 +713,7 @@ Contoh menambah format baru, misalnya `^superskrip^`:
 
 ## Pengaturan
 
-Disimpan di `$XDG_CONFIG_HOME/nyerat/settings.json` (bawaan `~/.config/nyerat/settings.json`): mode gelap, sidebar dan tab yang terakhir dipilih (Berkas, Outline, atau Riwayat), folder yang terakhir dibuka, tab berfile yang terbuka saat jendela ditutup (urutan, tab aktif, dan posisi kursor), mode fokus, mode typewriter, auto save, ukuran jendela, panel Asisten (terbuka atau tidak) beserta model dan mode berpikirnya, dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
+Disimpan di `$XDG_CONFIG_HOME/nyerat/settings.json` (bawaan `~/.config/nyerat/settings.json`): mode gelap, sidebar dan tab yang terakhir dipilih (Berkas, Outline, atau Riwayat), folder yang terakhir dibuka, tab berfile yang terbuka saat jendela ditutup (urutan, tab aktif, dan posisi kursor), mode fokus, mode typewriter, auto save, ukuran jendela, panel Asisten (terbuka atau tidak) beserta model dan mode berpikirnya, pemetaan nama proyek → folder untuk harness eksternal (`projects`), dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
 
 Nilai bawaan: sidebar terbuka pada tab Outline, panel Asisten tertutup dengan model `deepseek-flash` tanpa mode berpikir, fokus/typewriter mati, ukuran jendela 1100 × 760 piksel, dan mode gelap mengikuti tema sistem (`dark: null`). Setelah mode gelap dipilih lewat menu, pilihan itu disimpan. Ukuran awal jendela dibatasi ke area kerja monitor. Mode source dan pilihan tampilan papan/teks tidak disimpan antar proses.
 
@@ -690,6 +724,7 @@ Nilai bawaan: sidebar terbuka pada tab Outline, panel Asisten tertutup dengan mo
 - Gambar yang diubah di disk tidak dimuat ulang sampai aplikasi dibuka lagi (ada cache per URI); GIF animasi hanya menampilkan frame pertama, termasuk di penampil zoom
 - **Seret kartu telah diuji lewat input mouse X11/XTest.** `npm test` dan `npm run test:ui` memeriksa lima skenario melalui event yang benar-benar diterima GTK, termasuk perubahan Markdown, undo/redo, dan simpan. Jalur input ini berhasil di lingkungan pengembangan, sementara helper klik lama `Gdk.test_simulate_button` tidak meneruskan tombol dengan andal. Pengujian manual dengan mouse fisik dan sesi Wayland masih belum terverifikasi
 - Papan: hanya item daftar di tingkat atas yang menjadi kartu (daftar bersarang dipertahankan sebagai catatan kartu); baris biasa di antara dua kartu dipindahkan ke akhir daftar saat disimpan. Belum ada arsip, pemilih tanggal, atau penyuntingan label lewat antarmuka (tulis `#tag` dan `@{YYYY-MM-DD}` di judul kartu), dan memindahkan kartu dengan keyboard hanya lewat menu klik kanan
+- Harness eksternal: baru pi. Status run (antre, bekerja, log) hanya ada selama aplikasi terbuka; yang bertahan adalah posisi kartu dan catatan `↳`. Kartu dikenali dari teksnya, jadi menyunting judul kartu yang sedang dikerjakan memutus statusnya: chip dan menu log hilang dari kartu itu, dan kartu tidak dipindah saat harness selesai. Harness berjalan non-interaktif: pertanyaan atau permintaan izin dari harness tidak bisa dijawab dari Nyerat (belum ada status *menunggu* atau terminal interaktif), dan izin alatnya mengikuti pengaturan pi sendiri. Belum ada worktree per kartu (kartu di proyek yang sama mengantre) dan belum ada tampilan diff hasil harness di Nyerat; tinjau di repo proyek
 - Di tampilan teks, frontmatter papan tampil seperti Markdown biasa (garis `---` dan teks)
 - Klik pertama pada gambar membuka sintaksnya, sehingga gambar bergeser sekitar satu baris ke bawah. Klik ganda yang jatuh di strip tipis tepi atas gambar karenanya bisa meleset ke teks di atasnya
 - Gambar di dalam sel tabel tidak ditampilkan (hanya teks alt-nya), dan gambar di dalam daftar atau kutipan tidak ikut menjorok

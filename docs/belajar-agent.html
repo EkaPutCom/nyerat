@@ -260,6 +260,16 @@ input[type=text] { width: 100%; }
 .states { display: grid; gap: 8px; margin: 10px 0; }
 .states label { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: .85rem; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--surface); }
 .states label span { overflow-wrap: anywhere; }
+.runs { display: grid; gap: 6px; margin: 10px 0; }
+.runs .run { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; font-size: .85rem; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--surface); }
+.runs .run span { overflow-wrap: anywhere; }
+.runs .st { font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.runs .st.working { border-color: var(--third); background: var(--third-soft); }
+.runs .st.queued { border-color: var(--line); background: var(--surface-2); }
+.runs .st.failed, .runs .st.stopped { border-color: var(--before); background: var(--before-soft); }
+.runs .st.done { border-color: var(--after); background: var(--after-soft); }
+.runs .run .acts { display: flex; gap: 4px; }
+.runs .run button { padding: 2px 8px; font-size: .78rem; }
 .machine { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; font-size: .8rem; margin: 10px 0; }
 .machine .st { border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; background: var(--surface-2); }
 .machine .st.good { border-color: var(--third); background: var(--third-soft); }
@@ -268,6 +278,8 @@ input[type=text] { width: 100%; }
 @media (max-width: 600px) {
   .log div { grid-template-columns: 1fr; gap: 0; }
   .states label { grid-template-columns: 1fr; }
+  .runs .run { grid-template-columns: minmax(0, 1fr) auto; }
+  .runs .run .acts { grid-column: 1 / -1; }
 }
 </style>
 </head>
@@ -278,12 +290,12 @@ input[type=text] { width: 100%; }
 <header class="hero">
   <div class="eyebrow"><a href="index.html">← Nyerat</a> · Catatan belajar · 4–5 Oktober 2026</div>
   <h1>Belajar membangun agent dari Nyerat</h1>
-  <p class="lede">Dalam dua hari, asisten Nyerat berkembang dari panel chat dengan <b>4 alat baca</b> menjadi agent dengan <b>16 alat</b>. Kini ia bisa merencanakan pekerjaan, mengusulkan paket perubahan, memeriksa hasilnya, dan melanjutkan pekerjaan setelah terputus. Satu prinsip dipegang sejak commit pertama: <b>agent boleh membaca dengan bebas, tetapi setiap perubahan berkas harus disetujui pengguna dulu</b>. Halaman ini menjelaskan cara prinsip itu dijaga di setiap tahap. Isinya mencakup struktur data, alur loop, batas keamanan, biaya, dan simulasi kecil yang bisa Anda coba sendiri.</p>
+  <p class="lede">Dalam dua hari, asisten Nyerat berkembang dari panel chat dengan <b>4 alat baca</b> menjadi agent dengan <b>16 alat</b>. Kini ia bisa merencanakan pekerjaan, mengusulkan paket perubahan, memeriksa hasilnya, dan melanjutkan pekerjaan setelah terputus. Satu prinsip dipegang sejak commit pertama: <b>agent boleh membaca dengan bebas, tetapi setiap perubahan berkas harus disetujui pengguna dulu</b>. Bab terakhir menunjukkan langkah berikutnya: Nyerat menugaskan kartu kanban ke agent lain (pi) yang bekerja di folder proyek terpisah, sementara Nyerat hanya memegang papannya. Halaman ini menjelaskan cara prinsip itu dijaga di setiap tahap. Isinya mencakup struktur data, alur loop, batas keamanan, biaya, dan simulasi kecil yang bisa Anda coba sendiri.</p>
   <div class="kpis">
     <div class="kpi"><div class="what">Alat yang ditawarkan ke model</div><div class="big">16</div><div class="from">dari 4 · f6a4cc7 → 90c28bb</div></div>
-    <div class="kpi"><div class="what">Tes asisten (unit + GUI)</div><div class="big">162</div><div class="from">dari 65 · semuanya tanpa API berbayar</div></div>
-    <div class="kpi"><div class="what">Kode <code>src/agent/</code></div><div class="big">2.619 baris</div><div class="from">dari 1.099 baris di 8 berkas → 19 berkas</div></div>
-    <div class="kpi"><div class="what">Penulisan berkas tanpa persetujuan</div><div class="big">0</div><div class="from">semua lewat <code>Change</code> + preflight</div></div>
+    <div class="kpi"><div class="what">Tes asisten (unit + GUI)</div><div class="big">178</div><div class="from">dari 65 · semuanya tanpa API berbayar</div></div>
+    <div class="kpi"><div class="what">Kode <code>src/agent/</code></div><div class="big">2.908 baris</div><div class="from">dari 1.099 baris di 8 berkas → 20 berkas</div></div>
+    <div class="kpi"><div class="what">Penulisan folder kerja tanpa persetujuan</div><div class="big">0</div><div class="from">semua lewat <code>Change</code> + preflight; harness eksternal hanya di folder proyek lain (Bab 9)</div></div>
   </div>
   <nav class="toc" aria-label="Daftar isi">
     <a href="#perjalanan">Perjalanan</a>
@@ -296,6 +308,7 @@ input[type=text] { width: 100%; }
     <a href="#bab6">6 · Journal &amp; pemulihan</a>
     <a href="#bab7">7 · Log agent</a>
     <a href="#bab8">8 · Tindakan lebih luas</a>
+    <a href="#bab9">9 · Orkestrator</a>
     <a href="#biaya">Biaya</a>
     <a href="#pelajaran">Pelajaran</a>
   </nav>
@@ -320,6 +333,7 @@ input[type=text] { width: 100%; }
     <li><span class="h">6c47266</span><span><b>Bab 5, 6</b> · Rencana (<code>atur_pekerjaan</code>), paket (<code>usulkan_paket</code>), verifikasi, journal tindakan, retry, dan ringkasan riwayat.</span></li>
     <li><span class="h">1c90735</span><span><b>Bab 7</b> · Jendela Log agent untuk memantau putaran, penalaran, alat, dan hasilnya.</span></li>
     <li><span class="h">90c28bb</span><span><b>Bab 8</b> · Sisip, hapus, pindah, ganti semua, persetujuan sebagian, Urungkan, alat riwayat Git, dan verifikasi struktur.</span></li>
+    <li><span class="h">baru</span><span><b>Bab 9</b> · Orkestrator harness: kartu <code>@pi</code> dikerjakan pi di folder proyek lain, antrean per folder, Log pi, kartu pindah ke Dikerjakan/Review.</span></li>
   </ol>
 </section>
 
@@ -694,6 +708,76 @@ TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
 </section>
 
 <!-- ============================================================ -->
+<section class="chapter" id="bab9">
+  <div class="chapnum">Bab 9 · belum di-commit · <code>agent/harness.ts</code>, <code>orchestrator.ts</code></div>
+  <h2>Nyerat sebagai orkestrator: agent lain bekerja, Nyerat memegang papan</h2>
+  <p><b>Kebutuhan.</b> Kode proyek (misalnya <code>~/web-ecommerce</code>) tidak tinggal di folder kerja Nyerat, dan pekerjaannya butuh agent yang bisa menjalankan perintah, mengedit kode, dan menjalankan tes. Itu bukan tugas agent Nyerat, yang sengaja tidak pernah menulis sendiri. Jawabannya: biarkan agent lain (<a href="https://pi.dev">pi</a>) yang bekerja, dan jadikan papan kanban Nyerat <b>bidang kendali</b>. Kartu menyatakan tugas, <code>@pi</code> menyatakan siapa yang mengerjakannya, dan daftar menyatakan statusnya.</p>
+  <div class="grid2">
+    <div class="panel">
+<pre><code>## Rencana
+- [ ] Checkout pakai QRIS @pi #fitur
+  Pakai SDK resmi.
+- [ ] Tes keranjang @pi #proyek/toko-admin
+
+// frontmatter papan: proyek: web-ecommerce
+// settings.json: projects = {
+//   "web-ecommerce": "/home/eka/web-ecommerce",
+//   "toko-admin":    "/home/eka/toko-admin" }</code></pre>
+    </div>
+    <div class="panel">
+<pre><code>interface Run {
+  board, card        // papan + teks kartu (pengenal)
+  agent: 'pi'
+  project, folder    // nama → folder dari pengaturan
+  prompt
+  status: 'queued' | 'working' | 'done'
+        | 'failed' | 'stopped'
+  trace: AgentTrace  // Log pi
+  result: HarnessResult | null
+}</code></pre>
+    </div>
+  </div>
+  <div class="flow" aria-label="Alur satu kartu">
+    <span class="node user">klik kanan → Kerjakan dengan pi</span><span class="to">→</span>
+    <span class="node pure">buildPrompt + RunQueue</span><span class="to">→</span>
+    <span class="node">pi --mode json (cwd = folder proyek)</span><span class="to">→ JSONL</span>
+    <span class="node pure">PiReader → AgentTrace</span><span class="to">→</span>
+    <span class="node ctl">kartu: Dikerjakan → Review + ↳ ringkasan</span>
+  </div>
+  <h3>9a. Batas kepercayaan pindah ke folder</h3>
+  <p>Sampai Bab 8, setiap tulisan melewati <code>Change</code> dan jendela tinjau. Harness eksternal tidak bisa diperlakukan seperti itu: pi menulis langsung, menjalankan <code>bash</code>, dan memakai aturan izinnya sendiri. Jadi batasnya tidak lagi per perubahan, tetapi <b>per folder</b>:</p>
+  <div class="scroll-x">
+  <table class="data cards">
+    <thead><tr><th>Risiko</th><th>Pengaman</th></tr></thead>
+    <tbody>
+      <tr><td data-k="Risiko">Kartu, catatan, atau agent Nyerat mengarahkan harness ke folder sembarang</td><td data-k="Pengaman">Markdown hanya menyebut <b>nama</b> proyek. Nama dipetakan ke folder di <code>settings.projects</code>, yang hanya diisi lewat dialog pilih folder oleh pengguna.</td></tr>
+      <tr><td data-k="Risiko">Harness menulis ke folder kerja Nyerat tanpa jendela tinjau</td><td data-k="Pengaman"><code>checkProjectFolder()</code> menolak folder kerja, isinya, induknya, root, dan path relatif.</td></tr>
+      <tr><td data-k="Risiko">Dua harness menimpa satu repo</td><td data-k="Pengaman"><code>RunQueue</code>: satu run <code>working</code> per folder, sisanya <code>queued</code> berurutan.</td></tr>
+      <tr><td data-k="Risiko">Harness menunggu masukan selamanya</td><td data-k="Pengaman">stdin ditutup sejak awal, sehingga permintaan masukan langsung mendapat EOF.</td></tr>
+      <tr><td data-k="Risiko">Cucu proses menahan pipe, run tidak pernah selesai</td><td data-k="Pengaman">Setelah proses keluar, sisa keluaran diberi tenggang 1,5 detik lalu dibatalkan. <i>Hentikan</i> = SIGTERM, lalu SIGKILL setelah 5 detik. Menutup jendela menghentikan semua run.</td></tr>
+      <tr><td data-k="Risiko">Perubahan masuk tanpa ditinjau</td><td data-k="Pengaman">Prompt meminta pi tidak commit/push. Kartu berhenti di <i>Review</i>, dan diff ditinjau di repo proyek.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>9b. Delegasi lewat kontrak proses, bukan pemanggilan alat</h3>
+  <p>pi tidak dipanggil sebagai alat model. Ia proses terpisah dengan kontrak yang jelas: argumen masuk, JSONL keluar, kode keluar di akhir. <code>PiReader</code> membaca event <code>tool_execution_start/end</code>, <code>message_update</code>, <code>message_end</code> (dengan <code>stopReason</code> dan <code>usage.cost</code>), dan <code>agent_settled</code>, lalu memetakannya ke <code>AgentTrace</code> yang sama dengan Bab 7. Jendela Log agent dipakai ulang tanpa perubahan apa pun. Baris yang bukan JSON dicatat apa adanya dan tidak menggagalkan pembacaan.</p>
+  <p>Satu jebakan GJS: pipe dari <code>Gio.Subprocess.get_stdout_pipe()</code> dibungkus sebagai <code>Gio.UnixInputStream</code> setelah Gtk dimuat, dan GJS mencetak <code>Gjs-WARNING</code>. Karena itu pipe dibaca lewat <code>GLib.IOChannel</code>, dipisah hanya pada LF sesuai framing JSONL pi.</p>
+  <h3>9c. Papan sebagai sumber kebenaran, kartu dicari ulang</h3>
+  <p>Papan tidak punya id kartu, jadi kartu dikenali dari teksnya. Setiap kali status berubah, <code>locateCard()</code> mencarinya di papan <em>terkini</em> (pengguna mungkin sudah memindahkannya) dan menolak bila tidak ada atau tidak unik. Papan yang terbuka diubah lewat editornya (satu langkah undo); yang tertutup ditulis langsung ke disk.</p>
+  <div class="sim" id="sim6">
+    <h3>Simulasi 6: antrean per folder proyek <span class="kind">Interaktif · logika nyata</span></h3>
+    <p>Tugaskan beberapa kartu ke dua proyek, lalu selesaikan, gagalkan, atau batalkan run-nya. Yang berjalan adalah salinan <code>RunQueue.add()</code> dan <code>end()</code> dari <code>agent/harness.ts</code>.</p>
+    <div class="btnrow"><button id="s6-a">+ kartu web-ecommerce</button><button id="s6-b">+ kartu toko-admin</button><button class="ghost" id="s6-reset">Ulang</button></div>
+    <div class="runs" id="s6-runs"></div>
+    <div class="msg" id="s6-msg">Belum ada kartu yang ditugaskan.</div>
+  </div>
+  <h3>9d. Uji: proses sungguhan, harness tiruan</h3>
+  <p>Tes GUI menjalankan skrip shell yang berpura-pura menjadi pi, lewat jalur proses yang sama. Tes ini memeriksa cwd dan prompt, kartu yang berpindah ke <i>Dikerjakan</i> lalu <i>Review</i> dengan catatan, antrean yang benar-benar berurutan (skrip mencatat <code>mulai</code>/<code>selesai</code>), <i>Hentikan</i> pada proses yang macet 30 detik, kegagalan dengan pesan dari stderr, folder proyek yang ditanyakan sekali lalu diingat, dan papan tertutup yang diperbarui di disk. Tes unit mencakup penugasan <code>@nama</code> (bukan email atau <code>@{tanggal}</code>), proyek, penolakan folder, prompt, <code>PiReader</code>, catatan hasil, dan antrean. Ada 16 tes baru, semuanya tanpa pi atau API sungguhan.</p>
+  <div class="caveat"><b>Yang diukur dan yang belum:</b> satu uji ujung-ke-ujung dengan pi 1.0.3 sungguhan (DeepSeek, tugas "buat HALO.txt" di repo contoh) berhasil. Berkas dibuat di repo proyek tanpa commit, folder kerja tetap kosong, kartu pindah ke Review, dan run memakai 4.248 token (±$0,0038). Itu satu run, bukan evaluasi. Mengurai <code>@nama</code> menambah ±0,35 ms per 500 kartu pada <code>cardMeta()</code> (±0,7 µs per kartu). Belum ada: status <i>menunggu</i> saat harness meminta izin, terminal interaktif, worktree per kartu (kartu di proyek yang sama mengantre), dan tampilan diff hasil harness di Nyerat. Status run hanya ada selama aplikasi terbuka; yang bertahan adalah posisi kartu dan catatan <code>↳</code>.</div>
+  <div class="lesson"><b>Pelajaran</b>Saat mendelegasikan ke agent lain, jangan pura-pura bisa meninjau setiap langkahnya. Pindahkan batasnya ke tempat yang bisa dijaga: <b>di mana</b> ia boleh bekerja (nama → folder yang dipilih pengguna), <b>berapa banyak</b> sekaligus (antrean per folder), dan <b>kapan berhenti</b> (EOF, tenggang, SIGKILL). Lalu buat hasilnya terlihat di tempat pengguna sudah bekerja: kartu, catatan, dan log.</div>
+</section>
+
+<!-- ============================================================ -->
 <section class="chapter" id="biaya">
   <div class="chapnum">Biaya · <code>bench/AGENTIC.md</code> · <code>npm run bench:agentic</code></div>
   <h2>Berapa biaya keamanan itu?</h2>
@@ -736,6 +820,9 @@ TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
       <tr><td data-k="Pola">Selesai = lulus pemeriksaan</td><td data-k="Struktur"><code>WorkState.status</code> + <code>Verification</code></td><td data-k="Di Nyerat"><code>verifyWork</code>, <code>structureCheck</code></td></tr>
       <tr><td data-k="Pola">Niat dicatat sebelum bertindak</td><td data-k="Struktur"><code>ActionEvent</code>, rekonsiliasi tiga hasil</td><td data-k="Di Nyerat"><code>reconcileEvents</code></td></tr>
       <tr><td data-k="Pola">Observabilitas terpisah dari konteks</td><td data-k="Struktur">log berbatas di memori</td><td data-k="Di Nyerat"><code>AgentTrace</code></td></tr>
+      <tr><td data-k="Pola">Delegasi lewat kontrak proses</td><td data-k="Struktur">argumen → JSONL → kode keluar, dipetakan ke log yang sama</td><td data-k="Di Nyerat"><code>PiReader</code>, <code>spawnHarness</code></td></tr>
+      <tr><td data-k="Pola">Nama, bukan path, untuk tempat berbahaya</td><td data-k="Struktur">nama di data, pemetaan hanya dari pengguna</td><td data-k="Di Nyerat"><code>settings.projects</code>, <code>checkProjectFolder</code></td></tr>
+      <tr><td data-k="Pola">Satu penulis per sumber daya</td><td data-k="Struktur">antrean per kunci (folder)</td><td data-k="Di Nyerat"><code>RunQueue</code></td></tr>
     </tbody>
   </table>
   </div>
@@ -746,10 +833,10 @@ TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
     4) Bagaimana hasilnya diverifikasi, dan bagaimana kemampuan ini pulih setelah interupsi?
     5) Tulis tes dengan <code>Provider</code> palsu, ukur biayanya dengan <code>bench:agentic</code>, lalu perbarui halaman ini.
   </div>
-  <p>Sumber: <a href="https://github.com/EkaPutCom/nyerat/blob/main/README.md">README.md</a> (bagian "Cara kerja asisten"), <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/AGENTIC.md">AGENTIC.md</a>, <a href="https://github.com/EkaPutCom/nyerat/tree/main/src/agent">src/agent/</a>, dan riwayat git commit f6a4cc7 sampai 90c28bb. Lihat juga <a href="belajar-performa.html">belajar performa dari editor Nyerat</a>.</p>
+  <p>Sumber: <a href="https://github.com/EkaPutCom/nyerat/blob/main/README.md">README.md</a> (bagian "Cara kerja asisten"), <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/AGENTIC.md">AGENTIC.md</a>, <a href="https://github.com/EkaPutCom/nyerat/tree/main/src/agent">src/agent/</a>, dan riwayat git commit f6a4cc7 sampai 90c28bb, ditambah orkestrator harness (Bab 9). Lihat juga <a href="belajar-performa.html">belajar performa dari editor Nyerat</a>.</p>
 </section>
 
-<footer>Simulasi 1, 4, dan 5 menjalankan salinan logika Nyerat di browser Anda (tokenizer dan BM25, preflight dan Urungkan, rekonsiliasi journal). Simulasi 2 adalah model sederhana tanpa hasil ukur penyedia. Simulasi 3 adalah peragaan dengan skenario tertulis, bukan keluaran model sungguhan.</footer>
+<footer>Simulasi 1, 4, 5, dan 6 menjalankan salinan logika Nyerat di browser Anda (tokenizer dan BM25, preflight dan Urungkan, rekonsiliasi journal, antrean harness). Simulasi 2 adalah model sederhana tanpa hasil ukur penyedia. Simulasi 3 adalah peragaan dengan skenario tertulis, bukan keluaran model sungguhan.</footer>
 </div>
 
 <script>
@@ -843,6 +930,7 @@ const journey = [
   { c: '6c47266', t: 'rencana, paket, verifikasi', read: 4, propose: 4, control: 2, tests: 132, lines: 2063, files: 17 },
   { c: '1c90735', t: 'Log agent', read: 4, propose: 4, control: 2, tests: 137, lines: 2186, files: 18 },
   { c: '90c28bb', t: 'tindakan lebih luas', read: 7, propose: 7, control: 2, tests: 162, lines: 2619, files: 19 },
+  { c: 'baru', t: 'orkestrator pi', read: 7, propose: 7, control: 2, tests: 178, lines: 2908, files: 20 },
 ];
 function toolsChart() {
   const svg = $('#chart-tools');
@@ -1229,6 +1317,61 @@ function sim5() {
     l.querySelector('select').addEventListener('change', sim5);
   });
 })();
+
+/* ---------- Simulasi 6: antrean harness (salinan RunQueue di agent/harness.ts) ---------- */
+class RunQueue {
+  constructor() { this.runs = []; this.seq = 0; }
+  add(run) {
+    const busy = this.runs.some(r => r.folder === run.folder && (r.status === 'working' || r.status === 'queued'));
+    const added = Object.assign({}, run, { id: ++this.seq, status: busy ? 'queued' : 'working', result: null });
+    this.runs.push(added);
+    return added;
+  }
+  end(run, status) {
+    const wasWorking = run.status === 'working';
+    run.status = status;
+    if (!wasWorking) return null;
+    const next = this.runs.find(r => r.folder === run.folder && r.status === 'queued');
+    if (next) next.status = 'working';
+    return next || null;
+  }
+}
+let s6q = new RunQueue();
+const s6names = { working: 'bekerja', queued: 'antre', done: 'selesai', failed: 'gagal', stopped: 'dibatalkan' };
+const s6tasks = ['Checkout QRIS', 'Tes keranjang', 'Rapikan README', 'Perbaiki ongkir', 'Ekspor laporan', 'Validasi stok'];
+function s6render(text) {
+  const box = $('#s6-runs');
+  box.innerHTML = '';
+  for (const r of s6q.runs) {
+    const row = document.createElement('div');
+    row.className = 'run';
+    row.innerHTML = '<span><b>#' + r.id + '</b> ' + esc(r.card) + ' <span style="color:var(--text-3)">· ' + esc(r.project) + '</span></span><span class="st ' + r.status + '">' + s6names[r.status] + '</span><span class="acts"></span>';
+    const acts = row.querySelector('.acts');
+    const act = (label, status) => {
+      const b = document.createElement('button');
+      b.className = 'ghost';
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        const next = s6q.end(r, status);
+        s6render('end(#' + r.id + ', <code>' + status + '</code>)' + (next ? ' → giliran <b>#' + next.id + '</b> di ' + esc(next.project) + ' mulai bekerja.' : ' → tidak ada giliran baru' + (status === 'stopped' ? ' (membatalkan antrean tidak memberi giliran).' : '.')));
+      });
+      acts.appendChild(b);
+    };
+    if (r.status === 'working') { act('Selesai', 'done'); act('Gagal', 'failed'); }
+    if (r.status === 'queued') act('Batalkan', 'stopped');
+    box.appendChild(row);
+  }
+  const msg = $('#s6-msg');
+  msg.className = 'msg';
+  msg.innerHTML = text || 'Belum ada kartu yang ditugaskan.';
+}
+function s6add(project) {
+  const r = s6q.add({ card: s6tasks[s6q.seq % s6tasks.length], project, folder: '/home/eka/' + project });
+  s6render('add(#' + r.id + ') di ' + esc(project) + ' → <code>' + r.status + '</code>' + (r.status === 'queued' ? ': folder ini sedang dikerjakan run lain.' : '.'));
+}
+$('#s6-a').addEventListener('click', () => s6add('web-ecommerce'));
+$('#s6-b').addEventListener('click', () => s6add('toko-admin'));
+$('#s6-reset').addEventListener('click', () => { s6q = new RunQueue(); s6render(''); });
 
 /* ---------- mulai ---------- */
 function drawAll() { toolsChart(); sim2(); }

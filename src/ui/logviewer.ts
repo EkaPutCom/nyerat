@@ -28,8 +28,8 @@ export class LogViewer {
     private stick = true;
     private stickIdle = 0;
 
-    constructor(parent: Gtk.Window | null, private readonly trace: AgentTrace) {
-        this.window = new Gtk.Window({ transient_for: parent, default_width: 760, default_height: 640, title: 'Log agent' });
+    constructor(parent: Gtk.Window | null, private readonly trace: AgentTrace, title = 'Log agent') {
+        this.window = new Gtk.Window({ transient_for: parent, default_width: 760, default_height: 640, title });
         const header = new Gtk.HeaderBar({ show_title_buttons: true });
         this.window.set_titlebar(header);
 
