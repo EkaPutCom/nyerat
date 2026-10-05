@@ -2,7 +2,7 @@
 
 export const WELCOME = `# Selamat datang di Nyerat
 
-Editor **Markdown** yang langsung terformat: sintaks disembunyikan, dan muncul lagi saat kursor berada di barisnya. Coba klik baris ini.
+Ruang kerja pribadi untuk catatan, rencana, dan tugas, bersama agent AI (buka panelnya dengan \`Ctrl+Shift+A\`). Semuanya **Markdown** yang langsung terformat: sintaks disembunyikan, dan muncul lagi saat kursor berada di barisnya. Coba klik baris ini.
 
 ## Format teks
 
@@ -12,18 +12,18 @@ Editor **Markdown** yang langsung terformat: sintaks disembunyikan, dan muncul l
 
 ## Daftar tugas
 
-- [x] Pasang GJS
-- [ ] Tulis sesuatu yang hebat (klik kotaknya untuk mencentang)
+- [x] Buka folder kerja
+- [ ] Catat keputusan rapat hari ini (klik kotaknya untuk mencentang)
 
-1. Daftar bernomor
+1. Tulis rencana
 2. Tekan Enter untuk lanjut otomatis
 
 > Kutipan juga bisa.
 > Tekan Enter di baris kosong untuk keluar.
 
 \`\`\`js
-function halo(nama) {
-    return \`Halo, \${nama}!\`;
+function sisaAnggaran(total, terpakai) {
+    return total - terpakai;
 }
 \`\`\`
 
@@ -35,8 +35,8 @@ function halo(nama) {
 
 \`\`\`mermaid
 graph LR
-    A[Tulis] --> B{Bagus?}
-    B -->|ya| C[Simpan]
+    A[Catat] --> B{Perlu tindak lanjut?}
+    B -->|ya| C[Buat tugas]
     B -->|belum| A
 \`\`\`
 

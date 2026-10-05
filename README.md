@@ -82,7 +82,7 @@ npm start
 Setelah di-build, aplikasi bisa dijalankan langsung tanpa npm, termasuk untuk membuka file tertentu (file yang belum ada akan dibuat saat disimpan):
 
 ```bash
-gjs -m dist/nyerat.js catatan.md
+gjs -m dist/nyerat.js rencana.md
 ```
 
 Aplikasi memakai argumen pertama yang bukan opsi sebagai path file atau folder. Setiap pemanggilan membuka proses dan jendela sendiri; di dalam jendela itu file lain dibuka sebagai tab. Tanpa argumen, tab berfile yang terbuka saat jendela terakhir ditutup dibuka lagi. Pada pembukaan pertama tanpa file, editor menampilkan dokumen contoh; jika tidak ada tab untuk dipulihkan, pembukaan berikutnya dimulai dengan dokumen kosong.

@@ -58,8 +58,8 @@ Rapat mingguan, **Jumat pagi**. Hal yang *perlu* ditindaklanjuti ada di bawah, t
 > Kutipan dari pengguna: "Akhirnya editor yang tidak mengganggu."
 
 \`\`\`ts
-function sapa(nama: string): string {
-    return \`Halo, \${nama}!\`;
+function sisaAnggaran(total: number, terpakai: number): number {
+    return total - terpakai;
 }
 \`\`\`
 
@@ -92,16 +92,17 @@ Tulis diagram sebagai kode, lihat hasilnya langsung.
 
 \`\`\`mermaid
 graph LR
-    A[Tulis] --> B{Bagus?}
-    B -->|ya| C[Simpan]
+    A[Catat] --> B{Perlu tindak lanjut?}
+    B -->|ya| C[Buat tugas]
     B -->|belum| A
-    C --> D[Ekspor HTML]
+    C --> D[Tinjau bersama agent]
 \`\`\`
 
 \`\`\`mermaid
 sequenceDiagram
-    Pengguna->>Nyerat: Ketik kode diagram
-    Nyerat-->>Pengguna: Gambar muncul seketika
+    Anda->>Agent: Perbarui jadwal rilis
+    Agent-->>Anda: Usulan perubahan (selisih)
+    Anda->>Agent: Terapkan
 \`\`\`
 `;
 
@@ -110,18 +111,18 @@ const DBML_DOC = `# Skema Basis Data
 Blok \`dbml\` (bahasa dbdiagram.io) digambar sebagai diagram ER.
 
 \`\`\`dbml
-Table pengguna {
+Table proyek {
   id int [pk]
   nama varchar
 }
 
-Table catatan {
+Table tugas {
   id int [pk]
   judul varchar
-  pengguna_id int
+  proyek_id int
 }
 
-Ref: catatan.pengguna_id > pengguna.id
+Ref: tugas.proyek_id > proyek.id
 \`\`\`
 `;
 
@@ -154,24 +155,22 @@ kanban: true
 const CODE_DOC = `# Blok Kode Berwarna
 
 \`\`\`python
-def fibonacci(n):
-    a, b = 0, 1
-    for _ in range(n):
-        yield a
-        a, b = b, a + b
+from datetime import date
 
-print(list(fibonacci(10)))
+def sisa_hari(rilis, hari_ini):
+    return (rilis - hari_ini).days
+
+print(sisa_hari(date(2026, 11, 22), date(2026, 10, 5)))
 \`\`\`
 
 \`\`\`rust
-fn main() {
-    let nama = "Nyerat";
-    println!("Halo, {nama}!");
+fn total_anggaran(biaya: &[u64]) -> u64 {
+    biaya.iter().sum()
 }
 \`\`\`
 
 \`\`\`bash
-npm install && npm start
+git add rencana/ && git commit -m "Perbarui jadwal rilis"
 \`\`\`
 `;
 
@@ -310,7 +309,7 @@ function main(app: Gtk.Application): void {
 
     // ───────── GIF 2: mengetik Markdown ─────────
     load('', false, 0);
-    const typed = '# Daftar Belanja\n\nHari ini beli **sayur**, *buah*, dan `telur`.\n\n- [ ] Bayam\n- [x] Apel\n- [ ] Tahu\n';
+    const typed = '# Catatan Rapat\n\nKeputusan: rilis **22 November**, anggaran *tidak berubah*, dan bug di `sinkronisasi`.\n\n- [ ] Budi: perbaiki bug\n- [x] Sari: siapkan materi\n- [ ] Dewi: jadwalkan beta\n';
     let acc = '';
     frame('mengetik', 2);
     for (const ch of typed) {
@@ -321,13 +320,13 @@ function main(app: Gtk.Application): void {
     frame('mengetik', 6);
 
     // ───────── GIF 3: diagram hidup ─────────
-    load('# Alur Kerja\n\n```mermaid\ngraph LR\n    A[Tulis] --> B[Simpan]\n```\n', false, 0, false);
+    load('# Alur Kerja\n\n```mermaid\ngraph LR\n    A[Catat] --> B[Rencanakan]\n```\n', false, 0, false);
     waitMermaid();
     frame('diagram', 3);
     cursorTo(4, 20);
     waitMermaid();
     frame('diagram', 3);
-    for (const add of ['\n    B --> C[Ekspor]', '\n    C --> D[Bagikan]', '\n    D --> A']) {
+    for (const add of ['\n    B --> C[Kerjakan]', '\n    C --> D[Tinjau]', '\n    D --> A']) {
         const it = iterAtLine(buf, 4);
         it.forward_to_line_end();
         buf.insert(it, add, -1);
@@ -479,20 +478,20 @@ function main(app: Gtk.Application): void {
         const [, , err, status] = GLib.spawn_sync(repo, ['git', '-c', 'user.name=Eka Putra', '-c', 'user.email=eka@example.com', ...args], env, GLib.SpawnFlags.SEARCH_PATH, null);
         if (status !== 0) throw new Error(`git ${args.join(' ')}: ${new TextDecoder().decode(err ?? undefined)}`);
     };
-    const note = GLib.build_filenamev([repo, 'catatan.md']);
+    const note = GLib.build_filenamev([repo, 'rencana.md']);
     const versions = [
-        ['Buat kerangka catatan', '# Catatan Proyek\n\n## Tujuan\n\nMenulis tanpa gangguan.\n'],
-        ['Tambah bagian jadwal', '# Catatan Proyek\n\n## Tujuan\n\nMenulis tanpa gangguan.\n\n## Jadwal\n\n- Draf pertama: Oktober\n'],
-        ['Perbaiki tujuan dan jadwal', '# Catatan Proyek\n\n## Tujuan\n\nMenulis tanpa gangguan, dengan tampilan yang langsung terformat.\n\n## Jadwal\n\n- Draf pertama: 10 Oktober\n- Revisi: 24 Oktober\n'],
+        ['Buat kerangka rencana', '# Rencana Peluncuran\n\n## Tujuan\n\nMerilis Catat 1.0.\n'],
+        ['Tambah bagian jadwal', '# Rencana Peluncuran\n\n## Tujuan\n\nMerilis Catat 1.0.\n\n## Jadwal\n\n- Beta tertutup: Oktober\n'],
+        ['Perjelas tujuan dan tanggal', '# Rencana Peluncuran\n\n## Tujuan\n\nMerilis Catat 1.0 untuk pengguna Linux, lengkap dengan sinkronisasi folder.\n\n## Jadwal\n\n- Beta tertutup: 20 Oktober\n- Rilis publik: 15 November\n'],
     ];
     git('init', '-q');
     for (const [msg, text] of versions) {
         GLib.file_set_contents(note, text);
-        git('add', 'catatan.md');
+        git('add', 'rencana.md');
         git('commit', '-q', '-m', msg);
     }
-    GLib.file_set_contents(note, versions[2][1] + '- Rilis: 1 November\n');
-    GLib.file_set_contents(GLib.build_filenamev([repo, 'ide.md']), '# Ide\n\nBelum masuk git.\n');
+    GLib.file_set_contents(note, versions[2][1] + '- Evaluasi: 30 November\n');
+    GLib.file_set_contents(GLib.build_filenamev([repo, 'ide.md']), '# Ide\n\nFitur ekspor ke PDF (belum masuk git).\n');
     w.openFolder(repo, false);
     w.load(note);
     w.setOption('sidebar', true);
