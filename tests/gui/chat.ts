@@ -479,6 +479,34 @@ export function chatTests(c: GuiContext): void {
         pump();
     });
 
+    test('usulan papan kanban: tambah dan pindah kartu muncul di papan yang sedang terbuka', () => {
+        const papan = GLib.build_filenamev([book, 'tugas.md']);
+        GLib.file_set_contents(papan, '---\nkanban: true\n---\n\n## Rencana\n\n- [ ] Tulis laporan #penting\n- [ ] Kirim undangan @{2026-10-20}\n\n## Dikerjakan\n\n- [ ] Riset pelabuhan\n\n## Selesai\n\n- [x] Pesan tempat\n');
+        w.openFile(papan);
+        for (let i = 0; i < 40; i++) { pump(); GLib.usleep(8000); }
+        ok(w.boardMode, 'papan tidak terbuka sebagai papan');
+
+        const press = (provider: Provider) => { proposeAndPress(provider, 'apply'); for (let i = 0; i < 40; i++) { pump(); GLib.usleep(8000); } };   // papan memuat ulang di idle
+        try {
+        press(proposalProvider('ubah_kanban', { nama: 'tugas', aksi: 'tambah', kartu: 'Susun jadwal revisi @{2026-11-02}', daftar: 'dikerjakan', alasan: 'permintaan pengguna' }));
+        contains(lastDiff, '+- [ ] Susun jadwal revisi @{2026-11-02}');
+        eq(w.board.getBoard().columns[1].cards.map(c => c.text), ['Riset pelabuhan', 'Susun jadwal revisi @{2026-11-02}']);
+
+        press(proposalProvider('ubah_kanban', { nama: 'tugas', aksi: 'pindah', kartu: 'Kirim undangan', daftar: 'Selesai', alasan: 'sudah dikirim' }));
+        eq(w.board.getBoard().columns[2].cards.map(c => c.text), ['Pesan tempat', 'Kirim undangan @{2026-10-20}']);
+        eq(w.board.getBoard().columns[0].cards.map(c => c.text), ['Tulis laporan #penting']);
+        const prefix = optVal('shot-proposal');
+        if (prefix) {
+            for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
+            widgetPixbuf(w.win)?.savev(`${prefix}-papan.png`, 'png', [], []);
+        }
+        } finally {
+            w.editor.buffer.set_modified(false);   // jangan memunculkan dialog simpan saat menutup tab
+            ok(w.closeTab(), 'closeTab() gagal');
+            pump();
+        }
+    });
+
     test('penerapan menolak isi yang berubah sejak diusulkan dan path di luar folder', () => {
         const apply = panel.host.applyChange!;
         const stale = apply({ kind: 'edit', file: 'bab-1.md', before: 'isi lama', after: 'isi baru', reason: '' });

@@ -11,6 +11,11 @@ import { section, test, eq, ok, contains, settle } from '../framework.js';
 const RENCANA = '# Rencana\n\n- Draf pertama: Oktober\n- Revisi: November\n\n## Catatan\n\nBelum ada.\n';
 const files: SourceFile[] = [{ name: 'rencana.md', text: RENCANA }, { name: 'riset/pelabuhan.md', text: '# Pelabuhan\n\nAda dua dermaga.\n' }];
 
+const PAPAN = '---\nkanban: true\n---\n\n## Rencana\n\n- [ ] Tulis laporan #penting\n  catatan laporan\n- [ ] Kirim undangan @{2026-10-20}\n\n## Dikerjakan\n\n- [ ] Riset pelabuhan\n\n## Selesai\n\n- [x] Pesan tempat\n';
+const kfiles: SourceFile[] = [...files, { name: 'papan.md', text: PAPAN }];
+const kanban = (args: object) => planChange('ubah_kanban', JSON.stringify({ nama: 'papan', alasan: 'x', ...args }), kfiles);
+const kanbanAfter = (args: object): string => { const r = kanban(args); if (!r.ok) throw new Error(r.message); return r.change.after; };
+
 const plan = (name: string, args: object, over: SourceFile[] = files) => planChange(name, JSON.stringify(args), over);
 
 export function changeTests(): void {
@@ -80,9 +85,52 @@ export function changeTests(): void {
         eq(unifiedDiff('x\n', 'x\n'), '');
     });
 
+    test('ubah_kanban: tambah kartu di akhir daftar, hanya baris itu yang berubah', () => {
+        const after = kanbanAfter({ aksi: 'tambah', kartu: 'Susun jadwal #rencana', daftar: 'dikerjakan' });
+        eq(after, PAPAN.replace('- [ ] Riset pelabuhan\n', '- [ ] Riset pelabuhan\n- [ ] Susun jadwal #rencana\n'));
+        const r = kanban({ aksi: 'tambah', kartu: 'Susun jadwal', daftar: 'Dikerjakan' });
+        ok(r.ok && r.change.kind === 'edit' && r.change.file === 'papan.md', 'bentuk usulan salah');
+    });
+
+    test('ubah_kanban: pindah kartu ke akhir daftar lain dan tandai selesai/belum', () => {
+        const moved = kanbanAfter({ aksi: 'pindah', kartu: 'riset pelabuhan', daftar: 'Selesai' });
+        eq(moved, PAPAN.replace('## Dikerjakan\n\n- [ ] Riset pelabuhan\n\n', '## Dikerjakan\n\n').replace('- [x] Pesan tempat\n', '- [x] Pesan tempat\n- [ ] Riset pelabuhan\n'));
+        const done = kanbanAfter({ aksi: 'tandai', kartu: 'undangan', selesai: true });
+        contains(done, '- [x] Kirim undangan @{2026-10-20}');
+        contains(kanbanAfter({ aksi: 'tandai', kartu: 'Pesan tempat', selesai: false }), '- [ ] Pesan tempat');
+        contains(kanbanAfter({ aksi: 'tandai', kartu: 'laporan', selesai: true }), '  catatan laporan');   // catatan kartu tetap
+    });
+
+    test('diff memisahkan perubahan yang berjauhan: pindah kartu tidak menandai daftar lain sebagai berubah', () => {
+        const after = kanbanAfter({ aksi: 'pindah', kartu: 'Kirim undangan', daftar: 'Selesai' });
+        const d = diffPreview(PAPAN, after);
+        eq([d.added, d.removed], [1, 1]);
+        const u = unifiedDiff(PAPAN, after);
+        eq(u.split('\n').filter(l => l.startsWith('@@')).length, 2);
+        eq(u.split('\n').filter(l => /^[-+]/.test(l)), ['-- [ ] Kirim undangan @{2026-10-20}', '+- [ ] Kirim undangan @{2026-10-20}']);
+        ok(!u.includes('-## Dikerjakan') && !u.includes('-- [ ] Riset'), 'bagian yang tidak berubah ikut ditandai');
+        eq(unifiedDiff('a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk\nl\n', 'a\nB\nc\nd\ne\nf\ng\nh\ni\nj\nK\nl\n').split('\n').filter(l => l.startsWith('@@')), ['@@ -1,5 +1,5 @@', '@@ -8,5 +8,5 @@']);
+    });
+
+    test('ubah_kanban: galat yang jelas untuk model (bukan papan, daftar/kartu tidak cocok, tanpa perubahan)', () => {
+        const bad = (args: object, base = kanban): string => { const r = base(args); ok(!r.ok, 'seharusnya gagal'); return r.ok ? '' : r.message; };
+        contains(bad({ aksi: 'tambah', kartu: 'x', daftar: 'Rencana', nama: 'rencana.md' }), 'bukan papan kanban');
+        contains(bad({ aksi: 'tambah', kartu: 'x', daftar: 'Ditunda' }), 'Daftar di papan: Rencana, Dikerjakan, Selesai');
+        contains(bad({ aksi: 'tambah', kartu: 'x', daftar: '' }), '"daftar" wajib');
+        contains(bad({ aksi: 'pindah', kartu: 'tidak ada', daftar: 'Selesai' }), 'Tidak ada kartu');
+        contains(bad({ aksi: 'pindah', kartu: 'a', daftar: 'Selesai' }), 'cocok dengan');   // banyak kartu memuat "a"
+        contains(bad({ aksi: 'pindah', kartu: 'Pesan tempat', daftar: 'Selesai' }), 'sudah ada di daftar');
+        contains(bad({ aksi: 'tandai', kartu: 'Pesan tempat', selesai: true }), 'sudah berstatus');
+        contains(bad({ aksi: 'tandai', kartu: 'Pesan tempat' }), '"selesai"');
+        contains(bad({ aksi: 'hapus', kartu: 'Pesan tempat' }), 'salah satu dari');
+        contains(bad({ aksi: 'tambah', kartu: 'baris\nbaru', daftar: 'Rencana' }), 'satu baris');
+        contains(bad({ aksi: 'tambah', kartu: '', daftar: 'Rencana' }), 'wajib');
+    });
+
     test('describeCall untuk alat pengubah', () => {
         eq(describeCall('buat_berkas', '{"nama":"a.md"}'), 'Mengusulkan berkas baru a.md');
         eq(describeCall('ubah_berkas', '{"nama":"a.md"}'), 'Mengusulkan perubahan pada a.md');
+        eq(describeCall('ubah_kanban', '{"nama":"papan.md"}'), 'Mengusulkan perubahan papan papan.md');
     });
 
     section('Agent: persetujuan perubahan di sesi');
@@ -198,6 +246,6 @@ export function changeTests(): void {
         const off = buildContext({ ...input(), recent: [] }).system;
         contains(on, 'ubah_berkas');
         ok(!off.includes('ubah_berkas'), 'instruksi usulan ada tanpa izin');
-        eq(CHANGE_TOOLS.map(t => t.name), ['buat_berkas', 'ubah_berkas']);
+        eq(CHANGE_TOOLS.map(t => t.name), ['buat_berkas', 'ubah_berkas', 'ubah_kanban']);
     });
 }

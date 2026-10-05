@@ -177,6 +177,7 @@ export function describeCall(name: string, rawArguments: string): string {
         case 'baca_berkas': return `Membaca ${asString(a.nama) || 'berkas'}${asInt(a.dari_baris) ? ` (dari baris ${asInt(a.dari_baris)})` : ''}`;
         case 'buat_berkas': return `Mengusulkan berkas baru ${asString(a.nama)}`;
         case 'ubah_berkas': return `Mengusulkan perubahan pada ${asString(a.nama)}`;
+        case 'ubah_kanban': return `Mengusulkan perubahan papan ${asString(a.nama)}`;
         default: return name;
     }
 }

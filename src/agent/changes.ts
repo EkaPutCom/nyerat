@@ -3,6 +3,7 @@
 // pengguna menyetujui selisihnya (ui/chat.ts), jadi model tidak pernah mengubah berkas sendirian.
 
 import { matchMention, type SourceFile } from './context.js';
+import { addCard, isKanban, moveCard, parseBoard, serializeBoard, updateCard, type Board, type Position } from '../markdown/kanban.js';
 import type { ToolSpec } from './provider.js';
 
 export interface Change {
@@ -43,6 +44,23 @@ export const CHANGE_TOOLS: ToolSpec[] = [
                 alasan: { type: 'string', description: 'Satu kalimat: mengapa perubahan ini' },
             },
             required: ['nama', 'teks_lama', 'teks_baru', 'alasan'],
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'ubah_kanban',
+        description: 'Usulkan perubahan pada papan kanban (berkas Markdown dengan "kanban: true" di frontmatter): tambah kartu ke sebuah daftar, pindahkan kartu ke daftar lain, atau tandai kartu selesai/belum. Lebih aman daripada ubah_berkas untuk papan. Tidak langsung ditulis: pengguna melihat selisihnya lalu menerapkan atau menolak.',
+        parameters: {
+            type: 'object',
+            properties: {
+                nama: { type: 'string', description: 'Nama berkas papan seperti di daftar_berkas' },
+                aksi: { type: 'string', enum: ['tambah', 'pindah', 'tandai'], description: 'tambah = kartu baru di akhir daftar; pindah = pindahkan kartu ke akhir daftar lain; tandai = ubah status selesai' },
+                kartu: { type: 'string', description: 'tambah: teks kartu baru (boleh memuat #tag dan @{2026-10-20}). pindah/tandai: potongan teks kartu yang ada (harus cocok dengan tepat satu kartu)' },
+                daftar: { type: 'string', description: 'tambah: daftar tujuan. pindah: daftar tujuan. Nama daftar persis seperti heading di papan (huruf besar/kecil tidak dibedakan)' },
+                selesai: { type: 'boolean', description: 'tandai saja: true = selesai, false = belum' },
+                alasan: { type: 'string', description: 'Satu kalimat: mengapa perubahan ini' },
+            },
+            required: ['nama', 'aksi', 'kartu', 'alasan'],
             additionalProperties: false,
         },
     },
@@ -107,33 +125,151 @@ export function planChange(name: string, rawArguments: string, files: SourceFile
         return { ok: true, change: { kind: 'edit', file: file.name, before: file.text, after, reason } };
     }
 
+    if (name === 'ubah_kanban') return planKanban(args, reason, files);
+
     return fail(`Alat "${name}" tidak dikenal.`, 'alat tidak dikenal');
+}
+
+// ---------- Papan kanban ----------
+
+function planKanban(args: Record<string, unknown>, reason: string, files: SourceFile[]): PlanResult {
+    const raw = asText(args.nama);
+    if (!raw.trim()) return fail('Argumen "nama" wajib diisi.', 'nama kosong');
+    const file = matchMention(raw, files);
+    if (!file) return fail(`Berkas "${raw}" tidak ditemukan. Panggil daftar_berkas untuk melihat nama yang ada.`, 'berkas tidak ada');
+    if (!isKanban(file.text)) return fail(`${file.name} bukan papan kanban (frontmatter tanpa "kanban: true"). Pakai ubah_berkas untuk berkas biasa.`, 'bukan papan');
+    const board = parseBoard(file.text);
+    const titles = board.columns.map(c => c.title).join(', ') || '(belum ada daftar)';
+    const action = asText(args.aksi);
+    const cardText = asText(args.kartu).trim();
+    if (!cardText) return fail('Argumen "kartu" wajib diisi.', 'kartu kosong');
+
+    const findColumn = (wanted: string): number | string => {
+        const w = wanted.trim().toLowerCase();
+        if (!w) return 'Argumen "daftar" wajib diisi.';
+        const exact = board.columns.map((c, i) => c.title.toLowerCase() === w ? i : -1).filter(i => i >= 0);
+        const hits = exact.length ? exact : board.columns.map((c, i) => c.title.toLowerCase().includes(w) ? i : -1).filter(i => i >= 0);
+        if (hits.length === 1) return hits[0];
+        return `Daftar "${wanted}" ${hits.length ? 'cocok dengan lebih dari satu daftar' : 'tidak ada'}. Daftar di papan: ${titles}.`;
+    };
+    const findCard = (): Position | string => {
+        const w = cardText.toLowerCase();
+        const hits: Position[] = [];
+        board.columns.forEach((c, column) => c.cards.forEach((card, index) => { if (card.text.toLowerCase().includes(w)) hits.push({ column, index }); }));
+        if (hits.length === 1) return hits[0];
+        const list = hits.slice(0, 5).map(p => `"${board.columns[p.column].cards[p.index].text}" (${board.columns[p.column].title})`).join('; ');
+        return hits.length ? `"${cardText}" cocok dengan ${hits.length} kartu: ${list}. Perpanjang teksnya sampai unik.` : `Tidak ada kartu yang memuat "${cardText}" di ${file.name}.`;
+    };
+
+    let next: Board;
+    if (action === 'tambah') {
+        const column = findColumn(asText(args.daftar));
+        if (typeof column === 'string') return fail(column, 'daftar tidak cocok');
+        if (cardText.includes('\n')) return fail('Teks kartu baru harus satu baris.', 'kartu tidak valid');
+        next = addCard(board, column, cardText);
+    } else if (action === 'pindah') {
+        const from = findCard();
+        if (typeof from === 'string') return fail(from, 'kartu tidak cocok');
+        const column = findColumn(asText(args.daftar));
+        if (typeof column === 'string') return fail(column, 'daftar tidak cocok');
+        if (column === from.column) return fail('Kartu itu sudah ada di daftar tersebut.', 'tidak ada perubahan');
+        next = moveCard(board, from, { column, index: Infinity });
+    } else if (action === 'tandai') {
+        const at = findCard();
+        if (typeof at === 'string') return fail(at, 'kartu tidak cocok');
+        if (typeof args.selesai !== 'boolean') return fail('Argumen "selesai" (true/false) wajib diisi untuk aksi tandai.', 'selesai kosong');
+        if (board.columns[at.column].cards[at.index].done === args.selesai) return fail('Kartu itu sudah berstatus demikian.', 'tidak ada perubahan');
+        next = updateCard(board, at, { done: args.selesai });
+    } else {
+        return fail('Argumen "aksi" harus salah satu dari: tambah, pindah, tandai.', 'aksi tidak valid');
+    }
+    const after = serializeBoard(next);
+    if (after === file.text) return fail('Tidak ada yang berubah di papan.', 'tidak ada perubahan');
+    return { ok: true, change: { kind: 'edit', file: file.name, before: file.text, after, reason } };
 }
 
 export const describeChange = (c: Change): string => `${c.kind === 'create' ? 'Berkas baru' : 'Ubah'} ${c.file}`;
 
 // ---------- Pratinjau selisih ----------
 
-// Diff gaya git untuk jendela tinjauan: satu hunk dengan 3 baris konteks, karena usulan agent selalu satu
-// penggantian yang berurutan. Kosong bila tidak ada perbedaan.
-export function unifiedDiff(before: string, after: string, context = 3): string {
-    const a = before ? before.replace(/\n$/, '').split('\n') : [];
-    const b = after ? after.replace(/\n$/, '').split('\n') : [];
+// ---------- Diff ----------
+
+interface Op {
+    sign: ' ' | '-' | '+';
+    text: string;
+}
+
+const MAX_LCS_CELLS = 4_000_000;
+
+const splitLines = (text: string): string[] => text ? text.replace(/\n$/, '').split('\n') : [];
+
+// Diff per baris: awalan dan akhiran yang sama dipangkas, bagian tengahnya dibandingkan dengan LCS supaya
+// perubahan yang terpisah (mis. kartu kanban pindah daftar) tidak tampil sebagai satu blok hapus-tambah.
+// Bagian tengah yang terlalu besar untuk LCS jatuh ke satu blok hapus lalu tambah.
+function diffOps(before: string, after: string): Op[] {
+    const a = splitLines(before), b = splitLines(after);
     let head = 0;
     while (head < a.length && head < b.length && a[head] === b[head]) head++;
     let tail = 0;
     while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
-    if (head === a.length && head === b.length) return '';
-    const from = Math.max(0, head - context);
-    const lead = a.slice(from, head);
-    const trail = a.slice(a.length - tail, a.length - tail + context);
-    const removed = a.slice(head, a.length - tail);
-    const added = b.slice(head, b.length - tail);
-    const range = (start: number, count: number) => `${count ? start + 1 : start},${count}`;
-    return [
-        `@@ -${range(from, lead.length + removed.length + trail.length)} +${range(from, lead.length + added.length + trail.length)} @@`,
-        ...lead.map(t => ` ${t}`), ...removed.map(t => `-${t}`), ...added.map(t => `+${t}`), ...trail.map(t => ` ${t}`),
-    ].join('\n');
+    const ma = a.slice(head, a.length - tail), mb = b.slice(head, b.length - tail);
+
+    const ops: Op[] = a.slice(0, head).map(text => ({ sign: ' ' as const, text }));
+    const n = ma.length, m = mb.length;
+    if (!n || !m || (n + 1) * (m + 1) > MAX_LCS_CELLS) {
+        ops.push(...ma.map(text => ({ sign: '-' as const, text })), ...mb.map(text => ({ sign: '+' as const, text })));
+    } else {
+        // lcs[i][j] = panjang LCS dari ma[i..] dan mb[j..]
+        const w = m + 1;
+        const lcs = new Int32Array((n + 1) * w);
+        for (let i = n - 1; i >= 0; i--) {
+            for (let j = m - 1; j >= 0; j--) {
+                lcs[i * w + j] = ma[i] === mb[j] ? lcs[(i + 1) * w + j + 1] + 1 : Math.max(lcs[(i + 1) * w + j], lcs[i * w + j + 1]);
+            }
+        }
+        let i = 0, j = 0;
+        while (i < n || j < m) {
+            if (i < n && j < m && ma[i] === mb[j]) { ops.push({ sign: ' ', text: ma[i] }); i++; j++; }
+            else if (i < n && (j === m || lcs[(i + 1) * w + j] >= lcs[i * w + j + 1])) ops.push({ sign: '-', text: ma[i++] });   // hapus dulu, baru tambah (seperti git)
+            else ops.push({ sign: '+', text: mb[j++] });
+        }
+    }
+    ops.push(...a.slice(a.length - tail).map(text => ({ sign: ' ' as const, text })));
+    return ops;
+}
+
+interface Hunk {
+    oldStart: number;   // nomor baris mulai (1-based; 0 bila kosong)
+    oldCount: number;
+    newStart: number;
+    newCount: number;
+    ops: Op[];
+}
+
+// Kelompokkan perubahan menjadi hunk dengan `context` baris di sekitarnya; hunk yang berdekatan digabung.
+function hunksOf(ops: Op[], context: number): Hunk[] {
+    const changed = ops.map((o, i) => o.sign === ' ' ? -1 : i).filter(i => i >= 0);
+    if (!changed.length) return [];
+    const ranges: [number, number][] = [];
+    for (const i of changed) {
+        const from = Math.max(0, i - context), to = Math.min(ops.length, i + context + 1);
+        const last = ranges[ranges.length - 1];
+        if (last && from <= last[1]) last[1] = to;
+        else ranges.push([from, to]);
+    }
+    return ranges.map(([from, to]) => {
+        const slice = ops.slice(from, to);
+        const before = ops.slice(0, from);
+        const oldBefore = before.filter(o => o.sign !== '+').length, newBefore = before.filter(o => o.sign !== '-').length;
+        const oldCount = slice.filter(o => o.sign !== '+').length, newCount = slice.filter(o => o.sign !== '-').length;
+        return { oldStart: oldCount ? oldBefore + 1 : oldBefore, oldCount, newStart: newCount ? newBefore + 1 : newBefore, newCount, ops: slice };
+    });
+}
+
+// Diff gaya git untuk jendela tinjauan: hunk dengan 3 baris konteks. Kosong bila tidak ada perbedaan.
+export function unifiedDiff(before: string, after: string, context = 3): string {
+    return hunksOf(diffOps(before, after), context).map(h =>
+        [`@@ -${h.oldStart},${h.oldCount} +${h.newStart},${h.newCount} @@`, ...h.ops.map(o => `${o.sign}${o.text}`)].join('\n')).join('\n');
 }
 
 export interface DiffLine {
@@ -150,30 +286,21 @@ export interface DiffPreview {
 const CONTEXT_LINES = 2;
 const MAX_PREVIEW_LINES = 60;
 
-// Selisih per baris: awalan dan akhiran yang sama dipangkas, sisanya ditampilkan sebagai hapus lalu tambah,
-// dengan beberapa baris konteks. Cukup untuk satu penggantian yang berurutan, yang memang bentuk usulan agent.
+// Ringkasan singkat: jumlah baris tambah/hapus dan baris-barisnya (konteks 2 baris, dipotong bila panjang).
 export function diffPreview(before: string, after: string): DiffPreview {
-    const a = before ? before.replace(/\n$/, '').split('\n') : [];
-    const b = after ? after.replace(/\n$/, '').split('\n') : [];
-    let head = 0;
-    while (head < a.length && head < b.length && a[head] === b[head]) head++;
-    let tail = 0;
-    while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
-
-    const removed = a.slice(head, a.length - tail);
-    const added = b.slice(head, b.length - tail);
+    const ops = diffOps(before, after);
+    const hunks = hunksOf(ops, CONTEXT_LINES);
     const lines: DiffLine[] = [];
-    if (head > CONTEXT_LINES) lines.push({ sign: '…', text: '' });
-    for (const text of a.slice(Math.max(0, head - CONTEXT_LINES), head)) lines.push({ sign: ' ', text });
-    for (const text of removed) lines.push({ sign: '-', text });
-    for (const text of added) lines.push({ sign: '+', text });
-    for (const text of a.slice(a.length - tail, a.length - tail + CONTEXT_LINES)) lines.push({ sign: ' ', text });
-    if (tail > CONTEXT_LINES) lines.push({ sign: '…', text: '' });
-
+    hunks.forEach((h, i) => {
+        if (i > 0 || h.oldStart > 1) lines.push({ sign: '…', text: '' });
+        lines.push(...h.ops.map(o => ({ sign: o.sign, text: o.text })));
+    });
+    const last = hunks[hunks.length - 1];
+    if (last && last.oldStart + last.oldCount - 1 < splitLines(before).length) lines.push({ sign: '…', text: '' });
     if (lines.length > MAX_PREVIEW_LINES) {
         const hidden = lines.length - MAX_PREVIEW_LINES;
         lines.length = MAX_PREVIEW_LINES;
         lines.push({ sign: '…', text: `${hidden} baris lagi` });
     }
-    return { lines, added: added.length, removed: removed.length };
+    return { lines, added: ops.filter(o => o.sign === '+').length, removed: ops.filter(o => o.sign === '-').length };
 }
