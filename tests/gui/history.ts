@@ -78,6 +78,9 @@ export function historyTests(c: GuiContext): void {
     test('file yang belum di-commit menampilkan pesan kosong', () => {
         w.load(untracked);
         ok(waitFor(() => rows() === 0 && w.history.note.label.includes('Belum ada commit')), `pesan: ${w.history.note.label}`);
+        // Daftar dikosongkan dulu (clear()); placeholder pesan harus tetap terpasang dan tampil.
+        ok(w.history.note.get_parent() === w.history.list, 'pesan terlepas dari daftar setelah dikosongkan');
+        ok(w.history.note.get_mapped(), 'pesan tidak tampil');
     });
     test('file di luar repositori git menampilkan pesan', () => {
         w.load(outside);
@@ -86,6 +89,7 @@ export function historyTests(c: GuiContext): void {
     test('dokumen tanpa file menampilkan petunjuk menyimpan', () => {
         w.history.setFile(null);
         ok(w.history.note.label.includes('Simpan dokumen'), `pesan: ${w.history.note.label}`);
+        ok(w.history.note.get_parent() === w.history.list, 'pesan terlepas dari daftar');
     });
     test('riwayat tidak dimuat selama tab lain yang terbuka', () => {
         w.sidebar.setPage('outline');

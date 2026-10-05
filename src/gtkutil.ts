@@ -36,11 +36,11 @@ export function removeWidget(widget: Gtk.Widget): void {
     else widget.unparent();
 }
 
-// Kosongkan wadah dari semua anaknya. Placeholder ListBox juga anaknya di GTK 4, jadi
-// ListBox dikosongkan lewat remove_all() yang hanya membuang barisnya.
+// Kosongkan wadah dari semua anaknya. Placeholder ListBox juga anaknya di GTK 4, dan
+// remove_all() GTK 4.14 ikut membuangnya; karena itu ListBox dikosongkan per baris.
 export function removeChildren(widget: Gtk.Widget): void {
     if (widget instanceof Gtk.ListBox) {
-        widget.remove_all();
+        for (let row = widget.get_row_at_index(0); row; row = widget.get_row_at_index(0)) widget.remove(row);
         return;
     }
     for (const child of childrenOf(widget)) removeWidget(child);
