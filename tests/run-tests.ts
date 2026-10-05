@@ -5,6 +5,7 @@
 //   gjs -m dist/run-tests.js --no-gui                hanya tes konversi Markdown → HTML
 //   gjs -m dist/run-tests.js --mouse                 tambah klik mouse sungguhan (pointer akan bergerak)
 //   gjs -m dist/run-tests.js --screenshot=a.png      simpan tangkapan layar jendela editor
+//   gjs -m dist/run-tests.js --shot-proposal=/tmp/p  simpan tangkapan jendela tinjau usulan agent (/tmp/p-<n>-tinjau.png dan -utama.png)
 //
 // Tes GUI membuka jendela sungguhan, jadi perlu sesi desktop (X11/Wayland).
 

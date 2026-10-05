@@ -6,7 +6,8 @@ import type { KeyStore } from '../../src/agent/apikey.js';
 import { chatsDir, listChats } from '../../src/agent/chatstore.js';
 import { readTextFile } from '../../src/files.js';
 import type { ChatRequest, Provider } from '../../src/agent/provider.js';
-import { section, test, eq, ok, contains, settle, tmp } from '../framework.js';
+import { section, test, eq, ok, contains, settle, tmp, optVal } from '../framework.js';
+import { widgetPixbuf } from '../widgets.js';
 import type { GuiContext } from './context.js';
 import { childrenOf } from '../../src/gtkutil.js';
 
@@ -391,6 +392,7 @@ export function chatTests(c: GuiContext): void {
     };
     // Kirim pertanyaan, tunggu jendela tinjau terbuka, ambil teks selisihnya, lalu tekan tombolnya dan tunggu giliran selesai.
     let lastDiff = '';
+    let shotCount = 0;
     const proposeAndPress = (provider: Provider, button: 'apply' | 'reject' | 'close'): void => {
         panel.makeProvider = () => provider;
         panel.reset();
@@ -399,6 +401,14 @@ export function chatTests(c: GuiContext): void {
         const viewer = panel.viewer;
         ok(viewer, 'jendela tinjau tidak terbuka');
         lastDiff = viewer.diffView.buffer.text;
+        // --shot-proposal=<prefix>: simpan tangkapan jendela tinjau dan jendela utama (<prefix>-<n>-tinjau.png) untuk diperiksa mata.
+        const prefix = optVal('shot-proposal');
+        if (prefix) {
+            for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
+            const n = shotCount++;
+            widgetPixbuf(viewer.window)?.savev(`${prefix}-${n}-tinjau.png`, 'png', [], []);
+            widgetPixbuf(w.win)?.savev(`${prefix}-${n}-utama.png`, 'png', [], []);
+        }
         if (button === 'apply') viewer.applyButton.emit('clicked');
         else if (button === 'reject') viewer.rejectButton.emit('clicked');
         else viewer.window.destroy();
