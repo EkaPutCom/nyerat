@@ -1,4 +1,4 @@
-// Alat yang boleh dipanggil model untuk membaca naskah sendiri (function calling). Semuanya hanya-baca dan murni:
+// Alat yang boleh dipanggil model untuk membaca dokumen di ruang kerja sendiri (function calling). Semuanya hanya-baca dan murni:
 // bekerja di atas daftar berkas yang diberikan pemanggil (bukan disk), jadi mudah diuji dan tidak bisa keluar dari proyek.
 // Murni TypeScript tanpa GTK.
 
@@ -14,12 +14,12 @@ const MAX_SNIPPET_CHARS = 900;
 export const TOOLS: ToolSpec[] = [
     {
         name: 'daftar_berkas',
-        description: 'Daftar semua berkas naskah di proyek beserta jumlah kata dan heading-nya (kerangka buku). Pakai untuk mengetahui bab/berkas apa yang ada.',
+        description: 'Daftar semua berkas dokumen di folder kerja beserta jumlah kata dan heading-nya (kerangka isi). Pakai untuk mengetahui berkas dan bagian apa yang ada.',
         parameters: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
-        name: 'cari_naskah',
-        description: 'Cari bagian naskah yang paling relevan dengan sebuah topik atau pertanyaan (pencarian kata kunci berperingkat). Mengembalikan potongan per bagian dengan nama berkas, heading, dan nomor baris. Cocok untuk topik, kejadian, atau gagasan.',
+        name: 'cari_dokumen',
+        description: 'Cari bagian dokumen yang paling relevan dengan sebuah topik atau pertanyaan (pencarian kata kunci berperingkat). Mengembalikan potongan per bagian dengan nama berkas, heading, dan nomor baris. Cocok untuk topik, keputusan, rencana, kejadian, atau gagasan.',
         parameters: {
             type: 'object',
             properties: {
@@ -32,7 +32,7 @@ export const TOOLS: ToolSpec[] = [
     },
     {
         name: 'cari_teks',
-        description: 'Cari kemunculan teks persis (tanpa membedakan huruf besar/kecil) di seluruh naskah atau satu berkas, dan kembalikan baris tempatnya muncul. Cocok untuk nama tokoh, tempat, angka, atau istilah tertentu, mis. memeriksa konsistensi.',
+        description: 'Cari kemunculan teks persis (tanpa membedakan huruf besar/kecil) di seluruh dokumen atau satu berkas, dan kembalikan baris tempatnya muncul. Cocok untuk nama, tempat, angka, tanggal, atau istilah tertentu, mis. memeriksa konsistensi.',
         parameters: {
             type: 'object',
             properties: {
@@ -45,7 +45,7 @@ export const TOOLS: ToolSpec[] = [
     },
     {
         name: 'baca_berkas',
-        description: 'Baca isi sebuah berkas naskah (bisa sebagian: dari_baris sampai sampai_baris, nomor baris mulai dari 1). Hasil memuat nomor baris. Berkas panjang dipotong; lanjutkan dengan dari_baris berikutnya.',
+        description: 'Baca isi sebuah berkas dokumen (bisa sebagian: dari_baris sampai sampai_baris, nomor baris mulai dari 1). Hasil memuat nomor baris. Berkas panjang dipotong; lanjutkan dengan dari_baris berikutnya.',
         parameters: {
             type: 'object',
             properties: {
@@ -83,7 +83,7 @@ const listFiles = (files: SourceFile[]): ToolOutcome => ({
     summary: `${files.length} berkas`,
 });
 
-function searchManuscript(files: SourceFile[], args: Record<string, unknown>): ToolOutcome {
+function searchDocuments(files: SourceFile[], args: Record<string, unknown>): ToolOutcome {
     const query = asString(args.kueri);
     if (!query) return { content: 'Argumen "kueri" wajib diisi.', summary: 'kueri kosong' };
     const limit = Math.min(Math.max(asInt(args.maks) ?? 8, 1), MAX_SEARCH_HITS);
@@ -159,7 +159,7 @@ export function runTool(name: string, rawArguments: string, files: SourceFile[])
     }
     switch (name) {
         case 'daftar_berkas': return listFiles(files);
-        case 'cari_naskah': return searchManuscript(files, args);
+        case 'cari_dokumen': return searchDocuments(files, args);
         case 'cari_teks': return searchText(files, args);
         case 'baca_berkas': return readFile(files, args);
         default: return { content: `Alat "${name}" tidak dikenal. Alat yang tersedia: ${TOOLS.map(t => t.name).join(', ')}.`, summary: 'alat tidak dikenal' };
@@ -172,7 +172,7 @@ export function describeCall(name: string, rawArguments: string): string {
     try { a = JSON.parse(rawArguments || '{}') ?? {}; } catch (e) { /* tampilkan nama alatnya saja */ }
     switch (name) {
         case 'daftar_berkas': return 'Melihat daftar berkas';
-        case 'cari_naskah': return `Mencari “${asString(a.kueri)}”`;
+        case 'cari_dokumen': return `Mencari “${asString(a.kueri)}”`;
         case 'cari_teks': return `Mencari teks “${asString(a.teks)}”${asString(a.berkas) ? ` di ${asString(a.berkas)}` : ''}`;
         case 'baca_berkas': return `Membaca ${asString(a.nama) || 'berkas'}${asInt(a.dari_baris) ? ` (dari baris ${asInt(a.dari_baris)})` : ''}`;
         default: return name;

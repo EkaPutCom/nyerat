@@ -339,12 +339,12 @@ export function toolTests(): void {
         eq(r.content.split('\n').filter(l => l.startsWith('x.md:')).length, 40);
     });
 
-    test('cari_naskah mengembalikan potongan paling relevan beserta lokasinya', () => {
-        const r = runTool('cari_naskah', '{"kueri":"pulau tanpa nama"}', files);
+    test('cari_dokumen mengembalikan potongan paling relevan beserta lokasinya', () => {
+        const r = runTool('cari_dokumen', '{"kueri":"pulau tanpa nama"}', files);
         contains(r.content, '[bab-3.md › Bab 3: Pulau · baris 1–');
         contains(r.content, 'pulau tanpa nama');
         eq(r.summary, '1 potongan');
-        contains(runTool('cari_naskah', '{"kueri":"zzz qqq"}', files).content, 'Tidak ada bagian naskah yang cocok');
+        contains(runTool('cari_dokumen', '{"kueri":"zzz qqq"}', files).content, 'Tidak ada bagian naskah yang cocok');
     });
 
     test('baca_berkas: bernomor baris, bisa per rentang, tahu total baris', () => {
@@ -380,7 +380,7 @@ export function toolTests(): void {
     test('describeCall menyusun frasa antarmuka', () => {
         eq(describeCall('cari_teks', '{"teks":"Hasan","berkas":"bab-2.md"}'), 'Mencari teks “Hasan” di bab-2.md');
         eq(describeCall('baca_berkas', '{"nama":"bab-1.md","dari_baris":10}'), 'Membaca bab-1.md (dari baris 10)');
-        eq(describeCall('cari_naskah', '{"kueri":"surat"}'), 'Mencari “surat”');
+        eq(describeCall('cari_dokumen', '{"kueri":"surat"}'), 'Mencari “surat”');
         eq(describeCall('daftar_berkas', ''), 'Melihat daftar berkas');
         eq(describeCall('cari_teks', '{rusak'), 'Mencari teks “”');
     });
