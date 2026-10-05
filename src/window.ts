@@ -30,6 +30,7 @@ import { FileTree, isDirectory } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
 import { ChatPanel } from './ui/chat.js';
 import { readProject } from './agent/project.js';
+import { cleanNewName, type Change } from './agent/changes.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
 import { TabBar } from './ui/tabbar.js';
@@ -196,6 +197,7 @@ export class MainWindow {
                 return bounds[0] ? buf.get_text(bounds[1], bounds[2], false) : '';
             },
             root: () => this.fileTree.root,
+            applyChange: change => this.applyChange(change),
             files: () => {
                 const files = this.fileTree.root ? readProject(this.fileTree.root, this.file) : [];
                 // Tab lain yang belum disimpan: asisten membaca isi editor, bukan versi di disk.
@@ -437,6 +439,36 @@ export class MainWindow {
         if (!visible) return;
         this.chat.updateContextSummary();
         this.chat.focusInput();
+    }
+
+    // Terapkan perubahan usulan agent yang sudah disetujui pengguna. Mengembalikan pesan galat atau null.
+    // Berkas yang terbuka diubah lewat editornya (satu langkah undo); yang lain ditulis ke disk. Dalam kedua
+    // kasus isi harus masih sama dengan yang dilihat agent, supaya suntingan pengguna tidak tertimpa.
+    private applyChange(change: Change): string | null {
+        const root = this.fileTree.root;
+        if (!root) return 'tidak ada folder kerja yang terbuka';
+        // Pertahanan berlapis: planChange() sudah menolak nama seperti ini, tetapi penulisan ke disk tidak boleh bergantung padanya.
+        if (cleanNewName(change.file) !== change.file) return 'path di luar folder kerja atau tidak valid';
+        const path = GLib.build_filenamev([root, ...change.file.split('/')]);
+        try {
+            const open = this.docs.find(d => d.file === path);
+            if (change.kind === 'create') {
+                if (fileExists(path)) return `${change.file} sudah ada`;
+                GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
+                writeTextFile(path, change.after);
+                this.fileTree.refresh(GLib.path_get_dirname(path));
+                this.openInTab(path);
+                return null;
+            }
+            const current = open ? open.editor.getText() : fileExists(path) ? readTextFile(path) : null;
+            if (current === null) return `${change.file} tidak ada lagi`;
+            if (current !== change.before) return `${change.file} berubah sejak diusulkan; minta usulan baru`;
+            if (open) open.editor.replaceText(change.after);
+            else writeTextFile(path, change.after);
+            return null;
+        } catch (e) {
+            return errorMessage(e);
+        }
     }
 
     // Nama berkas relatif terhadap folder proyek (sama dengan nama di agent/project.ts); null jika di luar folder atau belum disimpan.

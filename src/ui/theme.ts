@@ -57,6 +57,8 @@ const buildCss = (p: Palette): string => `
     .chat-pop label { color: @theme_fg_color; }
     .chat-pop label.side-title, .chat-pop label.side-meta { opacity: 0.7; }
     .chat-step { color: ${p.faint}; font-size: 12px; }
+    .chat-proposal { background-color: ${p.codeBg}; border-radius: 8px; padding: 8px 10px; color: ${p.fg}; font-size: 13px; }
+    .chat-diff { font-family: monospace; font-size: 12px; color: ${p.fg}; }
     .chat-error { color: #c9372c; font-size: 12px; }
     .chat button.flat { color: ${p.sideFg}; }
     .sidebar button.flat { color: ${p.sideFg}; }

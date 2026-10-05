@@ -377,6 +377,94 @@ export function chatTests(c: GuiContext): void {
         panel.reset();
     });
 
+    // ---------- Usulan perubahan agent ----------
+    const proposalProvider = (name: string, args: object): Provider => {
+        let round = 0;
+        return {
+            async chat(req) {
+                round++;
+                if (round === 1) return { usage: null, cancelled: false, reasoning: '', toolCalls: [{ id: 'u1', name, arguments: JSON.stringify(args) }] };
+                req.onText('Sudah saya usulkan.');
+                return { usage: { prompt: 50, cached: 0, completion: 5 }, cancelled: false, toolCalls: [], reasoning: '' };
+            },
+        };
+    };
+    const findButton = (prefix: string): Gtk.Button | null => {
+        let found: Gtk.Button | null = null;
+        const walk = (widget: Gtk.Widget) => {
+            if (widget instanceof Gtk.Button && (widget.label ?? '').startsWith(prefix) && widget.get_visible() && widget.get_mapped()) found = widget;
+            childrenOf(widget).forEach(walk);
+            if (widget instanceof Gtk.ScrolledWindow && widget.get_child()) walk(widget.get_child()!);
+        };
+        walk(panel.messages);
+        return found;
+    };
+    // Kirim pertanyaan, tunggu kartu persetujuan, tekan tombol, lalu tunggu giliran selesai.
+    const proposeAndPress = (provider: Provider, button: string): void => {
+        panel.makeProvider = () => provider;
+        panel.reset();
+        const done = panel.ask('Tolong ubah');
+        let pressed = false;
+        for (let i = 0; i < 300 && !pressed; i++) {
+            pump();
+            const b = findButton(button);
+            if (b) { b.emit('clicked'); pressed = true; }
+            else GLib.usleep(5000);
+        }
+        ok(pressed, `tombol ${button} tidak muncul`);
+        settle(done);
+        panel.makeProvider = () => provider;
+    };
+    const diskOf = (name: string) => readTextFile(GLib.build_filenamev([book, name]));
+
+    test('usulan ubah: kartu menampilkan selisih; Terapkan mengubah editor dan bisa dibatalkan, disk belum tersentuh', () => {
+        setText('# Bab 2\n\nBadai menghantam kapal.\n');
+        w.editor.buffer.set_modified(false);
+        const diskBefore = diskOf('bab-2.md');
+        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-2.md', teks_lama: 'Badai menghantam kapal.', teks_baru: 'Badai menghantam kapal itu.', alasan: 'lebih jelas' }), 'Terapkan');
+        const text = all();
+        contains(text, 'Ubah bab-2.md');
+        contains(text, '- Badai menghantam kapal.');
+        contains(text, '+ Badai menghantam kapal itu.');
+        contains(text, 'Diterapkan.');
+        contains(text, '1 perubahan diterapkan');
+        eq(w.editor.getText(), '# Bab 2\n\nBadai menghantam kapal itu.\n');
+        eq(diskOf('bab-2.md'), diskBefore);
+        w.editor.buffer.undo();
+        eq(w.editor.getText(), '# Bab 2\n\nBadai menghantam kapal.\n');
+    });
+
+    test('usulan ubah pada berkas yang tidak terbuka ditulis ke disk setelah Terapkan', () => {
+        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-1', teks_lama: 'membawa surat dari ayahnya', teks_baru: 'membawa surat dari ibunya', alasan: 'x' }), 'Terapkan');
+        contains(diskOf('bab-1.md'), 'membawa surat dari ibunya');
+    });
+
+    test('Tolak: berkas tidak berubah dan model diberi tahu', () => {
+        const before = diskOf('bab-1.md');
+        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-1.md', teks_lama: 'Raka bertemu Laras', teks_baru: 'Raka bertemu Hasan', alasan: 'x' }), 'Tolak');
+        eq(diskOf('bab-1.md'), before);
+        contains(all(), 'Ditolak.');
+        ok(!all().includes('perubahan diterapkan'), 'dihitung diterapkan');
+    });
+
+    test('usulan berkas baru: Terapkan menulis dan membukanya di tab', () => {
+        proposeAndPress(proposalProvider('buat_berkas', { nama: 'rencana/oktober', isi: '# Oktober\n\n- Tulis bab 3\n', alasan: 'rencana bulan ini' }), 'Terapkan');
+        eq(diskOf('rencana/oktober.md'), '# Oktober\n\n- Tulis bab 3\n');
+        contains(all(), 'Berkas baru rencana/oktober.md');
+        ok(w.file?.endsWith('/rencana/oktober.md'), `tab aktif: ${w.file}`);
+        ok(w.closeTab(), 'closeTab() gagal');
+        pump();
+    });
+
+    test('penerapan menolak isi yang berubah sejak diusulkan dan path di luar folder', () => {
+        const apply = panel.host.applyChange!;
+        const stale = apply({ kind: 'edit', file: 'bab-1.md', before: 'isi lama', after: 'isi baru', reason: '' });
+        contains(stale ?? '', 'berubah sejak diusulkan');
+        contains(apply({ kind: 'create', file: '../luar.md', before: '', after: 'x', reason: '' }) ?? '', 'di luar folder');
+        ok(!GLib.file_test(GLib.build_filenamev([tmp, 'luar.md']), GLib.FileTest.EXISTS), 'berkas tertulis di luar folder');
+        contains(apply({ kind: 'create', file: 'bab-1.md', before: '', after: 'x', reason: '' }) ?? '', 'sudah ada');
+    });
+
     test('menutup panel', () => {
         w.setOption('chat', false);
         pump();

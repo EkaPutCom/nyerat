@@ -31,6 +31,7 @@ import { gitLogTests } from './unit/gitlog.js';
 import { fileOpsTests } from './unit/fileops.js';
 import { agentTests, apiKeyTests, toolTests } from './unit/agent.js';
 import { transcriptTests } from './unit/transcript.js';
+import { changeTests } from './unit/changes.js';
 import { deepseekTests } from './unit/deepseek.js';
 import { chatTests } from './gui/chat.js';
 import { syntaxHidingTests } from './gui/syntax.js';
@@ -69,6 +70,7 @@ function runUnitTests(): void {
     apiKeyTests();
     toolTests();
     transcriptTests();
+    changeTests();
     deepseekTests();
 }
 

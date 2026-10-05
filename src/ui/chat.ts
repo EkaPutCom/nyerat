@@ -17,7 +17,8 @@ import { buildContext, DEFAULT_BUDGET, findMentions, type BuiltContext, type Con
 import { deleteChat, listChats, loadChat, nowStamp, saveChat, titleFrom } from '../agent/chatstore.js';
 import { DEEPSEEK_MODELS, DeepSeek } from '../agent/deepseek.js';
 import type { Provider, Usage } from '../agent/provider.js';
-import { ChatSession, type ToolStep } from '../agent/session.js';
+import { ChatSession, type ProposalResult, type ToolStep } from '../agent/session.js';
+import { diffPreview, describeChange, type Change } from '../agent/changes.js';
 import { chatMarkup } from '../markdown/chatmarkup.js';
 import { escapeMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from './theme.js';
@@ -28,6 +29,8 @@ export interface ChatHost {
     active(): { name: string; text: string; cursorLine: number } | null;   // dokumen terbuka (isi buffer, bukan disk)
     selection(): string;
     files(): SourceFile[];                                                  // berkas lain di folder proyek
+    // Terapkan perubahan yang sudah disetujui pengguna. Mengembalikan pesan galat, atau null bila berhasil.
+    applyChange?(change: Change): string | null;
     root(): string | null;                                                  // folder naskah; tempat riwayat percakapan disimpan
 }
 
@@ -47,8 +50,8 @@ const KIND_LABEL = { map: 'Peta', active: 'Dokumen', selection: 'Pilihan', menti
 
 const fmtTokens = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1).replace('.', ',')} rb` : `${n}`;
 
-const usageText = (u: Usage, toolCalls: number): string =>
-    `${fmtTokens(u.prompt)} masuk${u.cached ? ` (${fmtTokens(u.cached)} dari cache)` : ''} · ${fmtTokens(u.completion)} keluar${toolCalls ? ` · ${toolCalls} penelusuran` : ''}`;
+const usageText = (u: Usage, toolCalls: number, applied = 0): string =>
+    `${fmtTokens(u.prompt)} masuk${u.cached ? ` (${fmtTokens(u.cached)} dari cache)` : ''} · ${fmtTokens(u.completion)} keluar${toolCalls ? ` · ${toolCalls} penelusuran` : ''}${applied ? ` · ${applied} perubahan diterapkan` : ''}`;
 
 interface Bubble {
     label: Gtk.Label;
@@ -337,10 +340,11 @@ export class ChatPanel {
                     answer.thinkingLabel.set_text(reasoning.trim());
                 },
                 onTool: step => this.showStep(answer.steps, step),
+                onProposal: change => this.propose(change),
             }, this.cancellable);
             this.render(answer.bubble);
             if (result.cancelled) answer.footer.set_text(answer.bubble.text || result.toolCalls ? 'Dihentikan' : 'Dihentikan sebelum ada jawaban');
-            else if (result.usage) answer.footer.set_text(usageText(result.usage, result.toolCalls));
+            else if (result.usage) answer.footer.set_text(usageText(result.usage, result.toolCalls, result.applied));
             answer.footer.set_visible(!!answer.footer.get_text());
             this.persist();
         } catch (e) {
@@ -645,6 +649,68 @@ export class ChatPanel {
         label.set_text(step.summary ? `${step.label} → ${step.summary}` : `${step.label}…`);
         label.show();
         box.show();
+    }
+
+    // Kartu persetujuan: selisih yang diusulkan agent, dengan tombol Terapkan dan Tolak. Berkas tidak disentuh
+    // sebelum Terapkan ditekan; menghentikan giliran (tombol Hentikan) sama dengan menolak.
+    private propose(change: Change): Promise<ProposalResult> {
+        const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
+        card.add_css_class('chat-proposal');
+        const title = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, use_markup: true, selectable: true });
+        title.set_markup(`<b>${escapeMarkup(describeChange(change))}</b>`);
+        card.append(title);
+        if (change.reason.trim()) {
+            const reason = new Gtk.Label({ label: change.reason.trim(), xalign: 0, wrap: true, max_width_chars: 44, selectable: true });
+            reason.add_css_class('side-meta');
+            card.append(reason);
+        }
+
+        const diff = diffPreview(change.before, change.after);
+        const color = { '+': '#2a8a4a', '-': '#c9372c', ' ': '', '…': '' } as const;
+        const markup = diff.lines.map(l => l.sign === '…'
+            ? `<span alpha="60%">… ${escapeMarkup(l.text)}</span>`
+            : `<span${color[l.sign] ? ` foreground="${color[l.sign]}"` : ''}>${l.sign} ${escapeMarkup(l.text)}</span>`).join('\n');
+        const body = new Gtk.Label({ xalign: 0, yalign: 0, use_markup: true, selectable: true, wrap: true, wrap_mode: 2, max_width_chars: 48 });
+        body.add_css_class('chat-diff');
+        body.set_markup(markup);
+        const scroll = new Gtk.ScrolledWindow({ min_content_height: 40, max_content_height: 240, propagate_natural_height: true, hscrollbar_policy: Gtk.PolicyType.NEVER });
+        scroll.set_child(body);
+        card.append(scroll);
+
+        const status = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, visible: false });
+        status.add_css_class('side-meta');
+        const apply = new Gtk.Button({ label: `Terapkan (+${diff.added} −${diff.removed})` });
+        apply.add_css_class('suggested-action');
+        const reject = new Gtk.Button({ label: 'Tolak' });
+        const buttons = new Gtk.Box({ spacing: 6 });
+        buttons.append(apply);
+        buttons.append(reject);
+        card.append(buttons);
+        card.append(status);
+        this.empty.hide();
+        this.messages.append(card);
+        this.stick = true;
+
+        return new Promise<ProposalResult>(resolve => {
+            let done = false;
+            const finish = (result: ProposalResult, text: string, error = false) => {
+                if (done) return;
+                done = true;
+                buttons.hide();
+                status.set_text(text);
+                status.remove_css_class('side-meta');
+                status.add_css_class(error ? 'chat-error' : 'side-meta');
+                status.show();
+                resolve(result);
+            };
+            apply.connect('clicked', () => {
+                const error = this.host.applyChange ? this.host.applyChange(change) : 'penerapan tidak tersedia';
+                if (error) finish({ applied: false, error }, `Gagal diterapkan: ${error}`, true);
+                else finish({ applied: true }, 'Diterapkan. Perubahan di editor bisa dibatalkan dengan Ctrl+Z.');
+            });
+            reject.connect('clicked', () => finish({ applied: false }, 'Ditolak.'));
+            this.cancellable?.connect(() => finish({ applied: false }, 'Dibatalkan.'));
+        });
     }
 
     private addNote(text: string, error = false): void {
