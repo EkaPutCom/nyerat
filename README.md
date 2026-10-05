@@ -1,25 +1,27 @@
 # Nyerat
 
-Editor Markdown **AI-native** untuk desktop Linux: asisten AI adalah bagian inti editor, bukan tambahan, dan ia memahami seluruh naskah Anda. Tampilan penulisannya langsung terformat, tanpa panel pratinjau. Dibuat dengan **GTK 4**, **GtkSourceView 5**, dan **GJS** (JavaScript untuk GNOME). Kodenya ditulis dalam **TypeScript** dan dibundel dengan **Vite**.
+Nyerat dikembangkan menuju **personal workbench AI agent** untuk desktop Linux: ruang kerja pribadi untuk mengolah catatan, dokumen, riset, rencana, dan tugas bersama agent AI yang memahami konteks kerja Anda. Fondasi yang tersedia saat ini adalah editor Markdown dengan tampilan langsung terformat, papan kanban, riwayat Git, dan asisten AI baca-saja. Dibuat dengan **GTK 4**, **GtkSourceView 5**, dan **GJS** (JavaScript untuk GNOME). Kodenya ditulis dalam **TypeScript** dan dibundel dengan **Vite**.
 
 Tidak ada panel pratinjau terpisah: teks langsung tampil terformat. Sintaks Markdown seperti `#`, `**`, `` ` `` dan `[](url)` disembunyikan, lalu muncul lagi saat kursor berada di baris tersebut.
 
 Landing page-nya ada di [`docs/`](docs/index.html) (HTML statis; aktifkan GitHub Pages dari folder `/docs` pada branch `main` untuk menayangkannya). Tangkapan layar dibuat oleh [`scripts/capture.ts`](scripts/capture.ts).
 
-## Visi: editor yang AI-native
+## Goal: personal workbench AI agent
 
-Menulis panjang (novel, dokumentasi, riset) sulit karena penulis harus mengingat semuanya: usia tokoh di bab 1, istilah yang dipakai di bab 7, keputusan yang dicatat bulan lalu. Nyerat dirancang agar AI menjadi rekan kerja yang **sudah membaca naskah itu**, bukan kotak chat terpisah yang harus disuapi salinan teks. Prinsipnya:
+Tujuan Nyerat adalah menjadi ruang kerja pribadi tempat pengguna dan agent AI bekerja dengan konteks yang sama: catatan, dokumen, riset, keputusan, rencana, dan tugas dalam satu folder kerja. Agent membantu memahami informasi, menyusun rencana, dan menuntaskan pekerjaan dengan hasil yang dapat diperiksa pengguna. Menulis tetap menjadi salah satu alur kerja utama. Prinsip pengembangannya:
 
-- **Konteks datang dari naskah, bukan dari salin-tempel.** Dokumen yang terbuka (termasuk yang belum disimpan), pilihan, posisi kursor, dan peta seluruh folder disusun otomatis; model juga menelusuri berkas sendiri dengan alat baca-saja
+- **Konteks datang dari ruang kerja.** Dokumen yang terbuka (termasuk yang belum disimpan), pilihan, posisi kursor, dan peta seluruh folder disusun otomatis; model juga menelusuri berkas sendiri dengan alat baca-saja
 - **Transparan.** Setiap jawaban memperlihatkan konteks apa yang dikirim, penelusuran apa yang dilakukan, dan berapa token yang terpakai
-- **Penulis memegang kendali.** Asisten hanya membaca dan mengusulkan; naskah tidak pernah diubah tanpa Anda. Naskah yang dikirim ke penyedia model bisa dibatasi lewat saklar, dan API key milik Anda sendiri
+- **Pengguna memegang kendali.** Saat ini asisten hanya membaca dan mengusulkan. Pengembangan kemampuan agent untuk mengubah dokumen atau menjalankan tindakan harus menyediakan batas akses yang jelas dan hasil yang dapat ditinjau; tindakan yang membutuhkan persetujuan menunggu persetujuan pengguna. Dokumen yang dikirim ke penyedia model bisa dibatasi lewat saklar, dan API key milik Anda sendiri
 - **Teks tetap milik Anda.** Semua berupa Markdown biasa di berkas biasa (bisa di-diff dan di-commit ke Git); tanpa format tertutup dan tanpa akun
 
-Keadaan sekarang: chat dengan DeepSeek yang menelusuri naskah dan menjawab dengan kutipan berkas dan nomor baris. Yang belum ada (lihat *Keterbatasan*): menyisipkan usulan langsung ke dokumen, pemeriksaan konsistensi otomatis, dan penyedia model selain DeepSeek.
+Keadaan sekarang: editor Markdown, kanban, riwayat Git, dan chat dengan DeepSeek yang menelusuri dokumen serta menjawab dengan kutipan berkas dan nomor baris. Kemampuan agent untuk mengubah dokumen dan menjalankan tugas belum tersedia.
+
+Arah pengembangan berikutnya adalah memperluas konteks dari naskah ke pekerjaan pribadi, menghubungkan percakapan dengan rencana dan hasil kerja, serta menambahkan tindakan agent yang dapat ditinjau dan dikendalikan pengguna. Menyisipkan usulan langsung ke dokumen, pemeriksaan konsistensi otomatis, dan penyedia model selain DeepSeek juga belum tersedia (lihat *Keterbatasan*).
 
 ## Arti nama
 
-**Nyerat** berasal dari kata dalam bahasa Sunda dan Jawa yang berarti *menulis*. Aplikasi ini dibuat untuk **membantu penulis**: tampilannya bersih dan bebas gangguan, sehingga penulis bisa fokus pada tulisannya tanpa repot dengan sintaks Markdown.
+**Nyerat** berasal dari kata dalam bahasa Sunda dan Jawa yang berarti *menulis*. Menulis menjadi fondasi ruang kerja ini: catatan, rencana, dan hasil kerja tetap tersimpan sebagai dokumen yang mudah dibaca dan disunting, dengan tampilan bersih agar pengguna bisa fokus pada pekerjaannya.
 
 ## Kebutuhan
 
