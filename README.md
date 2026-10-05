@@ -364,6 +364,7 @@ src/
     ├── outline.ts        tab Outline: daftar heading
     ├── history.ts        tab Riwayat: commit git untuk file aktif
     ├── historyviewer.ts  jendela baca satu commit: diff dan isi versi itu
+    ├── proposalviewer.ts jendela tinjau usulan perubahan agent: diff yang sama, tombol Tolak/Terapkan
     ├── findbar.ts        bilah pencarian (targetnya berpindah mengikuti tab aktif)
     ├── tabbar.ts         baris tab dokumen (tampil jika ada ≥ 2 dokumen)
     ├── statusbar.ts      hitungan kata, posisi kursor, pesan singkat
