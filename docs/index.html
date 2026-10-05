@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nyerat — Personal workbench AI agent untuk Linux</title>
-<meta name="description" content="Nyerat adalah personal workbench AI agent untuk desktop Linux: ruang kerja pribadi untuk catatan, dokumen, riset, dan rencana, dengan agent AI yang memahami konteks kerja Anda. Fondasinya editor Markdown yang langsung terformat. Dibuat dengan GTK 4, GJS, dan TypeScript.">
+<meta name="description" content="Nyerat adalah personal workbench AI agent untuk desktop Linux. Agent menelusuri catatan, dokumen, riset, dan rencana Anda, lalu mengusulkan tindakan nyata yang Anda tinjau dan setujui dulu. Fondasinya editor Markdown yang langsung terformat. Dibuat dengan GTK 4, GJS, dan TypeScript.">
 <meta property="og:title" content="Nyerat — Personal workbench AI agent untuk Linux">
-<meta property="og:description" content="Ruang kerja pribadi dengan agent AI yang memahami konteks kerja Anda, di atas editor Markdown yang langsung terformat. Kanban, tabel, diagram, riwayat Git, mode gelap.">
+<meta property="og:description" content="Agent AI yang bekerja di ruang kerja pribadi Anda: membaca konteks, mengusulkan perubahan, dan menulis hanya setelah Anda menyetujui selisihnya. Editor Markdown, kanban, riwayat Git.">
 <meta property="og:image" content="https://nyerat.ekaput.com/assets/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="631">
-<meta property="og:image:alt" content="Nyerat dengan panel Asisten AI yang menelusuri dua bab dan menunjukkan ketidakkonsistenan usia tokoh">
+<meta property="og:image:alt" content="Nyerat setelah agent AI memperbarui tanggal rilis di rencana dan memindahkan kartu tugas, atas persetujuan pengguna">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://nyerat.ekaput.com/assets/og-image.png">
 <meta property="og:type" content="website">
@@ -165,6 +165,7 @@ footer a { color: var(--muted); }
       Nyerat
     </a>
     <nav>
+      <a class="hide-sm" href="#agent">Agent</a>
       <a class="hide-sm" href="#fitur">Fitur</a>
       <a class="hide-sm" href="#demo">Demo</a>
       <a class="hide-sm" href="#pasang">Pasang</a>
@@ -181,23 +182,70 @@ footer a { color: var(--muted); }
   <div class="wrap">
     <span class="pill">Sumber terbuka · Lisensi MIT · Untuk desktop Linux</span>
     <h1>Personal workbench<br><em>AI agent.</em></h1>
-    <p class="lead">Nyerat adalah ruang kerja pribadi untuk catatan, dokumen, riset, rencana, dan tugas. Agent AI-nya sudah membaca konteks kerja Anda: dokumen yang terbuka, pilihan, dan semua berkas di folder. Tanya tanpa salin-tempel, dan jawabannya datang dengan kutipan berkas dan nomor baris. Agent bisa mengusulkan berkas baru dan perubahan teks; tidak ada yang tertulis sebelum Anda menyetujui selisihnya.</p>
+    <p class="lead">Nyerat adalah ruang kerja pribadi tempat Anda dan agent AI mengerjakan catatan, dokumen, riset, rencana, dan tugas dengan konteks yang sama. Agent tidak berhenti pada jawaban: ia menelusuri berkas Anda, lalu mengusulkan tindakan nyata, yaitu membuat berkas, mengubah teks, dan memindahkan kartu tugas. Setiap usulan tampil sebagai selisih yang Anda tinjau; tidak ada yang tertulis sebelum Anda menyetujuinya.</p>
     <figure class="shot">
-      <img src="assets/asisten-terang.png" width="1332" height="867" alt="Jendela Nyerat dengan panel Asisten yang menelusuri dua bab dan menunjukkan ketidakkonsistenan usia tokoh">
+      <img src="assets/agent-selesai.png" width="1280" height="780" alt="Jendela Nyerat setelah agent memperbarui tanggal rilis di rencana peluncuran dan memindahkan kartu tugas, keduanya atas persetujuan pengguna">
     </figure>
   </div>
 </div>
+
+<!-- ========== AGENT ========== -->
+<section id="agent">
+  <div class="wrap">
+    <div class="center">
+      <p class="eyebrow">Agentic</p>
+      <h2>Agent yang bekerja, Anda yang memutuskan</h2>
+      <p class="sub">Minta hasil, bukan hanya jawaban. Agent membaca, merencanakan, dan mengusulkan; Anda memegang tombol terakhirnya.</p>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="ico">1</div><h3>Membaca konteks</h3><p>Dokumen yang terbuka (termasuk yang belum disimpan), pilihan, dan peta seluruh folder disusun otomatis. Agent juga menelusuri berkas sendiri dengan <code>cari_dokumen</code>, <code>cari_teks</code>, dan <code>baca_berkas</code>, lalu mengutip berkas dan nomor baris.</p></div>
+      <div class="card"><div class="ico">2</div><h3>Mengusulkan tindakan</h3><p>Dengan <code>buat_berkas</code>, <code>ubah_berkas</code>, dan <code>ubah_kanban</code>, agent bisa membuat catatan baru, memperbarui teks di rencana, dan menambah, memindah, atau menandai kartu tugas.</p></div>
+      <div class="card"><div class="ico">3</div><h3>Anda meninjau, lalu menyetujui</h3><p>Tiap usulan membuka jendela tinjau bergaya diff Git. Tidak ada yang tertulis sebelum Anda menekan Terapkan. Tolak, dan agent tidak memaksa.</p></div>
+    </div>
+
+    <div class="row" style="margin-top:72px">
+      <div class="text">
+        <p class="eyebrow">Contoh alur kerja</p>
+        <h2>Dari “ada yang tidak sinkron?” sampai selesai.</h2>
+        <p class="sub" style="margin-bottom:18px">Folder kerja berisi rencana peluncuran, catatan rapat, riset, dan papan tugas. Cukup minta dengan bahasa biasa:</p>
+        <ul>
+          <li>“Adakah keputusan rapat yang belum masuk ke rencana peluncuran?” Agent menemukan rilis yang diundur ke 22 November di catatan rapat, sementara rencana masih 15 November</li>
+          <li>“Perbarui tanggal rilisnya dan pindahkan kartu materi rilis ke Dikerjakan.” Dua usulan muncul berurutan, masing-masing dengan selisihnya</li>
+          <li>“Buat ringkasan riset pesaing di folder riset.” Berkas baru ditulis setelah Anda menyetujui isinya</li>
+        </ul>
+      </div>
+      <figure class="shot"><img src="assets/agent.gif" width="900" height="548" loading="lazy" alt="Animasi agent mengusulkan perubahan rencana dan papan tugas; pengguna menerapkan keduanya"><figcaption>Agent mengusulkan, pengguna menerapkan: rencana dan papan tugas ikut diperbarui</figcaption></figure>
+    </div>
+
+    <div class="row flip">
+      <div class="text">
+        <p class="eyebrow">Kendali ada di Anda</p>
+        <h2>Setiap tindakan bisa diperiksa dulu.</h2>
+        <ul>
+          <li>Jendela tinjau menampilkan selisih baris sungguhan, dengan nomor baris dan konteks, seperti riwayat Git</li>
+          <li>Perubahan pada dokumen yang terbuka bisa dibatalkan dengan <kbd>Ctrl</kbd>+<kbd>Z</kbd></li>
+          <li>Berkas yang berubah sejak diusulkan tidak ditimpa; agent diminta mengusulkan ulang</li>
+          <li>Hanya berkas Markdown di folder kerja; nama berkas di luar folder ditolak</li>
+          <li>Memindahkan kartu hanya menandai kartu itu, bukan seluruh papan</li>
+          <li>Semua tetap Markdown biasa yang bisa di-diff dan di-commit ke Git, tanpa akun dan dengan API key milik Anda</li>
+        </ul>
+        <p class="sub" style="margin:18px 0 0">Berikutnya: usulan beberapa berkas sekaligus dan tindakan lain yang tetap bisa ditinjau. Belum tersedia saat ini: menjalankan perintah dan penyedia model selain DeepSeek.</p>
+      </div>
+      <figure class="shot"><img src="assets/usulan-diff.png" width="860" height="620" loading="lazy" alt="Jendela tinjau usulan agent: selisih satu baris tanggal rilis dengan tombol Tolak dan Terapkan"><figcaption>Jendela tinjau: tanggal rilis berubah dari 15 ke 22 November</figcaption></figure>
+    </div>
+  </div>
+</section>
 
 <!-- ========== FITUR RINGKAS ========== -->
 <section id="fitur">
   <div class="wrap">
     <div class="center">
       <p class="eyebrow">Fitur</p>
-      <h2>Agent yang paham konteks kerja, ruang kerja yang tidak mengganggu</h2>
-      <p class="sub">Catatan, dokumentasi, riset, dan rencana kerja dalam satu folder dan satu jendela GTK yang ringan.</p>
+      <h2>Ruang kerja tempat agent bekerja bersama Anda</h2>
+      <p class="sub">Catatan, dokumen, riset, rencana, dan tugas dalam satu folder dan satu jendela GTK yang ringan, dengan editor yang tidak mengganggu.</p>
     </div>
     <div class="grid">
-      <div class="card"><div class="ico">✦</div><h3>Agent AI di inti ruang kerja (DeepSeek)</h3><p>Tanya soal pekerjaan Anda di panel samping. Agent sudah membaca konteks kerja: ia menyusun konteks otomatis dan menelusuri berkas di folder untuk menemukan, misalnya, kontradiksi antarbab. Bila diminta, ia mengusulkan berkas baru atau perubahan teks, dan hanya menulis setelah Anda menyetujui selisihnya.</p></div>
+      <div class="card"><div class="ico">✦</div><h3>Agent AI di inti ruang kerja (DeepSeek)</h3><p>Tanya, minta rencana, atau minta perubahan di panel samping. Agent menyusun konteks otomatis, menelusuri berkas di folder, dan mengusulkan berkas baru, perubahan teks, atau perubahan papan kanban yang baru ditulis setelah Anda menyetujui selisihnya.</p></div>
       <div class="card"><div class="ico">❏</div><h3>Riwayat percakapan per folder</h3><p>Percakapan dengan asisten disimpan sebagai berkas Markdown di <code>.nyerat/chats</code> dalam folder kerja. Buka lagi dan lanjutkan kapan saja; folder itu tidak ikut Git secara otomatis.</p></div>
       <div class="card"><div class="ico">✎</div><h3>Penulisan langsung terformat</h3><p>Heading, tebal, miring, coret, stabilo, kode inline, tautan, dan gambar langsung terformat. Sintaksnya muncul lagi saat kursor ada di baris itu.</p></div>
       <div class="card"><div class="ico">▦</div><h3>Papan kanban</h3><p>File Markdown dengan <code>kanban: true</code> dibuka sebagai papan ala Trello. Setiap perubahan ditulis kembali sebagai teks Markdown biasa.</p></div>
@@ -276,16 +324,16 @@ footer a { color: var(--muted); }
       <div class="text">
         <p class="eyebrow">Asisten</p>
         <h2>Tanya konteks kerja Anda, jawabannya berikut kutipan.</h2>
-        <p class="sub" style="margin-bottom:18px">Panel Asisten (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd>) menyusun konteks dari dokumen, pilihan, dan berkas lain di folder, lalu menelusuri naskah sendiri sebelum menjawab. Permintaan seperti “geser jadwal revisi ke Desember” membuka jendela tinjau berisi selisihnya, seperti diff riwayat Git.</p>
+        <p class="sub" style="margin-bottom:18px">Panel Asisten (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd>) menyusun konteks dari dokumen, pilihan, dan berkas lain di folder, lalu menelusuri berkas sendiri sebelum menjawab, misalnya menemukan keputusan rapat yang belum masuk ke rencana.</p>
         <ul>
           <li>Jawaban mengalir dan menyebut berkas serta nomor barisnya</li>
           <li>Tiap jawaban memperlihatkan konteks dan pemakaian token</li>
-          <li>Usulan perubahan ditampilkan sebagai selisih; berkas baru tersentuh setelah Anda menekan Terapkan, dan perubahan di editor bisa di-undo</li>
+          <li>Permintaan bertindak membuka jendela tinjau; berkas tersentuh setelah Anda menekan Terapkan</li>
           <li>Percakapan tersimpan per folder sebagai Markdown, bisa dilanjutkan lagi</li>
           <li>Dokumen yang disertakan dikirim ke DeepSeek; saklar konteks bisa dimatikan</li>
         </ul>
       </div>
-      <figure class="shot"><img src="assets/asisten.gif" width="900" height="586" loading="lazy" alt="Animasi panel Asisten menjawab pertanyaan tentang ketidakkonsistenan usia tokoh antara dua bab"><figcaption>Asisten menelusuri bab dan menunjukkan kontradiksi usia tokoh</figcaption></figure>
+      <figure class="shot"><img src="assets/asisten.gif" width="900" height="586" loading="lazy" alt="Animasi panel Asisten menjawab pertanyaan tentang keputusan rapat yang belum masuk ke rencana peluncuran"><figcaption>Agent menelusuri catatan rapat dan rencana, lalu menunjukkan tanggal rilis yang belum sinkron</figcaption></figure>
     </div>
 
     <div class="row flip">
@@ -322,11 +370,13 @@ footer a { color: var(--muted); }
       <figure class="shot"><img src="assets/kanban.png" width="1332" height="867" loading="lazy" alt="Papan kanban mode terang dengan empat daftar dan kartu berlabel"><figcaption>Papan kanban, mode terang</figcaption></figure>
       <figure class="shot"><img src="assets/kanban-gelap.png" width="1332" height="867" loading="lazy" alt="Papan kanban dalam mode gelap"><figcaption>Papan kanban, mode gelap</figcaption></figure>
       <figure class="shot"><img src="assets/asisten-terang.png" width="1332" height="867" loading="lazy" alt="Panel Asisten di sisi kanan berisi pertanyaan, langkah penelusuran, dan jawaban"><figcaption>Panel Asisten, mode terang</figcaption></figure>
+      <figure class="shot"><img src="assets/usulan-kanban.png" width="860" height="620" loading="lazy" alt="Jendela tinjau usulan agent: kartu kanban berpindah dari daftar Rencana ke Dikerjakan"><figcaption>Jendela tinjau usulan: kartu kanban berpindah daftar</figcaption></figure>
+      <figure class="shot"><img src="assets/agent-selesai.png" width="1280" height="780" loading="lazy" alt="Panel Asisten setelah dua usulan diterapkan, dengan rencana yang sudah berubah"><figcaption>Setelah usulan diterapkan: rencana diperbarui, kartu berpindah</figcaption></figure>
       <figure class="shot"><img src="assets/asisten-gelap.png" width="1332" height="867" loading="lazy" alt="Panel Asisten dalam mode gelap"><figcaption>Panel Asisten, mode gelap</figcaption></figure>
-      <figure class="shot"><img src="assets/riwayat-percakapan.png" width="1332" height="867" loading="lazy" alt="Panel Asisten dengan daftar percakapan sebelumnya yang tersimpan di folder naskah"><figcaption>Riwayat percakapan per folder, mode terang</figcaption></figure>
+      <figure class="shot"><img src="assets/riwayat-percakapan.png" width="1332" height="867" loading="lazy" alt="Panel Asisten dengan daftar percakapan sebelumnya yang tersimpan di folder kerja"><figcaption>Riwayat percakapan per folder, mode terang</figcaption></figure>
       <figure class="shot"><img src="assets/riwayat-percakapan-gelap.png" width="1332" height="867" loading="lazy" alt="Daftar percakapan sebelumnya di panel Asisten, mode gelap"><figcaption>Riwayat percakapan per folder, mode gelap</figcaption></figure>
       <figure class="shot"><img src="assets/tab.png" width="1332" height="867" loading="lazy" alt="Empat dokumen terbuka sebagai tab, satu bertanda belum disimpan"><figcaption>Banyak dokumen sebagai tab dalam satu jendela</figcaption></figure>
-      <figure class="shot"><img src="assets/berkas.png" width="1332" height="867" loading="lazy" alt="Tab Berkas menampilkan pohon folder naskah, riset, dan tokoh"><figcaption>Pohon berkas dengan folder dan file Markdown</figcaption></figure>
+      <figure class="shot"><img src="assets/berkas.png" width="1332" height="867" loading="lazy" alt="Tab Berkas menampilkan pohon folder kerja: catatan, rencana, dan riset"><figcaption>Pohon berkas dengan folder dan file Markdown</figcaption></figure>
       <figure class="shot"><img src="assets/riwayat-diff.png" width="912" height="705" loading="lazy" alt="Jendela diff sebuah commit dengan baris tambah dan hapus berwarna"><figcaption>Diff sebuah commit</figcaption></figure>
       <figure class="shot"><img src="assets/zoom-gambar.png" width="812" height="487" loading="lazy" alt="Penampil gambar dengan tombol zoom, pas layar, dan 100 persen"><figcaption>Penampil gambar dengan zoom</figcaption></figure>
     </div>

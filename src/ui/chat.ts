@@ -44,8 +44,8 @@ const SOURCE_TEXT: Record<KeySource, string> = {
 
 const SUGGESTIONS = [
     'Ringkas dokumen ini dalam beberapa poin',
-    'Adakah bagian yang tidak konsisten dengan berkas lain?',
-    'Beri masukan untuk bagian yang sedang saya tulis',
+    'Apa saja yang belum selesai atau belum sinkron di folder ini?',
+    'Susun rencana langkah berikutnya dari catatan saya',
 ];
 
 const KIND_LABEL = { map: 'Peta', active: 'Dokumen', selection: 'Pilihan', mention: 'Lampiran', excerpt: 'Potongan' } as const;
@@ -96,6 +96,7 @@ export class ChatPanel {
     private cancellable: Gio.Cancellable | null = null;
     private renderTimer = 0;
     private dark = false;
+    private cardsBox: Gtk.Box | null = null;   // tempat kartu usulan giliran yang sedang berjalan
     viewer: ProposalViewer | null = null;   // jendela tinjau usulan yang sedang menunggu keputusan
     private stickIdle = 0;
     private stick = true;            // tetap menempel di bawah selama pengguna tidak menggulir ke atas
@@ -337,6 +338,7 @@ export class ChatPanel {
         this.empty.hide();
         this.addUser(question);
         const answer = this.addAssistant();
+        this.cardsBox = answer.cards;
         this.cancellable = new Gio.Cancellable();
         this.sendButton.set_icon_name('media-playback-stop-symbolic');
         this.sendButton.set_tooltip_text('Hentikan');
@@ -634,6 +636,8 @@ export class ChatPanel {
         const meta = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, visible: false });
         meta.add_css_class('side-meta');
         const steps = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, visible: false });
+        // Kartu usulan perubahan agent: di antara langkah penelusuran dan jawaban, sesuai urutan kejadiannya.
+        const cards = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, visible: false });
         const thinkingLabel = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 40, selectable: true });
         thinkingLabel.add_css_class('chat-thinking');
         const thinking = new Gtk.Expander({ label: 'Proses berpikir', visible: false });
@@ -643,6 +647,7 @@ export class ChatPanel {
         const row = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 });
         row.append(meta);
         row.append(steps);
+        row.append(cards);
         row.append(thinking);
         row.append(bubble.label);
         row.append(footer);
@@ -650,7 +655,7 @@ export class ChatPanel {
         thinking.hide();
         footer.hide();
         this.messages.append(row);
-        return { bubble, meta, steps, thinking, thinkingLabel, footer };
+        return { bubble, meta, steps, cards, thinking, thinkingLabel, footer };
     }
 
     // Satu baris per penelusuran asisten: "Mencari “surat”…" lalu, setelah selesai, "… → 5 potongan".
@@ -690,7 +695,8 @@ export class ChatPanel {
         card.append(status);
         card.append(review);
         this.empty.hide();
-        this.messages.append(card);
+        (this.cardsBox ?? this.messages).append(card);
+        this.cardsBox?.show();
         this.stick = true;
 
         return new Promise<ProposalResult>(resolve => {
@@ -712,7 +718,7 @@ export class ChatPanel {
                 const viewer = new ProposalViewer(this.host.window?.() ?? null, change, this.dark,
                     c => this.host.applyChange ? this.host.applyChange(c) : 'penerapan tidak tersedia');
                 viewer.onDecision = applied => {
-                    if (applied) finish({ applied: true }, 'Diterapkan. Perubahan di editor bisa dibatalkan dengan Ctrl+Z.');
+                    if (applied) finish({ applied: true }, 'Diterapkan.');
                     else if (viewer.error) finish({ applied: false, error: viewer.error }, `Gagal diterapkan: ${viewer.error}`, true);
                     else finish({ applied: false }, 'Ditolak.');
                 };
