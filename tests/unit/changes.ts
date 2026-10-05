@@ -2,7 +2,7 @@
 // Tanpa GUI dan tanpa jaringan.
 
 import { buildContext, type ContextInput, type SourceFile } from '../../src/agent/context.js';
-import { cleanNewName, CHANGE_TOOLS, diffPreview, planChange, type Change } from '../../src/agent/changes.js';
+import { cleanNewName, CHANGE_TOOLS, diffPreview, planChange, unifiedDiff, type Change } from '../../src/agent/changes.js';
 import { ChatSession, type ProposalResult, type ToolStep } from '../../src/agent/session.js';
 import { describeCall } from '../../src/agent/tools.js';
 import type { ChatRequest, ChatResult, Provider } from '../../src/agent/provider.js';
@@ -68,6 +68,16 @@ export function changeTests(): void {
         eq(big.added, 200);
         ok(big.lines.length <= 61, `terlalu panjang: ${big.lines.length}`);
         eq(big.lines[big.lines.length - 1].sign, '…');
+    });
+
+    test('unifiedDiff: hunk gaya git dengan tiga baris konteks dan nomor baris yang benar', () => {
+        const r = plan('ubah_berkas', { nama: 'rencana.md', teks_lama: '- Revisi: November', teks_baru: '- Revisi: Desember', alasan: 'x' });
+        if (!r.ok) throw new Error('usulan gagal');
+        eq(unifiedDiff(r.change.before, r.change.after), [
+            '@@ -1,6 +1,6 @@', ' # Rencana', ' ', ' - Draf pertama: Oktober', '-- Revisi: November', '+- Revisi: Desember', ' ', ' ## Catatan', ' ',
+        ].join('\n').replace('@@ -1,6 +1,6 @@', '@@ -1,7 +1,7 @@'));
+        eq(unifiedDiff('', 'a\nb\n'), '@@ -0,0 +1,2 @@\n+a\n+b');
+        eq(unifiedDiff('x\n', 'x\n'), '');
     });
 
     test('describeCall untuk alat pengubah', () => {

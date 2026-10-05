@@ -6,7 +6,7 @@ import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import GLib from 'gi://GLib';
 import { commitContent, commitDiff, commitFile, workingDiff, type TextResult } from '../git.js';
-import { parseDiff, type Commit } from '../gitlog.js';
+import { parseDiff, type Commit, type DiffLine } from '../gitlog.js';
 import { replaceAllText } from '../editor/view.js';
 import { iterAtLine, onKeyPress, pack } from '../gtkutil.js';
 
@@ -14,6 +14,43 @@ const DIFF_COLORS = {
     light: { add: '#dafbe1', del: '#ffebe9', hunk: '#0969da' },
     dark: { add: '#17331f', del: '#3d1a1c', hunk: '#6cb6ff' },
 };
+
+// Tampilan diff bersama (riwayat Git dan usulan perubahan agent): tag warna di buffer, lalu isi baris berjenis.
+export function setupDiffTags(view: Gtk.TextView, dark: boolean): void {
+    const colors = DIFF_COLORS[dark ? 'dark' : 'light'];
+    const table = view.buffer.get_tag_table();
+    const add = (name: string, props: Record<string, string>) => {
+        const tag = new Gtk.TextTag({ name });
+        for (const [key, value] of Object.entries(props)) tag.set_property(key, value);
+        table.add(tag);
+    };
+    add('add', { paragraph_background: colors.add });
+    add('del', { paragraph_background: colors.del });
+    add('hunk', { foreground: colors.hunk });
+}
+
+export function fillDiff(view: Gtk.TextView, lines: DiffLine[]): void {
+    const buffer = view.buffer;
+    // Diff dan isi file bisa sepanjang satu buku.
+    replaceAllText(view, () => buffer.set_text(lines.map(l => l.text).join('\n'), -1));
+    lines.forEach((line, i) => {
+        if (line.kind === 'context') return;
+        const start = iterAtLine(buffer, i);
+        const end = start.copy();
+        end.forward_to_line_end();
+        buffer.apply_tag_by_name(line.kind, start, end);
+    });
+}
+
+export function createDiffView(): Gtk.TextView {
+    const view = new Gtk.TextView({
+        editable: false, cursor_visible: false, monospace: true,
+        wrap_mode: Gtk.WrapMode.WORD_CHAR,
+        left_margin: 14, right_margin: 14, top_margin: 10, bottom_margin: 10,
+    });
+    view.add_css_class('history-text');
+    return view;
+}
 
 export class HistoryViewer {
     readonly window: Gtk.Window;
@@ -85,7 +122,7 @@ export class HistoryViewer {
             return true;
         });
 
-        this.setupDiffTags(dark);
+        setupDiffTags(this.diffView, dark);
         this.setPlaceholder('Memuat…');
         if (commit) {
             commitDiff(file, commit).then(result => this.showDiff(result));
@@ -125,32 +162,13 @@ export class HistoryViewer {
     }
 
     private createView(): Gtk.TextView {
-        const view = new Gtk.TextView({
-            editable: false, cursor_visible: false, monospace: true,
-            wrap_mode: Gtk.WrapMode.WORD_CHAR,
-            left_margin: 14, right_margin: 14, top_margin: 10, bottom_margin: 10,
-        });
-        view.add_css_class('history-text');
-        return view;
+        return createDiffView();
     }
 
     private scrolled(view: Gtk.TextView): Gtk.ScrolledWindow {
         const scroll = new Gtk.ScrolledWindow();
         scroll.set_child(view);
         return scroll;
-    }
-
-    private setupDiffTags(dark: boolean): void {
-        const colors = DIFF_COLORS[dark ? 'dark' : 'light'];
-        const table = this.diffView.buffer.get_tag_table();
-        const add = (name: string, props: Record<string, string>) => {
-            const tag = new Gtk.TextTag({ name });
-            for (const [key, value] of Object.entries(props)) tag.set_property(key, value);
-            table.add(tag);
-        };
-        add('add', { paragraph_background: colors.add });
-        add('del', { paragraph_background: colors.del });
-        add('hunk', { foreground: colors.hunk });
     }
 
     private showDiff(result: TextResult): void {
@@ -161,15 +179,7 @@ export class HistoryViewer {
         if (!lines.length) return buffer.set_text(this.commit
             ? 'Tidak ada perubahan isi pada commit ini (misalnya hanya ganti nama)'
             : 'Tidak ada perubahan yang belum di-commit', -1);
-        // Diff dan isi file bisa sepanjang satu buku.
-        replaceAllText(this.diffView, () => buffer.set_text(lines.map(l => l.text).join('\n'), -1));
-        lines.forEach((line, i) => {
-            if (line.kind === 'context') return;
-            const start = iterAtLine(buffer, i);
-            const end = start.copy();
-            end.forward_to_line_end();
-            buffer.apply_tag_by_name(line.kind, start, end);
-        });
+        fillDiff(this.diffView, lines);
     }
 
     private showContent(result: TextResult): void {

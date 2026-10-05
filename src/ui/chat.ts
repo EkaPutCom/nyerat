@@ -19,6 +19,7 @@ import { DEEPSEEK_MODELS, DeepSeek } from '../agent/deepseek.js';
 import type { Provider, Usage } from '../agent/provider.js';
 import { ChatSession, type ProposalResult, type ToolStep } from '../agent/session.js';
 import { diffPreview, describeChange, type Change } from '../agent/changes.js';
+import { ProposalViewer } from './proposalviewer.js';
 import { chatMarkup } from '../markdown/chatmarkup.js';
 import { escapeMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from './theme.js';
@@ -31,6 +32,7 @@ export interface ChatHost {
     files(): SourceFile[];                                                  // berkas lain di folder proyek
     // Terapkan perubahan yang sudah disetujui pengguna. Mengembalikan pesan galat, atau null bila berhasil.
     applyChange?(change: Change): string | null;
+    window?(): Gtk.Window | null;                                           // induk jendela tinjau usulan
     root(): string | null;                                                  // folder naskah; tempat riwayat percakapan disimpan
 }
 
@@ -93,6 +95,8 @@ export class ChatPanel {
     readonly thinkingCheck: Gtk.CheckButton;
     private cancellable: Gio.Cancellable | null = null;
     private renderTimer = 0;
+    private dark = false;
+    viewer: ProposalViewer | null = null;   // jendela tinjau usulan yang sedang menunggu keputusan
     private stick = true;            // tetap menempel di bawah selama pengguna tidak menggulir ke atas
     private summaryTimer = 0;
     // Percakapan yang sedang tampil di disk: berkasnya (null = belum ditulis), folder asalnya, dan judulnya.
@@ -259,6 +263,7 @@ export class ChatPanel {
     }
 
     setPalette(palette: Palette): void {
+        this.dark = palette.dark;
         this.colors = { code: palette.codeFg, codeBg: palette.codeBg, link: palette.accent, mark: palette.markBg };
         for (const b of this.bubbles) this.render(b);
     }
@@ -651,8 +656,9 @@ export class ChatPanel {
         box.show();
     }
 
-    // Kartu persetujuan: selisih yang diusulkan agent, dengan tombol Terapkan dan Tolak. Berkas tidak disentuh
-    // sebelum Terapkan ditekan; menghentikan giliran (tombol Hentikan) sama dengan menolak.
+    // Usulan perubahan: jendela tinjau (seperti diff riwayat Git) terbuka otomatis; di panel tertinggal kartu
+    // ringkas dengan status dan tombol untuk membukanya lagi. Berkas tidak disentuh sebelum Terapkan; menutup
+    // jendela, Tolak, atau menghentikan giliran sama dengan menolak.
     private propose(change: Change): Promise<ProposalResult> {
         const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
         card.add_css_class('chat-proposal');
@@ -664,29 +670,13 @@ export class ChatPanel {
             reason.add_css_class('side-meta');
             card.append(reason);
         }
-
         const diff = diffPreview(change.before, change.after);
-        const color = { '+': '#2a8a4a', '-': '#c9372c', ' ': '', '…': '' } as const;
-        const markup = diff.lines.map(l => l.sign === '…'
-            ? `<span alpha="60%">… ${escapeMarkup(l.text)}</span>`
-            : `<span${color[l.sign] ? ` foreground="${color[l.sign]}"` : ''}>${l.sign} ${escapeMarkup(l.text)}</span>`).join('\n');
-        const body = new Gtk.Label({ xalign: 0, yalign: 0, use_markup: true, selectable: true, wrap: true, wrap_mode: 2, max_width_chars: 48 });
-        body.add_css_class('chat-diff');
-        body.set_markup(markup);
-        const scroll = new Gtk.ScrolledWindow({ min_content_height: 40, max_content_height: 240, propagate_natural_height: true, hscrollbar_policy: Gtk.PolicyType.NEVER });
-        scroll.set_child(body);
-        card.append(scroll);
-
-        const status = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, visible: false });
+        const status = new Gtk.Label({ label: `+${diff.added} −${diff.removed} · menunggu keputusan Anda`, xalign: 0, wrap: true, max_width_chars: 44 });
         status.add_css_class('side-meta');
-        const apply = new Gtk.Button({ label: `Terapkan (+${diff.added} −${diff.removed})` });
-        apply.add_css_class('suggested-action');
-        const reject = new Gtk.Button({ label: 'Tolak' });
-        const buttons = new Gtk.Box({ spacing: 6 });
-        buttons.append(apply);
-        buttons.append(reject);
-        card.append(buttons);
+        const review = new Gtk.Button({ label: 'Tinjau perubahan', halign: Gtk.Align.START });
+        review.add_css_class('suggested-action');
         card.append(status);
+        card.append(review);
         this.empty.hide();
         this.messages.append(card);
         this.stick = true;
@@ -696,20 +686,34 @@ export class ChatPanel {
             const finish = (result: ProposalResult, text: string, error = false) => {
                 if (done) return;
                 done = true;
-                buttons.hide();
+                this.viewer = null;
+                review.hide();
                 status.set_text(text);
                 status.remove_css_class('side-meta');
+                status.remove_css_class('chat-error');
                 status.add_css_class(error ? 'chat-error' : 'side-meta');
-                status.show();
                 resolve(result);
             };
-            apply.connect('clicked', () => {
-                const error = this.host.applyChange ? this.host.applyChange(change) : 'penerapan tidak tersedia';
-                if (error) finish({ applied: false, error }, `Gagal diterapkan: ${error}`, true);
-                else finish({ applied: true }, 'Diterapkan. Perubahan di editor bisa dibatalkan dengan Ctrl+Z.');
+            const open = () => {
+                if (done) return;
+                if (this.viewer) { this.viewer.show(); return; }
+                const viewer = new ProposalViewer(this.host.window?.() ?? null, change, this.dark,
+                    c => this.host.applyChange ? this.host.applyChange(c) : 'penerapan tidak tersedia');
+                viewer.onDecision = applied => {
+                    if (applied) finish({ applied: true }, 'Diterapkan. Perubahan di editor bisa dibatalkan dengan Ctrl+Z.');
+                    else if (viewer.error) finish({ applied: false, error: viewer.error }, `Gagal diterapkan: ${viewer.error}`, true);
+                    else finish({ applied: false }, 'Ditolak.');
+                };
+                this.viewer = viewer;
+                viewer.show();
+            };
+            review.connect('clicked', open);
+            this.cancellable?.connect(() => {
+                const viewer = this.viewer;
+                finish({ applied: false }, 'Dibatalkan.');
+                viewer?.close();
             });
-            reject.connect('clicked', () => finish({ applied: false }, 'Ditolak.'));
-            this.cancellable?.connect(() => finish({ applied: false }, 'Dibatalkan.'));
+            open();
         });
     }
 

@@ -114,6 +114,28 @@ export const describeChange = (c: Change): string => `${c.kind === 'create' ? 'B
 
 // ---------- Pratinjau selisih ----------
 
+// Diff gaya git untuk jendela tinjauan: satu hunk dengan 3 baris konteks, karena usulan agent selalu satu
+// penggantian yang berurutan. Kosong bila tidak ada perbedaan.
+export function unifiedDiff(before: string, after: string, context = 3): string {
+    const a = before ? before.replace(/\n$/, '').split('\n') : [];
+    const b = after ? after.replace(/\n$/, '').split('\n') : [];
+    let head = 0;
+    while (head < a.length && head < b.length && a[head] === b[head]) head++;
+    let tail = 0;
+    while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+    if (head === a.length && head === b.length) return '';
+    const from = Math.max(0, head - context);
+    const lead = a.slice(from, head);
+    const trail = a.slice(a.length - tail, a.length - tail + context);
+    const removed = a.slice(head, a.length - tail);
+    const added = b.slice(head, b.length - tail);
+    const range = (start: number, count: number) => `${count ? start + 1 : start},${count}`;
+    return [
+        `@@ -${range(from, lead.length + removed.length + trail.length)} +${range(from, lead.length + added.length + trail.length)} @@`,
+        ...lead.map(t => ` ${t}`), ...removed.map(t => `-${t}`), ...added.map(t => `+${t}`), ...trail.map(t => ` ${t}`),
+    ].join('\n');
+}
+
 export interface DiffLine {
     sign: ' ' | '+' | '-' | '…';
     text: string;

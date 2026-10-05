@@ -389,29 +389,19 @@ export function chatTests(c: GuiContext): void {
             },
         };
     };
-    const findButton = (prefix: string): Gtk.Button | null => {
-        let found: Gtk.Button | null = null;
-        const walk = (widget: Gtk.Widget) => {
-            if (widget instanceof Gtk.Button && (widget.label ?? '').startsWith(prefix) && widget.get_visible() && widget.get_mapped()) found = widget;
-            childrenOf(widget).forEach(walk);
-            if (widget instanceof Gtk.ScrolledWindow && widget.get_child()) walk(widget.get_child()!);
-        };
-        walk(panel.messages);
-        return found;
-    };
-    // Kirim pertanyaan, tunggu kartu persetujuan, tekan tombol, lalu tunggu giliran selesai.
-    const proposeAndPress = (provider: Provider, button: string): void => {
+    // Kirim pertanyaan, tunggu jendela tinjau terbuka, ambil teks selisihnya, lalu tekan tombolnya dan tunggu giliran selesai.
+    let lastDiff = '';
+    const proposeAndPress = (provider: Provider, button: 'apply' | 'reject' | 'close'): void => {
         panel.makeProvider = () => provider;
         panel.reset();
         const done = panel.ask('Tolong ubah');
-        let pressed = false;
-        for (let i = 0; i < 300 && !pressed; i++) {
-            pump();
-            const b = findButton(button);
-            if (b) { b.emit('clicked'); pressed = true; }
-            else GLib.usleep(5000);
-        }
-        ok(pressed, `tombol ${button} tidak muncul`);
+        for (let i = 0; i < 300 && !panel.viewer; i++) { pump(); GLib.usleep(5000); }
+        const viewer = panel.viewer;
+        ok(viewer, 'jendela tinjau tidak terbuka');
+        lastDiff = viewer.diffView.buffer.text;
+        if (button === 'apply') viewer.applyButton.emit('clicked');
+        else if (button === 'reject') viewer.rejectButton.emit('clicked');
+        else viewer.window.destroy();
         settle(done);
         panel.makeProvider = () => provider;
     };
@@ -421,11 +411,12 @@ export function chatTests(c: GuiContext): void {
         setText('# Bab 2\n\nBadai menghantam kapal.\n');
         w.editor.buffer.set_modified(false);
         const diskBefore = diskOf('bab-2.md');
-        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-2.md', teks_lama: 'Badai menghantam kapal.', teks_baru: 'Badai menghantam kapal itu.', alasan: 'lebih jelas' }), 'Terapkan');
+        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-2.md', teks_lama: 'Badai menghantam kapal.', teks_baru: 'Badai menghantam kapal itu.', alasan: 'lebih jelas' }), 'apply');
         const text = all();
         contains(text, 'Ubah bab-2.md');
-        contains(text, '- Badai menghantam kapal.');
-        contains(text, '+ Badai menghantam kapal itu.');
+        contains(lastDiff, '@@ -1,3 +1,3 @@');
+        contains(lastDiff, '-Badai menghantam kapal.');
+        contains(lastDiff, '+Badai menghantam kapal itu.');
         contains(text, 'Diterapkan.');
         contains(text, '1 perubahan diterapkan');
         eq(w.editor.getText(), '# Bab 2\n\nBadai menghantam kapal itu.\n');
@@ -435,22 +426,44 @@ export function chatTests(c: GuiContext): void {
     });
 
     test('usulan ubah pada berkas yang tidak terbuka ditulis ke disk setelah Terapkan', () => {
-        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-1', teks_lama: 'membawa surat dari ayahnya', teks_baru: 'membawa surat dari ibunya', alasan: 'x' }), 'Terapkan');
+        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-1', teks_lama: 'membawa surat dari ayahnya', teks_baru: 'membawa surat dari ibunya', alasan: 'x' }), 'apply');
         contains(diskOf('bab-1.md'), 'membawa surat dari ibunya');
     });
 
     test('Tolak: berkas tidak berubah dan model diberi tahu', () => {
         const before = diskOf('bab-1.md');
-        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-1.md', teks_lama: 'Raka bertemu Laras', teks_baru: 'Raka bertemu Hasan', alasan: 'x' }), 'Tolak');
+        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-1.md', teks_lama: 'Raka bertemu Laras', teks_baru: 'Raka bertemu Hasan', alasan: 'x' }), 'reject');
         eq(diskOf('bab-1.md'), before);
         contains(all(), 'Ditolak.');
         ok(!all().includes('perubahan diterapkan'), 'dihitung diterapkan');
     });
 
+    test('menutup jendela tinjau sama dengan menolak', () => {
+        const before = diskOf('bab-1.md');
+        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-1.md', teks_lama: 'Raka bertemu Laras', teks_baru: 'Raka bertemu Hasan', alasan: 'x' }), 'close');
+        eq(diskOf('bab-1.md'), before);
+        contains(all(), 'Ditolak.');
+    });
+
+    test('Hentikan saat usulan menunggu: jendela tinjau tertutup dan kartu menjadi Dibatalkan', () => {
+        panel.makeProvider = () => proposalProvider('ubah_berkas', { nama: 'bab-1.md', teks_lama: 'Raka bertemu Laras', teks_baru: 'x', alasan: 'x' });
+        panel.reset();
+        const before = diskOf('bab-1.md');
+        const done = panel.ask('Tolong ubah');
+        for (let i = 0; i < 300 && !panel.viewer; i++) { pump(); GLib.usleep(5000); }
+        ok(panel.viewer, 'jendela tinjau tidak terbuka');
+        panel.stop();
+        settle(done);
+        contains(all(), 'Dibatalkan.');
+        eq(panel.viewer, null);
+        eq(diskOf('bab-1.md'), before);
+    });
+
     test('usulan berkas baru: Terapkan menulis dan membukanya di tab', () => {
-        proposeAndPress(proposalProvider('buat_berkas', { nama: 'rencana/oktober', isi: '# Oktober\n\n- Tulis bab 3\n', alasan: 'rencana bulan ini' }), 'Terapkan');
+        proposeAndPress(proposalProvider('buat_berkas', { nama: 'rencana/oktober', isi: '# Oktober\n\n- Tulis bab 3\n', alasan: 'rencana bulan ini' }), 'apply');
         eq(diskOf('rencana/oktober.md'), '# Oktober\n\n- Tulis bab 3\n');
         contains(all(), 'Berkas baru rencana/oktober.md');
+        contains(lastDiff, '@@ -0,0 +1,3 @@');
         ok(w.file?.endsWith('/rencana/oktober.md'), `tab aktif: ${w.file}`);
         ok(w.closeTab(), 'closeTab() gagal');
         pump();

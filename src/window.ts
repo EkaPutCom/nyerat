@@ -198,6 +198,7 @@ export class MainWindow {
             },
             root: () => this.fileTree.root,
             applyChange: change => this.applyChange(change),
+            window: () => this.win,
             files: () => {
                 const files = this.fileTree.root ? readProject(this.fileTree.root, this.file) : [];
                 // Tab lain yang belum disimpan: asisten membaca isi editor, bukan versi di disk.
