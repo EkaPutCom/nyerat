@@ -292,7 +292,7 @@ input[type=text] { width: 100%; }
   <h1>Belajar membangun agent dari Nyerat</h1>
   <p class="lede">Dalam dua hari, asisten Nyerat berkembang dari panel chat dengan <b>4 alat baca</b> menjadi agent dengan <b>16 alat</b>. Kini ia bisa merencanakan pekerjaan, mengusulkan paket perubahan, memeriksa hasilnya, dan melanjutkan pekerjaan setelah terputus. Satu prinsip dipegang sejak commit pertama: <b>agent boleh membaca dengan bebas, tetapi setiap perubahan berkas harus disetujui pengguna dulu</b>. Bab terakhir menunjukkan langkah berikutnya: Nyerat menugaskan kartu kanban ke agent lain (pi) yang bekerja di folder proyek terpisah, sementara Nyerat hanya memegang papannya. Halaman ini menjelaskan cara prinsip itu dijaga di setiap tahap. Isinya mencakup struktur data, alur loop, batas keamanan, biaya, dan simulasi kecil yang bisa Anda coba sendiri.</p>
   <div class="kpis">
-    <div class="kpi"><div class="what">Alat yang ditawarkan ke model</div><div class="big">16</div><div class="from">dari 4 · f6a4cc7 → b1ab712</div></div>
+    <div class="kpi"><div class="what">Alat yang ditawarkan ke model</div><div class="big">16</div><div class="from">dari 4 · f6a4cc7 → 0db63d2</div></div>
     <div class="kpi"><div class="what">Tes asisten (unit + GUI)</div><div class="big">185</div><div class="from">dari 65 · semuanya tanpa API berbayar</div></div>
     <div class="kpi"><div class="what">Kode <code>src/agent/</code></div><div class="big">3.010 baris</div><div class="from">dari 1.099 baris di 8 berkas → 20 berkas</div></div>
     <div class="kpi"><div class="what">Penulisan folder kerja tanpa persetujuan</div><div class="big">0</div><div class="from">semua lewat <code>Change</code> + preflight; harness eksternal hanya di folder proyek lain (Bab 9)</div></div>
@@ -334,7 +334,7 @@ input[type=text] { width: 100%; }
     <li><span class="h">1c90735</span><span><b>Bab 7</b> · Jendela Log agent untuk memantau putaran, penalaran, alat, dan hasilnya.</span></li>
     <li><span class="h">90c28bb</span><span><b>Bab 8</b> · Sisip, hapus, pindah, ganti semua, persetujuan sebagian, Urungkan, alat riwayat Git, dan verifikasi struktur.</span></li>
     <li><span class="h">b1ab712</span><span><b>Bab 9</b> · Orkestrator harness: kartu <code>@pi</code> dikerjakan pi di folder proyek lain, antrean per folder, Log pi, kartu pindah ke Dikerjakan/Review.</span></li>
-    <li><span class="h">baru</span><span><b>Bab 9d</b> · pi lewat mode RPC: status ⏸ menunggu saat pi bertanya atau extension meminta izin, dijawab dari Nyerat; arahan saat bekerja dan balasan yang melanjutkan sesi.</span></li>
+    <li><span class="h">0db63d2</span><span><b>Bab 9d</b> · pi lewat mode RPC: status ⏸ menunggu saat pi bertanya atau extension meminta izin, dijawab dari Nyerat; arahan saat bekerja dan balasan yang melanjutkan sesi.</span></li>
   </ol>
 </section>
 
@@ -991,7 +991,7 @@ const journey = [
   { c: '1c90735', t: 'Log agent', read: 4, propose: 4, control: 2, tests: 137, lines: 2186, files: 18 },
   { c: '90c28bb', t: 'tindakan lebih luas', read: 7, propose: 7, control: 2, tests: 162, lines: 2619, files: 19 },
   { c: 'b1ab712', t: 'orkestrator pi', read: 7, propose: 7, control: 2, tests: 178, lines: 2908, files: 20 },
-  { c: 'baru', t: 'pi menunggu jawaban', read: 7, propose: 7, control: 2, tests: 185, lines: 3010, files: 20 },
+  { c: '0db63d2', t: 'pi menunggu jawaban', read: 7, propose: 7, control: 2, tests: 185, lines: 3010, files: 20 },
 ];
 function toolsChart() {
   const svg = $('#chart-tools');
