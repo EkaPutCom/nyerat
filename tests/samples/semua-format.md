@@ -51,6 +51,8 @@ Tautan dengan format: [**tebal** dan *miring*](https://example.com).
 
 Tautan relatif: [README](../../README.md).
 
+Tautan antardokumen: [[README]], [[README#Fitur|bagian fitur]], dan `[[bukan tautan]]` di dalam kode.
+
 Autolink: <https://example.org> dan <mailto:halo@example.com>.
 
 URL polos: https://developer.gnome.org/documentation/ di tengah kalimat.

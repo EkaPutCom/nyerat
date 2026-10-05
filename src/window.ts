@@ -29,7 +29,8 @@ import { remapPath } from './fileops.js';
 import { FileTree, isDirectory } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
 import { ChatPanel } from './ui/chat.js';
-import { readProject } from './agent/project.js';
+import { listMarkdownFiles, readProject } from './agent/project.js';
+import { newNotePath, resolveWikiLink, type WikiLink } from './markdown/wikilink.js';
 import { projectPath } from './agent/path.js';
 import { applyBatch } from './agent/batch.js';
 import { changeFiles, cleanNewName, type Change } from './agent/changes.js';
@@ -344,6 +345,12 @@ export class MainWindow {
         editor.onMessage = msg => this.statusBar.toast(msg);
         editor.onViewImage = (pixbuf, title) => new ImageViewer(this.win, pixbuf, title).show();
         editor.getBaseDir = () => doc.file ? GLib.path_get_dirname(doc.file) : GLib.get_home_dir();
+        editor.onOpenNote = link => this.openNote(link, doc);
+        editor.onOpenDocument = path => this.openInTab(path);
+        editor.listNotes = () => {
+            const root = this.noteRoot(doc);
+            return root ? listMarkdownFiles(root) : [];
+        };
         editor.buffer.connect('modified-changed', () => this.refreshTitle(doc));
         // Teks berubah selagi papan tampil dan bukan dari papan sendiri (undo/redo): baca ulang.
         editor.buffer.connect('changed', () => {
@@ -537,6 +544,49 @@ export class MainWindow {
     private projectName(path: string | null): string | null {
         const root = this.fileTree.root;
         return path && root && path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path ? GLib.path_get_basename(path) : null;
+    }
+
+    // ---------- Tautan [[catatan]] ----------
+
+    // Folder tempat [[catatan]] dicari: folder kerja bila dokumen ada di dalamnya (atau belum disimpan),
+    // kalau tidak folder dokumen itu sendiri.
+    private noteRoot(doc: Doc): string | null {
+        const root = this.fileTree.root;
+        if (root && (!doc.file || doc.file.startsWith(`${root}/`))) return root;
+        return doc.file ? GLib.path_get_dirname(doc.file) : null;
+    }
+
+    // Ctrl+klik [[catatan]]: buka berkasnya di tab. Catatan yang belum ada dibuka sebagai dokumen kosong
+    // di samping dokumen asal dan baru tertulis ke disk saat disimpan, jadi klik yang keliru tidak meninggalkan berkas.
+    openNote(link: WikiLink, doc = this.doc): void {
+        if (!link.target) {
+            if (link.heading) this.jumpToHeading(doc, link.heading);
+            return;
+        }
+        const root = this.noteRoot(doc);
+        if (!root) {
+            this.statusBar.toast('Buka folder atau simpan dokumen dulu untuk mengikuti tautan [[catatan]]');
+            return;
+        }
+        const from = doc.file?.startsWith(`${root}/`) ? doc.file.slice(root.length + 1) : null;
+        const found = resolveWikiLink(link.target, listMarkdownFiles(root), from);
+        const rel = found ?? newNotePath(link.target, from);
+        if (!rel) {
+            this.statusBar.toast(`Nama catatan tidak valid: ${link.target}`);
+            return;
+        }
+        const path = GLib.build_filenamev([root, ...rel.split('/')]);
+        if (!found) GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
+        if (!this.openInTab(path)) return;
+        if (!found) this.statusBar.toast(`Catatan baru: ${rel} (tersimpan setelah diisi)`);
+        else if (link.heading) this.jumpToHeading(this.doc, link.heading);
+    }
+
+    private jumpToHeading(doc: Doc, heading: string): void {
+        const want = heading.trim().toLowerCase();
+        const found = doc.editor.headings.find(h => h.text.trim().toLowerCase() === want);
+        if (found) doc.editor.jumpToLine(found.line);
+        else this.statusBar.toast(`Bagian tidak ditemukan: ${heading}`);
     }
 
     // ---------- Papan kanban ----------

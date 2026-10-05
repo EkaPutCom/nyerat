@@ -6,6 +6,7 @@
 //   decorations.ts  dijalankan setiap kursor pindah baris
 //   lists.ts        Enter dan Tab
 //   clicks.ts       klik kotak tugas dan Ctrl+klik tautan
+//   wikicomplete.ts saran nama catatan saat mengetik [[
 //   images.ts       gambar ditampilkan di bawah barisnya
 //   codehighlight.ts  isi blok kode diwarnai sesuai bahasanya
 //   tablelayer.ts   tabel dirender sebagai grid, tableedit.ts menyuntingnya
@@ -18,6 +19,9 @@
 //   onMessage(text)                     pesan singkat untuk pengguna
 //   onViewImage(pixbuf, title)          gambar diminta diperbesar (klik ganda / perintah menu)
 //   getBaseDir()                        folder untuk tautan relatif
+//   onOpenNote(link)                    Ctrl+klik [[catatan]]
+//   onOpenDocument(path)                Ctrl+klik tautan ke berkas Markdown; false = buka dengan aplikasi lain
+//   listNotes()                         berkas Markdown di proyek, untuk saran [[
 
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
@@ -32,7 +36,9 @@ import { LineTagger } from './tagsync.js';
 import { highlight, HighlightCache } from './highlighter.js';
 import { MarkerConcealer, dimOutsideParagraph } from './decorations.js';
 import { continueBlock, indentListItem, isInCodeBlock } from './lists.js';
-import { toggleTaskAt, linkAt } from './clicks.js';
+import { toggleTaskAt, linkAt, wikiLinkAt } from './clicks.js';
+import { WikiCompleter } from './wikicomplete.js';
+import type { WikiLink } from '../markdown/wikilink.js';
 import { ImageLayer } from './images.js';
 import { CodeHighlighter } from './codehighlight.js';
 import { TableLayer } from './tablelayer.js';
@@ -102,6 +108,10 @@ export class MarkdownView {
     onMessage: (text: string) => void = () => {};
     onViewImage: (pixbuf: GdkPixbuf.Pixbuf, title: string) => void = () => {};  // gambar diminta diperbesar
     getBaseDir: () => string = () => GLib.get_home_dir();
+    onOpenNote: (link: WikiLink) => void = () => {};
+    onOpenDocument: (path: string) => boolean = () => false;
+    listNotes: () => string[] = () => [];
+    readonly completer: WikiCompleter;
 
     private margin = -1;
     private width = -1;
@@ -183,15 +193,25 @@ export class MarkdownView {
         this.widget = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.EXTERNAL, hexpand: true, vexpand: true });
         this.widget.set_child(this.view);
 
+        this.completer = new WikiCompleter(this.view);
+        this.completer.listNotes = () => this.listNotes();
+
         this.buffer.connect_after('insert-text', (_b, end, text) => {
+            this.completer.queue(true);
             const start = end.copy();
             start.backward_chars(cpLength(text));
             this.markDirty(start, end);
         });
-        this.buffer.connect_after('delete-range', (_b, start) => this.markDirty(start, start));
+        this.buffer.connect_after('delete-range', (_b, start) => {
+            this.completer.queue(false);
+            this.markDirty(start, start);
+        });
         this.buffer.connect('changed', () => this.queueHighlight());
         this.buffer.connect('mark-set', (_b, _i, mark) => {
-            if (mark === this.buffer.get_insert() || mark === this.buffer.get_selection_bound()) this.queueCursorUpdate();
+            if (mark === this.buffer.get_insert() || mark === this.buffer.get_selection_bound()) {
+                this.queueCursorUpdate();
+                this.completer.queue(false);
+            }
         });
         // Margin dihitung dari lebar area yang terlihat (page_size adjustment horizontal,
         // diisi TextView saat dialokasikan), bukan dari lebar TextView yang ikut ditentukan
@@ -220,6 +240,7 @@ export class MarkdownView {
         this.images.destroy();
         this.tableLayer.destroy();
         this.mermaid.destroy();
+        this.completer.destroy();
     }
 
     get isDestroyed(): boolean {
@@ -499,6 +520,7 @@ export class MarkdownView {
     // Dipanggil untuk setiap tombol. true = sudah ditangani, GTK tidak memprosesnya lagi.
     onKey(keyval: number, state: number): boolean {
         if (state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK)) return false;
+        if (this.completer.onKey(keyval)) return true;
         if (this.buffer.get_has_selection()) return false;
         const shift = (state & Gdk.ModifierType.SHIFT_MASK) !== 0;
 
@@ -533,6 +555,11 @@ export class MarkdownView {
         if (toggleTaskAt(this.buffer, iter, this.tags)) return true;
 
         if (state & Gdk.ModifierType.CONTROL_MASK) {
+            const wiki = wikiLinkAt(this.buffer, iter, this.tags);
+            if (wiki) {
+                this.onOpenNote(wiki);
+                return true;
+            }
             const url = linkAt(this.buffer, iter, this.tags);
             if (url) {
                 this.openUrl(url);
@@ -560,7 +587,10 @@ export class MarkdownView {
     openUrl(url: string): void {
         let uri = url;
         if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) {
-            const path = GLib.path_is_absolute(url) ? url : GLib.build_filenamev([this.getBaseDir(), decodeURI(url)]);
+            const bare = url.replace(/[#?].*$/, '');
+            const path = GLib.path_is_absolute(bare) ? bare : GLib.build_filenamev([this.getBaseDir(), decodeURI(bare)]);
+            // Tautan ke catatan Markdown lain dibuka di Nyerat sendiri, seperti [[wikilink]].
+            if (/\.(md|markdown|mdown|mkd)$/i.test(path) && this.onOpenDocument(path)) return;
             uri = Gio.File.new_for_path(path).get_uri();
         }
         const root = this.view.get_root();

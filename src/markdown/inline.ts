@@ -2,7 +2,7 @@
 //
 // Teknik "masking": setelah suatu bagian dikenali, karakternya diganti '\0' di
 // salinan string, sehingga pola berikutnya tidak bisa mengenalinya lagi. Urutan
-// pengenalan: escape (\*) dan kode inline → tautan/gambar → URL → penekanan.
+// pengenalan: escape (\*) dan kode inline → [[wikilink]] → tautan/gambar → URL → penekanan.
 // Contoh: di `**x**` bagian ** sudah di-mask sebagai kode, jadi tidak jadi tebal.
 //
 // Hasil: tags [nama, awal, akhir], marks [awal, akhir] (sintaks yang boleh
@@ -10,6 +10,7 @@
 // Posisi dalam satuan UTF-16 dan relatif terhadap awal string.
 
 import { EMPHASIS, ESCAPE_OR_CODE, type InlineTag } from './syntax.js';
+import { WIKILINK } from './wikilink.js';
 
 export interface InlineImage {
     alt: string;
@@ -54,6 +55,19 @@ export function parseInline(s: string): InlineResult {
             tags.push(['code', a + n, b - n]); mark(a, a + n); mark(b - n, b);
         }
         mask(a, b);
+    }
+
+    // [[Catatan]] dan [[Catatan|teks]]: yang terlihat hanya nama catatan, atau teksnya bila ada alias.
+    t = cur();
+    if (t.includes('[[')) {
+        const reWiki = WIKILINK();
+        while ((r = reWiki.exec(t))) {
+            const a = r.index, b = a + r[0].length;
+            const ts = r[2] === undefined || !r[2].trim() ? a + 2 : a + 3 + r[1].length;
+            if (!r[1].trim() || b - 2 <= ts) continue;
+            tags.push(['link', ts, b - 2]);
+            mark(a, ts); mark(b - 2, b); mask(a, b);
+        }
     }
 
     t = cur();

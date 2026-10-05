@@ -37,9 +37,27 @@
   <li>Heading, <strong>tebal</strong>, <em>miring</em>, coret (<code>~~</code>), stabilo (<code>==</code>), kode inline, tautan, dan gambar langsung terformat.</li>
   <li>Sintaks seperti <code>**</code>, <code>==</code>, atau <code>[]()</code> muncul lagi saat kursor masuk ke barisnya.</li>
   <li>Kutipan bersarang <code>&gt;&gt;</code> makin menjorok sampai tiga tingkat.</li>
-  <li>Tautan dibuka dengan <kbd>Ctrl</kbd>+klik; path relatif dihitung dari folder berkas.</li>
+  <li>Tautan dibuka dengan <kbd>Ctrl</kbd>+klik; path relatif dihitung dari folder berkas, dan tautan ke berkas Markdown dibuka di tab Nyerat.</li>
 </ul>
 <figure><img src="../assets/sintaks.gif" width="900" height="586" loading="lazy" alt="Animasi kursor berpindah antar baris; sintaks Markdown muncul di baris aktif dan tersembunyi di baris lain"><figcaption>Sintaks hanya terlihat di baris tempat kursor berada</figcaption></figure>
+
+<h2 id="wikilink">Tautan antardokumen <code>[[ ]]</code></h2>
+<p>Seperti di Obsidian, catatan saling ditautkan menurut namanya, tanpa perlu menulis path.</p>
+<table>
+  <tr><th>Tulis</th><th>Hasil</th></tr>
+  <tr><td><code>[[Catatan Harian]]</code></td><td>Tautan ke <code>Catatan Harian.md</code> di subfolder mana pun dalam folder kerja</td></tr>
+  <tr><td><code>[[Catatan Harian|kemarin]]</code></td><td>Tampil sebagai “kemarin”</td></tr>
+  <tr><td><code>[[Rencana#Anggaran]]</code></td><td>Membuka <code>Rencana.md</code> lalu melompat ke heading “Anggaran”</td></tr>
+  <tr><td><code>[[#Anggaran]]</code></td><td>Melompat ke heading di dokumen yang sama</td></tr>
+  <tr><td><code>[[arsip/Rencana]]</code></td><td>Memilih berkas tertentu bila ada beberapa yang bernama sama</td></tr>
+</table>
+<ul>
+  <li>Di baris lain hanya nama (atau teks setelah <code>|</code>) yang tampil sebagai tautan; kurungnya muncul lagi saat kursor masuk ke baris itu.</li>
+  <li><kbd>Ctrl</kbd>+klik membuka catatannya di tab. Nama dicocokkan tanpa ekstensi dan tanpa membedakan huruf besar/kecil; bila ada nama kembar, berkas di folder yang sama dengan dokumen asal dipakai, lalu yang path-nya paling pendek.</li>
+  <li>Catatan yang belum ada dibuka sebagai dokumen kosong di samping dokumen asal. Berkasnya baru dibuat saat disimpan, jadi klik yang keliru tidak meninggalkan berkas kosong.</li>
+  <li>Mengetik <code>[[</code> memunculkan saran nama berkas. <kbd>↑</kbd>/<kbd>↓</kbd> memilih, <kbd>Enter</kbd> atau <kbd>Tab</kbd> menyisipkan nama beserta <code>]]</code>, <kbd>Esc</kbd> menutup saran.</li>
+  <li>Ekspor HTML menulis <code>[[Nama]]</code> sebagai tautan ke <code>Nama.md</code>.</li>
+</ul>
 
 <h2 id="daftar">Daftar dan tugas</h2>
 <ul>

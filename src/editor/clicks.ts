@@ -1,9 +1,10 @@
-// Arti klik pada teks: mencentang kotak tugas dan membaca URL tautan.
+// Arti klik pada teks: mencentang kotak tugas, membaca URL tautan, dan target [[wikilink]].
 
 import type Gtk from 'gi://Gtk?version=4.0';
 import { cpToU16, cpLength } from './offsets.js';
 import type { Tags } from './tags.js';
 import { lineText } from './editing.js';
+import { WIKILINK, parseWikiLink, type WikiLink } from '../markdown/wikilink.js';
 
 // Klik di "[ ]" / "[x]" → balik status centangnya. Mengembalikan true jika ditangani.
 export function toggleTaskAt(buffer: Gtk.TextBuffer, iter: Gtk.TextIter, tags: Tags): boolean {
@@ -39,6 +40,17 @@ export function linkAt(buffer: Gtk.TextBuffer, iter: Gtk.TextIter, tags: Tags): 
         while ((r = re.exec(line))) {
             if (pos >= r.index && pos <= r.index + r[0].length) return r[1] ?? r[0];
         }
+    }
+    return null;
+}
+
+// [[Catatan]] di posisi iter, atau null.
+export function wikiLinkAt(buffer: Gtk.TextBuffer, iter: Gtk.TextIter, tags: Tags): WikiLink | null {
+    if (!iter.has_tag(tags.link)) return null;
+    const [line] = lineText(buffer, iter);
+    const pos = cpToU16(line, iter.get_line_offset());
+    for (const r of line.matchAll(WIKILINK())) {
+        if (pos >= r.index && pos <= r.index + r[0].length) return parseWikiLink(r[0].slice(2, -2));
     }
     return null;
 }

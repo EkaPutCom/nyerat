@@ -8,6 +8,7 @@
 //   gjs -m dist/run-tests.js --shot-proposal=/tmp/p  simpan tangkapan jendela tinjau usulan agent (/tmp/p-<n>-tinjau.png dan -utama.png)
 //   gjs -m dist/run-tests.js --shot-harness=/tmp/h   simpan tangkapan papan dengan kartu pi bekerja/antre dan log pi (/tmp/h-papan.png, -log.png)
 //   gjs -m dist/run-tests.js --shot-tree-menu=/tmp/m  simpan tangkapan menu klik kanan pohon berkas dan papan kanban baru (/tmp/m-menu.png, -papan.png)
+//   gjs -m dist/run-tests.js --shot-wikilink=/tmp/w   simpan tangkapan saran [[catatan]] terang/gelap (/tmp/w-terang.png, -terang-saran.png, -gelap*.png)
 //   gjs -m dist/run-tests.js --shot-due=/tmp/d        simpan tangkapan kalender tenggat dan dialog kartu terang/gelap (/tmp/d-kalender.png, -dialog.png, -dialog-gelap.png)
 //
 // Tes GUI membuka jendela sungguhan, jadi perlu sesi desktop (X11/Wayland).
@@ -25,6 +26,7 @@ import { createContext } from './gui/context.js';
 import { widgetPixbuf } from './widgets.js';
 import { incrementalTests } from './unit/incremental.js';
 import { inlineTests } from './unit/inline.js';
+import { wikiLinkTests } from './unit/wikilink.js';
 import { settingsTests } from './unit/settings.js';
 import { tableTests } from './unit/table.js';
 import { kanbanModelTests } from './unit/kanban.js';
@@ -57,6 +59,7 @@ import { kanbanBoardTests } from './gui/kanban.js';
 import { kanbanMouseTests } from './gui/kanban-mouse.js';
 import { folderTests } from './gui/folder.js';
 import { folderMouseTests } from './gui/folder-mouse.js';
+import { wikiLinkGuiTests } from './gui/wikilink.js';
 import { sampleTests } from './gui/sample.js';
 import { windowSizeTests } from './gui/window.js';
 import { robustnessTests } from './gui/robust.js';
@@ -67,6 +70,7 @@ setRoot(import.meta.url);
 
 function runUnitTests(): void {
     inlineTests();
+    wikiLinkTests();
     incrementalTests();
     settingsTests();
     tableTests();
@@ -116,6 +120,7 @@ function runGuiTests(app: Gtk.Application): void {
     if (opt('with-kanban-mouse')) kanbanMouseTests(c);
     folderTests(c);
     if (opt('with-kanban-mouse')) folderMouseTests(c);
+    wikiLinkGuiTests(c);
     sampleTests(c);
     windowSizeTests(c);
     tabTests(c);

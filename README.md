@@ -163,7 +163,8 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 - **Diagram Mermaid.** Blok ```` ```mermaid ```` dirender sebagai diagram (flowchart, sequence, class, state, ER, gantt, pie, dan jenis lain yang didukung Mermaid). Saat kursor di luar blok hanya diagramnya yang terlihat; saat kursor masuk, kodenya muncul dan diagram menjadi pratinjau di bawahnya yang ikut berubah selagi mengetik. Kode yang salah tidak disembunyikan, pesan galatnya muncul di bawah blok. Klik ganda memperbesar diagram, dan warnanya mengikuti mode terang/gelap. Diagram dirender secara lokal (tanpa internet); ekspor HTML memuat Mermaid dari CDN sehingga diagram di file hasil ekspor butuh internet
 - **Diagram DBML (dbdiagram).** Blok ```` ```dbml ```` (bahasa skema dbdiagram.io) digambar sebagai diagram ER dengan perilaku yang sama seperti Mermaid. Yang didukung: `Table` (alias, `pk`, `unique`, `note`, `ref:` di dalam kolom, `indexes`), `Ref` satu baris maupun blok dengan relasi `>` `<` `-` `<>`, dan `Enum`/`TableGroup`/`Project`/`Note` yang dilewati. Kolom di sisi "banyak" suatu relasi otomatis bertanda FK. Galat sintaks muncul seketika beserta nomor barisnya. Ekspor HTML menulisnya sebagai diagram ER Mermaid
 - Daftar tugas `- [ ]` bisa dicentang dengan mengklik kotaknya
-- Tautan dibuka dengan **Ctrl+klik** (path relatif dihitung dari folder file)
+- Tautan dibuka dengan **Ctrl+klik** (path relatif dihitung dari folder file); tautan ke berkas Markdown dibuka di tab Nyerat sendiri
+- **Tautan antardokumen gaya Obsidian.** `[[Nama Catatan]]` menautkan berkas Markdown lain di folder kerja menurut namanya (tanpa ekstensi, huruf besar/kecil tidak dibedakan, di subfolder mana pun); `[[Catatan|teks lain]]` menampilkan teks lain dan `[[Catatan#Bagian]]` melompat ke heading. Di baris lain hanya nama atau teksnya yang tampil sebagai tautan. **Ctrl+klik** membuka catatannya di tab; catatan yang belum ada dibuka sebagai dokumen kosong di samping dokumen asal dan baru tertulis ke disk setelah disimpan. Mengetik `[[` memunculkan saran nama berkas (↑/↓ memilih, Enter/Tab menyisipkan beserta `]]`, Esc menutup). Bila ada beberapa berkas bernama sama, yang satu folder dengan dokumen asal dipakai, lalu yang path-nya paling pendek; tulis `[[folder/Nama]]` untuk memilih yang lain. Ekspor HTML menuliskannya sebagai tautan ke `Nama.md`
 - Gambar `![alt](url)` ditampilkan langsung di bawah barisnya, dari file lokal (path relatif dihitung dari folder dokumen) maupun dari internet. Klik gambar untuk memunculkan sintaksnya; **klik ganda** (atau menu ☰ → *Perbesar Gambar* untuk gambar di baris kursor) membuka penampil dengan zoom: roda mouse memperbesar di titik penunjuk, `+`/`−`, `0` untuk 100%, `F` atau tombol *Pas* untuk pas layar, geser dengan drag, `Esc` menutup
 - Enter melanjutkan daftar, daftar bernomor, daftar tugas, dan kutipan secara otomatis; Enter di item kosong mengakhirinya
 - Tab / Shift+Tab mengatur indentasi item daftar
@@ -356,7 +357,7 @@ src/
 │   ├── provider.ts       antarmuka Provider (dipakai klien sungguhan dan penyedia palsu di tes)
 │   ├── sse.ts            murni: baca baris aliran SSE (teks, penalaran, potongan pemanggilan alat, usage) dan pesan galat HTTP
 │   ├── deepseek.ts       klien DeepSeek lewat libsoup 3 (GIO/GLib; dimuat saat dipakai)
-│   ├── project.ts        baca berkas Markdown di folder proyek dengan cache (GLib/GIO)
+│   ├── project.ts        baca berkas Markdown di folder proyek dengan cache, dan daftar namanya untuk saran [[ (GLib/GIO)
 │   └── apikey.ts         API key: variabel lingkungan, keyring (libsecret), atau file 0600
 │
 ├── markdown/             memahami Markdown (TypeScript murni, tanpa GTK)
@@ -367,7 +368,8 @@ src/
 │   ├── pango.ts          isi sel tabel (Markdown inline) → markup Pango untuk Gtk.Label
 │   ├── chatmarkup.ts     jawaban asisten (heading, daftar, kutipan, blok kode, inline) → markup Pango
 │   ├── dbml.ts           penerjemah DBML (dbdiagram.io) → diagram ER Mermaid
-│   └── html.ts           markdownToHtml(): untuk Ekspor HTML
+│   ├── html.ts           markdownToHtml(): untuk Ekspor HTML
+│   └── wikilink.ts       tautan [[catatan]]: penguraian, pencarian berkas, saran nama
 │
 ├── editor/               mesin editor
 │   ├── view.ts           MarkdownView: widget editor, menyatukan modul di bawah
@@ -376,7 +378,8 @@ src/
 │   ├── decorations.ts    menyembunyikan marker, meredupkan (mode fokus)
 │   ├── editing.ts        perintah format: tebal, tautan, heading, kutipan
 │   ├── lists.ts          Enter dan Tab di daftar dan kutipan
-│   ├── clicks.ts         klik kotak tugas, membaca URL tautan
+│   ├── clicks.ts         klik kotak tugas, membaca URL tautan dan target [[catatan]]
+│   ├── wikicomplete.ts   saran nama catatan saat mengetik [[
 │   ├── images.ts         menampilkan gambar di bawah barisnya, dan menerima klik/klik ganda
 │   ├── tablelayer.ts     merender tabel sebagai grid yang muncul/hilang mengikuti kursor
 │   ├── mermaid.ts        menampilkan blok ```mermaid dan ```dbml sebagai diagram (pola yang sama dengan tabel)
@@ -735,6 +738,7 @@ Nilai bawaan: sidebar terbuka pada tab Outline, panel Asisten tertutup dengan mo
 - Gambar di dalam sel tabel tidak ditampilkan (hanya teks alt-nya), dan gambar di dalam daftar atau kutipan tidak ikut menjorok
 - Ekspor papan kanban menghasilkan Markdown yang dikonversi menjadi heading dan daftar HTML, bukan tampilan papan. Frontmatter tidak diproses khusus; DBML yang salah sintaks diekspor sebagai blok kode biasa
 - Ekspor HTML tidak menyalin atau menyematkan gambar lokal, dan tidak menyesuaikan path relatif jika hasil ekspor disimpan di folder lain
+- Tautan `[[catatan]]`: belum ada panel tautan balik (backlink) atau grafik, mengganti nama/memindah berkas tidak memperbarui tautan `[[ ]]` yang menunjuknya, sematan `![[ ]]` dan rujukan blok `^id` belum didukung, saran `[[` hanya nama berkas (belum heading), dan verifikasi struktur agent belum memeriksa tautan `[[ ]]` yang putus
 - Warna blok kode belum ikut ke hasil Ekspor HTML; di HTML blok kode hanya diberi kelas `language-…`
 - Sel tabel disunting di teks mentahnya (klik sel atau gerakkan kursor ke dalam tabel), bukan langsung di grid
 - Teks sel yang terlalu panjang dipotong dengan "…", tidak dibungkus ke baris berikutnya, dan isi sel hanya satu baris

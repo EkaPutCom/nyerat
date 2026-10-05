@@ -9,8 +9,10 @@
 import { RE, ESCAPE_OR_CODE, startsTable } from './syntax.js';
 import { parseTable, tableEnd } from './table.js';
 import { dbmlToMermaid } from './dbml.js';
+import { WIKILINK, parseWikiLink, wikiLabel } from './wikilink.js';
 
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const unesc = (s: string): string => s.replace(/&quot;/g, '"').replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&');
 const slug = (s: string): string => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
 
 function emphHtml(s: string): string {
@@ -32,6 +34,15 @@ function inlineHtml(s: string): string {
         : `\u0001${codes.push(`<code>${esc(code)}</code>`) - 1}\u0001`);
     s = esc(s);
     const tok = (html: string) => `\u0003${links.push(html) - 1}\u0003`;
+    // [[Catatan#Bagian|teks]] → <a href="Catatan.md#bagian">teks</a>. Isinya sudah di-escape, jadi href
+    // dibangun dari teks asli lalu di-escape ulang.
+    s = s.replace(WIKILINK(), (whole: string, ref: string, alias?: string) => {
+        const link = parseWikiLink(unesc(alias === undefined ? ref : `${ref}|${alias}`));
+        if (!link.target && !link.heading) return whole;
+        const file = link.target ? encodeURI(/\.(md|markdown)$/i.test(link.target) ? link.target : `${link.target}.md`) : '';
+        const href = file + (link.heading ? `#${slug(link.heading)}` : '');
+        return tok(`<a class="wikilink" href="${esc(href)}">${esc(wikiLabel(link))}</a>`);
+    });
     s = s.replace(/!\[([^\]]*)\]\(([^)\s]*)(?:\s+&quot;(.*?)&quot;)?\)/g,
         (_: string, alt: string, src: string, t?: string) => tok(`<img src="${src}" alt="${alt}"${t ? ` title="${t}"` : ''}>`));
     s = s.replace(/\[([^\]]*)\]\(([^)\s]*)(?:\s+&quot;(.*?)&quot;)?\)/g,
