@@ -488,6 +488,39 @@ export function chatTests(c: GuiContext): void {
         contains(apply({ kind: 'create', file: 'bab-1.md', before: '', after: 'x', reason: '' }) ?? '', 'sudah ada');
     });
 
+    test('jawaban panjang: panel menempel di bawah sampai baris terakhir dan footer terlihat', () => {
+        const long = Array.from({ length: 14 }, (_, i) => `${i + 1}. **Butir ${i + 1}** — contoh \`kode ${i}\` dengan kalimat cukup panjang supaya membungkus ke beberapa baris di panel sempit.`).join('\n')
+            + '\n\nKalau mau, saya bisa usulkan satu perubahan konkret. Mau saya buatkan usulannya?';
+        panel.makeProvider = () => ({
+            async chat(req) {
+                for (const part of long.match(/\S+\s*/g) ?? []) req.onText(part);
+                return { usage: { prompt: 3600, cached: 3000, completion: 400 }, cancelled: false, toolCalls: [], reasoning: '' };
+            },
+        });
+        panel.reset();
+        settle(panel.ask('Beri masukan panjang'));
+        const vadj = panel.scroller.get_vadjustment();
+        for (let i = 0; i < 60; i++) { pump(); GLib.usleep(10000); }
+        ok(vadj.get_upper() > vadj.get_page_size(), 'jawaban tidak cukup panjang untuk menggulir');
+        // Nilai adjustment saja tidak cukup (pernah benar sementara gambarnya terpotong): periksa posisi footer sebenarnya
+        // di dalam area terlihat.
+        let footer: Gtk.Label | null = null;
+        const walk = (widget: Gtk.Widget) => {
+            if (widget instanceof Gtk.Label && widget.get_text().startsWith('3,6 rb masuk')) footer = widget;
+            childrenOf(widget).forEach(walk);
+        };
+        walk(panel.messages);
+        ok(footer, 'footer pemakaian token tidak ada');
+        const bounds = (footer as Gtk.Label).compute_bounds(panel.scroller);
+        ok(bounds[0], 'posisi footer tidak terbaca');
+        const bottom = bounds[1].get_y() + bounds[1].get_height();
+        ok(bounds[1].get_y() >= 0 && bottom <= panel.scroller.get_height() + 1, `footer di luar area terlihat: y=${bounds[1].get_y().toFixed(0)}, bawah=${bottom.toFixed(0)}, tinggi=${panel.scroller.get_height()}`);
+        const prefix = optVal('shot-chat');
+        if (prefix) widgetPixbuf(w.win)?.savev(`${prefix}.png`, 'png', [], []);
+        panel.makeProvider = () => provider;
+        panel.reset();
+    });
+
     test('menutup panel', () => {
         w.setOption('chat', false);
         pump();

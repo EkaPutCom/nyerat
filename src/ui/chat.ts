@@ -97,6 +97,7 @@ export class ChatPanel {
     private renderTimer = 0;
     private dark = false;
     viewer: ProposalViewer | null = null;   // jendela tinjau usulan yang sedang menunggu keputusan
+    private stickIdle = 0;
     private stick = true;            // tetap menempel di bawah selama pengguna tidak menggulir ke atas
     private summaryTimer = 0;
     // Percakapan yang sedang tampil di disk: berkasnya (null = belum ditulis), folder asalnya, dan judulnya.
@@ -196,7 +197,16 @@ export class ChatPanel {
         this.scroller = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.EXTERNAL, vexpand: true });
         this.scroller.set_child(this.messages);
         const vadj = this.scroller.get_vadjustment();
-        vadj.connect('changed', () => { if (this.stick) vadj.set_value(vadj.get_upper() - vadj.get_page_size()); });
+        // Menggulir di dalam sinyal "changed" (dipancarkan saat alokasi tata letak) mengubah nilainya, tetapi viewport tidak
+        // menerapkannya: isi tampil terpotong beberapa baris dengan footer tak terlihat. Karena itu digulirkan di idle berikutnya.
+        vadj.connect('changed', () => {
+            if (!this.stick || this.stickIdle) return;
+            this.stickIdle = GLib.idle_add(GLib.PRIORITY_HIGH_IDLE, () => {
+                this.stickIdle = 0;
+                if (this.stick) vadj.set_value(vadj.get_upper() - vadj.get_page_size());
+                return GLib.SOURCE_REMOVE;
+            });
+        });
         vadj.connect('value-changed', () => { this.stick = vadj.get_upper() - vadj.get_page_size() - vadj.get_value() < 24; });
 
         // Konteks: ringkasan + popover pengaturan apa yang dikirim.
@@ -256,6 +266,8 @@ export class ChatPanel {
         this.renderTimer = 0;
         if (this.summaryTimer) GLib.source_remove(this.summaryTimer);
         this.summaryTimer = 0;
+        if (this.stickIdle) GLib.source_remove(this.stickIdle);
+        this.stickIdle = 0;
     }
 
     get busy(): boolean {
