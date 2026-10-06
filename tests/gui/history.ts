@@ -28,7 +28,7 @@ export function historyTests(c: GuiContext): void {
         for (let i = 0; i < 500 && !cond(); i++) { pump(); GLib.usleep(10000); }
         return cond();
     };
-    const rows = () => listRows(w.history.list).length;
+    const rows = () => w.history.store.n_items;
 
     const a = GLib.build_filenamev([repo, 'a.md']);
     const untracked = GLib.build_filenamev([repo, 'baru.md']);
@@ -47,14 +47,14 @@ export function historyTests(c: GuiContext): void {
     w.sidebar.setPage('history');
 
     test('tab riwayat tidak membuat sidebar mengembang (sidebar tetap di tepi kiri, selebar 240)', () => {
-        ok(!w.sidebar.widget.compute_expand(Gtk.Orientation.HORIZONTAL), 'sidebar menuntut ruang sisa');
+        ok(!w.sidebar.panel.compute_expand(Gtk.Orientation.HORIZONTAL), 'sidebar menuntut ruang sisa');
         ok(!w.history.widget.compute_expand(Gtk.Orientation.HORIZONTAL), 'tab riwayat menuntut ruang sisa');
         w.win.set_default_size(1600, 700);
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(15000); }
-        const a = w.sidebar.widget.get_allocation();
+        const a = w.sidebar.panel.get_allocation();
         ok(a.width <= 260, `lebar sidebar ${a.width}`);
         // Relatif ke isi jendela: di desktop, dekorasi/bayangan window manager menggeser alokasi toplevel.
-        const x = w.sidebar.widget.translate_coordinates(w.win.get_child()!, 0, 0)[1];
+        const x = w.sidebar.panel.translate_coordinates(w.win.get_child()!, 0, 0)[1];
         // Kembalikan ukuran: jendela yang lebih lebar dari layar Xvfb menaruh tombol di luar
         // monitor, dan popover dari tombol itu memicu Gdk-CRITICAL di GTK 4 (X11).
         w.win.set_default_size(1100, 700);
@@ -72,14 +72,13 @@ export function historyTests(c: GuiContext): void {
     test('riwayat file tampil terbaru dulu', () => {
         w.load(a);
         ok(waitFor(() => rows() === 2), 'jumlah baris riwayat');
-        const label = (i: number) => ((w.history.list.get_row_at_index(i)!.get_child() as Gtk.Box).get_first_child() as Gtk.Label).label;
+        const label = (i: number) => (w.history.store.get_item(i) as unknown as { commit: { subject: string } }).commit.subject;
         eq([label(0), label(1)], ['Tambah baris dua', 'Buat catatan']);
     });
     test('file yang belum di-commit menampilkan pesan kosong', () => {
         w.load(untracked);
         ok(waitFor(() => rows() === 0 && w.history.note.label.includes('Belum ada commit')), `pesan: ${w.history.note.label}`);
-        // Daftar dikosongkan dulu (clear()); placeholder pesan harus tetap terpasang dan tampil.
-        ok(w.history.note.get_parent() === w.history.list, 'pesan terlepas dari daftar setelah dikosongkan');
+        // Daftar dikosongkan dulu (clear()); pesan menggantikan daftar dan harus tampil.
         ok(w.history.note.get_mapped(), 'pesan tidak tampil');
     });
     test('file di luar repositori git menampilkan pesan', () => {
@@ -89,7 +88,7 @@ export function historyTests(c: GuiContext): void {
     test('dokumen tanpa file menampilkan petunjuk menyimpan', () => {
         w.history.setFile(null);
         ok(w.history.note.label.includes('Simpan dokumen'), `pesan: ${w.history.note.label}`);
-        ok(w.history.note.get_parent() === w.history.list, 'pesan terlepas dari daftar');
+        ok(w.history.note.get_mapped(), 'pesan tidak tampil');
     });
     test('riwayat tidak dimuat selama tab lain yang terbuka', () => {
         w.sidebar.setPage('outline');
@@ -109,7 +108,7 @@ export function historyTests(c: GuiContext): void {
     let commits: Commit[] = [];
     test('klik commit membuka penampil dengan diff dan isi versi itu', () => {
         w.history.onOpen = commit => { commits.push(commit); };
-        w.history.list.emit('row-activated', w.history.list.get_row_at_index(1)!);
+        w.history.list.emit('activate', 1);
         eq(commits.length, 1, 'commit dibuka');
         eq(commits[0].subject, 'Tambah baris dua');
         const viewer = new HistoryViewer(w.win, a, commits[0], false);
@@ -135,7 +134,7 @@ export function historyTests(c: GuiContext): void {
     test('penampil menampilkan isi versi pertama untuk commit awal', () => {
         const first = commits[0];
         w.history.onOpen = commit => { commits.push(commit); };
-        w.history.list.emit('row-activated', w.history.list.get_row_at_index(2)!);
+        w.history.list.emit('activate', 2);
         const root = commits[commits.length - 1];
         ok(root !== first, 'commit awal tidak dibuka');
         const viewer = new HistoryViewer(w.win, a, root, true);

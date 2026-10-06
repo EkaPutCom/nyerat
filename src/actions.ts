@@ -7,6 +7,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { wrapSelection, insertLink, insertBlock, togglePrefix, setHeading } from './editor/editing.js';
 import { showAbout } from './ui/dialogs.js';
+import { PreferencesDialog } from './ui/preferences.js';
+import { CommandPalette } from './ui/palette.js';
 import type Adw from 'gi://Adw?version=1';
 import type { TableCommand } from './editor/tableedit.js';
 import type { MainWindow, Option } from './window.js';
@@ -14,8 +16,8 @@ import type { MainWindow, Option } from './window.js';
 const TABLE_TEMPLATE: [before: string, after: string] = ['| Kolom 1 | Kolom 2 | Kolom 3 |\n| ------- | ------- | ------- |\n| ', ' |  |  |\n'];
 
 // Aksi yang menyunting teks dokumen. Saat papan kanban tampil, teksnya tersembunyi, jadi
-// aksi ini ditolak dengan pesan alih-alih mengubah teks yang tidak terlihat.
-const TEXT_ACTIONS = new Set([
+// aksi ini dinonaktifkan (menu meredup, pintasan dan palet tidak memicunya).
+export const TEXT_ACTIONS = new Set([
     'find', 'bold', 'italic', 'strike', 'inline-code', 'highlight', 'link', 'image', 'zoom-image', 'codeblock', 'table',
     'quote', 'ulist', 'olist', 'heading0', 'heading1', 'heading2', 'heading3', 'heading4', 'heading5', 'heading6',
     'table-row-below', 'table-row-above', 'table-delete-row', 'table-col-right', 'table-col-left', 'table-delete-col',
@@ -25,13 +27,11 @@ const TEXT_ACTIONS = new Set([
 export function registerActions(app: Adw.Application, w: MainWindow): void {
     const action = (name: string, accels: string[] | null, run: () => void) => {
         const a = new Gio.SimpleAction({ name });
-        a.connect('activate', () => {
-            if (w.boardMode && TEXT_ACTIONS.has(name)) w.statusBar.toast('Beralih ke tampilan teks (Ctrl+Shift+B) untuk menyunting');
-            else run();
-        });
+        a.connect('activate', run);
         app.add_action(a);
         if (accels) app.set_accels_for_action(`app.${name}`, accels);
     };
+    // Toggle yang bukan kunci GSettings: mode source dan mode gelap.
     const toggle = (name: Option, accels: string[], initial: boolean) => {
         const a = Gio.SimpleAction.new_stateful(name, null, GLib.Variant.new_boolean(initial));
         a.connect('change-state', (act, value) => {
@@ -66,6 +66,8 @@ export function registerActions(app: Adw.Application, w: MainWindow): void {
     action('save-as', ['<Control><Shift>s'], () => w.saveAs());
     action('export-html', ['<Control><Shift>e'], () => w.exportHtml());
     action('quit', ['<Control>q'], () => w.win.close());
+    action('preferences', ['<Control>comma'], () => new PreferencesDialog(w.settings).present(w.win));
+    action('command-palette', ['<Control><Shift>p'], () => new CommandPalette(app).present(w.win));
     action('about', null, () => showAbout(w.win));
     action('find', ['<Control>f'], () => w.findBar.open());
 
@@ -99,11 +101,17 @@ export function registerActions(app: Adw.Application, w: MainWindow): void {
 
     // Tampilan
     const s = w.settings;
-    toggle('sidebar', ['<Control>backslash', '<Control><Shift>1'], s.sidebar);
-    toggle('chat', ['<Control><Shift>a'], s.chat);
+    // Toggle yang terikat ke kunci GSettings: status aksinya mengikuti kunci itu.
+    const setting = (key: string, accels: string[]) => {
+        app.add_action(s.gsettings.create_action(key));
+        if (accels.length) app.set_accels_for_action(`app.${key}`, accels);
+    };
+    setting('sidebar', ['<Control>backslash', '<Control><Shift>1']);
+    setting('chat', ['<Control><Shift>a']);
+    setting('focus', ['F8']);
+    setting('typewriter', ['F9']);
+    setting('autosave', []);
     toggle('source', ['<Control>slash'], false);
-    toggle('focus', ['F8'], s.focus);
-    toggle('typewriter', ['F9'], s.typewriter);
     toggle('dark', ['<Control><Shift>d'], w.dark);
-    toggle('autosave', [], s.autosave);
+    w.syncActionsEnabled();
 }

@@ -32,14 +32,10 @@ export function folderMouseTests(c: GuiContext): void {
         // Titik pada widget dalam koordinat layar.
         const onScreen = (widget: Gtk.Widget, x: number, y: number) => screenPoint(widget, x, y, (xid, sx, sy) => input.toRoot(xid, sx, sy));
         const rowPoint = (name: string): [number, number] => {
-            let [ok2, it] = ft.store.iter_children(null);
-            while (ok2 && ft.store.get_value(it, 0) !== name) ok2 = ft.store.iter_next(it);
-            ok(ok2, `baris ${name} tidak ada`);
-            const rect = ft.view.get_cell_area(ft.store.get_path(it)!, ft.view.get_column(0));
-            ok(ft.view.get_mapped(), 'pohon belum tampil');
-            // get_cell_area memberi koordinat bin window; ubah ke koordinat widget TreeView.
-            const [x, y] = ft.view.convert_bin_window_to_widget_coords(rect.x + 40, rect.y + rect.height / 2);
-            return onScreen(ft.view, x, y);
+            ok(ft.list.get_mapped(), 'pohon belum tampil');
+            const point = ft.rowPoint(abs(name));
+            ok(point, `baris ${name} tidak ada`);
+            return onScreen(ft.list, point![0], point![1]);
         };
         const drag = (from: [number, number], to: [number, number]) => {
             move(...from);
@@ -61,24 +57,10 @@ export function folderMouseTests(c: GuiContext): void {
             const label = ft.widget.get_first_child()!;
             ok(label.get_mapped(), 'judul tidak terlihat');
             const titlePoint = onScreen(label, 20, label.get_allocated_height() / 2);
-            ft.view.expand_all();
+            ft.expand(abs('tujuan'));
             settle();
-            let found: [number, number] | null = null;
-            const walk = (iter: Gtk.TreeIter | null, depth: number) => {
-                let [ok2, it] = ft.store.iter_children(iter);
-                while (ok2) {
-                    if (ft.store.get_value(it, 1) === abs('tujuan', 'b.md')) {
-                        const rect = ft.view.get_cell_area(ft.store.get_path(it)!, ft.view.get_column(0));
-                        const [px, py] = ft.view.convert_bin_window_to_widget_coords(rect.x + 40, rect.y + rect.height / 2);
-                        found = onScreen(ft.view, px, py);
-                    }
-                    walk(it, depth + 1);
-                    ok2 = ft.store.iter_next(it);
-                }
-            };
-            walk(null, 0);
-            ok(found, 'baris b.md tidak ditemukan');
-            drag(found!, titlePoint);
+            const found = rowPoint('tujuan/b.md');
+            drag(found, titlePoint);
             ok(exists(abs('b.md')) && !exists(abs('tujuan', 'b.md')), 'file tidak keluar ke root');
         });
     } finally {

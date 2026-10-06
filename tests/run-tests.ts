@@ -107,6 +107,12 @@ function runGuiTests(app: Adw.Application): void {
         c.w.win.destroy();
         return;
     }
+    if (opt('only-folder-mouse')) {
+        folderMouseTests(c);
+        c.buf.set_modified(false);
+        c.w.win.destroy();
+        return;
+    }
     const { w, ed, buf, pump, setText, cursorTo } = c;
     pump();
 

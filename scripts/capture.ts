@@ -12,7 +12,7 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import Gio from 'gi://Gio';
 import System from 'system';
 
-import { DEFAULTS } from '../src/settings.js';
+import { AppSettings } from '../src/settings.js';
 import { MainWindow } from '../src/window.js';
 import { isKanban, moveCard, parseBoard } from '../src/markdown/kanban.js';
 import type { Provider } from '../src/agent/provider.js';
@@ -226,7 +226,7 @@ git add rencana/ && git commit -m "Perbarui jadwal rilis"
 
 function main(app: Adw.Application): void {
     GLib.mkdir_with_parents(OUT, 0o755);
-    const settings = { ...DEFAULTS, welcomed: true, dark: false, sidebarPage: 'outline' as const, width: 1280, height: 780 };
+    const settings = AppSettings.inMemory({ welcomed: true, dark: false, sidebarPage: 'outline', width: 1280, height: 780 });
     const w = new MainWindow(app, settings, null);
     const ed = w.editor, buf = ed.buffer;
     const ctx = GLib.MainContext.default();
@@ -563,7 +563,7 @@ function main(app: Adw.Application): void {
     const toplevels = () => Gtk.Window.list_toplevels();
     // Jendela anak (penampil) saja; jendela WebKit tak terlihat milik Mermaid ikut menjadi toplevel.
     const child = () => toplevels().find(t => t.get_visible() && (t as unknown as Gtk.Window).get_transient_for() === (w.win as unknown as Gtk.Window));
-    w.history.list.emit('row-activated', w.history.list.get_row_at_index(0)!);
+    w.history.list.emit('activate', 0);
     idle(1500);
     const viewer = child();
     if (viewer) {

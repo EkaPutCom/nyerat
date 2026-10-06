@@ -18,7 +18,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
 import { APP_NAME } from './config.js';
-import { saveSettings, type Settings } from './settings.js';
+import { type AppSettings } from './settings.js';
 import { readTextFile, writeTextFile, writeTextFileAsync, waitForWrites, fileExists } from './files.js';
 import { markdownToHtml } from './markdown/html.js';
 import { WELCOME } from './welcome.js';
@@ -39,10 +39,10 @@ import { agentGit } from './git.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
 import { TabBar } from './ui/tabbar.js';
-import { createHeaderBar, type HeaderBar } from './ui/headerbar.js';
+import { HeaderBar } from './ui/headerbar.js';
 import { applyTheme, systemPrefersDark, type Palette } from './ui/theme.js';
 import { chooseFile, askSaveChanges, showError, harnessAskDialog, harnessTextDialog } from './ui/dialogs.js';
-import { registerActions } from './actions.js';
+import { registerActions, TEXT_ACTIONS } from './actions.js';
 import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
 import { assignCard, cardMeta, countCards, isKanban, newBoard, parseBoard, serializeBoard, updateCard, type Board, type Card, type Position } from './markdown/kanban.js';
@@ -86,12 +86,15 @@ interface Doc {
 
 export class MainWindow {
     readonly app: Adw.Application;
-    readonly settings: Settings;
+    readonly settings: AppSettings;
     readonly outline: Outline;
     readonly history: History;
     readonly fileTree: FileTree;
     readonly sidebar: Sidebar;
     readonly findBar: FindBar;
+    // Teks pemberitahuan terakhir (untuk tes; toast sendiri hilang sendiri).
+    lastToast = '';
+    private readonly toasts = new Adw.ToastOverlay();
     readonly statusBar: StatusBar;
     readonly tabBar: TabBar;
     readonly board: KanbanBoard;
@@ -104,7 +107,7 @@ export class MainWindow {
     };
     private readonly runLogs = new Map<number, LogViewer>();
     readonly chat: ChatPanel;
-    readonly chatRevealer: Gtk.Revealer;
+    readonly chatSplit: Adw.OverlaySplitView;
     private readonly content: Gtk.Stack;
     readonly header: HeaderBar;
     readonly win: Adw.ApplicationWindow;
@@ -114,9 +117,10 @@ export class MainWindow {
     private nextId = 1;
     private palette: Palette | null = null;
     dark: boolean;
+    private colorScheme: boolean | null = null;   // pilihan terakhir yang diterapkan setDark (null = ikuti sistem)
 
     // path: file atau folder yang dibuka saat jendela muncul.
-    constructor(app: Adw.Application, settings: Settings, path: string | null = null) {
+    constructor(app: Adw.Application, settings: AppSettings, path: string | null = null) {
         this.app = app;
         this.settings = settings;
         this.dark = settings.dark ?? systemPrefersDark();
@@ -131,7 +135,7 @@ export class MainWindow {
         this.statusBar = new StatusBar();
         this.board = new KanbanBoard();
         this.chat = new ChatPanel();
-        this.header = createHeaderBar();
+        this.header = new HeaderBar();
 
         this.doc = this.addDoc();
         this.doc.editor.modes.focus = settings.focus;
@@ -146,7 +150,7 @@ export class MainWindow {
             linkedNotes: (file, links) => this.linkedNotes(file, links),
             changed: (run, message) => {
                 if (this.boardMode && this.file === run.board) this.board.queueRender();
-                if (message) this.statusBar.toast(message);
+                if (message) this.toast(message);
             },
         });
         this.board.onOpenNote = link => this.openNote(link);
@@ -194,14 +198,14 @@ export class MainWindow {
         // Hanya simpan dokumen berkas yang ada perubahannya; tanpa berkas, jangan memunculkan dialog simpan.
         this.history.beforeCommit = () => this.saveOpenFiles();
         this.history.onCommitted = () => {
-            this.statusBar.toast('Berhasil di-commit');
+            this.toast('Berhasil di-commit');
             this.syncHistory(true);
         };
         this.history.onOpenChanges = file => {
             const viewer = new HistoryViewer(this.win, file, null, this.dark);
             viewer.beforeCommit = () => this.saveOpenFiles();
             viewer.onCommitted = () => {
-                this.statusBar.toast('Berhasil di-commit');
+                this.toast('Berhasil di-commit');
                 this.syncHistory(true);
             };
             viewer.show();
@@ -210,16 +214,13 @@ export class MainWindow {
         this.chat.setThinking(settings.chatThinking);
         this.chat.onModelChanged = model => {
             this.settings.chatModel = model;
-            saveSettings(this.settings);
         };
         this.chat.setSaveChats(settings.chatSave);
         this.chat.onSaveChanged = save => {
             this.settings.chatSave = save;
-            saveSettings(this.settings);
         };
         this.chat.onThinkingChanged = thinking => {
             this.settings.chatThinking = thinking;
-            saveSettings(this.settings);
         };
         this.chat.host = {
             active: () => {
@@ -250,7 +251,6 @@ export class MainWindow {
         };
         this.sidebar.onPageChanged = page => {
             this.settings.sidebarPage = page;
-            saveSettings(this.settings);
             this.syncHistory();
         };
 
@@ -260,22 +260,20 @@ export class MainWindow {
         this.win.set_icon_name('accessories-text-editor');
         const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true });
         column.append(this.tabBar.widget);
-        column.append(this.findBar.widget);
+        column.append(this.findBar);
         this.content.add_named(this.board.widget, 'board');
         column.append(this.content);
-        column.append(this.statusBar.widget);
-        const main = new Gtk.Box();
-        main.append(this.sidebar.widget);
-        main.append(column);
-        const chatWrap = new Gtk.Box();
-        chatWrap.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL }));
-        chatWrap.append(this.chat.widget);
-        // hexpand false: lihat Sidebar; panel Asisten selebar width_request-nya, bukan sisa ruang.
-        this.chatRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT, transition_duration: 150, hexpand: false });
-        this.chatRevealer.set_child(chatWrap);
-        main.append(this.chatRevealer);
-        const toolbar = new Adw.ToolbarView({ content: main });
-        toolbar.add_top_bar(this.header.bar);
+        column.append(this.statusBar);
+        // Panel Asisten di kanan, selebar tetap; sisanya untuk editor.
+        this.chatSplit = new Adw.OverlaySplitView({
+            sidebar_position: Gtk.PackType.END, sidebar: this.chat.widget, content: column,
+            min_sidebar_width: 360, max_sidebar_width: 360, enable_show_gesture: false, enable_hide_gesture: false,
+        });
+        this.sidebar.setContent(this.chatSplit);
+        const main = this.sidebar.widget;
+        this.toasts.set_child(main);
+        const toolbar = new Adw.ToolbarView({ content: this.toasts });
+        toolbar.add_top_bar(this.header);
         this.win.set_content(toolbar);
         // true = batalkan penutupan (ada perubahan yang tidak jadi dibuang).
         this.win.connect('close-request', () => !this.onClose());
@@ -288,7 +286,21 @@ export class MainWindow {
         });
 
         registerActions(app, this);
-        this.setDark(this.dark);
+        this.setDark(settings.dark);
+        // Tema sistem berubah (Gaya Gelap GNOME) saat pengaturannya "ikuti sistem".
+        Adw.StyleManager.get_default().connect('notify::dark', () => {
+            if (this.settings.dark === null && Adw.StyleManager.get_default().dark !== this.dark) this.setDark(null);
+        });
+        settings.gsettings.connect('changed', (_gs, key) => this.onSettingChanged(key));
+        // Visibilitas panel mengikuti GSettings dua arah; efek sampingnya dipasang pada perubahan widgetnya.
+        settings.gsettings.bind('sidebar', this.sidebar.widget, 'show-sidebar', Gio.SettingsBindFlags.DEFAULT);
+        settings.gsettings.bind('chat', this.chatSplit, 'show-sidebar', Gio.SettingsBindFlags.DEFAULT);
+        this.sidebar.widget.connect('notify::show-sidebar', () => this.syncHistory());
+        this.chatSplit.connect('notify::show-sidebar', () => {
+            if (!this.chatSplit.show_sidebar) return;
+            this.chat.updateContextSummary();
+            this.chat.focusInput();
+        });
         this.tabBar.setActive(this.doc.id);
 
         // Isi awal: folder dari argumen, atau folder terakhir; lalu file, atau tab terakhir
@@ -309,10 +321,14 @@ export class MainWindow {
         this.syncMode();
         this.updateTitle();
         this.win.present();
-        this.sidebar.setVisible(settings.sidebar);
-        this.setChatVisible(settings.chat);
         this.syncHistory();
         this.editor.view.grab_focus();
+    }
+
+    // Pemberitahuan singkat yang hilang sendiri (Adw.Toast).
+    toast(message: string): void {
+        this.lastToast = message;
+        this.toasts.add_toast(new Adw.Toast({ title: message, timeout: 3 }));
     }
 
     // ---------- Dokumen aktif ----------
@@ -350,7 +366,7 @@ export class MainWindow {
             this.statusBar.setCursor(line, column);
             this.statusBar.setModes((Object.keys(MODE_LABELS) as Mode[]).filter(m => editor.modes[m]).map(m => MODE_LABELS[m]));
         };
-        editor.onMessage = msg => this.statusBar.toast(msg);
+        editor.onMessage = msg => this.toast(msg);
         editor.onViewImage = (pixbuf, title) => new ImageViewer(this.win, pixbuf, title).show();
         editor.getBaseDir = () => doc.file ? GLib.path_get_dirname(doc.file) : GLib.get_home_dir();
         editor.onOpenNote = link => this.openNote(link, doc);
@@ -391,7 +407,7 @@ export class MainWindow {
         this.updateTitle();
         this.fileTree.reveal(doc.file);
         this.syncHistory();
-        if (this.chatRevealer.get_reveal_child()) this.chat.updateContextSummary();
+        if (this.chatSplit.show_sidebar) this.chat.updateContextSummary();
     }
 
     // Nama tab/judul untuk dokumen.
@@ -462,15 +478,17 @@ export class MainWindow {
         if (!opened.length) return false;
         for (const [doc, cursor] of opened) doc.editor.restoreCursor(cursor);
         this.activate(active ?? opened[opened.length - 1][0]);
-        if (missing) this.statusBar.toast(`${missing} berkas dari sesi terakhir tidak ditemukan`);
+        if (missing) this.toast(`${missing} berkas dari sesi terakhir tidak ditemukan`);
         return true;
     }
 
     // ---------- Pengaturan tampilan ----------
 
-    setDark(dark: boolean): void {
-        this.dark = dark;
+    // dark null = ikuti tema sistem.
+    setDark(dark: boolean | null): void {
         const palette = applyTheme(dark);
+        this.colorScheme = dark;
+        this.dark = palette.dark;
         this.palette = palette;
         for (const doc of this.docs) doc.editor.setPalette(palette);
         this.board.setPalette(palette);
@@ -478,13 +496,6 @@ export class MainWindow {
     }
 
     // ---------- Asisten ----------
-
-    setChatVisible(visible: boolean): void {
-        this.chatRevealer.set_reveal_child(visible);
-        if (!visible) return;
-        this.chat.updateContextSummary();
-        this.chat.focusInput();
-    }
 
     // Terapkan perubahan usulan agent yang sudah disetujui pengguna. Mengembalikan pesan galat atau null.
     // Berkas yang terbuka diubah lewat editornya (satu langkah undo); yang lain ditulis ke disk. Dalam kedua
@@ -573,20 +584,20 @@ export class MainWindow {
         }
         const root = this.noteRoot(doc);
         if (!root) {
-            this.statusBar.toast('Buka folder atau simpan dokumen dulu untuk mengikuti tautan [[catatan]]');
+            this.toast('Buka folder atau simpan dokumen dulu untuk mengikuti tautan [[catatan]]');
             return;
         }
         const from = doc.file?.startsWith(`${root}/`) ? doc.file.slice(root.length + 1) : null;
         const found = resolveWikiLink(link.target, listMarkdownFiles(root), from);
         const rel = found ?? newNotePath(link.target, from);
         if (!rel) {
-            this.statusBar.toast(`Nama catatan tidak valid: ${link.target}`);
+            this.toast(`Nama catatan tidak valid: ${link.target}`);
             return;
         }
         const path = GLib.build_filenamev([root, ...rel.split('/')]);
         if (!found) GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
         if (!this.openInTab(path)) return;
-        if (!found) this.statusBar.toast(`Catatan baru: ${rel} (tersimpan setelah diisi)`);
+        if (!found) this.toast(`Catatan baru: ${rel} (tersimpan setelah diisi)`);
         else if (link.heading) this.jumpToHeading(this.doc, link.heading);
     }
 
@@ -614,7 +625,7 @@ export class MainWindow {
         const want = heading.trim().toLowerCase();
         const found = doc.editor.headings.find(h => h.text.trim().toLowerCase() === want);
         if (found) doc.editor.jumpToLine(found.line);
-        else this.statusBar.toast(`Bagian tidak ditemukan: ${heading}`);
+        else this.toast(`Bagian tidak ditemukan: ${heading}`);
     }
 
     // ---------- Papan kanban ----------
@@ -643,12 +654,22 @@ export class MainWindow {
         }
         const action = this.app.lookup_action('kanban-view');
         if (action instanceof Gio.SimpleAction) action.set_state(GLib.Variant.new_boolean(on));
+        this.syncActionsEnabled();
+    }
+
+    // Aksi penyunting teks mati selama papan kanban tampil (teksnya tersembunyi).
+    syncActionsEnabled(): void {
+        const board = this.boardMode;
+        for (const name of TEXT_ACTIONS) {
+            const action = this.app.lookup_action(name);
+            if (action instanceof Gio.SimpleAction) action.set_enabled(!board);
+        }
     }
 
     // Menu/pintasan "Tampilan Papan": berganti antara papan dan teks untuk dokumen kanban.
     toggleBoardView(on: boolean): void {
         if (on && !isKanban(this.editor.getText())) {
-            this.statusBar.toast('Dokumen ini bukan papan kanban (butuh "kanban: true" di frontmatter)');
+            this.toast('Dokumen ini bukan papan kanban (butuh "kanban: true" di frontmatter)');
             this.setBoardMode(false);
             return;
         }
@@ -709,7 +730,7 @@ export class MainWindow {
     // Jalankan harness untuk kartu di papan aktif. Folder proyek ditanyakan sekali lalu diingat di pengaturan.
     runHarness(at: Position, agent: string): void {
         const file = this.file;
-        if (!file) { this.statusBar.toast('Simpan papan dulu sebelum menugaskan kartu'); return; }
+        if (!file) { this.toast('Simpan papan dulu sebelum menugaskan kartu'); return; }
         const card = this.board.getBoard().columns[at.column]?.cards[at.index];
         if (!card) return;
         let project = cardProject(this.board.getBoard(), card);
@@ -724,7 +745,7 @@ export class MainWindow {
             }
         }
         const error = this.orchestrator.start(file, this.board.getBoard(), at, agent, project, this.settings.projects[project], GLib.path_get_basename(file));
-        if (error) this.statusBar.toast(`Tidak bisa menjalankan ${agent}: ${error}`);
+        if (error) this.toast(`Tidak bisa menjalankan ${agent}: ${error}`);
     }
 
     // Pilih folder untuk proyek `name` (atau proyek baru bila null) dan simpan pemetaannya.
@@ -733,9 +754,8 @@ export class MainWindow {
         if (!path) return null;
         const project = name ?? GLib.path_get_basename(path).replace(/\s+/g, '-');
         const problem = !PROJECT_NAME.test(project) ? `nama folder "${project}" tidak bisa dipakai sebagai nama proyek` : checkProjectFolder(path, this.fileTree.root);
-        if (problem) { this.statusBar.toast(`Folder proyek ditolak: ${problem}`); return null; }
+        if (problem) { this.toast(`Folder proyek ditolak: ${problem}`); return null; }
         this.settings.projects = { ...this.settings.projects, [project]: path };
-        saveSettings(this.settings);
         return { name: project, path };
     }
 
@@ -744,21 +764,21 @@ export class MainWindow {
         const reply = this.harnessDialogs.answer(run.ask, run.agent);
         if (!reply) return;   // Nanti: harness tetap menunggu
         const error = this.orchestrator.answer(run, reply);
-        if (error) this.statusBar.toast(`Jawaban tidak terkirim: ${error}`);
+        if (error) this.toast(`Jawaban tidak terkirim: ${error}`);
     }
 
     private steerHarness(run: Run): void {
         const text = this.harnessDialogs.text({ title: `Arahan untuk ${run.agent}`, label: `${run.agent} menerimanya sebelum langkah berikutnya, tanpa menghentikan pekerjaan.` });
         if (!text) return;
         const error = this.orchestrator.steer(run, text);
-        this.statusBar.toast(error ? `Arahan tidak terkirim: ${error}` : `Arahan dikirim ke ${run.agent}`);
+        this.toast(error ? `Arahan tidak terkirim: ${error}` : `Arahan dikirim ke ${run.agent}`);
     }
 
     private replyHarness(run: Run): void {
         const text = this.harnessDialogs.text({ title: `Balas ${run.agent}`, label: `Sesi ${run.agent} dilanjutkan dengan balasan ini; kartu kembali dikerjakan.`, context: run.result?.summary || undefined });
         if (!text) return;
         const error = this.orchestrator.resume(run, text);
-        if (error) this.statusBar.toast(`Tidak bisa membalas ${run.agent}: ${error}`);
+        if (error) this.toast(`Tidak bisa membalas ${run.agent}: ${error}`);
     }
 
     showRunLog(run: Run): LogViewer {
@@ -812,20 +832,29 @@ export class MainWindow {
         });
     }
 
-    // Ubah pilihan tampilan lalu terapkan. Semua kecuali mode source disimpan ke pengaturan.
+    // Ubah pilihan tampilan. Semua kecuali mode source adalah kunci GSettings: menuliskannya cukup,
+    // karena sidebar dan asisten terikat ke kuncinya (Gio.Settings.bind) dan sisanya diterapkan
+    // onSettingChanged. Aksi toggle di menu (Gio.Settings.create_action) memakai jalur yang sama.
     setOption(key: Option, value: boolean): void {
-        if (key === 'sidebar') {
-            this.sidebar.setVisible(value);
-            this.syncHistory();
-        }
-        else if (key === 'chat') this.setChatVisible(value);
-        else if (key === 'dark') this.setDark(value);
-        else if (key !== 'autosave') for (const doc of this.docs) doc.editor.setMode(key, value);
-        if (key !== 'source') {
-            this.settings[key] = value;
-            saveSettings(this.settings);
-        }
-        if (key === 'autosave' && value) for (const doc of this.docs) this.queueAutosave(doc);
+        if (key === 'source') for (const doc of this.docs) doc.editor.setMode('source', value);
+        else if (key === 'dark') {
+            this.setDark(value);
+            this.settings.dark = value;
+        } else this.settings[key] = value;
+    }
+
+    // Perubahan GSettings (menu, dialog preferensi, atau proses lain) yang perlu diterapkan ke komponen.
+    private onSettingChanged(key: string): void {
+        const s = this.settings;
+        if (key === 'color-scheme') {
+            if (s.dark !== this.colorScheme) this.setDark(s.dark);
+            const dark = this.app.lookup_action('dark');
+            if (dark instanceof Gio.SimpleAction) dark.set_state(GLib.Variant.new_boolean(this.dark));
+        } else if (key === 'focus' || key === 'typewriter') for (const doc of this.docs) doc.editor.setMode(key, s[key]);
+        else if (key === 'autosave') { if (s.autosave) for (const doc of this.docs) this.queueAutosave(doc); }
+        else if (key === 'chat-model') this.chat.setModel(s.chatModel);
+        else if (key === 'chat-thinking') this.chat.setThinking(s.chatThinking);
+        else if (key === 'chat-save') this.chat.setSaveChats(s.chatSave);
     }
 
     // ---------- Auto save ----------
@@ -860,7 +889,7 @@ export class MainWindow {
         const changes = doc.changes;
         writeTextFileAsync(path, doc.editor.getText(), error => {
             if (error) {
-                this.statusBar.toast(`Auto save gagal: ${errorMessage(error)}`);
+                this.toast(`Auto save gagal: ${errorMessage(error)}`);
             } else if (this.docs.includes(doc) && doc.file === path && doc.changes === changes) {
                 // Teks tidak berubah selama ditulis: isi di disk sama dengan buffer.
                 doc.editor.buffer.set_modified(false);
@@ -879,7 +908,7 @@ export class MainWindow {
             writeTextFile(doc.file, doc.editor.getText());
         } catch (e) {
             // Bukan dialog: auto save terus mencoba, dan dialog berulang mengganggu mengetik.
-            this.statusBar.toast(`Auto save gagal: ${errorMessage(e)}`);
+            this.toast(`Auto save gagal: ${errorMessage(e)}`);
             return false;
         }
         doc.editor.buffer.set_modified(false);
@@ -1038,10 +1067,9 @@ export class MainWindow {
         this.fileTree.reveal(this.file);
         this.syncHistory();
         this.settings.folder = absolute;
-        saveSettings(this.settings);
         if (!show) return;
         this.sidebar.setPage('files');
-        if (!this.sidebar.visible) this.app.lookup_action('sidebar')?.change_state(GLib.Variant.new_boolean(true));
+        this.settings.sidebar = true;
     }
 
     open(): void {
@@ -1064,7 +1092,7 @@ export class MainWindow {
         if (!this.write(this.file, this.editor.getText())) return false;
         this.editor.buffer.set_modified(false);
         this.cancelAutosave(this.doc);
-        this.statusBar.toast('Tersimpan');
+        this.toast('Tersimpan');
         return true;
     }
 
@@ -1095,7 +1123,7 @@ export class MainWindow {
         });
         if (!path) return;
         const html = markdownToHtml(this.editor.getText(), this.editor.headings[0]?.text || base);
-        if (this.write(path, html)) this.statusBar.toast(`Diekspor ke ${GLib.path_get_basename(path)}`);
+        if (this.write(path, html)) this.toast(`Diekspor ke ${GLib.path_get_basename(path)}`);
     }
 
     // Sisipkan ![nama](path). Path dibuat relatif terhadap file jika memungkinkan.
@@ -1118,7 +1146,6 @@ export class MainWindow {
         // Di GTK 4 ukuran default mengikuti ukuran jendela saat ini.
         const [width, height] = this.win.get_default_size();
         Object.assign(this.settings, { width, height });
-        saveSettings(this.settings);
         return true;
     }
 
@@ -1129,8 +1156,6 @@ export class MainWindow {
             doc.editor.destroy();
         }
         this.orchestrator.dispose();
-        this.statusBar.destroy();
-        this.outline.destroy();
         this.chat.destroy();
         this.history.destroy();
         this.fileTree.destroy();

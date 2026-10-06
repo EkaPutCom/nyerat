@@ -5,7 +5,7 @@ import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 
-import { DEFAULTS } from '../../src/settings.js';
+import { AppSettings } from '../../src/settings.js';
 import { ROOT, tmp } from '../framework.js';
 import { MainWindow, type Option } from '../../src/window.js';
 import type { TagName } from '../../src/editor/tags.js';
@@ -36,7 +36,7 @@ export interface GuiContext {
 
 export function createContext(app: Adw.Application): GuiContext {
     // Auto save mati: banyak tes membuka file sungguhan (dokumen contoh, README) lalu mengeditnya.
-    const settings = { ...DEFAULTS, welcomed: true, dark: false, autosave: false };
+    const settings = AppSettings.inMemory({ welcomed: true, dark: false, autosave: false });
     const w = new MainWindow(app, settings, null);
     const ed = w.editor;
     const buf = ed.buffer;

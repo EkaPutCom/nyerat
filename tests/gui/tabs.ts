@@ -3,11 +3,10 @@
 import GLib from 'gi://GLib';
 import { section, test, eq, ok, tmp } from '../framework.js';
 import { readTextFile } from '../../src/files.js';
-import { DEFAULTS, type Settings } from '../../src/settings.js';
+import { AppSettings } from '../../src/settings.js';
 import { MainWindow } from '../../src/window.js';
 import { registerActions } from '../../src/actions.js';
 import type { GuiContext } from './context.js';
-import { listRows } from '../widgets.js';
 
 export function tabTests(c: GuiContext): void {
     const { w, ed, pump } = c;
@@ -21,7 +20,7 @@ export function tabTests(c: GuiContext): void {
     const bab2 = put('bab-2.md', '# Bab Dua\n\n## Bagian\n\nIsi bab dua.\n');
     const papan = put('papan.md', '---\nkanban: true\n---\n\n## Rencana\n\n- [ ] Kartu\n');
     const settle = () => { for (let i = 0; i < 30; i++) { pump(); GLib.usleep(10000); } };
-    const tabsShown = () => w.tabBar.widget.get_reveal_child();
+    const tabsShown = () => w.tabBar.widget.tabs_revealed;
 
     // Mulai dari satu dokumen kosong tanpa file.
     w.file = null;
@@ -48,10 +47,10 @@ export function tabTests(c: GuiContext): void {
         eq(w.win.get_title(), 'bab-2.md — Nyerat', 'judul jendela');
     });
     test('outline dan hitungan kata mengikuti tab aktif', () => {
-        eq(listRows(w.outline.list).length, 2, 'heading bab 2');
+        eq(w.outline.count, 2, 'heading bab 2');
         w.switchTab(-1); settle();
         eq(w.file, bab1, 'file setelah pindah');
-        eq(listRows(w.outline.list).length, 1, 'heading bab 1');
+        eq(w.outline.count, 1, 'heading bab 1');
         ok(w.statusBar.right.label.includes('kata'), `status: ${w.statusBar.right.label}`);
     });
     test('file panjang di tab baru terbuka dari awal, bukan tergulir ke tengah', () => {
@@ -160,7 +159,7 @@ export function tabTests(c: GuiContext): void {
     // ---------- Pemulihan tab ----------
     section('Pemulihan tab');
     const bab3 = put('bab-3.md', '# Bab Tiga\n\nBaris kedua.\n\nBaris ketiga yang dituju kursor.\n');
-    const settingsFor = (extra: Partial<Settings>): Settings => ({ ...DEFAULTS, welcomed: true, dark: false, autosave: false, ...extra });
+    const settingsFor = (extra: Partial<AppSettings>): AppSettings => AppSettings.inMemory({ welcomed: true, dark: false, autosave: false, ...extra });
     // Jendela kedua mendaftarkan ulang aksi aplikasi; hancurkan lalu kembalikan aksi ke jendela tes utama.
     const closeWindow = (win: MainWindow) => {
         win.win.destroy();
@@ -207,7 +206,7 @@ export function tabTests(c: GuiContext): void {
         eq(w2.documentCount, 1, 'jumlah tab');
         eq(w2.file, bab2, 'tab aktif jatuh ke tab yang ada');
         ok(!GLib.file_test(hilang, GLib.FileTest.EXISTS), 'file hilang dibuat ulang');
-        ok(w2.statusBar.left.label.includes('tidak ditemukan'), `status: ${w2.statusBar.left.label}`);
+        ok(w2.lastToast.includes('tidak ditemukan'), `status: ${w2.lastToast}`);
         closeWindow(w2);
     });
     test('kursor di luar dokumen dipotong ke akhir', () => {
@@ -223,8 +222,8 @@ export function tabTests(c: GuiContext): void {
         eq(w2.file, bab3, 'file');
         closeWindow(w2);
     });
-    test('pengaturan tab yang rusak diabaikan', () => {
-        const s = settingsFor({ tabs: [null, { file: 42 }] as unknown as Settings['tabs'], activeTab: 5 });
+    test('tab yang tidak punya file dan indeks aktif di luar daftar diabaikan', () => {
+        const s = settingsFor({ tabs: [{ file: '', cursor: 0 }, { file: path('hilang-2.md'), cursor: 0 }], activeTab: 5 });
         const w2 = new MainWindow(c.app, s, null); settle();
         eq(w2.documentCount, 1, 'jumlah tab');
         eq(w2.file, null, 'file');

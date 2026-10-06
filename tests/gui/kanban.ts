@@ -238,7 +238,7 @@ export function kanbanBoardTests(c: GuiContext): void {
         w.load(papan); settleK();
         w.toggleBoardView(true);
         ok(!w.boardMode, 'dokumen biasa tampil sebagai papan');
-        ok(w.statusBar.left.label.includes('bukan papan kanban'), `pesan: ${w.statusBar.left.label}`);
+        ok(w.lastToast.includes('bukan papan kanban'), `pesan: ${w.lastToast}`);
     });
     test('papan kanban baru berisi tiga daftar kosong', () => {
         w.newBoardDocument(); settleK();
@@ -249,12 +249,16 @@ export function kanbanBoardTests(c: GuiContext): void {
         ok(w.closeTab(), 'closeTab() gagal'); settleK();
         ok(w.editor === ed, 'editor semula tidak aktif lagi');
     });
-    test('aksi yang menyunting teks ditolak saat papan tampil', () => {
+    test('aksi yang menyunting teks nonaktif saat papan tampil dan aktif lagi di tampilan teks', () => {
         openBoard();
         const before = text();
         action('bold'); action('heading1'); action('table');
         eq(text(), before, 'teks berubah');
-        ok(w.statusBar.left.label.includes('tampilan teks'), `pesan: ${w.statusBar.left.label}`);
+        const enabled = (name: string) => w.app.lookup_action(name)!.enabled;
+        eq([enabled('bold'), enabled('heading1'), enabled('table'), enabled('save')], [false, false, false, true], 'status aksi di papan');
+        w.toggleBoardView(false); settleK();
+        eq([enabled('bold'), enabled('table')], [true, true], 'status aksi di tampilan teks');
+        w.toggleBoardView(true); settleK();
     });
     test('simpan menulis Markdown yang bisa dibaca lagi sebagai papan yang sama', () => {
         openBoard();

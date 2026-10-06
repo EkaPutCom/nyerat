@@ -22,7 +22,7 @@ export function tableGridTests(c: GuiContext): void {
     const curLine = () => buf.get_iter_at_mark(buf.get_insert()).get_line();
     const curCol = () => cellIndexAt(lineAt(curLine()), buf.get_iter_at_mark(buf.get_insert()).get_line_offset());
     const tableLines = (from: number, to: number) => text().split('\n').slice(from, to + 1);
-    const tableMessage = () => w.statusBar.left.label;
+    const tableMessage = () => w.lastToast;
 
     test('tabel di luar kursor dirender sebagai grid', () => {
         setText(DOC); cursorTo(0); settleT();

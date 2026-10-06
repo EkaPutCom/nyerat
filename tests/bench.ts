@@ -26,7 +26,7 @@ import System from 'system';
 
 import { DIM, GREEN, RED, RESET, errorMessage, opt, optVal } from './framework.js';
 import { readTextFile, writeTextFile } from '../src/files.js';
-import { DEFAULTS } from '../src/settings.js';
+import { AppSettings } from '../src/settings.js';
 import { MainWindow } from '../src/window.js';
 import { markdownToHtml } from '../src/markdown/html.js';
 import { parseInline } from '../src/markdown/inline.js';
@@ -204,7 +204,7 @@ function runModelBench(): void {
 // Jendela tidak di-destroy: proses anak langsung keluar, dan destroy memicu peringatan GC dari GJS.
 const windows: MainWindow[] = [];
 async function runGuiBench(app: Adw.Application, n: number): Promise<void> {
-    const w = new MainWindow(app, { ...DEFAULTS, welcomed: true, dark: false }, null);
+    const w = new MainWindow(app, AppSettings.inMemory({ welcomed: true, dark: false }), null);
     windows.push(w);
     const ed = w.editor;
     const buf = ed.buffer;

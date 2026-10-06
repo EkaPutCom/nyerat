@@ -25,7 +25,7 @@ export function imageZoomTests(c: GuiContext): void {
         settleV();
         return viewer;
     };
-    const message = () => w.statusBar.left.label;
+    const message = () => w.lastToast;
     const cursorLineNow = () => buf.get_iter_at_mark(buf.get_insert()).get_line();
     const originalOnView = ed.onViewImage;
     let viewed: { pixbuf: GdkPixbuf.Pixbuf; title: string } | null = null;

@@ -11,7 +11,7 @@ import { LineTagger, normalize, tagRanges } from '../../src/editor/tagsync.js';
 import { section, test, ok, eq, tmp, opt, DIM, RESET } from '../framework.js';
 import type { GuiContext } from './context.js';
 import { iterAtLine } from '../../src/gtkutil.js';
-import { countPointerEvents, listRows, screenPoint } from '../widgets.js';
+import { countPointerEvents, screenPoint } from '../widgets.js';
 import { MouseInput } from './mouse-input.js';
 
 export function robustnessTests(c: GuiContext): void {
@@ -150,13 +150,12 @@ export function robustnessTests(c: GuiContext): void {
         };
         ok(boldAt(2), 'awal dokumen langsung diberi tag');
         ok(!ed.highlightComplete && !boldAt(lastLine), 'akhir dokumen seharusnya masih dicicil');
-        eq(listRows(w.outline.list).length < 300, true, 'outline seharusnya dibangun bertahap');
         // Menyunting selagi cicilan berjalan, termasuk menambah baris.
         buf.insert(iterAtLine(buf, 6), '**baru**\n\n', -1);
         for (let i = 0; i < 1000 && !ed.highlightComplete; i++) pump();
         ok(ed.highlightComplete, 'penyorotan bertahap tidak selesai');
         ok(boldAt(lastLine + 2), 'akhir dokumen diberi tag setelah cicilan');
-        eq(listRows(w.outline.list).length, 300, 'jumlah baris outline');
+        eq(w.outline.count, 300, 'jumlah baris outline');
 
         const reference = new Gtk.TextBuffer();
         const tags = createTags(reference);
@@ -230,27 +229,27 @@ export function robustnessTests(c: GuiContext): void {
     });
     test('mengedit satu heading mempertahankan baris outline lainnya', () => {
         setText('# Satu\n\n## Dua\n\n# Tiga');
-        const first = w.outline.list.get_row_at_index(0)!;
-        const last = w.outline.list.get_row_at_index(2)!;
+        const first = w.outline.store.get_item(0)!;
+        const last = w.outline.store.get_item(2)!;
         cursorTo(2, -1);
         buf.insert_at_cursor(' baru', -1); pump();
-        ok(w.outline.list.get_row_at_index(0) === first, 'heading pertama dibangun ulang');
-        ok(w.outline.list.get_row_at_index(2) === last, 'heading terakhir dibangun ulang');
+        ok(w.outline.store.get_item(0) === first, 'heading pertama dibangun ulang');
+        ok(w.outline.store.get_item(2) === last, 'heading terakhir dibangun ulang');
         cursorTo(2);
         buf.insert_at_cursor('x', -1); pump();  // heading kedua menjadi paragraf
-        eq(listRows(w.outline.list).length, 2, 'satu heading dihapus');
-        ok(w.outline.list.get_row_at_index(1) === last, 'akhiran tidak dipertahankan');
-        w.outline.list.emit('row-activated', last); pump();
+        eq(w.outline.count, 2, 'satu heading dihapus');
+        ok(w.outline.store.get_item(1) === last, 'akhiran tidak dipertahankan');
+        w.outline.list.emit('activate', 1); pump();
         eq(buf.get_iter_at_mark(buf.get_insert()).get_line(), 4, 'tujuan klik setelah heading dihapus');
         buf.undo(); pump();
-        eq(listRows(w.outline.list).length, 3, 'undo mengembalikan heading');
+        eq(w.outline.count, 3, 'undo mengembalikan heading');
     });
     test('outline memakai ulang label saat heading hanya bergeser baris', () => {
         setText('awal\n\n# Judul');
-        const row = w.outline.list.get_row_at_index(0)!;
+        const item = w.outline.store.get_item(0)!;
         buf.insert(buf.get_start_iter(), 'baris baru\n', -1); pump();
-        ok(listRows(w.outline.list)[0] === row, 'baris outline tidak dipakai ulang');
-        w.outline.list.emit('row-activated', row);
+        ok(w.outline.store.get_item(0) === item, 'item outline tidak dipakai ulang');
+        w.outline.list.emit('activate', 0);
         pump();
         eq(buf.get_iter_at_mark(buf.get_insert()).get_line(), 3, 'tujuan klik heading bergeser');
     });

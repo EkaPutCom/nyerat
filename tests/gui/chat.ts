@@ -59,10 +59,10 @@ export function chatTests(c: GuiContext): void {
     const all = () => labels().join('\n');
 
     test('panel dibuka lewat opsi chat; pengaturan tersimpan', () => {
-        ok(!w.chatRevealer.reveal_child, 'awalnya tertutup');
+        ok(!w.chatSplit.show_sidebar, 'awalnya tertutup');
         w.setOption('chat', true);   // aksi aplikasi sudah diarahkan ke jendela tes folder, jadi lewat jendela ini langsung
         pump();
-        ok(w.chatRevealer.reveal_child, 'tidak terbuka');
+        ok(w.chatSplit.show_sidebar, 'tidak terbuka');
         eq(w.settings.chat, true);
     });
 
@@ -718,7 +718,7 @@ export function chatTests(c: GuiContext): void {
     test('menutup panel', () => {
         w.setOption('chat', false);
         pump();
-        ok(!w.chatRevealer.reveal_child, 'tidak tertutup');
+        ok(!w.chatSplit.show_sidebar, 'tidak tertutup');
         eq(w.settings.chat, false);
     });
 
