@@ -92,3 +92,6 @@ export function pack(box: Gtk.Box, child: Gtk.Widget, expand = false): void {
     }
     box.append(child);
 }
+
+// Isi Gtk.Template dari berkas .ui yang dibundel sebagai teks (`import xml from './x.ui?raw'`).
+export const uiTemplate = (xml: string): Uint8Array => new TextEncoder().encode(xml);

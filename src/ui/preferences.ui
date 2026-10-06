@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="NyeratPreferencesDialog" parent="AdwPreferencesDialog">
+    <property name="title">Preferensi</property>
+    <child>
+      <object class="AdwPreferencesPage">
+        <property name="title">Umum</property>
+        <property name="icon-name">preferences-system-symbolic</property>
+        <child>
+          <object class="AdwPreferencesGroup">
+            <property name="title">Tampilan</property>
+            <child>
+              <object class="AdwComboRow" id="colorScheme">
+                <property name="title">Tema warna</property>
+                <property name="model">
+                  <object class="GtkStringList">
+                    <items>
+                      <item>Ikuti sistem</item>
+                      <item>Terang</item>
+                      <item>Gelap</item>
+                    </items>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="AdwSwitchRow" id="focus">
+                <property name="title">Mode fokus</property>
+                <property name="subtitle">Redupkan semua paragraf kecuali yang sedang disunting</property>
+              </object>
+            </child>
+            <child>
+              <object class="AdwSwitchRow" id="typewriter">
+                <property name="title">Mode typewriter</property>
+                <property name="subtitle">Jaga baris yang sedang diketik tetap di tengah</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwPreferencesGroup">
+            <property name="title">Berkas</property>
+            <child>
+              <object class="AdwSwitchRow" id="autosave">
+                <property name="title">Simpan otomatis</property>
+                <property name="subtitle">Berlaku untuk dokumen yang sudah punya file</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="AdwPreferencesPage">
+        <property name="title">Asisten</property>
+        <property name="icon-name">user-available-symbolic</property>
+        <child>
+          <object class="AdwPreferencesGroup">
+            <child>
+              <object class="AdwComboRow" id="chatModel">
+                <property name="title">Model</property>
+                <property name="model">
+                  <object class="GtkStringList" id="chatModels"/>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="AdwSwitchRow" id="chatThinking">
+                <property name="title">Mode berpikir</property>
+                <property name="subtitle">Lebih teliti, tetapi lebih lambat</property>
+              </object>
+            </child>
+            <child>
+              <object class="AdwSwitchRow" id="chatSave">
+                <property name="title">Simpan riwayat percakapan</property>
+                <property name="subtitle">Disimpan di folder kerja, di .nyerat/chats</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>
