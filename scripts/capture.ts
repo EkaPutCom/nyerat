@@ -716,6 +716,10 @@ function main(app: Adw.Application): void {
     frame('pekerjaan', 16);
     shot('pekerjaan');
     streamFrames = false;
+    // Daftar centang rencana di awal jawaban: gulir panel ke atas lalu tangkap panelnya saja.
+    w.chat.scroller.get_vadjustment().set_value(0);
+    idle(300);
+    widgetPixbuf(w.chat.widget)!.savev(`${OUT}/rencana.png`, 'png', [], []);
 
     // ───────── Log agent dari pekerjaan di atas ─────────
     w.chat.showLog();
