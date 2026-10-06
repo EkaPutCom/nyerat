@@ -208,6 +208,8 @@ export class ChatPanel extends Gtk.Box {
         this.input.buffer.connect('changed', () => { this.queueContextSummary(); this.updateSendButton(); });
         this.sendButton.connect('clicked', () => this.busy ? this.stop() : void this.send());
         this.updateSendButton();
+        // Panel bisa sudah terbuka sejak jendela dibuat (GSettings), tanpa notify::show-sidebar: hitung saat tampil.
+        this.connect('map', () => this.updateContextSummary());
     }
 
     // Kirim: tombol utama (suggested-action), nonaktif selama kotak pesan kosong. Hentikan: tombol biasa, selalu aktif.

@@ -213,6 +213,7 @@
     <!-- Konteks: ringkasan, dan popover pengaturan apa yang dikirim -->
     <child>
       <object class="GtkMenuButton" id="contextButton">
+        <property name="label" translatable="yes">Konteks</property>
         <property name="has-frame">false</property>
         <property name="direction">up</property>
         <property name="halign">start</property>

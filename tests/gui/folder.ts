@@ -120,6 +120,15 @@ export function folderTests(c: GuiContext): void {
         w3.win.destroy();
         pump();
     });
+    test('panel Asisten yang terbuka sejak awal langsung menampilkan ringkasan konteks', () => {
+        const w4 = new MainWindow(app, AppSettings.inMemory({ welcomed: true, dark: false, folder: proj, chat: true }), null);
+        pump();
+        ok(w4.chatSplit.show_sidebar, 'panel Asisten tidak terbuka');
+        ok(w4.chat.contextButton.get_label()?.startsWith('Konteks · ≈'), `ringkasan konteks kosong: "${w4.chat.contextButton.get_label()}"`);
+        w4.editor.buffer.set_modified(false);
+        w4.win.destroy();
+        pump();
+    });
     // ---------- Kelola berkas lewat pohon ----------
     const prompts: (string | null)[] = [];
     const errors: string[] = [];
