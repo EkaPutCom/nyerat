@@ -3,6 +3,7 @@
 // dipakai karena ini aplikasi GTK, bukan halaman web.
 
 import { copyFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { defineConfig, type Plugin } from 'vite';
 
 // Mermaid dijalankan di WebKitGTK (lihat src/editor/mermaid.ts), jadi yang dibutuhkan
@@ -14,8 +15,18 @@ const copyMermaid = (): Plugin => ({
     },
 });
 
+// Schema GSettings dikompilasi ke dist/, tempat settings.ts mencarinya saat runtime.
+const compileSchemas = (): Plugin => ({
+    name: 'compile-gschemas',
+    writeBundle(options) {
+        const dir = options.dir ?? 'dist';
+        copyFileSync('data/id.eka.Nyerat.gschema.xml', `${dir}/id.eka.Nyerat.gschema.xml`);
+        execFileSync('glib-compile-schemas', ['--strict', dir]);
+    },
+});
+
 export default defineConfig({
-    plugins: [copyMermaid()],
+    plugins: [copyMermaid(), compileSchemas()],
     build: {
         outDir: 'dist',
         emptyOutDir: true,

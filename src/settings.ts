@@ -1,7 +1,13 @@
-// Pengaturan pengguna, disimpan sebagai JSON di ~/.config/nyerat/settings.json.
+// Pengaturan pengguna di GSettings (schema: data/id.eka.Nyerat.gschema.xml).
+//
+// AppSettings hanya membungkus Gio.Settings dengan properti bertipe, jadi kode lain tetap
+// menulis `settings.autosave = true`. Setiap penulisan langsung disimpan; tidak ada save().
+// Dialog preferensi mengikat widgetnya ke `gsettings` yang sama, dan jendela mendengarkan
+// "changed::<kunci>" untuk menerapkan perubahan itu.
 
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { readTextFile, writeTextFile } from './files.js';
+import { APP_ID } from './config.js';
 
 // Tab berfile yang terbuka saat jendela terakhir ditutup, dipulihkan pada pembukaan berikutnya.
 export interface SavedTab {
@@ -9,63 +15,82 @@ export interface SavedTab {
     cursor: number;          // posisi kursor (code point)
 }
 
-export interface Settings {
-    dark: boolean | null;
-    sidebar: boolean;
-    sidebarPage: 'files' | 'outline' | 'history';
-    chat: boolean;           // panel asisten terbuka
-    chatModel: string;       // model DeepSeek untuk asisten
-    chatThinking: boolean;   // mode berpikir model (lebih teliti, lebih lambat)
-    chatSave: boolean;       // simpan riwayat percakapan di <folder>/.nyerat/chats
-    folder: string | null;   // folder yang terakhir dibuka
-    tabs: SavedTab[];        // tab yang dipulihkan saat dibuka tanpa argumen
-    activeTab: number;       // indeks tab aktif di tabs, -1 = tidak ada
-    typewriter: boolean;
-    focus: boolean;
-    autosave: boolean;
-    width: number;
-    height: number;
-    welcomed: boolean;
-    projects: Record<string, string>;   // nama proyek → folder, untuk harness eksternal yang mengerjakan kartu kanban
+export type SidebarPage = 'files' | 'outline' | 'history';
+
+// Berkas schema yang sudah dikompilasi ada di samping bundel (dist/), lihat vite.config.ts.
+function loadSchema(): Gio.SettingsSchema {
+    // Kode bersama dibundel ke dist/chunks/, jadi cari juga satu tingkat di atasnya.
+    let folder = Gio.File.new_for_uri(import.meta.url).get_parent()!;
+    if (!folder.get_child('gschemas.compiled').query_exists(null)) folder = folder.get_parent()!;
+    const dir = folder.get_path()!;
+    const source = Gio.SettingsSchemaSource.new_from_directory(dir, Gio.SettingsSchemaSource.get_default(), false);
+    const schema = source.lookup(APP_ID, false);
+    if (!schema) throw new Error(`schema ${APP_ID} tidak ditemukan di ${dir}`);
+    return schema;
 }
 
-export const DEFAULTS: Settings = {
-    dark: null,          // null = ikuti tema sistem
-    sidebar: true,
-    sidebarPage: 'outline',
-    chat: false,
-    chatModel: 'deepseek-flash',
-    chatThinking: false,
-    chatSave: true,
-    folder: null,
-    tabs: [],
-    activeTab: -1,
-    typewriter: false,
-    focus: false,
-    autosave: true,      // simpan otomatis dokumen yang sudah punya file
-    width: 1100,
-    height: 760,
-    welcomed: false,     // dokumen contoh sudah pernah ditampilkan
-    projects: {},
-};
+export class AppSettings {
+    readonly gsettings: Gio.Settings;
 
-// Dihitung saat dipanggil (bukan saat import) supaya tes bisa mengganti XDG_CONFIG_HOME.
-const configDir = () => GLib.build_filenamev([GLib.get_user_config_dir(), 'nyerat']);
-const configFile = () => GLib.build_filenamev([configDir(), 'settings.json']);
-
-export function loadSettings(): Settings {
-    try {
-        return { ...DEFAULTS, ...JSON.parse(readTextFile(configFile())) };
-    } catch (e) {
-        return { ...DEFAULTS };
+    // backend: tes memakai Gio.memory_settings_backend_new() supaya dconf pengguna tidak tersentuh.
+    constructor(backend?: Gio.SettingsBackend) {
+        this.gsettings = new Gio.Settings({ settings_schema: loadSchema(), ...(backend && { backend }) });
     }
-}
 
-export function saveSettings(settings: Settings): void {
-    try {
-        GLib.mkdir_with_parents(configDir(), 0o755);
-        writeTextFile(configFile(), JSON.stringify(settings, null, 2));
-    } catch (e) {
-        logError(e);
+    // null = ikuti tema sistem.
+    get dark(): boolean | null {
+        const scheme = this.gsettings.get_string('color-scheme');
+        return scheme === 'system' ? null : scheme === 'dark';
+    }
+    set dark(value: boolean | null) { this.gsettings.set_string('color-scheme', value === null ? 'system' : value ? 'dark' : 'light'); }
+
+    get sidebar(): boolean { return this.gsettings.get_boolean('sidebar'); }
+    set sidebar(value: boolean) { this.gsettings.set_boolean('sidebar', value); }
+    get sidebarPage(): SidebarPage { return this.gsettings.get_string('sidebar-page') as SidebarPage; }
+    set sidebarPage(value: SidebarPage) { this.gsettings.set_string('sidebar-page', value); }
+    get chat(): boolean { return this.gsettings.get_boolean('chat'); }
+    set chat(value: boolean) { this.gsettings.set_boolean('chat', value); }
+    get chatModel(): string { return this.gsettings.get_string('chat-model'); }
+    set chatModel(value: string) { this.gsettings.set_string('chat-model', value); }
+    get chatThinking(): boolean { return this.gsettings.get_boolean('chat-thinking'); }
+    set chatThinking(value: boolean) { this.gsettings.set_boolean('chat-thinking', value); }
+    get chatSave(): boolean { return this.gsettings.get_boolean('chat-save'); }
+    set chatSave(value: boolean) { this.gsettings.set_boolean('chat-save', value); }
+    get typewriter(): boolean { return this.gsettings.get_boolean('typewriter'); }
+    set typewriter(value: boolean) { this.gsettings.set_boolean('typewriter', value); }
+    get focus(): boolean { return this.gsettings.get_boolean('focus'); }
+    set focus(value: boolean) { this.gsettings.set_boolean('focus', value); }
+    get autosave(): boolean { return this.gsettings.get_boolean('autosave'); }
+    set autosave(value: boolean) { this.gsettings.set_boolean('autosave', value); }
+    get welcomed(): boolean { return this.gsettings.get_boolean('welcomed'); }
+    set welcomed(value: boolean) { this.gsettings.set_boolean('welcomed', value); }
+    get width(): number { return this.gsettings.get_int('width'); }
+    set width(value: number) { this.gsettings.set_int('width', Math.round(value)); }
+    get height(): number { return this.gsettings.get_int('height'); }
+    set height(value: number) { this.gsettings.set_int('height', Math.round(value)); }
+    get activeTab(): number { return this.gsettings.get_int('active-tab'); }
+    set activeTab(value: number) { this.gsettings.set_int('active-tab', value); }
+
+    // Folder terakhir; null = tidak ada.
+    get folder(): string | null { return this.gsettings.get_string('folder') || null; }
+    set folder(value: string | null) { this.gsettings.set_string('folder', value ?? ''); }
+
+    get tabs(): SavedTab[] {
+        return (this.gsettings.get_value('tabs').deepUnpack() as [string, number][]).map(([file, cursor]) => ({ file, cursor }));
+    }
+    set tabs(value: SavedTab[]) {
+        this.gsettings.set_value('tabs', new GLib.Variant('a(si)', value.map(t => [t.file, t.cursor] as [string, number])));
+    }
+
+    get projects(): Record<string, string> {
+        return this.gsettings.get_value('projects').deepUnpack() as Record<string, string>;
+    }
+    set projects(value: Record<string, string>) {
+        this.gsettings.set_value('projects', new GLib.Variant('a{ss}', value));
+    }
+
+    // Pengaturan di memori dengan nilai bawaan, plus `overrides`; untuk tes, bench, dan tangkapan layar.
+    static inMemory(overrides: Partial<Omit<AppSettings, 'gsettings'>> = {}): AppSettings {
+        return Object.assign(new AppSettings(Gio.memory_settings_backend_new()), overrides);
     }
 }

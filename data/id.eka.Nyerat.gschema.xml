@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <enum id="id.eka.Nyerat.ColorScheme">
+    <value nick="system" value="0"/>
+    <value nick="light" value="1"/>
+    <value nick="dark" value="2"/>
+  </enum>
+  <enum id="id.eka.Nyerat.SidebarPage">
+    <value nick="files" value="0"/>
+    <value nick="outline" value="1"/>
+    <value nick="history" value="2"/>
+  </enum>
+
+  <schema id="id.eka.Nyerat" path="/id/eka/Nyerat/">
+    <key name="color-scheme" enum="id.eka.Nyerat.ColorScheme">
+      <default>'system'</default>
+      <summary>Tema warna</summary>
+      <description>system mengikuti tema sistem; light atau dark memaksa satu tema.</description>
+    </key>
+    <key name="autosave" type="b">
+      <default>true</default>
+      <summary>Simpan otomatis dokumen yang sudah punya file</summary>
+    </key>
+    <key name="typewriter" type="b">
+      <default>false</default>
+      <summary>Mode typewriter</summary>
+    </key>
+    <key name="focus" type="b">
+      <default>false</default>
+      <summary>Mode fokus</summary>
+    </key>
+
+    <key name="sidebar" type="b">
+      <default>true</default>
+      <summary>Sidebar terbuka</summary>
+    </key>
+    <key name="sidebar-page" enum="id.eka.Nyerat.SidebarPage">
+      <default>'outline'</default>
+      <summary>Halaman sidebar yang aktif</summary>
+    </key>
+    <key name="chat" type="b">
+      <default>false</default>
+      <summary>Panel asisten terbuka</summary>
+    </key>
+    <key name="chat-model" type="s">
+      <default>'deepseek-flash'</default>
+      <summary>Model DeepSeek untuk asisten</summary>
+    </key>
+    <key name="chat-thinking" type="b">
+      <default>false</default>
+      <summary>Mode berpikir model (lebih teliti, lebih lambat)</summary>
+    </key>
+    <key name="chat-save" type="b">
+      <default>true</default>
+      <summary>Simpan riwayat percakapan di folder/.nyerat/chats</summary>
+    </key>
+
+    <key name="folder" type="s">
+      <default>''</default>
+      <summary>Folder yang terakhir dibuka (kosong = tidak ada)</summary>
+    </key>
+    <key name="tabs" type="a(si)">
+      <default>[]</default>
+      <summary>Tab berfile yang dipulihkan: (path, posisi kursor dalam code point)</summary>
+    </key>
+    <key name="active-tab" type="i">
+      <default>-1</default>
+      <summary>Indeks tab aktif di tabs, -1 = tidak ada</summary>
+    </key>
+    <key name="projects" type="a{ss}">
+      <default>{}</default>
+      <summary>Nama proyek ke folder, untuk harness eksternal yang mengerjakan kartu kanban</summary>
+    </key>
+
+    <key name="width" type="i">
+      <default>1100</default>
+      <summary>Lebar jendela</summary>
+    </key>
+    <key name="height" type="i">
+      <default>760</default>
+      <summary>Tinggi jendela</summary>
+    </key>
+    <key name="welcomed" type="b">
+      <default>false</default>
+      <summary>Dokumen contoh sudah pernah ditampilkan</summary>
+    </key>
+  </schema>
+</schemalist>
