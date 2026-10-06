@@ -19,7 +19,7 @@ import type { Provider } from '../src/agent/provider.js';
 import { listChats, saveChat } from '../src/agent/chatstore.js';
 import { iterAtLine } from '../src/gtkutil.js';
 import { widgetPixbuf } from '../tests/widgets.js';
-import { editCardDialog, harnessAskDialog } from '../src/ui/dialogs.js';
+import { editCardDialog, findDialog, harnessAskDialog } from '../src/ui/dialogs.js';
 import { findEntry } from '../src/ui/menu.js';
 
 // Folder kerja contoh untuk tangkapan panel Asisten (provider palsu; tanpa jaringan dan tanpa API key):
@@ -742,7 +742,7 @@ function main(app: Adw.Application): void {
     // ───────── Dialog kartu kanban (tenggat dengan kalender) ─────────
     load(BOARD, false, 0, false);
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
-        const dialog = Gtk.Window.list_toplevels().find(t => t instanceof Gtk.Window && t.title === 'Sunting Kartu') as Gtk.Window | undefined;
+        const dialog = findDialog('Sunting Kartu');
         if (dialog) { widgetPixbuf(dialog)?.savev(`${OUT}/kanban-kartu.png`, 'png', [], []); dialog.close(); }
         return GLib.SOURCE_REMOVE;
     });
@@ -799,7 +799,7 @@ function main(app: Adw.Application): void {
     const ask = runOf('Rapikan README')?.ask;
     if (ask) {
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-            const dialog = Gtk.Window.list_toplevels().find(t => t instanceof Gtk.Window && t.title === 'Jawab pi') as Gtk.Window | undefined;
+            const dialog = findDialog('Jawab pi');
             if (dialog) { widgetPixbuf(dialog)?.savev(`${OUT}/pi-jawab.png`, 'png', [], []); dialog.close(); }
             return GLib.SOURCE_REMOVE;
         });

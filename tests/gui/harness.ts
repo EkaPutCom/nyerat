@@ -6,7 +6,7 @@ import Gtk from 'gi://Gtk?version=4.0';
 import { readTextFile } from '../../src/files.js';
 import { parseBoard } from '../../src/markdown/kanban.js';
 import { findEntry } from '../../src/ui/menu.js';
-import { harnessAskDialog } from '../../src/ui/dialogs.js';
+import { findDialog, harnessAskDialog } from '../../src/ui/dialogs.js';
 import { descendants, widgetPixbuf } from '../widgets.js';
 import { section, test, eq, ok, contains, tmp, optVal } from '../framework.js';
 import type { HarnessAsk, HarnessReply } from '../../src/agent/harness.js';
@@ -276,7 +276,7 @@ export function harnessTests(c: GuiContext): void {
             // Dialog jawaban asli (modal): ditangkap dari timer selagi tampil, lalu ditutup ("Nanti").
             const capture = (ask: HarnessAsk, name: string) => {
                 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
-                    const dialog = Gtk.Window.list_toplevels().find(t => t instanceof Gtk.Window && t.title === 'Jawab pi') as Gtk.Window | undefined;
+                    const dialog = findDialog('Jawab pi');
                     if (dialog) { widgetPixbuf(dialog)?.savev(`${shot}-${name}.png`, 'png', [], []); dialog.close(); }
                     return GLib.SOURCE_REMOVE;
                 });

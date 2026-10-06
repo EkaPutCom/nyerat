@@ -5,7 +5,7 @@ import Gtk from 'gi://Gtk?version=4.0';
 import { readTextFile } from '../../src/files.js';
 import { addCard, isKanban, parseBoard } from '../../src/markdown/kanban.js';
 import { KanbanBoard } from '../../src/ui/kanban.js';
-import { dueField, editCardDialog } from '../../src/ui/dialogs.js';
+import { dueField, editCardDialog, findDialog } from '../../src/ui/dialogs.js';
 import { findEntry, type MenuEntry } from '../../src/ui/menu.js';
 import { childrenOf } from '../../src/gtkutil.js';
 import { descendants, widgetPixbuf } from '../widgets.js';
@@ -363,7 +363,7 @@ export function kanbanBoardTests(c: GuiContext): void {
             for (const dark of [false, true]) {
                 w.setOption('dark', dark);
                 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
-                    const dialog = Gtk.Window.list_toplevels().find(t => t instanceof Gtk.Window && t.title === 'Tambah Kartu') as Gtk.Window | undefined;
+                    const dialog = findDialog('Tambah Kartu');
                     if (dialog) { widgetPixbuf(dialog)?.savev(`${shot}-dialog${dark ? '-gelap' : ''}.png`, 'png', [], []); dialog.close(); }
                     return GLib.SOURCE_REMOVE;
                 });

@@ -1,6 +1,7 @@
 // Dialog standar: pilih file, konfirmasi simpan, pesan error, tentang.
-// Semua dialog bersifat modal dan blocking (main loop bersarang lewat runModal(), pengganti
-// gtk_dialog_run() yang dihapus GTK 4), jadi hasilnya bisa langsung dikembalikan.
+// Dialog memakai libadwaita (Adw.Dialog, Adw.AlertDialog) dan bersifat modal serta blocking
+// (main loop bersarang lewat runModal(), pengganti gtk_dialog_run() yang dihapus GTK 4), jadi
+// hasilnya bisa langsung dikembalikan.
 
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -9,7 +10,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import { attachWikiCompleter } from '../editor/wikicomplete.js';
-import { onKeyPress, runModal } from '../gtkutil.js';
+import { childrenOf, onKeyPress, runModal } from '../gtkutil.js';
 import { APP_NAME, APP_VERSION } from '../config.js';
 import { AGENT_NAME, composeCard, DUE_INPUT, splitCard, withDueDate } from '../markdown/kanban.js';
 import type { HarnessAsk, HarnessReply } from '../agent/harness.js';
@@ -66,64 +67,93 @@ export function chooseFile(parent: Gtk.Window, { title, save = false, selectFold
     });
 }
 
-// Jendela modal berisi `content` dan sebaris tombol di bawahnya; mengembalikan indeks tombol
-// yang ditekan, atau `cancel` jika ditutup (Escape atau tombol jendela). Tombol `preferred`
-// menjadi tombol bawaan (Enter di kolom isian dengan activates_default). `accept(i)` = false
-// membiarkan jendela tetap terbuka (misalnya isian tidak valid).
+// Jendela tempat dialog ditampilkan: induk yang diberikan, atau jendela terlihat pertama.
+// Adw.Dialog selalu menempel pada satu jendela; tanpa jendela sama sekali tak ada yang bisa ditampilkan.
+function hostWindow(parent: Gtk.Window | null): Gtk.Window | null {
+    return parent ?? (Gtk.Window.list_toplevels().find(t => t instanceof Gtk.Window && t.get_visible()) as Gtk.Window | undefined) ?? null;
+}
+
+// Dialog yang sedang tampil dengan judul `title` (untuk tangkapan layar dan tes), atau null.
+// Adw.Dialog bukan jendela sendiri, jadi tidak muncul di Gtk.Window.list_toplevels().
+export function findDialog(title: string): Adw.Dialog | null {
+    for (const top of Gtk.Window.list_toplevels()) {
+        if (!(top instanceof Adw.ApplicationWindow)) continue;
+        const dialog = top.get_visible_dialog();
+        if (dialog instanceof Adw.Dialog && dialog.title === title) return dialog;
+    }
+    return null;
+}
+
+// Semua Gtk.Entry di bawah `widget`.
+function entriesIn(widget: Gtk.Widget): Gtk.Entry[] {
+    return childrenOf(widget).flatMap(child => child instanceof Gtk.Entry ? [child] : entriesIn(child));
+}
+
+// Dialog modal (Adw.Dialog) berisi `content` dan sebaris tombol di bawahnya; mengembalikan indeks tombol
+// yang ditekan, atau `cancel` jika ditutup (Escape). Tombol `preferred` menjadi tombol bawaan
+// (Enter di kolom isian dengan activates_default). `accept(i)` = false membiarkan dialog tetap
+// terbuka (misalnya isian tidak valid). Tanpa jendela induk: dianggap dibatalkan.
 //
-// Bukan Gtk.AlertDialog dan tanpa destroy_with_parent: keduanya menghubungkan dialog ke sinyal
-// "destroy" jendela induk, dan saat proses keluar GJS bisa memfinalisasi induk lebih dulu
-// sehingga muncul GLib-GObject-CRITICAL. Induk juga dilepas (transient_for null) begitu selesai.
+// Dialog menempel pada jendela induk dan ditutup dengan force_close() begitu selesai, sehingga
+// tidak ada yang tertinggal saat proses keluar.
 function modalWindow(parent: Gtk.Window | null, title: string, width: number, content: Gtk.Widget, buttons: string[],
-    cancel: number, preferred: number, accept: (index: number) => boolean = () => true, resizable = true): number {
-    const win = new Gtk.Window({ title, transient_for: parent, modal: true, default_width: width, resizable });
+    cancel: number, preferred: number, accept: (index: number) => boolean = () => true): number {
+    const host = hostWindow(parent);
+    if (!host) return cancel;
+    const dialog = new Adw.Dialog({ title, content_width: width });
     const actions = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END });
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, margin_top: 16, margin_bottom: 12, margin_start: 16, margin_end: 16 });
     box.append(content);
     box.append(actions);
-    win.set_child(box);
-    onKeyPress(win, keyval => {
-        if (keyval !== Gdk.KEY_Escape) return false;
-        win.close();
-        return true;
-    });
+    const view = new Adw.ToolbarView({ content: box });
+    view.add_top_bar(new Adw.HeaderBar());
+    dialog.set_child(view);
     const answer = runModal<number>(finish => {
         buttons.forEach((label, i) => {
             const button = new Gtk.Button({ label });
             if (i === preferred) {
                 button.add_css_class('suggested-action');
-                win.set_default_widget(button);
+                dialog.set_default_widget(button);
             }
             button.connect('clicked', () => { if (accept(i)) finish(i); });
             actions.append(button);
         });
-        win.connect('close-request', () => {
-            finish(cancel);
-            return false;
-        });
-        win.present();
+        // Enter di isian menekan tombol bawaan. Adw.Dialog meneruskan Enter ke default-widget hanya
+        // lewat jalurnya sendiri; ini membuat perilakunya sama untuk setiap isian.
+        for (const entry of entriesIn(content)) {
+            if (entry.activates_default) entry.connect('activate', () => (dialog.get_default_widget() as Gtk.Button | null)?.emit('clicked'));
+        }
+        dialog.connect('closed', () => finish(cancel));
+        dialog.present(host);
         // Fokus awal di tombol bawaan, kecuali isian sudah merebutnya.
-        if (!(win.get_focus() instanceof Gtk.Text)) win.get_default_widget()?.grab_focus();
+        if (!(dialog.get_focus() instanceof Gtk.Text)) dialog.get_default_widget()?.grab_focus();
     });
-    win.set_transient_for(null);
-    win.destroy();
+    dialog.force_close();
     return answer;
 }
 
-// Pesan singkat dengan beberapa tombol.
-function alert(parent: Gtk.Window | null, message: string, detail: string | null, buttons: string[], cancel: number, preferred: number): number {
-    const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
-    const heading = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 48 });
-    heading.set_markup(`<b>${GLib.markup_escape_text(message, -1)}</b>`);
-    content.append(heading);
-    if (detail) content.append(new Gtk.Label({ label: detail, xalign: 0, wrap: true, max_width_chars: 48 }));
-    return modalWindow(parent, '', 380, content, buttons, cancel, preferred, () => true, false);
+// Pesan singkat dengan beberapa tombol (Adw.AlertDialog). `destructive` = indeks tombol yang
+// berbahaya (merah); tombol `preferred` yang lain disorot sebagai saran.
+function alert(parent: Gtk.Window | null, message: string, detail: string | null, buttons: string[], cancel: number, preferred: number, destructive = -1): number {
+    const host = hostWindow(parent);
+    if (!host) return cancel;
+    const dialog = new Adw.AlertDialog({ heading: message, body: detail ?? '' });
+    buttons.forEach((label, i) => {
+        dialog.add_response(String(i), label);
+        if (i === destructive) dialog.set_response_appearance(String(i), Adw.ResponseAppearance.DESTRUCTIVE);
+        else if (i === preferred && buttons.length > 1) dialog.set_response_appearance(String(i), Adw.ResponseAppearance.SUGGESTED);
+    });
+    dialog.set_default_response(String(preferred));
+    dialog.set_close_response(String(cancel));
+    return runModal<number>(finish => {
+        dialog.connect('response', (_d, id) => finish(Number(id)));
+        dialog.present(host);
+    });
 }
 
-// Mengembalikan 'save', 'discard', atau 'cancel'.
 export function askSaveChanges(parent: Gtk.Window, documentName: string): 'save' | 'discard' | 'cancel' {
     const answer = alert(parent, `Simpan perubahan pada “${documentName}”?`, 'Perubahan akan hilang jika tidak disimpan.',
-        ['Jangan Simpan', 'Batal', 'Simpan'], 1, 2);
+        ['Jangan Simpan', 'Batal', 'Simpan'], 1, 2, 0);
     return answer === 2 ? 'save' : answer === 0 ? 'discard' : 'cancel';
 }
 
@@ -233,7 +263,7 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
     // Ctrl+Enter menyimpan dari kolom catatan (Enter biasa membuat baris baru).
     onKeyPress(notes, (keyval, state) => {
         if ((keyval !== Gdk.KEY_Return && keyval !== Gdk.KEY_KP_Enter) || !(state & Gdk.ModifierType.CONTROL_MASK)) return false;
-        (notes.get_root() as Gtk.Window | null)?.get_default_widget()?.activate();
+        (notes.get_ancestor(Adw.Dialog.$gtype) as Adw.Dialog | null)?.get_default_widget()?.activate();
         return true;
     }, Gtk.PropagationPhase.CAPTURE);
 
@@ -271,7 +301,7 @@ export function promptDialog(parent: Gtk.Window | null, options: { title: string
 }
 
 export function confirmDialog(parent: Gtk.Window | null, message: string, detail?: string): boolean {
-    return alert(parent, message, detail ?? null, ['Batal', 'Hapus'], 0, 1) === 1;
+    return alert(parent, message, detail ?? null, ['Batal', 'Hapus'], 0, 1, 1) === 1;
 }
 
 // ---------- Dialog harness eksternal ----------

@@ -42,6 +42,7 @@ import { workTests } from './unit/work.js';
 import { traceTests } from './unit/trace.js';
 import { changeTests } from './unit/changes.js';
 import { deepseekTests } from './unit/deepseek.js';
+import { dialogTests } from './gui/dialogs.js';
 import { harnessTests as harnessModelTests } from './unit/harness.js';
 import { harnessTests } from './gui/harness.js';
 import { chatTests } from './gui/chat.js';
@@ -114,6 +115,7 @@ function runGuiTests(app: Adw.Application): void {
     mermaidTests(c);
     kanbanBoardTests(c);
     harnessTests(c);
+    dialogTests(c);
     // Tes folder membuat jendela lain dan mengganti aksi aplikasi. Periksa undo/redo
     // mouse selagi aksi masih terhubung ke jendela konteks ini.
     if (opt('with-kanban-mouse')) kanbanMouseTests(c);
