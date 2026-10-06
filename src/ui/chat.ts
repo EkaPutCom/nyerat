@@ -14,6 +14,7 @@ import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 import { systemKeyStore, type KeySource, type KeyStore } from '../agent/apikey.js';
 import { buildContext, DEFAULT_BUDGET, findMentions, type BuiltContext, type ContextOptions, type SourceFile } from '../agent/context.js';
 import { deleteChat, listChats, loadChat, nowStamp, saveChat, titleFrom } from '../agent/chatstore.js';
@@ -27,7 +28,8 @@ import { LogViewer } from './logviewer.js';
 import { chatMarkup } from '../markdown/chatmarkup.js';
 import { escapeMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from './theme.js';
-import { childrenOf, onKeyPress, pack } from '../gtkutil.js';
+import { childrenOf, onKeyPress, pack, uiTemplate } from '../gtkutil.js';
+import template from './chat.ui?raw';
 
 // Yang perlu diketahui panel dari jendela.
 export interface ChatHost {
@@ -67,18 +69,47 @@ interface Bubble {
     markdown: boolean;
 }
 
-export class ChatPanel {
-    readonly widget: Gtk.Box;
-    readonly input: Gtk.TextView;
-    readonly sendButton: Gtk.Button;
-    readonly messages: Gtk.Box;
-    readonly scroller: Gtk.ScrolledWindow;
-    readonly contextButton: Gtk.MenuButton;
-    readonly settingsButton: Gtk.MenuButton;
-    readonly historyButton: Gtk.MenuButton;
-    readonly saveCheck: Gtk.CheckButton;
-    readonly keyEntry: Gtk.Entry;
-    readonly keyStatus: Gtk.Label;
+export class ChatPanel extends Gtk.Box {
+    static {
+        GObject.registerClass({
+            GTypeName: 'NyeratChatPanel',
+            Template: uiTemplate(template),
+            Children: [
+                'input', 'sendButton', 'messages', 'scroller', 'contextButton', 'settingsButton', 'historyButton',
+                'saveCheck', 'keyEntry', 'keyStatus', 'modelCombo', 'thinkingCheck', 'contextList', 'chatList',
+            ],
+            InternalChildren: [
+                'clearButton', 'logButton', 'historyPopover', 'settingsPopover', 'contextPopover', 'saveKeyButton', 'forgetKeyButton',
+                'contextDocument', 'contextSelection', 'contextProject',
+            ],
+        }, this);
+    }
+    // Widget yang dideklarasikan di chat.ui.
+    declare readonly input: Gtk.TextView;
+    declare readonly sendButton: Gtk.Button;
+    declare readonly messages: Gtk.Box;
+    declare readonly scroller: Gtk.ScrolledWindow;
+    declare readonly contextButton: Gtk.MenuButton;
+    declare readonly settingsButton: Gtk.MenuButton;
+    declare readonly historyButton: Gtk.MenuButton;
+    declare readonly saveCheck: Gtk.CheckButton;
+    declare readonly keyEntry: Gtk.Entry;
+    declare readonly keyStatus: Gtk.Label;
+    declare readonly modelCombo: Gtk.ComboBoxText;
+    declare readonly thinkingCheck: Gtk.CheckButton;
+    declare private readonly contextList: Gtk.Box;
+    declare private readonly chatList: Gtk.Box;
+    declare private readonly _clearButton: Gtk.Button;
+    declare private readonly _logButton: Gtk.Button;
+    declare private readonly _historyPopover: Gtk.Popover;
+    declare private readonly _settingsPopover: Gtk.Popover;
+    declare private readonly _contextPopover: Gtk.Popover;
+    declare private readonly _saveKeyButton: Gtk.Button;
+    declare private readonly _forgetKeyButton: Gtk.Button;
+    declare private readonly _contextDocument: Gtk.CheckButton;
+    declare private readonly _contextSelection: Gtk.CheckButton;
+    declare private readonly _contextProject: Gtk.CheckButton;
+
     readonly session = new ChatSession();
 
     host: ChatHost = { active: () => null, selection: () => '', files: () => [], root: () => null };
@@ -96,9 +127,6 @@ export class ChatPanel {
     private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#4183c4', mark: '#fff3a3' };
     private readonly bubbles: Bubble[] = [];
     readonly empty: Gtk.Box;           // petunjuk awal; tampil selama percakapan kosong
-    private readonly contextList: Gtk.Box;
-    readonly modelCombo: Gtk.ComboBoxText;
-    readonly thinkingCheck: Gtk.CheckButton;
     private generation = 0;
     logViewer: LogViewer | null = null;   // jendela pemantau log agent, bila terbuka
     private cancellable: Gio.Cancellable | null = null;
@@ -114,55 +142,19 @@ export class ChatPanel {
     private chatRoot: string | null = null;
     private chatTitle = '';
     private chatCreated = '';
-    private readonly chatList: Gtk.Box;
     private readonly stepLabels = new Map<string, Gtk.Label>();   // id panggilan alat → baris langkahnya
 
     constructor() {
-        const title = new Gtk.Label({ label: 'ASISTEN', xalign: 0, margin_start: 16 });
-        title.add_css_class('side-title');
-        const clear = Gtk.Button.new_from_icon_name('edit-clear-all-symbolic');
-        clear.set_has_frame(false);
-        clear.set_tooltip_text('Percakapan baru');
-        clear.connect('clicked', () => this.reset());
-        this.chatList = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 });
-        const listScroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, min_content_width: 300, max_content_height: 280, propagate_natural_height: true });
-        listScroll.set_child(this.chatList);
-        const listBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: 12, margin_bottom: 12, margin_start: 12, margin_end: 12 });
-        listBox.add_css_class('chat-pop');
-        listBox.set_size_request(320, -1);
-        listBox.append(this.label('Percakapan sebelumnya'));
-        listBox.append(listScroll);
-        const listPopover = new Gtk.Popover();
-        listPopover.set_child(listBox);
-        this.historyButton = new Gtk.MenuButton({ has_frame: false, tooltip_text: 'Percakapan sebelumnya', popover: listPopover, icon_name: 'document-open-recent-symbolic' });
-        listPopover.connect('show', () => this.refreshChatList());
-        const log = Gtk.Button.new_from_icon_name('utilities-terminal-symbolic');
-        log.set_has_frame(false);
-        log.set_tooltip_text('Log agent: penalaran, alat yang dipakai, dan hasilnya');
-        log.connect('clicked', () => this.showLog());
-        this.settingsButton = new Gtk.MenuButton({ has_frame: false, tooltip_text: 'Pengaturan asisten', icon_name: 'emblem-system-symbolic' });
-        const header = new Gtk.Box({ margin_top: 4, margin_bottom: 8, margin_end: 6 });
-        pack(header, title, true);
-        header.append(clear);
-        header.append(log);
-        header.append(this.historyButton);
-        header.append(this.settingsButton);
+        super();
+        this._clearButton.connect('clicked', () => this.reset());
+        this._logButton.connect('clicked', () => this.showLog());
+        this._historyPopover.connect('show', () => this.refreshChatList());
 
         // Pengaturan: API key dan model.
-        this.keyEntry = new Gtk.Entry({ visibility: false, placeholder_text: 'sk-…', width_chars: 28 });
-        this.keyEntry.set_input_purpose(Gtk.InputPurpose.PASSWORD);
-        this.keyStatus = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 36 });
-        this.keyStatus.add_css_class('side-meta');
-        const save = new Gtk.Button({ label: 'Simpan' });
-        save.connect('clicked', () => void this.saveKey());
+        this._settingsPopover.connect('show', () => void this.refreshKeyStatus());
+        this._saveKeyButton.connect('clicked', () => void this.saveKey());
         this.keyEntry.connect('activate', () => void this.saveKey());
-        const forget = new Gtk.Button({ label: 'Hapus' });
-        forget.connect('clicked', () => void this.forgetKey());
-        const keyRow = new Gtk.Box({ spacing: 6 });
-        pack(keyRow, this.keyEntry, true);
-        keyRow.append(save);
-        keyRow.append(forget);
-        this.modelCombo = new Gtk.ComboBoxText();
+        this._forgetKeyButton.connect('clicked', () => void this.forgetKey());
         for (const m of DEEPSEEK_MODELS) this.modelCombo.append(m, m);
         this.modelCombo.connect('changed', () => {
             const id = this.modelCombo.get_active_id();
@@ -170,46 +162,19 @@ export class ChatPanel {
             this.model = id;
             this.onModelChanged(id);
         });
-        this.thinkingCheck = new Gtk.CheckButton({ label: 'Berpikir mendalam', tooltip_text: 'Model menalar lebih lama sebelum menjawab: biasanya lebih teliti, tetapi lebih lambat dan lebih mahal' });
         this.thinkingCheck.connect('toggled', () => {
             this.session.thinking = this.thinkingCheck.active;
             this.onThinkingChanged(this.thinkingCheck.active);
         });
-        this.saveCheck = new Gtk.CheckButton({
-            label: 'Simpan riwayat percakapan di folder', active: this.saveChats,
-            tooltip_text: 'Tiap percakapan ditulis sebagai berkas Markdown di <folder kerja>/.nyerat/chats. Isinya memuat kutipan dokumen; folder .nyerat tidak ikut Git kecuali Anda menghapus .nyerat/.gitignore',
-        });
+        this.saveCheck.active = this.saveChats;
         this.saveCheck.connect('toggled', () => {
             this.saveChats = this.saveCheck.active;
             this.onSaveChanged(this.saveChats);
         });
-        const privacy = new Gtk.Label({
-            label: 'Dokumen yang disertakan sebagai konteks (atur lewat tombol Konteks) dikirim ke server DeepSeek setiap kali Anda bertanya.',
-            xalign: 0, wrap: true, max_width_chars: 36,
-        });
-        privacy.add_css_class('side-meta');
-        const settings = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_top: 12, margin_bottom: 12, margin_start: 12, margin_end: 12 });
-        settings.add_css_class('chat-pop');
-        settings.append(this.label('API key DeepSeek'));
-        settings.append(keyRow);
-        settings.append(this.keyStatus);
-        settings.append(this.label('Model'));
-        settings.append(this.modelCombo);
-        settings.append(this.thinkingCheck);
-        settings.append(this.saveCheck);
-        settings.append(privacy);
-        const settingsPopover = new Gtk.Popover();
-        settingsPopover.set_child(settings);
-        this.settingsButton.set_popover(settingsPopover);
-        settingsPopover.connect('show', () => void this.refreshKeyStatus());
 
         // Pesan
-        this.messages = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, margin_bottom: 12, margin_start: 12, margin_end: 12, margin_top: 4 });
         this.empty = this.buildEmptyState();
         this.messages.append(this.empty);
-        // EXTERNAL, bukan NEVER: NEVER meneruskan lebar natural isi (teks panjang tanpa spasi) ke induk dan melebarkan panel.
-        this.scroller = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.EXTERNAL, vexpand: true });
-        this.scroller.set_child(this.messages);
         const vadj = this.scroller.get_vadjustment();
         // Menggulir di dalam sinyal "changed" (dipancarkan saat alokasi tata letak) mengubah nilainya, tetapi viewport tidak
         // menerapkannya: isi tampil terpotong beberapa baris dengan footer tak terlihat. Karena itu digulirkan di idle berikutnya.
@@ -223,54 +188,24 @@ export class ChatPanel {
         });
         vadj.connect('value-changed', () => { this.stick = vadj.get_upper() - vadj.get_page_size() - vadj.get_value() < 24; });
 
-        // Konteks: ringkasan + popover pengaturan apa yang dikirim.
-        this.contextList = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 });
-        const contextBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: 12, margin_bottom: 12, margin_start: 12, margin_end: 12 });
-        contextBox.add_css_class('chat-pop');
-        contextBox.append(this.label('Yang dikirim ke model'));
-        const checks: [string, string, keyof ContextOptions][] = [
-            ['Dokumen yang sedang dibuka', 'Isi lengkap dokumen aktif (bila terlalu panjang: bagian di sekitar kursor)', 'activeDocument'],
-            ['Teks yang dipilih', 'Kalimat yang sedang disorot di editor', 'selection'],
-            ['Berkas lain di folder', 'Peta proyek, potongan relevan, berkas yang di-@mention, dan izin bagi asisten untuk mencari dan membaca dokumen sendiri', 'project'],
+        // Konteks: pilihan apa yang dikirim.
+        const checks: [Gtk.CheckButton, keyof ContextOptions][] = [
+            [this._contextDocument, 'activeDocument'], [this._contextSelection, 'selection'], [this._contextProject, 'project'],
         ];
-        for (const [text, tip, key] of checks) {
-            const check = new Gtk.CheckButton({ label: text, active: this.options[key], tooltip_text: tip });
+        for (const [check, key] of checks) {
+            check.active = this.options[key];
             check.connect('toggled', () => { this.options[key] = check.active; this.updateContextPreview(); });
-            contextBox.append(check);
         }
-        contextBox.append(new Gtk.Separator());
-        contextBox.append(this.contextList);
-        const hint = new Gtk.Label({ label: 'Opsional: ketik @namaberkas di pesan untuk langsung melampirkan berkas utuh. Asisten juga dapat mencari dan membaca berkas lain sendiri.', xalign: 0, wrap: true, max_width_chars: 36 });
-        hint.add_css_class('side-meta');
-        contextBox.append(hint);
-        const contextPopover = new Gtk.Popover();
-        contextPopover.set_child(contextBox);
-        this.contextButton = new Gtk.MenuButton({ popover: contextPopover, has_frame: false, direction: Gtk.ArrowType.UP, halign: Gtk.Align.START, margin_start: 8 });
-        contextPopover.connect('show', () => this.updateContextPreview());
+        this._contextPopover.connect('show', () => this.updateContextPreview());
 
-        // Masukan
-        this.input = new Gtk.TextView({ wrap_mode: Gtk.WrapMode.WORD_CHAR, top_margin: 6, bottom_margin: 6, left_margin: 8, right_margin: 8 });
-        this.input.add_css_class('chat-input');
-        // Fase CAPTURE: sebelum TextView sendiri menyisipkan baris baru untuk Enter.
+        // Masukan. Fase CAPTURE: sebelum TextView sendiri menyisipkan baris baru untuk Enter.
         onKeyPress(this.input, (keyval, state) => this.onInputKey(keyval, state), Gtk.PropagationPhase.CAPTURE);
         this.input.buffer.connect('changed', () => this.queueContextSummary());
-        const inputScroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.EXTERNAL, min_content_height: 64, max_content_height: 160, propagate_natural_height: true, has_frame: true });
-        inputScroll.set_child(this.input);
-        this.sendButton = Gtk.Button.new_from_icon_name('go-up-symbolic');
-        this.sendButton.set_tooltip_text('Kirim (Enter)');
-        this.sendButton.set_valign(Gtk.Align.END);
         this.sendButton.connect('clicked', () => this.busy ? this.stop() : void this.send());
-        const inputRow = new Gtk.Box({ spacing: 6, margin_bottom: 8, margin_start: 8, margin_end: 8, margin_top: 2 });
-        pack(inputRow, inputScroll, true);
-        inputRow.append(this.sendButton);
+    }
 
-        this.widget = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: 360 });
-        this.widget.add_css_class('sidebar');
-        this.widget.add_css_class('chat');
-        this.widget.append(header);
-        pack(this.widget, this.scroller, true);
-        this.widget.append(this.contextButton);
-        this.widget.append(inputRow);
+    get widget(): Gtk.Widget {
+        return this;
     }
 
     // Jendela ditutup: hentikan permintaan dan timer yang masih berjalan.
@@ -636,12 +571,6 @@ export class ChatPanel {
     }
 
     // ---------- Pesan ----------
-
-    private label(text: string): Gtk.Label {
-        const l = new Gtk.Label({ label: text, xalign: 0 });
-        l.add_css_class('side-title');
-        return l;
-    }
 
     private buildEmptyState(): Gtk.Box {
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: 8 });

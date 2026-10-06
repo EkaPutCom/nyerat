@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="NyeratChatPanel" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="width-request">360</property>
+    <style>
+      <class name="sidebar"/>
+      <class name="chat"/>
+    </style>
+
+    <!-- Judul dan tombol: percakapan baru, log agent, riwayat, pengaturan -->
+    <child>
+      <object class="GtkBox">
+        <property name="margin-top">4</property>
+        <property name="margin-bottom">8</property>
+        <property name="margin-end">6</property>
+        <child>
+          <object class="GtkLabel">
+            <property name="label">ASISTEN</property>
+            <property name="xalign">0</property>
+            <property name="margin-start">16</property>
+            <property name="hexpand">true</property>
+            <style>
+              <class name="side-title"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="clearButton">
+            <property name="icon-name">edit-clear-all-symbolic</property>
+            <property name="has-frame">false</property>
+            <property name="tooltip-text">Percakapan baru</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="logButton">
+            <property name="icon-name">utilities-terminal-symbolic</property>
+            <property name="has-frame">false</property>
+            <property name="tooltip-text">Log agent: penalaran, alat yang dipakai, dan hasilnya</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkMenuButton" id="historyButton">
+            <property name="icon-name">document-open-recent-symbolic</property>
+            <property name="has-frame">false</property>
+            <property name="tooltip-text">Percakapan sebelumnya</property>
+            <property name="popover">
+              <object class="GtkPopover" id="historyPopover">
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">6</property>
+                    <property name="margin-top">12</property>
+                    <property name="margin-bottom">12</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <property name="width-request">320</property>
+                    <style>
+                      <class name="chat-pop"/>
+                    </style>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Percakapan sebelumnya</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="side-title"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkScrolledWindow">
+                        <property name="hscrollbar-policy">never</property>
+                        <property name="min-content-width">300</property>
+                        <property name="max-content-height">280</property>
+                        <property name="propagate-natural-height">true</property>
+                        <child>
+                          <object class="GtkBox" id="chatList">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">2</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkMenuButton" id="settingsButton">
+            <property name="icon-name">emblem-system-symbolic</property>
+            <property name="has-frame">false</property>
+            <property name="tooltip-text">Pengaturan asisten</property>
+            <property name="popover">
+              <object class="GtkPopover" id="settingsPopover">
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">8</property>
+                    <property name="margin-top">12</property>
+                    <property name="margin-bottom">12</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <style>
+                      <class name="chat-pop"/>
+                    </style>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">API key DeepSeek</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="side-title"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">6</property>
+                        <child>
+                          <object class="GtkEntry" id="keyEntry">
+                            <property name="visibility">false</property>
+                            <property name="placeholder-text">sk-…</property>
+                            <property name="width-chars">28</property>
+                            <property name="input-purpose">password</property>
+                            <property name="hexpand">true</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="saveKeyButton">
+                            <property name="label">Simpan</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="forgetKeyButton">
+                            <property name="label">Hapus</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="keyStatus">
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="max-width-chars">36</property>
+                        <style>
+                          <class name="side-meta"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Model</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="side-title"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkComboBoxText" id="modelCombo"/>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="thinkingCheck">
+                        <property name="label">Berpikir mendalam</property>
+                        <property name="tooltip-text">Model menalar lebih lama sebelum menjawab: biasanya lebih teliti, tetapi lebih lambat dan lebih mahal</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="saveCheck">
+                        <property name="label">Simpan riwayat percakapan di folder</property>
+                        <property name="tooltip-text">Tiap percakapan ditulis sebagai berkas Markdown di &lt;folder kerja&gt;/.nyerat/chats. Isinya memuat kutipan dokumen; folder .nyerat tidak ikut Git kecuali Anda menghapus .nyerat/.gitignore</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Dokumen yang disertakan sebagai konteks (atur lewat tombol Konteks) dikirim ke server DeepSeek setiap kali Anda bertanya.</property>
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="max-width-chars">36</property>
+                        <style>
+                          <class name="side-meta"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+
+    <!-- Pesan. EXTERNAL, bukan NEVER: NEVER meneruskan lebar natural isi (teks panjang tanpa spasi) ke induk dan melebarkan panel. -->
+    <child>
+      <object class="GtkScrolledWindow" id="scroller">
+        <property name="hscrollbar-policy">external</property>
+        <property name="vexpand">true</property>
+        <child>
+          <object class="GtkBox" id="messages">
+            <property name="orientation">vertical</property>
+            <property name="spacing">10</property>
+            <property name="margin-bottom">12</property>
+            <property name="margin-start">12</property>
+            <property name="margin-end">12</property>
+            <property name="margin-top">4</property>
+          </object>
+        </child>
+      </object>
+    </child>
+
+    <!-- Konteks: ringkasan, dan popover pengaturan apa yang dikirim -->
+    <child>
+      <object class="GtkMenuButton" id="contextButton">
+        <property name="has-frame">false</property>
+        <property name="direction">up</property>
+        <property name="halign">start</property>
+        <property name="margin-start">8</property>
+        <property name="popover">
+          <object class="GtkPopover" id="contextPopover">
+            <property name="child">
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">6</property>
+                <property name="margin-top">12</property>
+                <property name="margin-bottom">12</property>
+                <property name="margin-start">12</property>
+                <property name="margin-end">12</property>
+                <style>
+                  <class name="chat-pop"/>
+                </style>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label">Yang dikirim ke model</property>
+                    <property name="xalign">0</property>
+                    <style>
+                      <class name="side-title"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkCheckButton" id="contextDocument">
+                    <property name="label">Dokumen yang sedang dibuka</property>
+                    <property name="tooltip-text">Isi lengkap dokumen aktif (bila terlalu panjang: bagian di sekitar kursor)</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkCheckButton" id="contextSelection">
+                    <property name="label">Teks yang dipilih</property>
+                    <property name="tooltip-text">Kalimat yang sedang disorot di editor</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkCheckButton" id="contextProject">
+                    <property name="label">Berkas lain di folder</property>
+                    <property name="tooltip-text">Peta proyek, potongan relevan, berkas yang di-@mention, dan izin bagi asisten untuk mencari dan membaca dokumen sendiri</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkSeparator"/>
+                </child>
+                <child>
+                  <object class="GtkBox" id="contextList">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">2</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label">Opsional: ketik @namaberkas di pesan untuk langsung melampirkan berkas utuh. Asisten juga dapat mencari dan membaca berkas lain sendiri.</property>
+                    <property name="xalign">0</property>
+                    <property name="wrap">true</property>
+                    <property name="max-width-chars">36</property>
+                    <style>
+                      <class name="side-meta"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </property>
+          </object>
+        </property>
+      </object>
+    </child>
+
+    <!-- Masukan -->
+    <child>
+      <object class="GtkBox">
+        <property name="spacing">6</property>
+        <property name="margin-bottom">8</property>
+        <property name="margin-start">8</property>
+        <property name="margin-end">8</property>
+        <property name="margin-top">2</property>
+        <child>
+          <object class="GtkScrolledWindow">
+            <property name="hscrollbar-policy">external</property>
+            <property name="min-content-height">64</property>
+            <property name="max-content-height">160</property>
+            <property name="propagate-natural-height">true</property>
+            <property name="has-frame">true</property>
+            <property name="hexpand">true</property>
+            <child>
+              <object class="GtkTextView" id="input">
+                <property name="wrap-mode">word-char</property>
+                <property name="top-margin">6</property>
+                <property name="bottom-margin">6</property>
+                <property name="left-margin">8</property>
+                <property name="right-margin">8</property>
+                <style>
+                  <class name="chat-input"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="sendButton">
+            <property name="icon-name">go-up-symbolic</property>
+            <property name="tooltip-text">Kirim (Enter)</property>
+            <property name="valign">end</property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

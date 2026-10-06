@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="NyeratStatusBar" parent="GtkBox">
+    <property name="spacing">12</property>
+    <style>
+      <class name="statusbar"/>
+    </style>
+    <child>
+      <object class="GtkLabel" id="left">
+        <property name="xalign">0</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="right">
+        <property name="xalign">1</property>
+        <property name="hexpand">true</property>
+      </object>
+    </child>
+  </template>
+</interface>

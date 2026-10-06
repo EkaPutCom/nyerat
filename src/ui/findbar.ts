@@ -3,47 +3,51 @@
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GtkSource from 'gi://GtkSource?version=5';
+import GObject from 'gi://GObject';
 
-export class FindBar {
+import { uiTemplate } from '../gtkutil.js';
+import template from './findbar.ui?raw';
+
+export class FindBar extends Gtk.SearchBar {
+    static {
+        GObject.registerClass({
+            GTypeName: 'NyeratFindBar',
+            Template: uiTemplate(template),
+            InternalChildren: ['entry', 'previous', 'next'],
+        }, this);
+    }
+    declare _entry: Gtk.SearchEntry;
+    declare _previous: Gtk.Button;
+    declare _next: Gtk.Button;
+
     buffer: GtkSource.Buffer;
     view: Gtk.TextView;
     readonly settings: GtkSource.SearchSettings;
     context: GtkSource.SearchContext;
-    readonly entry: Gtk.SearchEntry;
-    readonly widget: Gtk.SearchBar;
 
     constructor(buffer: GtkSource.Buffer, view: Gtk.TextView) {
+        super();
         this.buffer = buffer;
         this.view = view;
         this.settings = new GtkSource.SearchSettings({ wrap_around: true, case_sensitive: false });
         this.context = new GtkSource.SearchContext({ buffer, settings: this.settings });
 
-        this.entry = new Gtk.SearchEntry({ width_chars: 32 });
-        this.entry.connect('search-changed', () => {
-            this.settings.search_text = this.entry.text || null;
+        const entry = this._entry;
+        entry.connect('search-changed', () => {
+            this.settings.search_text = entry.text || null;
             this.findNext(true);
         });
-        this.entry.connect('activate', () => this.findNext());
-        this.entry.connect('next-match', () => this.findNext());
-        this.entry.connect('previous-match', () => this.findPrevious());
-        this.entry.connect('stop-search', () => this.close());
+        entry.connect('activate', () => this.findNext());
+        entry.connect('next-match', () => this.findNext());
+        entry.connect('previous-match', () => this.findPrevious());
+        entry.connect('stop-search', () => this.close());
+        this._previous.connect('clicked', () => this.findPrevious());
+        this._next.connect('clicked', () => this.findNext());
 
-        const prev = Gtk.Button.new_from_icon_name('go-up-symbolic');
-        prev.connect('clicked', () => this.findPrevious());
-        const next = Gtk.Button.new_from_icon_name('go-down-symbolic');
-        next.connect('clicked', () => this.findNext());
-
-        const box = new Gtk.Box({ spacing: 6 });
-        box.append(this.entry);
-        box.append(prev);
-        box.append(next);
-
-        this.widget = new Gtk.SearchBar({ show_close_button: true });
-        this.widget.set_child(box);
-        this.widget.connect_entry(this.entry);
+        this.connect_entry(entry);
         // Sorotan hasil hilang saat bilah ditutup.
-        this.widget.connect('notify::search-mode-enabled', () => {
-            this.settings.search_text = this.widget.search_mode_enabled ? (this.entry.text || null) : null;
+        this.connect('notify::search-mode-enabled', () => {
+            this.settings.search_text = this.search_mode_enabled ? (entry.text || null) : null;
         });
     }
 
@@ -56,12 +60,12 @@ export class FindBar {
     }
 
     open(): void {
-        this.widget.search_mode_enabled = true;
-        this.entry.grab_focus();
+        this.search_mode_enabled = true;
+        this._entry.grab_focus();
     }
 
     close(): void {
-        this.widget.search_mode_enabled = false;
+        this.search_mode_enabled = false;
         this.view.grab_focus();
     }
 

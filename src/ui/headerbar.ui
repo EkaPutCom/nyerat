@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <menu id="mainMenu">
+    <section>
+      <item>
+        <attribute name="label">Buka Folder…</attribute>
+        <attribute name="action">app.open-folder</attribute>
+      </item>
+      <item>
+        <attribute name="label">Simpan Sebagai…</attribute>
+        <attribute name="action">app.save-as</attribute>
+      </item>
+      <item>
+        <attribute name="label">Auto Save</attribute>
+        <attribute name="action">app.autosave</attribute>
+      </item>
+      <item>
+        <attribute name="label">Ekspor HTML…</attribute>
+        <attribute name="action">app.export-html</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label">Palet Perintah</attribute>
+        <attribute name="action">app.command-palette</attribute>
+      </item>
+      <item>
+        <attribute name="label">Cari</attribute>
+        <attribute name="action">app.find</attribute>
+      </item>
+      <item>
+        <attribute name="label">Sisipkan Gambar…</attribute>
+        <attribute name="action">app.image</attribute>
+      </item>
+      <item>
+        <attribute name="label">Perbesar Gambar</attribute>
+        <attribute name="action">app.zoom-image</attribute>
+      </item>
+      <item>
+        <attribute name="label">Sisipkan Tabel</attribute>
+        <attribute name="action">app.table</attribute>
+      </item>
+      <submenu>
+        <attribute name="label">Edit Tabel</attribute>
+        <section>
+          <item>
+            <attribute name="label">Tambah Baris di Bawah</attribute>
+            <attribute name="action">app.table-row-below</attribute>
+          </item>
+          <item>
+            <attribute name="label">Tambah Baris di Atas</attribute>
+            <attribute name="action">app.table-row-above</attribute>
+          </item>
+          <item>
+            <attribute name="label">Hapus Baris</attribute>
+            <attribute name="action">app.table-delete-row</attribute>
+          </item>
+        </section>
+        <section>
+          <item>
+            <attribute name="label">Tambah Kolom di Kanan</attribute>
+            <attribute name="action">app.table-col-right</attribute>
+          </item>
+          <item>
+            <attribute name="label">Tambah Kolom di Kiri</attribute>
+            <attribute name="action">app.table-col-left</attribute>
+          </item>
+          <item>
+            <attribute name="label">Hapus Kolom</attribute>
+            <attribute name="action">app.table-delete-col</attribute>
+          </item>
+        </section>
+        <section>
+          <item>
+            <attribute name="label">Rata Kiri</attribute>
+            <attribute name="action">app.table-align-left</attribute>
+          </item>
+          <item>
+            <attribute name="label">Rata Tengah</attribute>
+            <attribute name="action">app.table-align-center</attribute>
+          </item>
+          <item>
+            <attribute name="label">Rata Kanan</attribute>
+            <attribute name="action">app.table-align-right</attribute>
+          </item>
+        </section>
+        <section>
+          <item>
+            <attribute name="label">Rapikan Tabel</attribute>
+            <attribute name="action">app.table-format</attribute>
+          </item>
+        </section>
+      </submenu>
+      <item>
+        <attribute name="label">Sisipkan Blok Kode</attribute>
+        <attribute name="action">app.codeblock</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label">Papan Kanban Baru</attribute>
+        <attribute name="action">app.kanban-new</attribute>
+      </item>
+      <item>
+        <attribute name="label">Tampilan Papan Kanban</attribute>
+        <attribute name="action">app.kanban-view</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label">Mode Source</attribute>
+        <attribute name="action">app.source</attribute>
+      </item>
+      <item>
+        <attribute name="label">Mode Fokus</attribute>
+        <attribute name="action">app.focus</attribute>
+      </item>
+      <item>
+        <attribute name="label">Mode Typewriter</attribute>
+        <attribute name="action">app.typewriter</attribute>
+      </item>
+      <item>
+        <attribute name="label">Mode Gelap</attribute>
+        <attribute name="action">app.dark</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label">Preferensi</attribute>
+        <attribute name="action">app.preferences</attribute>
+      </item>
+      <item>
+        <attribute name="label">Tentang Nyerat</attribute>
+        <attribute name="action">app.about</attribute>
+      </item>
+      <item>
+        <attribute name="label">Keluar</attribute>
+        <attribute name="action">app.quit</attribute>
+      </item>
+    </section>
+  </menu>
+  <template class="NyeratHeaderBar" parent="AdwBin">
+    <property name="child">
+    <object class="AdwHeaderBar">
+    <property name="title-widget">
+      <object class="AdwWindowTitle" id="windowTitle"/>
+    </property>
+    <child type="start">
+      <object class="GtkToggleButton">
+        <property name="icon-name">format-justify-left-symbolic</property>
+        <property name="action-name">app.sidebar</property>
+        <property name="tooltip-text">Sidebar (Ctrl+\)</property>
+      </object>
+    </child>
+    <!-- Ikon dokumen, bukan document-open-symbolic: di beberapa tema ikon (misalnya
+         elementary-xfce) document-open berupa folder, sehingga tertukar dengan Buka Folder. -->
+    <child type="start">
+      <object class="GtkButton">
+        <property name="icon-name">text-x-generic-symbolic</property>
+        <property name="action-name">app.open</property>
+        <property name="tooltip-text">Buka File (Ctrl+O)</property>
+      </object>
+    </child>
+    <child type="start">
+      <object class="GtkButton">
+        <property name="icon-name">folder-open-symbolic</property>
+        <property name="action-name">app.open-folder</property>
+        <property name="tooltip-text">Buka Folder (Ctrl+Shift+O)</property>
+      </object>
+    </child>
+    <child type="start">
+      <object class="GtkButton">
+        <property name="icon-name">document-new-symbolic</property>
+        <property name="action-name">app.new</property>
+        <property name="tooltip-text">Baru (Ctrl+N)</property>
+      </object>
+    </child>
+    <child type="end">
+      <object class="GtkMenuButton">
+        <property name="icon-name">open-menu-symbolic</property>
+        <property name="tooltip-text">Menu</property>
+        <property name="menu-model">mainMenu</property>
+      </object>
+    </child>
+    <child type="end">
+      <object class="GtkButton">
+        <property name="icon-name">document-save-symbolic</property>
+        <property name="action-name">app.save</property>
+        <property name="tooltip-text">Simpan (Ctrl+S)</property>
+      </object>
+    </child>
+    <child type="end">
+      <object class="GtkToggleButton">
+        <property name="icon-name">user-available-symbolic</property>
+        <property name="action-name">app.chat</property>
+        <property name="tooltip-text">Asisten (Ctrl+Shift+A)</property>
+      </object>
+    </child>
+    </object>
+    </property>
+  </template>
+</interface>

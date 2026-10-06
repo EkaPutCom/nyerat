@@ -1,35 +1,31 @@
 // Bilah status di bawah editor.
-//   kiri:  mode aktif, atau pesan singkat ("Tersimpan") selama 2,5 detik
+//   kiri:  mode aktif
 //   kanan: jumlah kata/karakter dan posisi kursor
 
 import Gtk from 'gi://Gtk?version=4.0';
-import GLib from 'gi://GLib';
-import { cpLength } from '../editor/offsets.js';
+import GObject from 'gi://GObject';
 
-export class StatusBar {
-    readonly left: Gtk.Label;
-    readonly right: Gtk.Label;
-    readonly widget: Gtk.Box;
+import { cpLength } from '../editor/offsets.js';
+import { uiTemplate } from '../gtkutil.js';
+import template from './statusbar.ui?raw';
+
+export class StatusBar extends Gtk.Box {
+    static {
+        GObject.registerClass({
+            GTypeName: 'NyeratStatusBar',
+            Template: uiTemplate(template),
+            InternalChildren: ['left', 'right'],
+        }, this);
+    }
+    declare _left: Gtk.Label;
+    declare _right: Gtk.Label;
 
     private counts = '';
-    private cursor = '';
+    private cursorText = '';
     private modes = '';
-    private toastId = 0;
 
-    constructor() {
-        this.left = new Gtk.Label({ xalign: 0 });
-        this.right = new Gtk.Label({ xalign: 1, hexpand: true });
-        this.widget = new Gtk.Box({ spacing: 12 });
-        this.widget.add_css_class('statusbar');
-        this.widget.append(this.left);
-        this.widget.append(this.right);
-    }
-
-    // Pesan yang masih tampil saat jendela ditutup: timer-nya tidak boleh menyentuh label yang sudah dibuang.
-    destroy(): void {
-        if (this.toastId) GLib.source_remove(this.toastId);
-        this.toastId = 0;
-    }
+    get left(): Gtk.Label { return this._left; }
+    get right(): Gtk.Label { return this._right; }
 
     setCounts(text: string): void {
         // Simbol Markdown tidak dihitung sebagai kata.
@@ -45,31 +41,21 @@ export class StatusBar {
     // Ringkasan papan kanban; menggantikan hitungan kata dan posisi kursor selama papan tampil.
     setBoardCounts(lists: number, cards: number): void {
         this.counts = `${lists} daftar · ${cards} kartu`;
-        this.cursor = '';
+        this.cursorText = '';
         this.render();
     }
 
     setCursor(line: number, column: number): void {
-        this.cursor = `Baris ${line + 1}, Kolom ${column + 1}`;
+        this.cursorText = `Baris ${line + 1}, Kolom ${column + 1}`;
         this.render();
     }
 
     setModes(names: string[]): void {
         this.modes = names.length ? `Mode: ${names.join(' · ')}` : '';
-        if (!this.toastId) this.left.label = this.modes;
-    }
-
-    toast(message: string): void {
-        this.left.label = message;
-        if (this.toastId) GLib.source_remove(this.toastId);
-        this.toastId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2500, () => {
-            this.toastId = 0;
-            this.left.label = this.modes;
-            return GLib.SOURCE_REMOVE;
-        });
+        this.left.label = this.modes;
     }
 
     private render(): void {
-        this.right.label = `${this.counts}   ${this.cursor}`;
+        this.right.label = `${this.counts}   ${this.cursorText}`;
     }
 }
