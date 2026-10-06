@@ -1,12 +1,15 @@
 // Sidebar kiri dengan tiga tab: Berkas (pohon folder), Outline (daftar heading), dan Riwayat (git).
 // Sidebar sendiri tidak tahu isi tabnya; keduanya diberikan oleh jendela.
+// Dibungkus Adw.OverlaySplitView: sidebar selebar tetap di kiri, sisanya untuk konten.
 
+import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 
 export type SidebarPage = 'files' | 'outline' | 'history';
 
 export class Sidebar {
-    readonly widget: Gtk.Revealer;
+    readonly widget: Adw.OverlaySplitView;
+    readonly panel: Gtk.Box;
     readonly stack: Gtk.Stack;
     onPageChanged: (page: SidebarPage) => void = () => {};
 
@@ -21,19 +24,20 @@ export class Sidebar {
         // Tiga tab harus muat di lebar sidebar; tombol yang terlalu lebar menaikkan lebar minimum jendela.
         switcher.add_css_class('sidebar-tabs');
 
-        const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: 240 });
-        box.add_css_class('sidebar');
-        box.append(switcher);
-        box.append(this.stack);
-        const wrap = new Gtk.Box();
-        box.set_hexpand(true);
-        wrap.append(box);
-        wrap.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL }));
+        this.panel = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
+        this.panel.add_css_class('sidebar');
+        this.panel.append(switcher);
+        this.panel.append(this.stack);
 
-        // hexpand false secara eksplisit: GTK 4 meneruskan hexpand anak (judul, kolom isian) ke
-        // atas, dan sidebar yang "mengembang" akan ikut dibagi ruang sisa jendela.
-        this.widget = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_RIGHT, transition_duration: 150, hexpand: false });
-        this.widget.set_child(wrap);
+        // Lebar tetap 240: isi sidebar (judul, kolom isian) tidak boleh membuatnya mengembang.
+        this.widget = new Adw.OverlaySplitView({
+            sidebar: this.panel, min_sidebar_width: 240, max_sidebar_width: 240,
+            enable_show_gesture: false, enable_hide_gesture: false,
+        });
+    }
+
+    setContent(content: Gtk.Widget): void {
+        this.widget.set_content(content);
     }
 
     get page(): SidebarPage {
@@ -45,10 +49,10 @@ export class Sidebar {
     }
 
     get visible(): boolean {
-        return this.widget.reveal_child;
+        return this.widget.show_sidebar;
     }
 
     setVisible(visible: boolean): void {
-        this.widget.set_reveal_child(visible);
+        this.widget.set_show_sidebar(visible);
     }
 }

@@ -1,107 +1,85 @@
-// Baris tab dokumen di atas editor. Hanya tampil jika ada dua dokumen atau lebih, jadi
-// pemakaian satu dokumen tidak berubah. Tab tidak tahu isi dokumen; jendela yang
-// menyuplai judul dan status "belum disimpan".
+// Baris tab dokumen di atas editor: Adw.TabBar yang menampilkan Adw.TabView, dan hanya terlihat
+// jika ada dua dokumen atau lebih (autohide). Isi dokumen tidak ada di TabView; tiap halamannya
+// hanya penanda, karena editor dan papan kanban dipilih oleh Gtk.Stack milik jendela.
+// Tab tidak tahu isi dokumen; jendela yang menyuplai judul dan status "belum disimpan".
 
+import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 
-interface Tab {
-    id: number;
-    box: Gtk.Box;
-    button: Gtk.ToggleButton;
-    label: Gtk.Label;
-}
-
 export class TabBar {
-    readonly widget: Gtk.Revealer;
+    readonly widget: Adw.TabBar;
     onSelect: (id: number) => void = () => {};
     onClose: (id: number) => void = () => {};
 
-    private readonly row: Gtk.Box;
-    private readonly scroller: Gtk.ScrolledWindow;
-    private tabs: Tab[] = [];
-    private active = -1;
+    private readonly view = new Adw.TabView();
+    private readonly pages = new Map<number, Adw.TabPage>();
+    private readonly ids_ = new Map<Adw.TabPage, number>();
     private syncing = false;
+    private removing: Adw.TabPage | null = null;
 
     constructor() {
-        this.row = new Gtk.Box({ spacing: 2, margin_start: 6, margin_end: 6, margin_top: 4, margin_bottom: 4 });
-        // Bar gulir bawaan tidak dipakai (tinggi bilah tab tetap); roda mouse tetap menggulir.
-        this.scroller = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.EXTERNAL, vscrollbar_policy: Gtk.PolicyType.NEVER, hexpand: true });
-        this.scroller.set_child(this.row);
-        const wrap = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-        wrap.add_css_class('tabbar');
-        wrap.append(this.scroller);
-        wrap.append(new Gtk.Separator());
-        this.widget = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, transition_duration: 100 });
-        this.widget.set_child(wrap);
+        this.widget = new Adw.TabBar({ view: this.view, autohide: true });
+        this.view.connect('notify::selected-page', () => {
+            const id = this.view.selected_page && this.ids_.get(this.view.selected_page);
+            if (!this.syncing && id !== null && id !== undefined) this.onSelect(id);
+        });
+        // Tombol tutup di tab hanya meminta; jendela yang memutuskan (mungkin bertanya dulu) lalu memanggil remove().
+        this.view.connect('close-page', (_view, page) => {
+            if (page === this.removing) {
+                this.view.close_page_finish(page, true);
+            } else {
+                this.view.close_page_finish(page, false);
+                const id = this.ids_.get(page);
+                if (id !== undefined) this.onClose(id);
+            }
+            return true;
+        });
     }
 
     get count(): number {
-        return this.tabs.length;
+        return this.view.n_pages;
     }
 
     add(id: number, title: string): void {
-        const button = new Gtk.ToggleButton({ has_frame: false, focus_on_click: false });
-        const label = new Gtk.Label({ label: title, ellipsize: 3, max_width_chars: 22, xalign: 0 });
-        button.set_child(label);
-        button.connect('toggled', () => {
-            if (this.syncing) return;
-            // Mengklik tab yang sudah aktif tidak boleh mematikannya.
-            if (id === this.active) button.set_active(true);
-            else this.onSelect(id);
-        });
-        const close = Gtk.Button.new_from_icon_name('window-close-symbolic');
-        close.set_has_frame(false);
-        close.set_focus_on_click(false);
-        close.set_tooltip_text('Tutup tab (Ctrl+W)');
-        close.add_css_class('tab-close');
-        close.connect('clicked', () => this.onClose(id));
-        const box = new Gtk.Box();
-        box.add_css_class('tab');
-        box.append(button);
-        box.append(close);
-        this.row.append(box);
-        this.tabs.push({ id, box, button, label });
-        this.refresh();
+        this.syncing = true;
+        const page = this.view.append(new Gtk.Box());
+        this.syncing = false;
+        page.title = title;
+        this.pages.set(id, page);
+        this.ids_.set(page, id);
     }
 
     remove(id: number): void {
-        const tab = this.tabs.find(t => t.id === id);
-        if (!tab) return;
-        this.tabs = this.tabs.filter(t => t !== tab);
-        this.row.remove(tab.box);
-        this.refresh();
+        const page = this.pages.get(id);
+        if (!page) return;
+        this.pages.delete(id);
+        this.ids_.delete(page);
+        this.removing = page;
+        this.syncing = true;   // TabView memilih tab tetangga sendiri; jendela yang menentukan tab aktif
+        this.view.close_page(page);
+        this.syncing = false;
+        this.removing = null;
     }
 
     setTitle(id: number, title: string, tooltip: string | null = null): void {
-        const tab = this.tabs.find(t => t.id === id);
-        if (!tab) return;
-        tab.label.set_text(title);
-        tab.button.set_tooltip_text(tooltip);
+        const page = this.pages.get(id);
+        if (!page) return;
+        page.title = title;
+        page.tooltip = tooltip ?? '';
     }
 
     setActive(id: number): void {
-        this.active = id;
+        const page = this.pages.get(id);
+        if (!page) return;
         this.syncing = true;
-        for (const t of this.tabs) t.button.set_active(t.id === id);
+        this.view.selected_page = page;
         this.syncing = false;
-        const tab = this.tabs.find(t => t.id === id);
-        if (tab) this.scrollTo(tab);
     }
 
-    // Urutan tab dari kiri ke kanan.
+    // Urutan tab dari kiri ke kanan (pengguna bisa menyeretnya).
     ids(): number[] {
-        return this.tabs.map(t => t.id);
-    }
-
-    private refresh(): void {
-        this.widget.set_reveal_child(this.tabs.length > 1);
-    }
-
-    private scrollTo(tab: Tab): void {
-        const adj = this.scroller.get_hadjustment();
-        const alloc = tab.box.get_allocation();
-        if (alloc.width <= 1) return;   // belum dialokasikan
-        if (alloc.x < adj.get_value()) adj.set_value(alloc.x);
-        else if (alloc.x + alloc.width > adj.get_value() + adj.get_page_size()) adj.set_value(alloc.x + alloc.width - adj.get_page_size());
+        const result: number[] = [];
+        for (let i = 0; i < this.view.n_pages; i++) result.push(this.ids_.get(this.view.get_nth_page(i))!);
+        return result;
     }
 }
