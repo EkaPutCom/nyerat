@@ -205,8 +205,20 @@ export class ChatPanel extends Gtk.Box {
 
         // Masukan. Fase CAPTURE: sebelum TextView sendiri menyisipkan baris baru untuk Enter.
         onKeyPress(this.input, (keyval, state) => this.onInputKey(keyval, state), Gtk.PropagationPhase.CAPTURE);
-        this.input.buffer.connect('changed', () => this.queueContextSummary());
+        this.input.buffer.connect('changed', () => { this.queueContextSummary(); this.updateSendButton(); });
         this.sendButton.connect('clicked', () => this.busy ? this.stop() : void this.send());
+        this.updateSendButton();
+    }
+
+    // Kirim: tombol utama (suggested-action), nonaktif selama kotak pesan kosong. Hentikan: tombol biasa, selalu aktif.
+    private updateSendButton(): void {
+        const busy = this.busy;
+        this.sendButton.set_icon_name(busy ? 'media-playback-stop-symbolic' : 'go-up-symbolic');
+        this.sendButton.set_tooltip_text(busy ? _('Hentikan') : _('Kirim (Enter)'));
+        this.sendButton.update_property([Gtk.AccessibleProperty.LABEL], [busy ? _('Hentikan') : _('Kirim')]);
+        if (busy) this.sendButton.remove_css_class('suggested-action');
+        else this.sendButton.add_css_class('suggested-action');
+        this.sendButton.set_sensitive(busy || !!this.input.buffer.text.trim());
     }
 
     get widget(): Gtk.Widget {
@@ -305,8 +317,7 @@ export class ChatPanel extends Gtk.Box {
         const answer = this.addAssistant();
         this.cardsBox = answer.cards;
         this.cancellable = new Gio.Cancellable();
-        this.sendButton.set_icon_name('media-playback-stop-symbolic');
-        this.sendButton.set_tooltip_text(_('Hentikan'));
+        this.updateSendButton();
         this.stick = true;
 
         const requestRoot = this.host.root();
@@ -360,8 +371,7 @@ export class ChatPanel extends Gtk.Box {
             if (!answer.bubble.text) answer.bubble.label.hide();
         } finally {
             this.cancellable = null;
-            this.sendButton.set_icon_name('go-up-symbolic');
-            this.sendButton.set_tooltip_text(_('Kirim (Enter)'));
+            this.updateSendButton();
             this.updateContextSummary();
         }
     }

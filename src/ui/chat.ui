@@ -287,18 +287,21 @@
     <!-- Masukan -->
     <child>
       <object class="GtkBox">
-        <property name="spacing">6</property>
         <property name="margin-bottom">8</property>
         <property name="margin-start">8</property>
         <property name="margin-end">8</property>
         <property name="margin-top">2</property>
+        <!-- Tombol kirim berada di dalam kotak pesan: satu bingkai untuk teks dan tombolnya. -->
+        <property name="overflow">hidden</property>
+        <style>
+          <class name="chat-composer"/>
+        </style>
         <child>
           <object class="GtkScrolledWindow">
             <property name="hscrollbar-policy">external</property>
             <property name="min-content-height">64</property>
             <property name="max-content-height">160</property>
             <property name="propagate-natural-height">true</property>
-            <property name="has-frame">true</property>
             <property name="hexpand">true</property>
             <child>
               <object class="GtkTextView" id="input">
@@ -319,6 +322,12 @@
             <property name="icon-name">go-up-symbolic</property>
             <property name="tooltip-text" translatable="yes">Kirim (Enter)</property>
             <property name="valign">end</property>
+            <property name="margin-end">6</property>
+            <property name="margin-bottom">6</property>
+            <style>
+              <class name="circular"/>
+              <class name="suggested-action"/>
+            </style>
           </object>
         </child>
       </object>

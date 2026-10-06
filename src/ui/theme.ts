@@ -51,6 +51,8 @@ const buildCss = (p: Palette): string => `
     .sidebar-tabs button { padding: 3px 6px; min-width: 0; font-size: 12px; }
     .side-meta { font-size: 11px; color: alpha(currentColor, 0.55); }
     .chat-input, .chat-input text { background-color: @view_bg_color; color: @view_fg_color; font-size: 13px; }
+    .chat-composer { background-color: @view_bg_color; border: 1px solid alpha(currentColor, 0.15); border-radius: 12px; }
+    .chat-composer:focus-within { outline: 2px solid alpha(@accent_color, 0.5); outline-offset: -1px; }
     .chat-user { background-color: alpha(@accent_bg_color, 0.16); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
     .chat-assistant { font-size: 13px; }
     .chat-thinking { color: alpha(currentColor, 0.55); font-size: 12px; font-style: italic; }

@@ -195,6 +195,29 @@ export function chatTests(c: GuiContext): void {
         panel.makeProvider = () => provider;
     });
 
+    test('tombol kirim di dalam kotak pesan: nonaktif saat kosong, tombol utama saat ada teks', () => {
+        const composer = panel.sendButton.get_parent()!;
+        ok(composer.has_css_class('chat-composer'), 'tombol kirim tidak berada di kotak pesan');
+        ok(panel.input.is_ancestor(composer), 'kotak teks tidak berada di bingkai yang sama');
+        void panel.ask('', false);
+        ok(!panel.sendButton.sensitive, 'kirim aktif padahal kosong');
+        void panel.ask('   ', false);
+        ok(!panel.sendButton.sensitive, 'kirim aktif padahal hanya spasi');
+        void panel.ask('Halo', false);
+        ok(panel.sendButton.sensitive && panel.sendButton.has_css_class('suggested-action'), 'kirim tidak aktif setelah ada teks');
+        const prefix = optVal('shot-composer');
+        if (prefix) {
+            const oldDark = w.dark;
+            for (const dark of [false, true]) {
+                w.setDark(dark);
+                for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
+                widgetPixbuf(panel.widget)?.savev(`${prefix}-${dark ? 'dark' : 'light'}.png`, 'png', [], []);
+            }
+            w.setDark(oldDark);
+        }
+        void panel.ask('', false);
+    });
+
     test('tombol hentikan membatalkan jawaban yang sedang mengalir; potongannya tetap tampil dan tersimpan', () => {
         const before = panel.session.history.length;
         panel.makeProvider = () => ({
@@ -207,6 +230,7 @@ export function chatTests(c: GuiContext): void {
         for (let i = 0; i < 200 && !all().includes('Separuh jawaban'); i++) { pump(); GLib.usleep(5000); }
         ok(panel.busy, 'seharusnya sedang sibuk');
         eq(panel.sendButton.get_tooltip_text(), 'Hentikan');
+        ok(panel.sendButton.sensitive && !panel.sendButton.has_css_class('suggested-action'), 'tombol hentikan harus aktif dan bukan tombol utama');
         panel.stop();
         settle(pending);
         contains(all(), 'Separuh jawaban');
