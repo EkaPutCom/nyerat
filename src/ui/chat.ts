@@ -9,7 +9,7 @@
 //   └──────────────────────────────┘
 
 import { journalText } from '../agent/journal.js';
-import { workText } from '../agent/work.js';
+import { WorkList } from './worklist.js';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
@@ -310,6 +310,8 @@ export class ChatPanel extends Gtk.Box {
         this.stick = true;
 
         const requestRoot = this.host.root();
+        const started = GLib.get_monotonic_time();
+        const elapsed = () => (GLib.get_monotonic_time() - started) / 1e6;
         let reasoning = '';
         try {
             const result = await this.session.ask(this.turnInput(question), this.makeProvider(found.key), this.model, {
@@ -332,15 +334,17 @@ export class ChatPanel extends Gtk.Box {
                 onState: () => {
                     if (generation !== this.generation) return;
                     this.persist();
-                    if (this.session.work) { answer.work.set_text(workText(this.session.work)); answer.work.show(); }
+                    if (this.session.work) { answer.work.update(this.session.work, true, elapsed()); answer.work.widget.show(); }
                 },
-                onTool: step => this.showStep(answer.steps, step),
+                // Rencana yang valid sudah tampil sebagai daftar centang; baris langkahnya tidak perlu diulang.
+                onTool: step => { if (!(step.label === 'Rencana pekerjaan' && this.session.work && step.summary !== 'rencana tidak valid')) this.showStep(answer.steps, step); },
                 onBatchProposal: this.host.applyBatch ? changes => requestRoot === this.host.root() ? this.propose(changes) : Promise.resolve({ applied: false, error: 'Folder kerja berubah selama permintaan' }) : undefined,
                 onProposal: change => requestRoot === this.host.root() ? this.propose(change) : Promise.resolve({ applied: false, error: 'Folder kerja berubah selama permintaan' }),
                 git: this.host.git ? request => requestRoot === this.host.root() ? this.host.git!(request) : Promise.resolve({ ok: false, message: 'Folder kerja berubah selama permintaan' }) : undefined,
             }, this.cancellable);
             if (generation !== this.generation) return;
             this.render(answer.bubble);
+            if (answer.work.widget.get_visible() && this.session.work) answer.work.update(this.session.work, false, elapsed());
             if (result.cancelled) answer.footer.set_text(answer.bubble.text || result.toolCalls ? _('Dihentikan') : _('Dihentikan sebelum ada jawaban'));
             else if (result.usage) answer.footer.set_text(usageText(result.usage, result.toolCalls, result.applied));
             answer.footer.set_visible(!!answer.footer.get_text());
@@ -349,6 +353,7 @@ export class ChatPanel extends Gtk.Box {
             if (generation !== this.generation) return;
             if (this.session.work) this.session.work.status = 'failed';
             this.persist();
+            if (answer.work.widget.get_visible() && this.session.work) answer.work.update(this.session.work, false, elapsed());
             this.render(answer.bubble);
             answer.footer.set_markup(`<span foreground="#c9372c">${escapeMarkup(e instanceof Error ? e.message : String(e))}</span>`);
             answer.footer.show();
@@ -421,7 +426,9 @@ export class ChatPanel extends Gtk.Box {
             }
         }
         if (this.session.work) {
-            this.addNote(workText(this.session.work), false, 'chat-work');
+            const list = new WorkList();
+            list.update(this.session.work, false);
+            this.messages.append(list.widget);
             if (this.session.work.status !== 'complete') {
                 const resume = new Gtk.Button({ label: _('Lanjutkan pekerjaan'), halign: Gtk.Align.START });
                 resume.connect('clicked', () => { resume.set_sensitive(false); void this.ask('Lanjutkan pekerjaan yang tersimpan. Baca isi aktual, periksa journal, dan jangan ulangi perubahan yang sudah diterapkan.'); });
@@ -632,8 +639,8 @@ export class ChatPanel extends Gtk.Box {
         const bubble = this.bubble(true, 'chat-assistant');
         const meta = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, visible: false });
         meta.add_css_class('side-meta');
-        const work = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, selectable: true, visible: false });
-        work.add_css_class('chat-work');
+        const work = new WorkList();
+        work.widget.hide();
         const steps = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, visible: false });
         // Kartu usulan perubahan agent: di antara langkah penelusuran dan jawaban, sesuai urutan kejadiannya.
         const cards = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, visible: false });
@@ -645,7 +652,7 @@ export class ChatPanel extends Gtk.Box {
         footer.add_css_class('side-meta');
         const row = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 });
         row.append(meta);
-        row.append(work);
+        row.append(work.widget);
         row.append(steps);
         row.append(cards);
         row.append(thinking);

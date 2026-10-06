@@ -561,12 +561,29 @@ export function chatTests(c: GuiContext): void {
         panel.reset();
         panel.makeProvider = () => proposalProvider('atur_pekerjaan', { tujuan: 'Sinkronkan jadwal rilis', langkah: [{ teks: 'Baca keputusan rapat', status: 'done' }, { teks: 'Periksa rencana dan kartu tugas', status: 'pending' }], catatan: 'Tanggal rilis: 22 November' });
         settle(panel.ask('Sinkronkan jadwal rilis'));
+        // Rencana tampil sebagai daftar centang: satu baris per langkah, bukan teks "- [x]", dan tidak diulang di baris langkah.
+        const workRows = (): Gtk.Widget[] => {
+            const out: Gtk.Widget[] = [];
+            const walk = (widget: Gtk.Widget) => {
+                if (widget.has_css_class('chat-work-step')) out.push(widget);
+                childrenOf(widget).forEach(walk);
+            };
+            walk(panel.messages);
+            return out;
+        };
+        eq(workRows().length, 2);
+        ok(workRows()[0].get_first_child()?.has_css_class('work-done'), 'langkah selesai tidak dicentang');
+        ok(workRows()[1].get_first_child()?.has_css_class('work-pending'), 'langkah berikutnya tidak berupa lingkaran kosong');
+        contains(all(), '1/2 langkah');
+        ok(!all().includes('- [x]'), 'rencana masih tampil sebagai teks mentah');
+        ok(!all().includes('Rencana pekerjaan →'), 'rencana diulang di baris langkah');
         const saved = listChats(book).find(chat => readTextFile(chat.path).includes('pekerjaan:'));
         ok(saved, 'rencana tidak disimpan');
         ok(panel.openChat(saved.path), 'rencana tidak dibuka');
         eq(panel.session.work?.status, 'paused');
         const resume = childrenOf(panel.messages).find(w => w instanceof Gtk.Button && w.get_label() === 'Lanjutkan pekerjaan');
         ok(resume, 'tombol lanjutkan hilang');
+        eq(workRows().length, 2);
         const prefix = optVal('shot-agentic');
         if (prefix) {
             const oldDark = w.dark;
