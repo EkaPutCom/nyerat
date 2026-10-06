@@ -59,7 +59,7 @@ const buildCss = (p: Palette): string => `
     .chat-pop label.side-title, .chat-pop label.side-meta { opacity: 0.7; }
     .chat-work { font-size: 13px; }
     .chat-work-goal { font-weight: bold; }
-    .work-done { background-color: @success_color; color: @window_bg_color; border-radius: 50%; min-width: 16px; min-height: 16px; }
+    .work-done { background-color: @success_bg_color; color: @success_fg_color; border-radius: 50%; min-width: 16px; min-height: 16px; }
     .work-pending { border: 1.5px solid alpha(currentColor, 0.45); border-radius: 50%; min-width: 13px; min-height: 13px; margin: 1px; }
     .work-blocked { color: @warning_color; }
     .work-step-done { color: alpha(currentColor, 0.7); }
