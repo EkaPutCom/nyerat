@@ -38,6 +38,15 @@ Bahasa: komentar kode, pesan commit, teks antarmuka, nama tes, dan dokumentasi d
 - Cara: render widget atau jendelanya di Xvfb dengan `widgetPixbuf()` (`tests/widgets.ts`) dari sebuah tes GUI, simpan PNG ke direktori scratchpad sesi (bukan ke repo), buka sendiri dengan Read untuk memeriksa (teks terpotong, ukuran, kontras, tema terang dan gelap), perbaiki bila perlu, lalu kirim ke pengguna dengan SendUserFile (`display: render`) beserta keterangan singkat apa yang terlihat. Pola yang ada: `--screenshot=a.png` untuk jendela editor dan `--shot-proposal=<prefix>` untuk jendela tinjau usulan agent (lihat `tests/run-tests.ts` dan `tests/gui/chat.ts`). Untuk tampilan baru, tambahkan opsi serupa di tesnya supaya mudah diulang.
 - Tampilan yang tidak bisa dirender di Xvfb (mis. bergantung pada GPU atau portal) dilaporkan sebagai belum terverifikasi secara visual, bukan dianggap benar. Tangkapan layar tidak masuk commit kecuali untuk `docs/assets/` lewat `npm run docs`.
 
+## UI wajib mengikuti standar GNOME
+
+- **Setiap antarmuka Nyerat (widget, panel, dialog, jendela, ikon, warna, teks) harus mengikuti [GNOME Human Interface Guidelines](https://developer.gnome.org/hig/) dan idiom libadwaita.** Nyerat adalah aplikasi GNOME (`com.ekaput.Nyerat`, runtime Flatpak GNOME 50); tampilan yang meniru aplikasi web/Electron atau platform lain tidak diterima walaupun mirip mockup yang diberikan. Ambil maksud mockup-nya, lalu wujudkan dengan komponen GNOME.
+- Urutan pilihan: widget `Adw.*` → widget GTK 4 → kelas gaya bawaan Adwaita (`card`, `dim-label`, `heading`, `caption`, `navigation-sidebar`, `boxed-list`, ...) → CSS sendiri di `ui/theme.ts` hanya bila belum tercakup.
+- Warna memakai warna bernama Adwaita sesuai perannya: `@success_color`/`@warning_color`/`@error_color` untuk teks/ikon, pasangan `@*_bg_color` + `@*_fg_color` untuk latar berisi teks atau ikon. Ikon memakai ikon simbolik standar (`*-symbolic`). Tampilan harus benar di tema terang dan gelap serta mengikuti aksen sistem.
+- Status tidak boleh hanya disampaikan lewat warna atau ikon: beri teks atau label aksesibel (`accessible_role`, `update_property(Gtk.AccessibleProperty.LABEL)`), dan semua fungsi bisa dijangkau dengan keyboard.
+- API libadwaita/GTK yang lebih baru dari versi terpasang (1.5/4.14) dipakai dengan deteksi fitur dan jalur cadangan, mis. `Adw.Spinner` (1.6+) dengan cadangan `Gtk.Spinner` di `ui/worklist.ts`. Rincian idiom, widget yang usang, dan polanya ada di bagian "Jebakan yang sudah diketahui" (butir **UI baru ikuti idiom GNOME**, **Teks antarmuka wajib bisa diterjemahkan**, **Tata letak adaptif**).
+- Saat melaporkan perubahan UI, sebutkan juga kesesuaiannya dengan HIG dan penyimpangan yang sengaja dibiarkan beserta alasannya.
+
 ## Pemeriksaan performa wajib
 
 - **Selalu cek dampak performa setiap perubahan sebelum menyatakan pekerjaan selesai.** Tes kebenaran saja belum cukup untuk perubahan kode aplikasi.
