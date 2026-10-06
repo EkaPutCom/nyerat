@@ -1,6 +1,7 @@
 // Warna, font, dan CSS aplikasi untuk mode terang dan gelap.
 // Warna tag teks editor diatur terpisah di editor/tags.ts (paintTags).
 
+import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import { FONT_TEXT } from '../config.js';
@@ -33,7 +34,8 @@ export const PALETTES: Record<'light' | 'dark', Palette> = {
     },
 };
 
-export const systemPrefersDark = (): boolean => /dark/i.test(Gtk.Settings.get_default()?.gtk_theme_name ?? '');
+// Pilihan gelap/terang dari pengaturan sistem (GNOME: Gaya Gelap), sebelum aplikasi memaksa salah satunya.
+export const systemPrefersDark = (): boolean => Adw.StyleManager.get_default().dark;
 
 const buildCss = (p: Palette): string => `
     .editor, .editor text { background-color: ${p.bg}; color: ${p.fg}; }
@@ -121,8 +123,7 @@ let provider: Gtk.CssProvider | null = null;
 // Mengembalikan palet supaya pemanggil bisa mewarnai tag editor.
 export function applyTheme(dark: boolean): Palette {
     const palette = PALETTES[dark ? 'dark' : 'light'];
-    const settings = Gtk.Settings.get_default();
-    if (settings) settings.gtk_application_prefer_dark_theme = dark;
+    Adw.StyleManager.get_default().set_color_scheme(dark ? Adw.ColorScheme.FORCE_DARK : Adw.ColorScheme.FORCE_LIGHT);
     if (!provider) {
         provider = new Gtk.CssProvider();
         const display = Gdk.Display.get_default();

@@ -5,6 +5,7 @@
 // Paket punya kotak centang per berkas: pengguna boleh menerapkan sebagian. Kotak catatan diteruskan ke agent
 // bersama keputusannya (mis. alasan menolak), supaya agent bisa memperbaiki usulannya.
 
+import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import GLib from 'gi://GLib';
@@ -40,7 +41,7 @@ export class ProposalViewer {
         this.window = new Gtk.Window({ transient_for: parent, default_width: 860, default_height: 620 });
         const changes = Array.isArray(change) ? change : [change];
         const title = changes.length > 1 ? `Paket: ${changes.length} berkas` : describeChange(changes[0]);
-        const header = new Gtk.HeaderBar({ show_title_buttons: true });
+        const header = new Adw.HeaderBar();
         this.window.set_titlebar(header);
         this.window.set_title(`Usulan agent: ${title}`);
 

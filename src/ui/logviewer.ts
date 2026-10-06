@@ -1,6 +1,7 @@
 // Jendela pemantau kegiatan agent: lini masa tiap giliran (putaran model, penalaran, alat yang dipanggil beserta
 // argumen dan hasilnya, usulan, token). Memperbarui diri selama agent bekerja; hanya membaca AgentTrace.
 
+import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import GLib from 'gi://GLib';
@@ -30,7 +31,7 @@ export class LogViewer {
 
     constructor(parent: Gtk.Window | null, private readonly trace: AgentTrace, title = 'Log agent') {
         this.window = new Gtk.Window({ transient_for: parent, default_width: 760, default_height: 640, title });
-        const header = new Gtk.HeaderBar({ show_title_buttons: true });
+        const header = new Adw.HeaderBar();
         this.window.set_titlebar(header);
 
         const copy = new Gtk.Button({ label: 'Salin semua', tooltip_text: 'Salin seluruh log sebagai teks' });

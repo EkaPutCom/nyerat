@@ -11,6 +11,7 @@
 // Gambar digambar dengan cairo pada skala zoom, bukan dibuatkan salinan yang
 // diperbesar, jadi zoom 800% pada foto besar tidak menghabiskan memori.
 
+import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import GdkPixbuf from 'gi://GdkPixbuf';
@@ -54,7 +55,7 @@ export class ImageViewer {
             transient_for: parent, modal: true, title,
             ...this.initialSize(parent, width, height),
         });
-        const header = new Gtk.HeaderBar({ show_title_buttons: true });
+        const header = new Adw.HeaderBar();
         const titles = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER });
         for (const [text, css] of [[title, 'title'], [`${width} × ${height} px`, 'subtitle']]) {
             const label = new Gtk.Label({ label: text, ellipsize: 3 });

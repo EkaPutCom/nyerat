@@ -2,6 +2,7 @@
 // tab Isi (file lengkap pada commit itu). Hanya baca; jendela tidak modal supaya dokumen
 // tetap bisa dibandingkan sambil mengedit.
 
+import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import GLib from 'gi://GLib';
@@ -74,7 +75,7 @@ export class HistoryViewer {
             ? `${commit.short} · ${commit.author} · ${GLib.DateTime.new_from_unix_local(commit.time).format('%d %b %Y %H:%M')}`
             : `${GLib.path_get_basename(file)} · dibandingkan dengan commit terakhir`;
         // Judul header dipakai StackSwitcher, jadi info commit ditaruh di atas isi.
-        const header = new Gtk.HeaderBar({ show_title_buttons: true });
+        const header = new Adw.HeaderBar();
         this.window.set_titlebar(header);
         this.window.set_title(title);
         const subject = new Gtk.Label({ label: title, xalign: 0, wrap: true });

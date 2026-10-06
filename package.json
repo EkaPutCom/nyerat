@@ -22,6 +22,7 @@
     "docs": "npm run build && XDG_CONFIG_HOME=$(mktemp -d) gjs -m dist/capture.js"
   },
   "devDependencies": {
+    "@girs/adw-1": "^5.5.0",
     "@girs/gdk-4.0": "^5.5.0",
     "@girs/gdkpixbuf-2.0": "^5.5.0",
     "@girs/gdkx11-4.0": "^5.5.0",

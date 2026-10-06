@@ -2,6 +2,7 @@
 // Semua dialog bersifat modal dan blocking (main loop bersarang lewat runModal(), pengganti
 // gtk_dialog_run() yang dihapus GTK 4), jadi hasilnya bisa langsung dikembalikan.
 
+import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
@@ -131,12 +132,12 @@ export function showError(parent: Gtk.Window | null, message: string): void {
 }
 
 export function showAbout(parent: Gtk.Window): void {
-    const dialog = new Gtk.AboutDialog({
-        transient_for: parent, modal: true, program_name: APP_NAME, version: APP_VERSION,
-        logo_icon_name: 'accessories-text-editor',
-        comments: 'Personal workbench AI agent untuk catatan, dokumen, riset, dan rencana, dengan GTK 4 dan GJS.',
+    const dialog = new Adw.AboutDialog({
+        application_name: APP_NAME, version: APP_VERSION, application_icon: 'accessories-text-editor',
+        developer_name: 'Eka Putra', license_type: Gtk.License.MIT_X11,
+        comments: 'Personal workbench AI agent untuk catatan, dokumen, riset, dan rencana, dengan GTK 4, libadwaita, dan GJS.',
     });
-    dialog.present();
+    dialog.present(parent);
 }
 
 // Jendela formulir modal: isi di atas, tombol Batal/`accept` di bawah. `validate` dipanggil

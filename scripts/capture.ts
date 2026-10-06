@@ -5,6 +5,7 @@
 // Menulis PNG dan GIF ke docs/assets/. Jendela sungguhan dibuka, jadi perlu sesi desktop.
 
 import GLib from 'gi://GLib';
+import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
@@ -223,7 +224,7 @@ git add rencana/ && git commit -m "Perbarui jadwal rilis"
 \`\`\`
 `;
 
-function main(app: Gtk.Application): void {
+function main(app: Adw.Application): void {
     GLib.mkdir_with_parents(OUT, 0o755);
     const settings = { ...DEFAULTS, welcomed: true, dark: false, sidebarPage: 'outline' as const, width: 1280, height: 780 };
     const w = new MainWindow(app, settings, null);
@@ -824,7 +825,7 @@ function main(app: Gtk.Application): void {
     w.win.destroy();
 }
 
-const app = new Gtk.Application({ application_id: 'id.eka.Nyerat.Capture', flags: Gio.ApplicationFlags.NON_UNIQUE });
+const app = new Adw.Application({ application_id: 'id.eka.Nyerat.Capture', flags: Gio.ApplicationFlags.NON_UNIQUE });
 app.connect('activate', () => {
     app.hold();
     GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {

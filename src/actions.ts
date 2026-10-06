@@ -7,7 +7,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { wrapSelection, insertLink, insertBlock, togglePrefix, setHeading } from './editor/editing.js';
 import { showAbout } from './ui/dialogs.js';
-import type Gtk from 'gi://Gtk?version=4.0';
+import type Adw from 'gi://Adw?version=1';
 import type { TableCommand } from './editor/tableedit.js';
 import type { MainWindow, Option } from './window.js';
 
@@ -22,7 +22,7 @@ const TEXT_ACTIONS = new Set([
     'table-align-left', 'table-align-center', 'table-align-right', 'table-format',
 ]);
 
-export function registerActions(app: Gtk.Application, w: MainWindow): void {
+export function registerActions(app: Adw.Application, w: MainWindow): void {
     const action = (name: string, accels: string[] | null, run: () => void) => {
         const a = new Gio.SimpleAction({ name });
         a.connect('activate', () => {

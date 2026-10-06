@@ -18,6 +18,7 @@
 // Hasil berupa median, p95, dan maksimum; JSON juga menyimpan sampel mentah.
 
 import GLib from 'gi://GLib';
+import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
@@ -202,7 +203,7 @@ function runModelBench(): void {
 
 // Jendela tidak di-destroy: proses anak langsung keluar, dan destroy memicu peringatan GC dari GJS.
 const windows: MainWindow[] = [];
-async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
+async function runGuiBench(app: Adw.Application, n: number): Promise<void> {
     const w = new MainWindow(app, { ...DEFAULTS, welcomed: true, dark: false }, null);
     windows.push(w);
     const ed = w.editor;
@@ -373,7 +374,7 @@ async function runGuiBench(app: Gtk.Application, n: number): Promise<void> {
 const CHILD = opt('child');
 
 function runGuiInProcess(): void {
-    const app = new Gtk.Application({ application_id: 'id.eka.Nyerat.Bench', flags: Gio.ApplicationFlags.NON_UNIQUE });
+    const app = new Adw.Application({ application_id: 'id.eka.Nyerat.Bench', flags: Gio.ApplicationFlags.NON_UNIQUE });
     app.connect('activate', () => {
         app.hold();
         void (async () => {

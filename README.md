@@ -41,6 +41,7 @@ Folder kerja contoh: proyek peluncuran produk dengan `rencana/peluncuran.md`, `c
 
 - Linux dengan desktop X11 atau Wayland
 - GJS (diuji dengan versi 1.80)
+- libadwaita 1 (diuji dengan 1.5) untuk tampilan GNOME native: header bar, tema terang/gelap mengikuti Gaya Gelap sistem, dan dialog Tentang.
 - GTK 4 (diuji dengan 4.14) dan GtkSourceView 5. Pustaka GTK 4 biasanya sudah ada di desktop modern (juga di XFCE, yang sendiri memakai GTK 3); yang perlu dipasang hanya binding GObject Introspection-nya. GTK 3 dan GTK 4 terpasang berdampingan tanpa saling mengganti.
 - WebKitGTK 6.0 dengan binding GObject Introspection (`gir1.2-webkit-6.0` di Debian/Ubuntu), **hanya untuk diagram Mermaid dan DBML**; tanpanya aplikasi tetap berjalan dan diagram menampilkan pesan galat
 - Node.js 20.19+ pada seri 20, atau 22.12+ (syarat Vite), **hanya untuk build** (diuji dengan Node.js 24). Aplikasinya sendiri dijalankan GJS, bukan Node.js.
@@ -48,7 +49,7 @@ Folder kerja contoh: proyek peluncuran produk dengan `rencana/peluncuran.md`, `c
 Di Ubuntu/Debian:
 
 ```bash
-sudo apt install gjs gir1.2-gtk-4.0 gir1.2-gtksource-5
+sudo apt install gjs gir1.2-gtk-4.0 gir1.2-gtksource-5 gir1.2-adw-1
 ```
 
 Untuk diagram, tambahkan dependensi opsional:

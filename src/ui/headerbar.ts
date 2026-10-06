@@ -1,6 +1,7 @@
 // Header bar: tombol-tombol dan menu ☰. Setiap tombol/menu hanya menyebut nama
 // aksi ("app.save"); aksinya sendiri didaftarkan di actions.ts.
 
+import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gio from 'gi://Gio';
 
@@ -36,23 +37,15 @@ function iconButton(icon: string, action: string, tooltip: string, toggle = fals
 }
 
 export interface HeaderBar {
-    readonly bar: Gtk.HeaderBar;
-    readonly title: Gtk.Label;
-    readonly subtitle: Gtk.Label;
-    // GTK 4 HeaderBar tidak punya judul dan subjudul sendiri; keduanya label di title_widget.
+    readonly bar: Adw.HeaderBar;
+    readonly windowTitle: Adw.WindowTitle;
     setTitle(title: string, subtitle: string): void;
 }
 
 export function createHeaderBar(): HeaderBar {
-    const bar = new Gtk.HeaderBar({ show_title_buttons: true });
-    const title = new Gtk.Label({ ellipsize: 3, single_line_mode: true });
-    title.add_css_class('title');
-    const subtitle = new Gtk.Label({ ellipsize: 3, single_line_mode: true });
-    subtitle.add_css_class('subtitle');
-    const titles = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER });
-    titles.append(title);
-    titles.append(subtitle);
-    bar.set_title_widget(titles);
+    const bar = new Adw.HeaderBar();
+    const windowTitle = new Adw.WindowTitle({ title: '', subtitle: '' });
+    bar.set_title_widget(windowTitle);
     bar.pack_start(iconButton('format-justify-left-symbolic', 'app.sidebar', 'Sidebar (Ctrl+\\)', true));
     // Ikon dokumen, bukan document-open-symbolic: di beberapa tema ikon (misalnya
     // elementary-xfce) document-open berupa folder, sehingga tertukar dengan Buka Folder.
@@ -81,10 +74,10 @@ export function createHeaderBar(): HeaderBar {
     bar.pack_end(iconButton('document-save-symbolic', 'app.save', 'Simpan (Ctrl+S)'));
     bar.pack_end(iconButton('user-available-symbolic', 'app.chat', 'Asisten (Ctrl+Shift+A)', true));
     return {
-        bar, title, subtitle,
+        bar, windowTitle,
         setTitle(text: string, sub: string): void {
-            title.set_text(text);
-            subtitle.set_text(sub);
+            windowTitle.set_title(text);
+            windowTitle.set_subtitle(sub);
         },
     };
 }

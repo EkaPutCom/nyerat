@@ -13,9 +13,8 @@
 //
 // Tes GUI membuka jendela sungguhan, jadi perlu sesi desktop (X11/Wayland).
 
-
+import Adw from 'gi://Adw?version=1';
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import System from 'system';
@@ -93,7 +92,7 @@ function runUnitTests(): void {
     harnessModelTests();
 }
 
-function runGuiTests(app: Gtk.Application): void {
+function runGuiTests(app: Adw.Application): void {
     const c = createContext(app);
     if (opt('only-chat')) {
         chatTests(c);
@@ -156,7 +155,7 @@ if (!opt('no-gui')) {
         if (opt('with-kanban-mouse')) recordFailure();
         print(`\n${DIM}Tes GUI dilewati: tidak ada display.${RESET}`);
     } else {
-        const app = new Gtk.Application({ application_id: 'id.eka.Nyerat.Test', flags: Gio.ApplicationFlags.NON_UNIQUE });
+        const app = new Adw.Application({ application_id: 'id.eka.Nyerat.Test', flags: Gio.ApplicationFlags.NON_UNIQUE });
         app.connect('activate', () => {
             app.hold();
             GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {

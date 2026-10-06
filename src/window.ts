@@ -13,6 +13,7 @@
 
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
+import Adw from 'gi://Adw?version=1';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
@@ -84,7 +85,7 @@ interface Doc {
 }
 
 export class MainWindow {
-    readonly app: Gtk.Application;
+    readonly app: Adw.Application;
     readonly settings: Settings;
     readonly outline: Outline;
     readonly history: History;
@@ -106,7 +107,7 @@ export class MainWindow {
     readonly chatRevealer: Gtk.Revealer;
     private readonly content: Gtk.Stack;
     readonly header: HeaderBar;
-    readonly win: Gtk.ApplicationWindow;
+    readonly win: Adw.ApplicationWindow;
 
     private docs: Doc[] = [];
     private doc: Doc;                 // dokumen aktif
@@ -115,7 +116,7 @@ export class MainWindow {
     dark: boolean;
 
     // path: file atau folder yang dibuka saat jendela muncul.
-    constructor(app: Gtk.Application, settings: Settings, path: string | null = null) {
+    constructor(app: Adw.Application, settings: Settings, path: string | null = null) {
         this.app = app;
         this.settings = settings;
         this.dark = settings.dark ?? systemPrefersDark();
@@ -255,9 +256,8 @@ export class MainWindow {
 
         // Tata letak
         const [width, height] = fitToScreen(settings.width, settings.height);
-        this.win = new Gtk.ApplicationWindow({ application: app, default_width: width, default_height: height });
+        this.win = new Adw.ApplicationWindow({ application: app, default_width: width, default_height: height });
         this.win.set_icon_name('accessories-text-editor');
-        this.win.set_titlebar(this.header.bar);
         const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true });
         column.append(this.tabBar.widget);
         column.append(this.findBar.widget);
@@ -274,7 +274,9 @@ export class MainWindow {
         this.chatRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT, transition_duration: 150, hexpand: false });
         this.chatRevealer.set_child(chatWrap);
         main.append(this.chatRevealer);
-        this.win.set_child(main);
+        const toolbar = new Adw.ToolbarView({ content: main });
+        toolbar.add_top_bar(this.header.bar);
+        this.win.set_content(toolbar);
         // true = batalkan penutupan (ada perubahan yang tidak jadi dibuang).
         this.win.connect('close-request', () => !this.onClose());
         // Jendela dihancurkan (ditutup, atau destroy() di tes). GTK 4 tidak memancarkan "destroy"

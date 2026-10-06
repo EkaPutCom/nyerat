@@ -1,6 +1,6 @@
-// Titik awal aplikasi GTK.
+// Titik awal aplikasi GTK 4 + libadwaita.
 
-import Gtk from 'gi://Gtk?version=4.0';
+import Adw from 'gi://Adw?version=1';
 import Gio from 'gi://Gio';
 import System from 'system';
 
@@ -12,7 +12,7 @@ import { MainWindow } from './window.js';
 export function main(argv: string[]): number {
     const path = argv.find(a => !a.startsWith('-')) ?? null;
     // NON_UNIQUE: setiap perintah membuka jendela (proses) sendiri.
-    const app = new Gtk.Application({ application_id: APP_ID, flags: Gio.ApplicationFlags.NON_UNIQUE });
+    const app = new Adw.Application({ application_id: APP_ID, flags: Gio.ApplicationFlags.NON_UNIQUE });
     app.connect('activate', () => {
         const settings = loadSettings();
         new MainWindow(app, settings, path);
