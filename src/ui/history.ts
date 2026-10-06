@@ -3,6 +3,8 @@
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
+import Gio from 'gi://Gio';
 import Pango from 'gi://Pango';
 import { commitFiles, fileLog, repoChanges, workingState, type GitFailure } from '../git.js';
 import { relativeTime, type ChangeKind, type Commit, type FileChange } from '../gitlog.js';
@@ -19,8 +21,16 @@ const FAILURE_TEXT: Record<GitFailure, string> = {
 
 const KIND_MARK: Record<ChangeKind, string> = { modified: 'M', added: 'A', deleted: 'D', renamed: 'R', untracked: 'U' };
 
+// Satu baris daftar commit. Datanya field biasa; tampilan dibaca ListView saat baris di-bind.
+class CommitItem extends GObject.Object {
+    static { GObject.registerClass({ GTypeName: 'NyeratCommitItem' }, this); }
+    commit!: Commit;
+    now = 0;
+}
+
 export class History {
-    readonly list: Gtk.ListBox;
+    readonly store = new Gio.ListStore({ item_type: CommitItem.$gtype });
+    readonly list: Gtk.ListView;
     readonly widget: Gtk.Box;
     readonly more: Gtk.Button;
     readonly changes: Gtk.Button;              // baris "belum di-commit", tampil hanya jika file berubah
@@ -45,15 +55,15 @@ export class History {
     readonly note: Gtk.Label;                  // pesan saat daftar kosong
 
     constructor() {
-        this.list = new Gtk.ListBox({ activate_on_single_click: true });
-        this.list.set_selection_mode(Gtk.SelectionMode.NONE);
-        this.list.connect('row-activated', (_list, row) => {
-            const commit = this.commits[row.get_index()];
+        this.list = new Gtk.ListView({ model: new Gtk.NoSelection({ model: this.store }), factory: this.createFactory(), single_click_activate: true });
+        this.list.add_css_class('navigation-sidebar');
+        this.list.connect('activate', (_list, position) => {
+            const commit = this.commits[position];
             if (commit) this.onOpen(commit);
         });
-        this.note = new Gtk.Label({ margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16, wrap: true, xalign: 0, max_width_chars: 24 });
+        // Daftar kosong: pesan (memuat, bukan repositori, belum ada commit) menggantikan daftar.
+        this.note = new Gtk.Label({ margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16, wrap: true, xalign: 0, max_width_chars: 24, valign: Gtk.Align.START });
         this.note.add_css_class('dim-label');
-        this.list.set_placeholder(this.note);
 
         // Judul mengembang di dalam header saja; sidebar tidak ikut mengembang karena lebarnya
         // diatur width_request dan Box utama memberi sisa ruang ke kolom editor yang hexpand.
@@ -99,8 +109,12 @@ export class History {
         this.changedBox = new Gtk.Expander({ expanded: true, visible: false, margin_start: 8, margin_end: 8, margin_bottom: 8 });
         this.changedBox.set_child(changedContent);
 
-        const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vexpand: true });
-        scroll.set_child(this.list);
+        const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vexpand: true, child: this.list });
+        const pages = new Gtk.Stack({ vexpand: true });
+        pages.add_named(scroll, 'list');
+        pages.add_named(this.note, 'note');
+        pages.visible_child_name = 'note';
+        this.store.connect('items-changed', () => { pages.visible_child_name = this.store.n_items ? 'list' : 'note'; });
         this.more = new Gtk.Button({ label: 'Muat lebih banyak', margin_top: 8, margin_bottom: 8, margin_start: 8, margin_end: 8, visible: false });
         this.more.connect('clicked', () => this.load(this.commits.length, false));
 
@@ -109,7 +123,7 @@ export class History {
         this.widget.append(header);
         this.widget.append(this.changes);
         this.widget.append(this.changedBox);
-        pack(this.widget, scroll, true);
+        pack(this.widget, pages, true);
         this.widget.append(this.more);
     }
 
@@ -225,7 +239,7 @@ export class History {
     private clear(): void {
         this.commits = [];
         this.more.set_visible(false);
-        removeChildren(this.list);
+        this.store.remove_all();
     }
 
     private async load(skip: number, keep: boolean): Promise<void> {
@@ -246,27 +260,30 @@ export class History {
             this.note.set_text('Belum ada commit untuk berkas ini');
         }
         const now = Math.floor(Date.now() / 1000);
-        for (const commit of result.commits) {
-            this.commits.push(commit);
-            this.list.insert(this.createRow(commit, now), -1);
-        }
+        this.commits.push(...result.commits);
+        this.store.splice(this.store.n_items, 0, result.commits.map(commit => Object.assign(new CommitItem(), { commit, now })));
         this.more.set_visible(result.commits.length === PAGE_SIZE);
     }
 
-    private createRow(commit: Commit, now: number): Gtk.ListBoxRow {
-        const subject = new Gtk.Label({
-            label: commit.subject || '(tanpa pesan)', xalign: 0, ellipsize: Pango.EllipsizeMode.END,
+    private createFactory(): Gtk.SignalListItemFactory {
+        const factory = new Gtk.SignalListItemFactory();
+        factory.connect('setup', (_f, item) => {
+            const subject = new Gtk.Label({ xalign: 0, ellipsize: Pango.EllipsizeMode.END });
+            const meta = new Gtk.Label({ xalign: 0, ellipsize: Pango.EllipsizeMode.END });
+            meta.add_css_class('side-meta');
+            const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, margin_start: 16, margin_end: 12 });
+            box.append(subject);
+            box.append(meta);
+            (item as Gtk.ListItem).child = box;
         });
-        const meta = new Gtk.Label({
-            label: `${commit.short} · ${commit.author} · ${relativeTime(commit.time, now)}`,
-            xalign: 0, ellipsize: Pango.EllipsizeMode.END,
+        factory.connect('bind', (_f, item) => {
+            const listItem = item as Gtk.ListItem;
+            const { commit, now } = listItem.item as CommitItem;
+            const box = listItem.child as Gtk.Box;
+            (box.get_first_child() as Gtk.Label).label = commit.subject || '(tanpa pesan)';
+            (box.get_last_child() as Gtk.Label).label = `${commit.short} · ${commit.author} · ${relativeTime(commit.time, now)}`;
+            box.set_tooltip_text(`${commit.subject}\n${commit.author}\n${GLib.DateTime.new_from_unix_local(commit.time).format('%d %b %Y %H:%M')}`);
         });
-        meta.add_css_class('side-meta');
-        const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, margin_start: 16, margin_end: 12 });
-        box.append(subject);
-        box.append(meta);
-        const row = new Gtk.ListBoxRow({ child: box });
-        row.set_tooltip_text(`${commit.subject}\n${commit.author}\n${GLib.DateTime.new_from_unix_local(commit.time).format('%d %b %Y %H:%M')}`);
-        return row;
+        return factory;
     }
 }
