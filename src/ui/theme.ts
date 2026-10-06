@@ -85,6 +85,8 @@ const buildCss = (p: Palette): string => `
     .kanban-add-list { background-color: alpha(${p.fg}, 0.05); border-radius: 10px; padding: 6px; }
     .kanban-chip { border-radius: 9px; padding: 0 8px; font-size: 11px; color: #ffffff; background-color: #6b7280; }
     .kanban-notes { background-color: transparent; color: ${p.faint}; padding: 0 2px; }
+    .kanban-card-text link, .kanban-note-link link { color: ${p.accent}; }
+    .kanban-note-link { font-size: 12px; }
     .kanban-due { background-color: alpha(${p.fg}, 0.12); color: ${p.fg}; }
     .kanban-due-overdue { background-color: #c9372c; color: #ffffff; }
     .kanban-due-today { background-color: #b7791f; color: #ffffff; }

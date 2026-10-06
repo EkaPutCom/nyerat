@@ -2,7 +2,7 @@
 
 import { assignCard, cardMeta, composeCard, parseBoard, splitCard } from '../../src/markdown/kanban.js';
 import {
-    boardProject, buildPrompt, cardProject, checkProjectFolder, describeReply, endsWithQuestion, HARNESSES, locateCard, PiReader, resultNote,
+    boardProject, buildPrompt, cardProject, cardWikiLinks, CONTEXT_CHARS, MAX_LINKED_NOTES, NOTE_CHARS, checkProjectFolder, describeReply, endsWithQuestion, HARNESSES, locateCard, PiReader, resultNote,
     rpcPrompt, rpcSteer, rpcUiResponse, RunQueue, stageColumn, type HarnessAsk,
 } from '../../src/agent/harness.js';
 import { AgentTrace } from '../../src/agent/trace.js';
@@ -81,6 +81,40 @@ export function harnessTests(): void {
         ok(!p2.includes('#proyek/'), 'tag proyek tidak ikut prompt');
         contains(p2, 'Tenggat: 2026-10-20');
         ok(!p2.includes('@pi'), 'penugasan tidak ikut judul');
+    });
+
+    test('[[catatan]] di judul dan catatan kartu menjadi daftar tautan konteks tanpa duplikat', () => {
+        const card = { done: false, text: 'Rapikan checkout [[Spesifikasi]] @pi', notes: ['Lihat [[spesifikasi]] dan [[Desain#Warna|warna]].', '`[[bukan]]`'] };
+        eq(cardWikiLinks(card).map(l => [l.target, l.heading]), [['Spesifikasi', ''], ['Desain', 'Warna']]);
+        const many = { done: false, text: 'x', notes: Array.from({ length: 15 }, (_, i) => `[[n${i}]]`) };
+        eq(cardWikiLinks(many).length, MAX_LINKED_NOTES, 'batas jumlah tautan');
+    });
+
+    test('prompt menyalin isi catatan terkait dalam blok kode, menandai yang hilang, dan memotong yang panjang', () => {
+        const card = { done: false, text: 'Rapikan checkout [[Spesifikasi]] @pi', notes: [] };
+        const link = (target: string, heading = '') => ({ target, heading, alias: '' });
+        const p = buildPrompt(card, 'web', 'papan.md', [
+            { link: link('Spesifikasi'), file: 'docs/Spesifikasi.md', text: '# Spek\n\nPakai ```js``` di contoh.' },
+            { link: link('Hilang'), file: null, text: null },
+            { link: link('Desain', 'Warna'), file: 'Desain.md', text: null },
+            { link: link('Panjang'), file: 'Panjang.md', text: 'x'.repeat(NOTE_CHARS + 50) },
+        ]);
+        contains(p, '## Catatan terkait dari Nyerat');
+        contains(p, '### [[Spesifikasi]] — docs/Spesifikasi.md');
+        contains(p, '````markdown\n# Spek\n\nPakai ```js``` di contoh.\n````');
+        contains(p, '### [[Hilang]]\n\n(tidak ditemukan di folder kerja Nyerat)');
+        contains(p, '(bagian "Warna" tidak ditemukan di berkas ini)');
+        contains(p, '…(dipotong, 50 karakter lagi)');
+        ok(p.indexOf('## Catatan terkait') < p.indexOf('Kerjakan tugas ini'), 'konteks sebelum batas tugas');
+        ok(!buildPrompt(card, 'web', 'papan.md').includes('Catatan terkait'), 'tanpa catatan tidak ada bagian konteks');
+    });
+
+    test('isi catatan terkait dibatasi total', () => {
+        const card = { done: false, text: 'x', notes: [] };
+        const notes = Array.from({ length: 5 }, (_, i) => ({ link: { target: `n${i}`, heading: '', alias: '' }, file: `n${i}.md`, text: 'y'.repeat(NOTE_CHARS) }));
+        const p = buildPrompt(card, 'web', 'papan.md', notes);
+        ok((p.match(/y{100,}/g) ?? []).reduce((n, m) => n + m.length, 0) <= CONTEXT_CHARS, 'melewati batas total');
+        contains(p, '(dilewati: batas konteks catatan terkait sudah tercapai)');
     });
 
     test('stageColumn dan locateCard', () => {

@@ -5,6 +5,8 @@
 // sehingga [[catatan harian]] menemukan "Jurnal/Catatan Harian.md". Target yang memuat '/' dicocokkan dengan
 // akhir path-nya. Path selalu relatif terhadap folder proyek dan memakai '/'.
 
+import { ESCAPE_OR_CODE, RE } from './syntax.js';
+
 export interface WikiLink {
     target: string;    // nama atau path catatan, tanpa #bagian
     heading: string;   // teks setelah '#', '' bila tidak ada
@@ -114,4 +116,38 @@ export function suggestNotes(query: string, files: string[], limit = 8): string[
     }
     ranked.sort((a, b) => a[0] - b[0] || baseName(a[1]).localeCompare(baseName(b[1]), 'id', { numeric: true }) || a[1].localeCompare(b[1]));
     return ranked.slice(0, limit).map(r => r[1]);
+}
+
+// Semua [[tautan]] di teks (di luar kode inline), tanpa duplikat menurut target dan bagian, urut kemunculan.
+export function wikiLinksIn(text: string): WikiLink[] {
+    const seen = new Set<string>();
+    const out: WikiLink[] = [];
+    const plain = text.replace(ESCAPE_OR_CODE(), m => ' '.repeat(m.length));
+    for (const m of plain.matchAll(WIKILINK())) {
+        const link = parseWikiLink(m[0].slice(2, -2));
+        const key = `${fold(link.target)}#${fold(link.heading)}`;
+        if (!link.target || seen.has(key)) continue;
+        seen.add(key);
+        out.push(link);
+    }
+    return out;
+}
+
+// Bagian dokumen di bawah heading `heading` (tanpa membedakan huruf besar) sampai heading berikutnya yang
+// setingkat atau lebih tinggi, termasuk heading-nya sendiri. null bila heading tidak ada. Blok kode dilewati.
+export function noteSection(text: string, heading: string): string | null {
+    const want = fold(heading.trim());
+    const lines = text.split('\n');
+    let fence = '', start = -1, level = 0;
+    for (let i = 0; i < lines.length; i++) {
+        const f = RE.fence.exec(lines[i]);
+        if (f && (!fence || f[2].startsWith(fence))) { fence = fence ? '' : f[2][0].repeat(3); continue; }
+        if (fence) continue;
+        const h = RE.heading.exec(lines[i]);
+        if (!h) continue;
+        const n = h[1].length;
+        if (start >= 0 && n <= level) return lines.slice(start, i).join('\n').trimEnd();
+        if (start < 0 && fold(lines[i].slice(h[0].length).replace(/\s+#+\s*$/, '').trim()) === want) { start = i; level = n; }
+    }
+    return start < 0 ? null : lines.slice(start).join('\n').trimEnd();
 }

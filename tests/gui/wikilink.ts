@@ -6,6 +6,7 @@ import Gdk from 'gi://Gdk?version=4.0';
 import Graphene from 'gi://Graphene';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import { widgetPixbuf } from '../widgets.js';
+import { attachWikiCompleter } from '../../src/editor/wikicomplete.js';
 import { section, test, eq, ok, tmp, optVal } from '../framework.js';
 import type { GuiContext } from './context.js';
 
@@ -116,6 +117,26 @@ export function wikiLinkGuiTests(c: GuiContext): void {
         buf.place_cursor(buf.get_iter_at_offset(4));
         pump();
         ok(!ed.completer.visible, 'saran muncul');
+    });
+
+    test('saran [[ juga bekerja di TextView biasa (kolom catatan dialog kartu)', () => {
+        const view = new Gtk.TextView();
+        const win = new Gtk.Window({ child: view, default_width: 400, default_height: 200 });
+        win.present();
+        pump();
+        const completer = attachWikiCompleter(view, () => ['Ide.md', 'Jurnal/Rencana.md']);
+        view.grab_focus();
+        view.buffer.insert_at_cursor('lihat [[ren', -1);
+        for (let i = 0; i < 10; i++) { pump(); GLib.usleep(5000); }
+        ok(completer.visible, 'saran tidak muncul');
+        eq(completer.items, ['Jurnal/Rencana.md']);
+        ok(completer.onKey(Gdk.KEY_Return), 'Enter tidak ditangani');
+        pump();
+        const [s0, e0] = view.buffer.get_bounds();
+        eq(view.buffer.get_text(s0, e0, true), 'lihat [[Rencana]]');
+        completer.destroy();
+        win.destroy();
+        pump();
     });
 
     // --shot-wikilink=<prefix>: simpan tangkapan saran [[ di tema terang dan gelap (<prefix>-terang.png, -gelap.png).

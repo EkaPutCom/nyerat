@@ -1,8 +1,9 @@
 // Tes tautan [[catatan]] gaya Obsidian: penguraian, pencarian berkas, saran nama, penyorotan inline, dan ekspor HTML.
 
 import { section, test, eq, ok, contains } from '../framework.js';
-import { newNotePath, parseWikiLink, resolveWikiLink, suggestNotes, wikiQuery, wikiTargetFor } from '../../src/markdown/wikilink.js';
+import { newNotePath, noteSection, parseWikiLink, wikiLinksIn, resolveWikiLink, suggestNotes, wikiQuery, wikiTargetFor } from '../../src/markdown/wikilink.js';
 import { parseInline } from '../../src/markdown/inline.js';
+import { cellMarkup, NOTE_URI } from '../../src/markdown/pango.js';
 import { body } from './helpers.js';
 
 const FILES = ['Ide.md', 'Jurnal/Catatan Harian.md', 'Jurnal/Ide.md', 'proyek/rencana-buku.md', 'proyek/sub/Bab 1.markdown', 'gambar.png'];
@@ -76,5 +77,22 @@ export function wikiLinkTests(): void {
         contains(body('[[#Pembuka]]'), '<a class="wikilink" href="#pembuka">Pembuka</a>');
         contains(body('[[a<b]]'), '>a&lt;b</a>');
         contains(body('`[[x]]`'), '<code>[[x]]</code>');
+    });
+    test('wikiLinksIn: urut kemunculan, tanpa duplikat, kode inline dilewati', () => {
+        eq(wikiLinksIn('[[A]] `[[B]]` [[a]] [[A#x]] [[C|c]]').map(l => `${l.target}#${l.heading}`), ['A#', 'A#x', 'C#']);
+    });
+    test('noteSection mengambil bagian sampai heading setingkat berikutnya, melewati blok kode', () => {
+        const doc = '# Judul\n\n## Warna\n\nbiru\n\n```\n# bukan heading\n```\n\n### Sub\n\nisi\n\n## Lain\n\nx';
+        eq(noteSection(doc, 'warna'), '## Warna\n\nbiru\n\n```\n# bukan heading\n```\n\n### Sub\n\nisi');
+        eq(noteSection(doc, 'Lain'), '## Lain\n\nx');
+        eq(noteSection(doc, 'tidak ada'), null);
+    });
+    test('markup kartu: [[catatan]] menjadi <a> yang bisa diklik, isi lain tetap', () => {
+        const colors = { code: '#c', codeBg: '#b', link: '#l', mark: '#m' };
+        const m = cellMarkup('Baca [[Spek#Warna|warna]] **cepat**', colors, true);
+        contains(m, `<a href="${NOTE_URI}Spek%23Warna%7Cwarna"><span foreground="#l" underline="single">warna</span></a>`);
+        contains(m, '<span font_weight="bold">cepat</span>');
+        ok(!cellMarkup('[[Spek]]', colors).includes('<a '), 'tanpa opsi tautan tidak jadi <a>');
+        ok(!cellMarkup('`[[Spek]]`', colors, true).includes('<a '), 'kode inline');
     });
 }

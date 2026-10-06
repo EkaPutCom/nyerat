@@ -69,13 +69,14 @@ kanban: true
 <figure class="narrow-fig"><img src="../assets/kanban-kartu.png" width="440" height="519" loading="lazy" alt="Dialog sunting kartu dengan kolom judul, tag, tenggat beserta tombol kalender, dikerjakan oleh, dan catatan"><figcaption>Dialog sunting kartu: tenggat dengan tombol kalender dan kolom Dikerjakan oleh</figcaption></figure>
 <ul>
   <li>Klik kanan untuk pindahkan, naik/turun, dan hapus; centang untuk menandai selesai.</li>
+  <li><a href="editor.html#wikilink"><code>[[Catatan]]</code></a> di judul kartu tampil sebagai tautan yang bisa diklik. Tautan di catatan kartu tampil sebagai baris <code>↗ nama</code> di bawah chip. Kolom catatan di dialog kartu memberi saran nama saat mengetik <code>[[</code>.</li>
   <li>Undo dan redo berlaku untuk perubahan di papan.</li>
 </ul>
 
 <h2 id="agent">Papan dan agent</h2>
 <ul>
   <li>Agent Nyerat mengubah papan lewat <code>ubah_kanban</code>: menambah, memindah, menandai, mengubah, atau menghapus kartu dan daftar, selalu lewat <a href="usulan.html">jendela tinjau</a>.</li>
-  <li>Kartu bertanda <code>@pi</code> dikerjakan harness pi di folder proyek lain. Lihat <a href="orkestrator.html">Orkestrator pi</a>.</li>
+  <li>Kartu bertanda <code>@pi</code> dikerjakan harness pi di folder proyek lain. Lihat <a href="orkestrator.html">Orkestrator pi</a>. Isi catatan yang ditautkan <code>[[ ]]</code> di kartu ikut masuk prompt pi sebagai <a href="orkestrator.html#konteks">konteks</a>.</li>
 </ul>
 </main>
 <aside class="toc" id="toc" aria-label="Daftar isi"></aside>

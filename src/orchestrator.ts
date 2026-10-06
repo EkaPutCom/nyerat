@@ -6,9 +6,10 @@
 import GLib from 'gi://GLib';
 import { assignCard, cardMeta, moveCard, updateCard, type Board, type Position } from './markdown/kanban.js';
 import {
-    buildPrompt, checkProjectFolder, describeReply, endsWithQuestion, HARNESSES, locateCard, PiReader, resultNote, rpcGetState,
-    rpcPrompt, rpcSteer, rpcUiResponse, RunQueue, stageColumn, type HarnessAsk, type HarnessReply, type HarnessSpec, type PiSignal, type Run,
+    buildPrompt, cardWikiLinks, checkProjectFolder, describeReply, endsWithQuestion, HARNESSES, locateCard, PiReader, resultNote, rpcGetState,
+    rpcPrompt, rpcSteer, rpcUiResponse, RunQueue, stageColumn, type HarnessAsk, type HarnessReply, type HarnessSpec, type LinkedNote, type PiSignal, type Run,
 } from './agent/harness.js';
+import type { WikiLink } from './markdown/wikilink.js';
 
 export interface HarnessProcess {
     write(line: string): boolean;   // satu perintah JSONL ke stdin; false bila stdin sudah tertutup atau gagal
@@ -136,6 +137,8 @@ export function findProgram(name: string): string | null {
 
 export interface OrchestratorHost {
     workspace(): string | null;
+    // Baca catatan yang ditautkan [[...]] dari kartu di papan itu, untuk konteks prompt.
+    linkedNotes(boardFile: string, links: WikiLink[]): LinkedNote[];
     // Ubah papan di path itu (terbuka di tab atau di disk). Mengembalikan pesan galat atau null.
     updateBoard(file: string, edit: (board: Board) => Board): string | null;
     // Status sebuah run berubah: gambar ulang papan, beri kabar.
@@ -178,9 +181,11 @@ export class Orchestrator {
             if (error) return error;
         }
         const assigned = { ...card, text };
+        const links = cardWikiLinks(assigned);
+        const notes = links.length ? this.host.linkedNotes(boardFile, links) : [];
         const run = this.queue.add({
             board: boardFile, card: text, title: shortTitle(text), agent, project, folder,
-            prompt: buildPrompt(assigned, project, boardName), session: null,
+            prompt: buildPrompt(assigned, project, boardName, notes), session: null,
         });
         run.trace.add('turn', `${spec.label} untuk “${run.title}”`, `Folder proyek: ${folder}\n\n${run.prompt}`);
         this.enqueue(run);

@@ -7,6 +7,7 @@ import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
+import { attachWikiCompleter } from '../editor/wikicomplete.js';
 import { onKeyPress, runModal } from '../gtkutil.js';
 import { APP_NAME, APP_VERSION } from '../config.js';
 import { AGENT_NAME, composeCard, DUE_INPUT, splitCard, withDueDate } from '../markdown/kanban.js';
@@ -201,7 +202,8 @@ export function dueField(text: string): DueField {
 
 // Dialog sunting kartu: judul (satu baris) dan catatan (banyak baris).
 // Mengembalikan isi baru, atau null jika dibatalkan.
-export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, heading = 'Sunting Kartu'): CardDraft | null {
+// listNotes: berkas Markdown di folder kerja, untuk saran saat mengetik [[ di catatan.
+export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, heading = 'Sunting Kartu', listNotes?: () => string[]): CardDraft | null {
     const parts = splitCard(card.text);
     const title = new Gtk.Entry({ text: parts.title, activates_default: true, hexpand: true });
     const tags = new Gtk.Entry({ text: parts.tags.join(' '), activates_default: true, hexpand: true, placeholder_text: 'tag1 tag2' });
@@ -213,6 +215,7 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
     notes.buffer.set_text(card.notes.join('\n'), -1);
     const frame = new Gtk.ScrolledWindow({ min_content_height: 140, has_frame: true, hexpand: true, vexpand: true });
     frame.set_child(notes);
+    const completer = listNotes ? attachWikiCompleter(notes, listNotes) : null;
 
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, vexpand: true });
     box.append(new Gtk.Label({ label: 'Judul', xalign: 0 }));
@@ -223,7 +226,7 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
     box.append(dueInput.widget);
     box.append(new Gtk.Label({ label: 'Dikerjakan oleh', xalign: 0 }));
     box.append(agent);
-    box.append(new Gtk.Label({ label: 'Catatan', xalign: 0 }));
+    box.append(new Gtk.Label({ label: listNotes ? 'Catatan · [[Nama]] menautkan catatan lain sebagai konteks agent' : 'Catatan', xalign: 0, wrap: true }));
     box.append(frame);
 
     // Ctrl+Enter menyimpan dari kolom catatan (Enter biasa membuat baris baru).
@@ -246,6 +249,7 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
         due.grab_focus();
         return false;
     });
+    completer?.destroy();
     if (!accepted) return null;
     const [start, end] = notes.buffer.get_bounds();
     return {

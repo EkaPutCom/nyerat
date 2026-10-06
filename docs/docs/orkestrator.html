@@ -49,6 +49,20 @@ proyek: web-ecommerce          <span class="c">← proyek bawaan papan</span>
 </ol>
 <p>Saat mulai, kartu pindah ke daftar <em>Dikerjakan</em>. Saat selesai, ke <em>Review</em> dengan catatan <code>↳ pi selesai …: ringkasan</code>. Bila gagal, kartu tetap di tempatnya dengan catatan <code>↳ pi gagal …: alasan</code>.</p>
 
+<h2 id="konteks">Catatan sebagai konteks</h2>
+<p>Pi bekerja di folder proyek, jadi ia tidak bisa membaca catatan di folder kerja Nyerat. Tautkan catatannya di kartu dengan <a href="editor.html#wikilink"><code>[[ ]]</code></a>, dan Nyerat menyalin isinya ke prompt.</p>
+<pre><code>- [ ] Checkout pakai QRIS [[Spesifikasi#Pembayaran]] @pi
+  Ikuti keputusan di [[Catatan Rapat]].</code></pre>
+<ul>
+  <li>Tautan di judul maupun catatan kartu ikut, paling banyak 10 per kartu. Nama dicari dengan aturan yang sama seperti <kbd>Ctrl</kbd>+klik di editor.</li>
+  <li><code>[[Catatan#Bagian]]</code> hanya menyalin bagian di bawah heading itu, sampai heading setingkat berikutnya.</li>
+  <li>Isi masuk ke bagian <em>Catatan terkait dari Nyerat</em> di prompt, dibungkus blok kode. Tiap catatan dipotong pada 8.000 karakter, dan totalnya 24.000 karakter. Catatan yang tidak ditemukan tetap disebut, supaya pi tahu ada yang hilang.</li>
+  <li>Dokumen yang sedang terbuka dibaca dari editornya, jadi suntingan yang belum disimpan ikut.</li>
+  <li>Prompt lengkap, termasuk isi catatan, terlihat di <a href="#log">log pi</a>.</li>
+  <li>Isi catatan diambil saat <em>Kerjakan dengan pi</em>. <em>Balas pi</em> melanjutkan sesi yang sama tanpa menyalinnya lagi.</li>
+</ul>
+<p>Di papan, tautan di judul kartu bisa diklik untuk membuka catatannya, dan tautan di catatan kartu tampil sebagai baris <code>↗ nama</code> di bawah chip. Kolom catatan di dialog sunting kartu memberi saran nama saat Anda mengetik <code>[[</code>.</p>
+
 <h2 id="status">Status kartu</h2>
 <div class="table-wrap"><table>
   <tr><th>Chip</th><th>Arti</th></tr>
@@ -90,6 +104,7 @@ proyek: web-ecommerce          <span class="c">← proyek bawaan papan</span>
 <ul>
   <li>Isi Markdown hanya menyebut <em>nama</em> proyek. Nama dipetakan ke folder yang hanya bisa diisi lewat dialog pilih folder, jadi kartu atau agent tidak bisa mengarahkan harness ke folder sembarang.</li>
   <li>Folder kerja Nyerat, isinya, induknya, root, dan path relatif ditolak sebagai folder proyek.</li>
+  <li>Isi catatan yang ditautkan <code>[[ ]]</code> dari folder kerja Nyerat dikirim ke pi sebagai bagian prompt (dan ke penyedia model yang dipakai pi). Jangan menautkan catatan yang tidak boleh keluar. Hanya berkas Markdown di folder kerja yang bisa ditautkan; folder bertitik, symlink, dan path di luar folder kerja tidak ikut.</li>
   <li>Nyerat sendiri tidak menulis ke folder proyek. Menutup jendela menghentikan semua harness yang berjalan.</li>
 </ul>
 </main>

@@ -24,7 +24,8 @@ import {
     addCard, addColumn, cardMeta, deleteCard, deleteColumn, dropIndex, dueStatus, moveCard, moveColumn,
     newBoard, renameColumn, toggleDone, updateCard, type Board, type Card, type Position,
 } from '../markdown/kanban.js';
-import { cellMarkup, type MarkupColors } from '../markdown/pango.js';
+import { cellMarkup, escapeMarkup, NOTE_URI, type MarkupColors } from '../markdown/pango.js';
+import { parseWikiLink, wikiLinksIn, type WikiLink } from '../markdown/wikilink.js';
 import { confirmDialog, editCardDialog, promptDialog, type CardDraft } from './dialogs.js';
 import type { Palette } from './theme.js';
 import { childrenOf, onClick, onKeyPress, pack, removeChildren } from '../gtkutil.js';
@@ -41,7 +42,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', '
 
 // Dialog bisa diganti (misalnya di tes) karena dialog asli menahan program sampai ditutup.
 export interface BoardDialogs {
-    editCard(parent: Gtk.Window | null, card: CardDraft, title?: string): CardDraft | null;
+    editCard(parent: Gtk.Window | null, card: CardDraft, title?: string, listNotes?: () => string[]): CardDraft | null;
     prompt(parent: Gtk.Window | null, options: { title: string; label: string; value?: string }): string | null;
     confirm(parent: Gtk.Window | null, message: string, detail?: string): boolean;
 }
@@ -91,6 +92,9 @@ export class KanbanBoard {
     dialogs: BoardDialogs = { editCard: editCardDialog, prompt: promptDialog, confirm: confirmDialog };
     today: () => string = () => GLib.DateTime.new_now_local().format('%Y-%m-%d') ?? '';
     harness: BoardHarness | null = null;
+    // [[catatan]] di kartu diklik, dan daftar berkas untuk saran [[ di dialog kartu (diisi jendela).
+    onOpenNote: (link: WikiLink) => void = () => {};
+    listNotes: (() => string[]) | null = null;
 
     private board: Board = newBoard([]);
     private readonly row: Gtk.Box;
@@ -228,16 +232,31 @@ export class KanbanBoard {
         check.connect('toggled', () => this.commit(toggleDone(this.board, { column: c, index: i })));
         const label = new Gtk.Label({ use_markup: true, xalign: 0, wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR, hexpand: true, width_chars: 10 });
         label.add_css_class('kanban-card-text');
-        const markup = cellMarkup(meta.title, this.colors);
+        const markup = cellMarkup(meta.title, this.colors, true);
         label.set_markup(card.done ? `<s>${markup}</s>` : markup);
+        label.connect('activate-link', (_l, uri: string) => this.activateNote(uri));
         const top = new Gtk.Box({ spacing: 8 });
         top.append(check);
         pack(top, label, true);
 
         const inner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
         inner.append(top);
+        // Tautan di catatan kartu tidak terlihat di judul, jadi ditampilkan sebagai chip yang bisa diklik.
+        const inTitle = new Set(wikiLinksIn(card.text).map(l => l.target.toLowerCase()));
+        const noteLinks = card.notes.length ? wikiLinksIn(card.notes.join('\n')).filter(l => !inTitle.has(l.target.toLowerCase())) : [];
         const badges = this.buildBadges(card.notes.length > 0, meta.tags, meta.due, meta.agent, this.harness?.status(card) ?? null);
         if (badges) inner.append(badges);
+        // Satu baris per tautan supaya tautan yang banyak tidak melebarkan kartu.
+        const linkBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
+        if (noteLinks.length) inner.append(linkBox);
+        for (const link of noteLinks) {
+            const ref = `${link.target}${link.heading ? `#${link.heading}` : ''}`;
+            const label = new Gtk.Label({ xalign: 0, ellipsize: Pango.EllipsizeMode.END, tooltip_text: `Buka catatan ${ref} (ikut menjadi konteks agent)` });
+            label.add_css_class('kanban-note-link');
+            label.set_markup(`<a href="${escapeMarkup(NOTE_URI + encodeURIComponent(ref))}">↗ ${escapeMarkup(link.alias || ref)}</a>`);
+            label.connect('activate-link', (_l, uri: string) => this.activateNote(uri));
+            linkBox.append(label);
+        }
         widget.append(inner);
 
         // Tekan-geser-lepas dengan tombol kiri. Kotak centang menangani kliknya sendiri lebih
@@ -338,7 +357,7 @@ export class KanbanBoard {
 
     // Kartu baru diisi lewat dialog yang sama dengan sunting kartu.
     showAddCard(column: number): void {
-        const draft = this.dialogs.editCard(this.parent, { text: '', notes: [] }, 'Tambah Kartu');
+        const draft = this.dialogs.editCard(this.parent, { text: '', notes: [] }, 'Tambah Kartu', this.listNotes ?? undefined);
         if (!draft?.text) return;
         const index = this.board.columns[column]?.cards.length ?? 0;
         const added = addCard(this.board, column, draft.text);
@@ -374,7 +393,7 @@ export class KanbanBoard {
     editCard(column: number, index: number): void {
         const card = this.board.columns[column]?.cards[index];
         if (!card) return;
-        const result = this.dialogs.editCard(this.parent, { text: card.text, notes: card.notes });
+        const result = this.dialogs.editCard(this.parent, { text: card.text, notes: card.notes }, undefined, this.listNotes ?? undefined);
         if (result?.text) this.commit(updateCard(this.board, { column, index }, { text: result.text, notes: result.notes }));
     }
 
@@ -425,6 +444,14 @@ export class KanbanBoard {
     }
 
     // ---------- Klik dan seret ----------
+
+    // Tautan [[catatan]] di kartu diklik. Penekanan kartu dibatalkan supaya lepasnya tidak membuka dialog sunting.
+    activateNote(uri: string): boolean {
+        if (!uri.startsWith(NOTE_URI)) return false;
+        this.press = null;
+        this.onOpenNote(parseWikiLink(decodeURIComponent(uri.slice(NOTE_URI.length))));
+        return true;
+    }
 
     // Tombol kiri ditekan di (x, y), koordinat kartu `widget`.
     onCardPress(column: number, index: number, widget: Gtk.Box, x: number, y: number): boolean {

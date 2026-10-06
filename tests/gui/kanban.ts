@@ -367,7 +367,7 @@ export function kanbanBoardTests(c: GuiContext): void {
                     if (dialog) { widgetPixbuf(dialog)?.savev(`${shot}-dialog${dark ? '-gelap' : ''}.png`, 'png', [], []); dialog.close(); }
                     return GLib.SOURCE_REMOVE;
                 });
-                editCardDialog(w.win, { text: 'Tulis laporan #kerja @{2026-10-20}', notes: [] }, 'Tambah Kartu');
+                editCardDialog(w.win, { text: 'Tulis laporan #kerja @{2026-10-20}', notes: ['Ikuti keputusan di [[Catatan Rapat]].'] }, 'Tambah Kartu', () => ['Catatan Rapat.md']);
             }
             w.setOption('dark', false);
             pump();

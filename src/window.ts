@@ -30,7 +30,7 @@ import { FileTree, isDirectory } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
 import { ChatPanel } from './ui/chat.js';
 import { listMarkdownFiles, readProject } from './agent/project.js';
-import { newNotePath, resolveWikiLink, type WikiLink } from './markdown/wikilink.js';
+import { newNotePath, noteSection, resolveWikiLink, type WikiLink } from './markdown/wikilink.js';
 import { projectPath } from './agent/path.js';
 import { applyBatch } from './agent/batch.js';
 import { changeFiles, cleanNewName, type Change } from './agent/changes.js';
@@ -46,7 +46,7 @@ import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
 import { assignCard, cardMeta, countCards, isKanban, newBoard, parseBoard, serializeBoard, updateCard, type Board, type Card, type Position } from './markdown/kanban.js';
 import { Orchestrator } from './orchestrator.js';
-import { cardProject, checkProjectFolder, HARNESSES, isActive, PROJECT_NAME, type HarnessAsk, type HarnessReply, type Run } from './agent/harness.js';
+import { cardProject, checkProjectFolder, HARNESSES, isActive, PROJECT_NAME, type LinkedNote, type HarnessAsk, type HarnessReply, type Run } from './agent/harness.js';
 import { LogViewer } from './ui/logviewer.js';
 import type { MenuEntry } from './ui/menu.js';
 
@@ -142,11 +142,17 @@ export class MainWindow {
         this.orchestrator = new Orchestrator({
             workspace: () => this.fileTree.root,
             updateBoard: (file, edit) => this.updateBoardFile(file, edit),
+            linkedNotes: (file, links) => this.linkedNotes(file, links),
             changed: (run, message) => {
                 if (this.boardMode && this.file === run.board) this.board.queueRender();
                 if (message) this.statusBar.toast(message);
             },
         });
+        this.board.onOpenNote = link => this.openNote(link);
+        this.board.listNotes = () => {
+            const root = this.noteRoot(this.doc);
+            return root ? listMarkdownFiles(root) : [];
+        };
         this.board.harness = {
             status: card => (this.file && this.orchestrator.queue.find(this.file, card.text)?.status) || null,
             menu: (card, at) => this.harnessMenu(card, at),
@@ -580,6 +586,26 @@ export class MainWindow {
         if (!this.openInTab(path)) return;
         if (!found) this.statusBar.toast(`Catatan baru: ${rel} (tersimpan setelah diisi)`);
         else if (link.heading) this.jumpToHeading(this.doc, link.heading);
+    }
+
+    // Catatan yang ditautkan kartu di papan `boardFile`, untuk konteks prompt harness. Dicari dengan aturan yang sama
+    // seperti Ctrl+klik; dokumen yang sedang terbuka dibaca dari editornya supaya suntingan yang belum tersimpan ikut.
+    private linkedNotes(boardFile: string, links: WikiLink[]): LinkedNote[] {
+        const root = this.fileTree.root && boardFile.startsWith(`${this.fileTree.root}/`) ? this.fileTree.root : GLib.path_get_dirname(boardFile);
+        const from = boardFile.slice(root.length + 1);
+        const files = listMarkdownFiles(root);
+        return links.map(link => {
+            const file = resolveWikiLink(link.target, files, from);
+            if (!file) return { link, file: null, text: null };
+            const path = GLib.build_filenamev([root, ...file.split('/')]);
+            let text: string;
+            try {
+                text = this.docs.find(d => d.file === path)?.editor.getText() ?? readTextFile(path);
+            } catch {
+                return { link, file: null, text: null };
+            }
+            return { link, file, text: link.heading ? noteSection(text, link.heading) : text };
+        });
     }
 
     private jumpToHeading(doc: Doc, heading: string): void {

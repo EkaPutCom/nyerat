@@ -8,7 +8,7 @@ import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
-import { removeChildren } from '../gtkutil.js';
+import { onKeyPress, removeChildren } from '../gtkutil.js';
 import { cpLength } from './offsets.js';
 import { lineText } from './editing.js';
 import { suggestNotes, wikiQuery, wikiTargetFor } from '../markdown/wikilink.js';
@@ -157,4 +157,18 @@ export class WikiCompleter {
         }
         this.select(0);
     }
+}
+
+// Pasang saran [[ pada TextView biasa (mis. kolom catatan di dialog kartu). MarkdownView menyambungkan sinyalnya sendiri.
+// Pemanggil wajib memanggil destroy() saat TextView-nya tidak dipakai lagi supaya popover dilepas.
+export function attachWikiCompleter(view: Gtk.TextView, listNotes: () => string[]): WikiCompleter {
+    const completer = new WikiCompleter(view);
+    completer.listNotes = listNotes;
+    const buffer = view.get_buffer();
+    buffer.connect_after('insert-text', () => completer.queue(true));
+    buffer.connect_after('delete-range', () => completer.queue(false));
+    buffer.connect('mark-set', (_b, _i, mark) => { if (mark === buffer.get_insert()) completer.queue(false); });
+    onKeyPress(view, (keyval, state) =>
+        !(state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK)) && completer.onKey(keyval), Gtk.PropagationPhase.CAPTURE);
+    return completer;
 }

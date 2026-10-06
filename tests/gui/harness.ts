@@ -350,6 +350,63 @@ export function harnessTests(c: GuiContext): void {
         eq(kb.getBoard().columns[2].cards[0].notes.filter(n => n.startsWith('↳ pi selesai')).length, 2, 'satu catatan per run');
     });
 
+    test('[[catatan]] di kartu: isi catatan masuk prompt pi, tautan bisa diklik tanpa membuka dialog sunting', () => {
+        const folder = GLib.build_filenamev([tmp, 'papan-wiki']);
+        GLib.mkdir_with_parents(GLib.build_filenamev([folder, 'spek']), 0o755);
+        GLib.file_set_contents(GLib.build_filenamev([folder, 'spek', 'Spesifikasi.md']), '# Spesifikasi\n\n## Warna\n\nTombol bayar hijau #1a7f37.\n\n## Lain\n\nRahasia lain.\n');
+        GLib.file_set_contents(GLib.build_filenamev([folder, 'Catatan Rapat.md']), 'Klien minta QRIS dinamis.\n');
+        const board = GLib.build_filenamev([folder, 'papan.md']);
+        GLib.file_set_contents(board, PAPAN.replace('- [ ] Checkout pakai QRIS @pi #fitur\n  Pakai SDK resmi.',
+            '- [ ] Checkout pakai QRIS [[Spesifikasi#Warna]] @pi #fitur\n  Pakai SDK resmi, lihat [[catatan rapat]] dan [[Hilang]].'));
+        for (const f of ['cwd', 'urutan', 'prompt', 'lepas', 'args', 'jawaban', 'sisa']) GLib.unlink(GLib.build_filenamev([dir, f]));
+        mode('ok');
+        ok(w.load(board), 'load papan');
+        for (let i = 0; i < 20; i++) { pump(); GLib.usleep(5000); }
+
+        // Tautan di judul berupa <a>, tautan di catatan menjadi baris tersendiri di bawah chip.
+        kb.render();
+        const widget = kb.columns[0].cards[at('Checkout').index];
+        const text = descendants(widget).find(x => x.has_css_class('kanban-card-text')) as Gtk.Label;
+        contains(text.get_label(), '<a href="nyerat-note:Spesifikasi%23Warna">');
+        eq(descendants(widget).filter(x => x.has_css_class('kanban-note-link')).map(x => (x as Gtk.Label).get_text()), ['↗ catatan rapat', '↗ Hilang']);
+
+        // --shot-kanban-wiki=<prefix>: kartu dengan tautan [[ ]] di tema terang dan gelap (<prefix>-terang.png, -gelap.png).
+        const shot = optVal('shot-kanban-wiki');
+        if (shot) {
+            for (const dark of [false, true]) {
+                w.setOption('dark', dark);
+                for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
+                widgetPixbuf(w.win)?.savev(`${shot}-${dark ? 'gelap' : 'terang'}.png`, 'png', [], []);
+            }
+            w.setOption('dark', false);
+            kb.render();
+        }
+        const edited: string[] = [];
+        const savedEdit = kb.dialogs.editCard;
+        kb.dialogs = { ...kb.dialogs, editCard: (_p, card) => { edited.push(card.text); return null; } };
+        const { column, index } = at('Checkout');
+        kb.onCardPress(column, index, widget, 5, 5);
+        ok(text.emit('activate-link', 'nyerat-note:catatan%20rapat'), 'tautan tidak ditangani');
+        kb.onCardRelease();
+        kb.dialogs = { ...kb.dialogs, editCard: savedEdit };
+        eq(edited, [], 'dialog sunting ikut terbuka');
+        eq(w.file, GLib.build_filenamev([folder, 'Catatan Rapat.md']), 'catatan yang terbuka');
+        ok(w.closeTab(), 'closeTab');
+        eq(w.file, board, 'kembali ke papan');
+
+        run('Checkout');
+        const wikiRun = () => w.orchestrator.queue.find(board, kb.getBoard().columns[at('Checkout').column].cards[at('Checkout').index].text);
+        ok(waitFor(() => wikiRun()?.status === 'done'), `status: ${wikiRun()?.status}`);
+        const prompt = JSON.parse(read('prompt')).message as string;
+        contains(prompt, '## Catatan terkait dari Nyerat');
+        contains(prompt, '### [[Spesifikasi#Warna]] — spek/Spesifikasi.md');
+        contains(prompt, 'Tombol bayar hijau #1a7f37.');
+        ok(!prompt.includes('Rahasia lain.'), 'bagian lain ikut tersalin');
+        contains(prompt, 'Klien minta QRIS dinamis.');
+        contains(prompt, '### [[Hilang]]\n\n(tidak ditemukan di folder kerja Nyerat)');
+        contains(wikiRun()!.trace.text(), 'Tombol bayar hijau');
+    });
+
     w.settings.projects = savedProjects;
     w.orchestrator.program = savedProgram;
     w.harnessDialogs = savedDialogs;
