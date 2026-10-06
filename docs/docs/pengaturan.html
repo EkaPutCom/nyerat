@@ -33,7 +33,7 @@
 <h2 id="lokasi">Lokasi berkas</h2>
 <div class="table-wrap"><table>
   <tr><th>Berkas</th><th>Isi</th></tr>
-  <tr><td>GSettings (<code>id.eka.Nyerat</code>)</td><td>Pengaturan aplikasi, disimpan di dconf</td></tr>
+  <tr><td>GSettings (<code>com.ekaput.Nyerat</code>)</td><td>Pengaturan aplikasi, disimpan di dconf. Versi sebelumnya memakai <code>id.eka.Nyerat</code>; pengaturan lama tidak dipindahkan</td></tr>
   <tr><td>Keyring sistem</td><td>API key DeepSeek</td></tr>
   <tr><td><code>~/.config/nyerat/deepseek.key</code></td><td>API key bila keyring tidak tersedia (mode 0600)</td></tr>
   <tr><td><code>&lt;folder kerja&gt;/.nyerat/chats/</code></td><td>Riwayat percakapan, rencana, dan journal tindakan</td></tr>
@@ -49,6 +49,7 @@
   <li><code>projects</code>: pemetaan nama proyek → folder untuk harness eksternal</li>
 </ul>
 <p>API key tidak pernah ditulis ke pengaturan.</p>
+<p>Di jendela sempit (di bawah ±900 piksel), panel Asisten melayang di atas editor alih-alih menempel di kanan; di bawah ±600 piksel sidebar juga. Panel ditutup saat jendela menyempit, dan pilihan panel Anda dipulihkan saat jendela dilebarkan lagi.</p>
 
 <h2 id="bawaan">Nilai bawaan</h2>
 <div class="table-wrap"><table>

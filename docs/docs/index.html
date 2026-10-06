@@ -32,8 +32,8 @@
 
 <h2 id="pasang">Pasang</h2>
 <p>Nyerat dijalankan oleh GJS, bukan Node.js. Node.js hanya dibutuhkan sekali untuk membangun kodenya. Di Ubuntu atau Debian:</p>
-<pre><span class="c"># wajib: GJS, GTK 4, dan GtkSourceView 5</span>
-sudo apt install gjs gir1.2-gtk-4.0 gir1.2-gtksource-5
+<pre><span class="c"># wajib: GJS, GTK 4, libadwaita, dan GtkSourceView 5</span>
+sudo apt install gjs gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gtksource-5
 
 <span class="c"># agent AI: libsoup 3 dan (opsional) keyring untuk API key</span>
 sudo apt install gir1.2-soup-3.0 gir1.2-secret-1
@@ -51,6 +51,15 @@ npm start</pre>
 <p>Setelah di-build, aplikasi bisa dibuka langsung dengan sebuah berkas atau folder:</p>
 <pre>gjs -m dist/nyerat.js ~/catatan          <span class="c"># buka folder kerja</span>
 gjs -m dist/nyerat.js rencana.md         <span class="c"># buka satu berkas</span></pre>
+
+<h2 id="menu-aplikasi">Pasang ke menu aplikasi (opsional)</h2>
+<p><code>npm start</code> menjalankan Nyerat langsung dari folder <code>dist/</code>. Agar muncul di menu aplikasi dengan ikon dan bisa membuka berkas Markdown dari pengelola berkas, pasang dengan Meson setelah build:</p>
+<pre>npm run build
+meson setup _build --prefix=/usr
+sudo meson install -C _build</pre>
+<p>Untuk memakai libadwaita terbaru tanpa bergantung pada versi distro, build sebagai Flatpak dengan runtime GNOME 50:</p>
+<pre>flatpak-builder --user --install --force-clean _flatpak build-aux/flatpak/com.ekaput.Nyerat.json</pre>
+<p>Pemasangan lewat Meson dan Flatpak belum diuji (lihat <a href="keterbatasan.html#gnome">Keterbatasan</a>).</p>
 
 <h2 id="api-key">Sambungkan agent</h2>
 <ol>

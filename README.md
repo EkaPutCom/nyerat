@@ -41,7 +41,7 @@ Folder kerja contoh: proyek peluncuran produk dengan `rencana/peluncuran.md`, `c
 
 - Linux dengan desktop X11 atau Wayland
 - GJS (diuji dengan versi 1.80)
-- libadwaita 1 (diuji dengan 1.5) untuk tampilan GNOME native: header bar, tema terang/gelap mengikuti Gaya Gelap sistem, dan dialog Tentang.
+- libadwaita 1 (diuji dengan 1.5) untuk tampilan GNOME native: header bar, tema terang/gelap mengikuti Gaya Gelap sistem, tata letak adaptif, dan dialog Tentang. Di libadwaita yang lebih baru Nyerat memakai fiturnya bila ada: warna aksen sistem (≥ 1.6) dan `Adw.ShortcutsDialog` (≥ 1.8, GNOME 49+). Jalur itu belum diuji di mesin pengembangan (Ubuntu 24.04, libadwaita 1.5); untuk memakainya, jalankan lewat Flatpak dengan runtime GNOME 50 (lihat [Memasang](#memasang)).
 - GTK 4 (diuji dengan 4.14) dan GtkSourceView 5. Pustaka GTK 4 biasanya sudah ada di desktop modern (juga di XFCE, yang sendiri memakai GTK 3); yang perlu dipasang hanya binding GObject Introspection-nya. GTK 3 dan GTK 4 terpasang berdampingan tanpa saling mengganti.
 - WebKitGTK 6.0 dengan binding GObject Introspection (`gir1.2-webkit-6.0` di Debian/Ubuntu), **hanya untuk diagram Mermaid dan DBML**; tanpanya aplikasi tetap berjalan dan diagram menampilkan pesan galat
 - Node.js 20.19+ pada seri 20, atau 22.12+ (syarat Vite), **hanya untuk build** (diuji dengan Node.js 24). Aplikasinya sendiri dijalankan GJS, bukan Node.js.
@@ -110,6 +110,7 @@ gjs -m dist/nyerat.js ~/catatan
 | `npm run bench:save` | Jalankan benchmark dan simpan hasilnya ke `bench/<tanggal-waktu>.json` |
 | `npm run bench:compare` | Jalankan benchmark dan tampilkan selisih terhadap [`bench/baseline.json`](bench/baseline.json) (hijau = lebih cepat, merah = lebih lambat, abu-abu = selisih < 25%, derau pengukuran) |
 | `npm run docs` | Potret aplikasi sungguhan (jendela akan terbuka sebentar), lalu perbarui PNG dan GIF di `docs/assets/` untuk landing page |
+| `npm run pot` | Buat templat terjemahan `po/nyerat.pot` dari berkas di `po/POTFILES.in` |
 
 Hasil optimasi dan batas cakupannya dicatat di [laporan performa](bench/PERFORMANCE.md). Biaya paket, verifikasi, dan checkpoint dicatat di [pemeriksaan performa agentic](bench/AGENTIC.md).
 
@@ -134,6 +135,28 @@ tanpa grid tabel, dan `--fixture=buku --size=400 --sizes=50,200,400` menguji nas
 (paragraf panjang yang dibungkus, dialog, *miring*/**tebal**, ±1,6 KB per blok; 400 blok ≈ 650 KB,
 sekitar 100.000 kata); jenis dokumen bawaan adalah `mixed`. Rendering gambar/diagram asinkron dan interaksi papan kanban belum diukur;
 kanban saat ini mencakup parsing dan serialisasi model.
+
+### Memasang
+
+`npm start` menjalankan aplikasi langsung dari `dist/` tanpa dipasang (schema GSettings dan ikon dibaca dari folder bundel). Untuk memasangnya ke sistem bersama berkas desktop, metainfo AppStream, ikon, schema, dan terjemahan, pakai Meson setelah build:
+
+```bash
+npm ci && npm run build
+meson setup _build --prefix=/usr
+meson install -C _build
+```
+
+Manifest Flatpak dengan runtime GNOME 50 ada di [`build-aux/flatpak/com.ekaput.Nyerat.json`](build-aux/flatpak/com.ekaput.Nyerat.json):
+
+```bash
+flatpak-builder --user --install --force-clean _flatpak build-aux/flatpak/com.ekaput.Nyerat.json
+```
+
+Manifest ini mengunduh dependensi npm saat build (`--share=network`), jadi cocok untuk build lokal; Flathub membutuhkan sumber npm yang dibangkitkan (`flatpak-node-generator`). Meson dan Flatpak belum diuji di mesin pengembangan (keduanya tidak terpasang); `desktop-file-validate` dan `appstreamcli validate` sudah lulus.
+
+### Terjemahan
+
+Bahasa sumber antarmuka adalah Indonesia. Teks di kode dibungkus `_()` (atau `fmt(_('… {nama} …'), { nama })` untuk teks berisi nilai, `pgettext()` bila perlu konteks) dari `src/i18n.ts`; teks di berkas `.ui` diberi `translatable="yes"`. Untuk menambah bahasa: `npm run pot`, salin `po/nyerat.pot` menjadi `po/<kode>.po`, terjemahkan, lalu tambahkan kodenya ke `po/LINGUAS`. Meson mengompilasi terjemahan ke `<prefix>/share/locale`; dari `dist/`, katalog dicari di `locale/` di akar repo.
 
 ### Mode pengembangan
 
@@ -239,6 +262,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 | Ctrl+Shift+A | Tampilkan/sembunyikan panel Asisten |
 | Ctrl+Shift+P | Palet perintah: cari dan jalankan perintah apa pun |
 | Ctrl+, | Preferensi |
+| Ctrl+? | Daftar pintasan keyboard |
 | Enter / Shift+Enter | Di kotak pesan Asisten: kirim / baris baru |
 
 ## Tes
@@ -324,18 +348,23 @@ vite.config.ts            pengaturan build Vite
 scripts/dev.mjs           npm run dev: build ulang + buka ulang aplikasi + cek tipe
 scripts/capture.ts        potret editor dan buat PNG/GIF untuk docs/assets/
 scripts/gifenc.d.ts       deklarasi tipe gifenc untuk script capture
+scripts/pot.sh            npm run pot: templat terjemahan po/nyerat.pot
 docs/                     landing page statis dan aset tangkapan layar
-data/                     schema GSettings (dikompilasi ke dist/ saat build)
+meson.build               pemasangan ke sistem/Flatpak (memasang isi dist/ setelah npm run build)
+build-aux/flatpak/        manifest Flatpak (runtime GNOME 50)
+po/                       terjemahan: POTFILES.in, LINGUAS, <bahasa>.po
+data/                     schema GSettings (dikompilasi ke dist/ saat build), berkas desktop dan metainfo (.in), ikon aplikasi, peluncur nyerat.in
 dist/                     hasil build (tidak masuk git)
 src/
 ├── main.ts               titik masuk: hanya memanggil main() dari app.ts
 ├── env.d.ts              tipe untuk GJS dan modul gi:// (dari paket @girs)
-├── gtkutil.ts            pembantu GTK 4 untuk semua lapisan: iter baris, anak widget, klik/tombol, dialog modal (runModal), pack()
+├── gtkutil.ts            pembantu GTK 4 untuk semua lapisan: iter baris, anak widget, klik/tombol, dialog modal tanpa main loop bersarang (modal(), after()), pack(), pixbuf ↔ Gdk.Texture, ikon dari dist/
+├── i18n.ts               gettext: _(), fmt(), pgettext(), ngettext(); domain diikat sebelum modul lain dievaluasi
 ├── app.ts                membuat Gtk.Application dan jendela
 ├── window.ts             MainWindow: menyusun komponen, mengelola dokumen/tab, buka/simpan/ekspor
 ├── actions.ts            semua Gio.Action aplikasi dan shortcut-nya (toggle pengaturan memakai Gio.Settings.create_action)
 ├── config.ts             nama, ID, versi aplikasi, dan font
-├── settings.ts           AppSettings: properti bertipe di atas Gio.Settings (schema di data/id.eka.Nyerat.gschema.xml)
+├── settings.ts           AppSettings: properti bertipe di atas Gio.Settings (schema di data/com.ekaput.Nyerat.gschema.xml)
 ├── commands.ts           nama aksi untuk palet perintah
 ├── files.ts              baca/tulis file teks UTF-8
 ├── fileops.ts            buat, ganti nama, hapus (ke sampah), dan pindahkan file/folder di disk (tanpa GTK; dipakai pohon berkas)
@@ -411,12 +440,13 @@ src/
     ├── findbar.ts        bilah pencarian (targetnya berpindah mengikuti tab aktif)
     ├── tabbar.ts         Adw.TabBar + Adw.TabView untuk tab dokumen (tampil jika ada ≥ 2 dokumen)
     ├── statusbar.ts      hitungan kata dan posisi kursor (pemberitahuan singkat lewat Adw.Toast di window.ts)
-    ├── dialogs.ts        pilih file, konfirmasi simpan, error, tentang
+    ├── dialogs.ts        pilih file, konfirmasi simpan, error, tentang (mengembalikan Promise)
+    ├── shortcuts.ts      dialog pintasan keyboard (Ctrl+?) dari accel aksi yang terpasang: Adw.ShortcutsDialog bila ada, selain itu Adw.Dialog berisi daftar
     ├── menu.ts           menu konteks sebagai data (MenuEntry) → Gtk.PopoverMenu
-    ├── imageviewer.ts    penampil gambar dengan zoom (cairo)
+    ├── imageviewer.ts    penampil gambar dengan zoom (Adw.Window, tekstur berskala lewat snapshot GSK)
     ├── kanban.ts         tampilan papan kanban: daftar, kartu, menu, seret-lepas
     ├── chat.ts           panel Asisten di kanan: pesan, tombol Konteks, pengaturan key dan model
-    └── theme.ts          palet warna, font, CSS terang/gelap
+    └── theme.ts          palet warna dokumen, font, CSS (warna bernama Adwaita untuk antarmuka, aksen sistem bila ada)
 tests/
 ├── run-tests.ts          titik masuk dan pendaftaran tes unit/GUI
 ├── framework.ts          asersi, hasil tes, opsi CLI, folder sementara
@@ -543,12 +573,15 @@ Nyerat berjalan di GTK 4, GtkSourceView 5, dan WebKitGTK 6.0. Beberapa perilaku 
 - **Anak overlay GtkTextView tidak bisa dilepas.** Di GTK 4.14, `gtk_text_view_remove()` tidak mengenal anak yang ditambahkan dengan `add_overlay()` (berakhir dengan *"GtkBox is not a child of GtkSourceView"*). `editor/overlays.ts` meminjamkan slot (`Gtk.Box` yang sudah menjadi overlay) ke gambar, tabel, dan diagram; slot yang dikembalikan dikosongkan, disembunyikan, lalu dipakai blok berikutnya. Penerima klik dipasang di isi slot, bukan di slotnya.
 - **Overlay GtkTextView tidak ikut bergulir sendiri.** Posisinya koordinat buffer, dan wadah overlay (`GtkTextViewChild`) menguranginya dengan offset gulir saat dialokasikan. Tetapi di GTK 4.14 offset itu hanya diperbarui di `size_allocate` TextView, dan menggulir tidak mengalokasikan ulang apa pun: gambar, tabel, dan diagram tertinggal di letak lama (tidak tampil atau melayang di atas teks). `OverlaySlots` karena itu meminta alokasi ulang TextView **dan** wadahnya setiap adjustment bergulir (GTK melewati alokasi wadah yang ukurannya tidak berubah). Biaya per langkah gulir tidak terukur (median ±0,22 ms dengan maupun tanpa). Tes `gambar di bawah dokumen panjang tampil di tempatnya setelah digulir` dan tes grid tabel memeriksa letak widget sebenarnya, bukan angka yang disimpan lapisan.
 - **`ListBox.remove_all()` ikut membuang placeholder** di GTK 4.14; `removeChildren()` (`gtkutil.ts`) membuang baris satu per satu.
-- **Dialog modal lewat main loop bersarang.** `gtk_dialog_run()` sudah tidak ada. `runModal()` (`gtkutil.ts`) menjalankan `GLib.MainLoop` sampai dialog menjawab, sehingga `chooseFile()`, `askSaveChanges()`, dan dialog kanban tetap mengembalikan jawabannya langsung. Pemilih berkas memakai `Gtk.FileDialog` (sudah menanyakan sebelum menimpa; di desktop yang punya xdg-desktop-portal, dialognya dibuka portal). Pesan dan formulir (sunting kartu, prompt) adalah `Gtk.Window` modal sendiri (`modalWindow()` di `ui/dialogs.ts`), bukan `Gtk.AlertDialog` dan tanpa `destroy_with_parent`: keduanya menghubungkan dialog ke sinyal `destroy` jendela induk, dan saat proses keluar GJS bisa memfinalisasi induk lebih dulu sehingga muncul GLib-GObject-CRITICAL.
+- **Dialog modal tanpa main loop bersarang.** `gtk_dialog_run()` sengaja dihapus GTK 4: main loop di dalam handler membuat kode lain berjalan di tengah-tengah handler itu. Dialog di `ui/dialogs.ts` mengembalikan Promise (`modal()` di `gtkutil.ts`), dan pemanggil melanjutkan lewat `after(nilai, lanjutan)`: nilai biasa (jalur yang tidak perlu bertanya, atau tiruan dialog di tes) diproses seketika, Promise setelah dijawab. Karena itu `closeTab()`, `save()`, dan `onClose()` tetap sinkron bila tidak ada yang perlu ditanyakan. Penutupan jendela yang perlu konfirmasi ditahan (`close-request` mengembalikan true), lalu `close()` dipanggil lagi setelah semua dialog dijawab setuju. Lanjutan yang berjalan setelah dialog memeriksa ulang keadaan (tab masih ada, kartu masih sama) karena pengguna bisa saja mengubahnya. Pemilih berkas memakai `Gtk.FileDialog` (sudah menanyakan sebelum menimpa; di desktop yang punya xdg-desktop-portal, dialognya dibuka portal). Pesan dan formulir memakai `Adw.AlertDialog` dan `Adw.Dialog` (`modalWindow()`), bukan `Gtk.AlertDialog` dan tanpa `destroy_with_parent`: keduanya menghubungkan dialog ke sinyal `destroy` jendela induk, dan saat proses keluar GJS bisa memfinalisasi induk lebih dulu sehingga muncul GLib-GObject-CRITICAL.
+- **Gambar sebagai `Gdk.Texture`.** `Gtk.Picture.new_for_pixbuf()` (usang sejak GTK 4.12), `Gdk.pixbuf_get_from_texture()` (4.12), dan `Gdk.cairo_set_source_pixbuf()` (4.20) tidak dipakai. Pixbuf tetap dipakai untuk memuat dan memperkecil gambar, lalu `textureFromPixbuf()`/`pixbufFromTexture()` (`gtkutil.ts`) menyalin pikselnya lewat `Gdk.MemoryTexture` dan `Gdk.TextureDownloader`. Penampil gambar menggambar teksturnya dengan `Gtk.Snapshot.append_scaled_texture()`.
+- **Tata letak adaptif.** Dua `Adw.Breakpoint` di jendela: di bawah 900sp panel Asisten melipat menjadi panel melayang, di bawah 600sp sidebar juga. Ukuran minimum jendela 360 × 294. OverlaySplitView dipasang dengan `pin_sidebar` supaya libadwaita tidak membuka panel sendiri saat jendela melebar; `bindPanel()` menutup panel saat melipat dan memulihkan pengaturan sebelumnya saat melebar (juga saat jendela ditutup selagi sempit).
 - **`hexpand`/`vexpand` diteruskan ke atas.** Di GTK 4, widget yang punya anak mengembang ikut mengembang. Sidebar, tab Riwayat, tab Berkas, dan panel Asisten diberi `hexpand: false` eksplisit, supaya tidak ikut dibagi ruang sisa jendela (dijaga tes `tab riwayat tidak membuat sidebar mengembang`). `pack(box, child, expand)` di `gtkutil.ts` menggantikan `pack_start()` dan menyetel ekspansi sesuai orientasi box.
 - **Seleksi jangan sampai kosong di tengah suntingan.** Di X11, seleksi yang sempat kosong melepas clipboard PRIMARY, dan GTK 4 membatalkan seleksi berikutnya begitu server mengonfirmasi pelepasan itu. `wrapSelection()` (`editor/editing.ts`) karena itu hanya menyisipkan/menghapus penanda di kedua ujung, tanpa menghapus seluruh seleksi dulu; tanpa itu Ctrl+B kedua tidak melepas `**`.
 - **Pohon berkas (TreeListModel + ListView) dan seret-lepas.** Tiap folder adalah `Gio.ListStore<FileNode>`; `Gtk.TreeListModel` memanggil fungsi pembuat anak juga hanya untuk memeriksa apakah baris bisa dibuka, jadi isi folder disimpan di `dirStores` dan dibaca sekali. Seret memakai `Gtk.DragSource`/`Gtk.DropTarget` pada ListView; baris di titik kursor dicari lewat `pick()` (baris adalah anak langsung ListView, isinya `TreeExpander`). Penanda tujuan memakai seleksi baris. Ikon drag diambil dari tema ikon; widget sebagai ikon (`GtkDragIcon`) memicu Gtk-CRITICAL saat drag selesai.
 - **Gtk.Template tanpa glib-compile-resources.** Berkas `.ui` diimpor sebagai teks (`import xml from './x.ui?raw'`) dan diberikan ke `Template:` sebagai `Uint8Array` (`uiTemplate()` di `gtkutil.ts`); tidak ada GResource yang perlu dikompilasi. `Adw.HeaderBar` kelas final, jadi `HeaderBar` membungkusnya dalam `Adw.Bin`.
-- **Pengaturan di GSettings.** Schema ada di `data/` dan dikompilasi ke `dist/` oleh plugin Vite; `settings.ts` memuatnya dari folder bundel, tanpa instalasi sistem. Toggle di menu (`sidebar`, `chat`, `focus`, `typewriter`, `autosave`) adalah `Gio.Settings.create_action`, sidebar dan panel Asisten terikat dengan `Gio.Settings.bind` ke `show-sidebar`, dan `MainWindow.onSettingChanged` menerapkan sisanya (termasuk perubahan dari dialog preferensi).
+- **Pengaturan di GSettings.** Schema ada di `data/` dan dikompilasi ke `dist/` oleh plugin Vite; `settings.ts` memuatnya dari folder bundel bila ada, kalau tidak dari direktori schema sistem (versi terpasang). Toggle di menu (`sidebar`, `chat`, `focus`, `typewriter`, `autosave`) adalah `Gio.Settings.create_action`, sidebar dan panel Asisten terikat dengan `Gio.Settings.bind` ke `show-sidebar` (lewat `bindPanel()`, lihat tata letak adaptif), dan `MainWindow.onSettingChanged` menerapkan sisanya (termasuk perubahan dari dialog preferensi).
+- **Warna.** Antarmuka (sidebar, panel Asisten, papan, warna status) memakai warna bernama Adwaita (`@accent_color`, `@card_bg_color`, `@error_bg_color`, ...), jadi ikut aksen sistem dan mode kontras tinggi. Permukaan dokumen (editor, tabel, tag teks, diagram) tetap memakai palet `theme.ts` karena `GtkTextTag` dan render diagram butuh nilai warna nyata dan tag `hidden` harus persis sama dengan latar editor; aksennya diambil dari `Adw.StyleManager.get_accent_color_rgba()` bila libadwaita ≥ 1.6.
 - **Menu konteks sebagai data.** `Gtk.Menu` sudah tidak ada. Menu klik kanan (pohon berkas, kartu, daftar) dibangun sebagai `MenuEntry[]` (`ui/menu.ts`) lalu diubah menjadi `Gtk.PopoverMenu` beraksi `menu.*`; tes cukup mencari entri dan memanggil `run()`.
 - **Tangkapan layar.** `gdk_pixbuf_get_from_window()` sudah tidak ada. `tests/widgets.ts` menggambar widget lewat `Gtk.WidgetPaintable` lalu merendernya menjadi tekstur dengan renderer jendelanya (dipakai `--screenshot` dan `scripts/capture.ts`).
 
@@ -692,7 +725,7 @@ Evaluasi deterministik di `tests/unit/agentic.ts` menguji pekerjaan sampai hasil
 1. Setiap gambar di editor (`Gtk.Picture`) punya `Gtk.GestureClick` sendiri, sehingga klik ganda tahu gambar mana yang dimaksud jika satu baris memuat beberapa gambar. Satu klik tetap membuka sintaksnya (`onActivate`); klik ganda (klik ke-2 dari gesture) memanggil `onZoom`, dan menu *Perbesar Gambar* memanggil `MarkdownView.zoomImage()` untuk baris kursor.
 2. `ImageLayer.imageAt()` memberikan **pixbuf ukuran penuh** dari cache (gambar di editor hanya salinan yang diperkecil), jadi penampil menampilkan resolusi aslinya.
 3. `MarkdownView` tidak membuka jendela sendiri. Ia memanggil `onViewImage`, dan `MainWindow` yang membuka `ImageViewer`, sehingga lapisan `editor/` tetap tidak bergantung pada `ui/`.
-4. `ImageViewer` menggambar dengan cairo pada skala zoom di `Gtk.DrawingArea` (`set_draw_func()`), bukan membuat salinan yang diperbesar, jadi zoom 800% pada foto besar tidak menghabiskan memori. Zoom mulai 300% memakai filter `NEAREST` supaya piksel tampil apa adanya.
+4. `ImageViewer` menggambar tekstur gambar pada skala zoom di widget kecil sendiri (`ZoomArea`, `vfunc_snapshot` + `append_scaled_texture()`), bukan membuat salinan yang diperbesar, jadi zoom 800% pada foto besar tidak menghabiskan memori. Zoom mulai 300% memakai filter `NEAREST` supaya piksel tampil apa adanya; di bawah 100% `TRILINEAR`.
 5. Zoom dibatasi 5%–800%, berkelipatan 1,25 (roda mouse lewat `Gtk.EventControllerScroll`; geser lewat `Gtk.GestureDrag` di ScrolledWindow yang tidak ikut bergeser). Saat roda mouse diputar di atas gambar, titik gambar di bawah penunjuk dijaga tidak bergeser: titik itu dihitung dalam koordinat gambar, lalu posisi gulir diatur ulang setelah tata letak selesai.
 6. Gambar dibuka dalam mode "pas layar tapi tidak diperbesar melebihi 100%", dan mengikuti ukuran jendela selama zoom belum diubah.
 
@@ -733,7 +766,7 @@ Contoh menambah format baru, misalnya `^superskrip^`:
 
 ## Pengaturan
 
-Disimpan di GSettings (schema `id.eka.Nyerat`, jalur `/id/eka/Nyerat/`; lihat `dconf-editor` atau `gsettings list-recursively id.eka.Nyerat` bila schema dipasang): tema warna (`color-scheme`: ikuti sistem, terang, gelap), sidebar dan tab yang terakhir dipilih (Berkas, Outline, atau Riwayat), folder yang terakhir dibuka, tab berfile yang terbuka saat jendela ditutup (urutan, tab aktif, dan posisi kursor), mode fokus, mode typewriter, auto save, ukuran jendela, panel Asisten (terbuka atau tidak) beserta model dan mode berpikirnya, pemetaan nama proyek → folder untuk harness eksternal (`projects`), dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
+Disimpan di GSettings (schema `com.ekaput.Nyerat`, jalur `/com/ekaput/Nyerat/`; lihat `dconf-editor` atau `gsettings list-recursively com.ekaput.Nyerat` bila schema dipasang): tema warna (`color-scheme`: ikuti sistem, terang, gelap), sidebar dan tab yang terakhir dipilih (Berkas, Outline, atau Riwayat), folder yang terakhir dibuka, tab berfile yang terbuka saat jendela ditutup (urutan, tab aktif, dan posisi kursor), mode fokus, mode typewriter, auto save, ukuran jendela, panel Asisten (terbuka atau tidak) beserta model dan mode berpikirnya, pemetaan nama proyek → folder untuk harness eksternal (`projects`), dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
 
 Nilai bawaan: sidebar terbuka pada tab Outline, panel Asisten tertutup dengan model `deepseek-flash` tanpa mode berpikir, fokus/typewriter mati, ukuran jendela 1100 × 760 piksel, dan tema warna mengikuti sistem (`color-scheme = 'system'`). Setelah tema dipilih lewat menu atau Preferensi (Ctrl+,), pilihan itu disimpan. Ukuran awal jendela dibatasi ke area kerja monitor. Mode source dan pilihan tampilan papan/teks tidak disimpan antar proses.
 
@@ -746,6 +779,8 @@ Nilai bawaan: sidebar terbuka pada tab Outline, panel Asisten tertutup dengan mo
 - Papan: hanya item daftar di tingkat atas yang menjadi kartu (daftar bersarang dipertahankan sebagai catatan kartu); baris biasa di antara dua kartu dipindahkan ke akhir daftar saat disimpan. Belum ada arsip atau penyuntingan label lewat antarmuka (tulis `#tag` dan `@{YYYY-MM-DD}` di judul kartu), dan memindahkan kartu dengan keyboard hanya lewat menu klik kanan
 - Harness eksternal: baru pi. Status run (antre, bekerja, log) hanya ada selama aplikasi terbuka; yang bertahan adalah posisi kartu dan catatan `↳`. Kartu dikenali dari teksnya, jadi menyunting judul kartu yang sedang dikerjakan memutus statusnya: chip dan menu log hilang dari kartu itu, dan kartu tidak dipindah saat harness selesai. Pertanyaan dikenali dari tanda `?` di akhir jawaban; pertanyaan tanpa `?` membuat kartu langsung ke *Review*, tetapi masih bisa dibalas lewat *Balas pi…* selama aplikasi terbuka. Pi tidak meminta izin alat sendiri: tanpa extension seperti `permission-gate`, semua alat pi langsung berjalan. Dialog extension `custom()` (TUI) tidak didukung mode RPC pi, dan belum ada terminal interaktif. Pi yang menunggu jawaban tetap hidup dan memegang antrean proyeknya sampai dijawab, dihentikan, atau jendela ditutup. Belum ada worktree per kartu (kartu di proyek yang sama mengantre) dan belum ada tampilan diff hasil harness di Nyerat; tinjau di repo proyek Catatan `[[ ]]` di kartu disalin ke prompt hanya saat run dimulai (*Balas pi* tidak menyalinnya lagi), maksimal 10 catatan, 8.000 karakter per catatan dan 24.000 total; tautan ke catatan yang tidak ada di papan tampil sama seperti tautan biasa.
 - Di tampilan teks, frontmatter papan tampil seperti Markdown biasa (garis `---` dan teks)
+- Terjemahan: belum ada bahasa selain Indonesia. Teks dari lapisan `agent/` dan `markdown/` (deskripsi alat dan pesan galat yang juga dibaca model, pesan validasi papan) serta dokumen contoh belum dibungkus gettext
+- Kepatuhan GNOME yang belum terverifikasi: sesi Wayland (tes berjalan di Xvfb/X11), pemasangan Meson dan build Flatpak, serta jalur libadwaita ≥ 1.6/1.8 (aksen sistem, `Adw.ShortcutsDialog`). Di dalam Flatpak, `git` dan `pi` harus tersedia di sandbox; manifest belum menyertakannya. `AdwSidebar`/`AdwViewSwitcherSidebar` (libadwaita 1.9) dan media query CSS (GTK 4.20) belum dipakai karena belum ada di libadwaita/GTK yang terpasang. Panel yang melayang di jendela sempit tidak tertutup saat konten diklik (efek `pin_sidebar`); tutup lewat tombolnya
 - Klik pertama pada gambar membuka sintaksnya, sehingga gambar bergeser sekitar satu baris ke bawah. Klik ganda yang jatuh di strip tipis tepi atas gambar karenanya bisa meleset ke teks di atasnya
 - Gambar di dalam sel tabel tidak ditampilkan (hanya teks alt-nya), dan gambar di dalam daftar atau kutipan tidak ikut menjorok
 - Ekspor papan kanban menghasilkan Markdown yang dikonversi menjadi heading dan daftar HTML, bukan tampilan papan. Frontmatter tidak diproses khusus; DBML yang salah sintaks diekspor sebagai blok kode biasa

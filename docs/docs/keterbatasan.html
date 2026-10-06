@@ -68,6 +68,15 @@
   <li>Tautan <code>[[ ]]</code>: belum ada panel tautan balik (backlink) atau grafik; mengganti nama atau memindah berkas tidak memperbarui tautan yang menunjuknya; sematan <code>![[ ]]</code> dan rujukan blok <code>^id</code> belum didukung; saran <code>[[</code> hanya nama berkas, belum heading.</li>
   <li>Ekspor HTML tidak menyematkan gambar lokal dan belum menyertakan warna blok kode.</li>
 </ul>
+<h2 id="gnome">Integrasi GNOME</h2>
+<ul>
+  <li>Antarmuka baru tersedia dalam bahasa Indonesia; infrastruktur terjemahan sudah ada, tetapi belum ada bahasa lain.</li>
+  <li>Belum diuji di sesi Wayland; tes berjalan di X11.</li>
+  <li>Pemasangan lewat Meson dan build Flatpak belum diuji. Di Flatpak, <code>git</code> dan <code>pi</code> harus tersedia di dalam sandbox.</li>
+  <li>Warna aksen sistem dan dialog pintasan <code>Adw.ShortcutsDialog</code> hanya dipakai di libadwaita 1.6/1.8 ke atas; di versi lebih lama dipakai warna Adwaita bawaan dan daftar pintasan biasa.</li>
+  <li>Panel yang melayang di jendela sempit tidak tertutup saat editor diklik; tutup lewat tombolnya.</li>
+</ul>
+
 <p>Daftar lengkap ada di bagian <em>Keterbatasan</em> pada <a href="https://github.com/EkaPutCom/nyerat#keterbatasan">README</a>.</p>
 </main>
 <aside class="toc" id="toc" aria-label="Daftar isi"></aside>
