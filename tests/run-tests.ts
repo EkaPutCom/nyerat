@@ -95,6 +95,12 @@ function runUnitTests(): void {
 
 function runGuiTests(app: Adw.Application): void {
     const c = createContext(app);
+    if (opt('only-dialogs')) {
+        dialogTests(c);
+        c.buf.set_modified(false);
+        c.w.win.destroy();
+        return;
+    }
     if (opt('only-chat')) {
         chatTests(c);
         c.buf.set_modified(false);

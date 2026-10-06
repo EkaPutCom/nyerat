@@ -23,6 +23,14 @@ export function dialogTests(c: GuiContext): void {
         });
         return open();
     };
+    // close() selama animasi buka diabaikan Adw.Dialog; ulangi sampai dialog benar-benar tertutup.
+    const closeWhenReady = (dialog: Adw.Dialog): void => {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            if (!dialog.get_mapped()) return GLib.SOURCE_REMOVE;
+            dialog.close();
+            return GLib.SOURCE_CONTINUE;
+        });
+    };
     const button = (root: Gtk.Widget, label: string) => descendants(root).find(x => x instanceof Gtk.Button && x.label === label) as Gtk.Button;
 
     test('prompt: tombol OK mengembalikan isian, Enter di isian juga menerima', () => {
@@ -38,7 +46,7 @@ export function dialogTests(c: GuiContext): void {
 
     test('prompt: Batal dan Escape (close) mengembalikan null', () => {
         eq(drive('Nama', () => promptDialog(w.win, { title: 'Nama', label: 'x', value: 'a' }), d => button(d, 'Batal').emit('clicked')), null);
-        eq(drive('Nama', () => promptDialog(w.win, { title: 'Nama', label: 'x', value: 'a' }), d => { d.close(); }), null);
+        eq(drive('Nama', () => promptDialog(w.win, { title: 'Nama', label: 'x', value: 'a' }), closeWhenReady), null);
     });
 
     // Dialog yang baru dijawab masih terlihat selama animasi tutup; jangan dijawab dua kali.
@@ -46,12 +54,16 @@ export function dialogTests(c: GuiContext): void {
     test('konfirmasi: tombol Hapus bertanda destruktif; Batal dan menutup = false', () => {
         const pick = (response: string): boolean => {
             let tries = 0;
+            let target: Adw.AlertDialog | null = null;
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
                 const dialog = w.win.get_visible_dialog();
-                if (dialog instanceof Adw.AlertDialog && dialog !== answered) {
-                    answered = dialog;
-                    if (response === 'close') dialog.close();
-                    else button(dialog, response).emit('clicked');
+                if (!target && dialog instanceof Adw.AlertDialog && dialog !== answered) answered = target = dialog;
+                if (target) {
+                    if (response !== 'close') {
+                        button(target, response).emit('clicked');
+                        return GLib.SOURCE_REMOVE;
+                    }
+                    closeWhenReady(target);
                     return GLib.SOURCE_REMOVE;
                 }
                 return ++tries < 100 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
@@ -62,4 +74,7 @@ export function dialogTests(c: GuiContext): void {
         eq(pick('Batal'), false, 'Batal');
         eq(pick('close'), false, 'ditutup');
     });
+
+    // Tes sesudahnya (mouse) tidak boleh mulai selagi dialog masih beranimasi menutup dan menahan input.
+    for (let i = 0; i < 100 && w.win.get_visible_dialog(); i++) { c.pump(); GLib.usleep(20000); }
 }
