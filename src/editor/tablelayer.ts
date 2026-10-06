@@ -79,7 +79,7 @@ export class TableLayer {
     onActivate: (line: number, col: number) => void = () => {};  // sel diklik
 
     private cursor: [number, number] = [-1, -1];
-    private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#4183c4', mark: '#fff3a3' };
+    private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#1c71d8', mark: '#fff3a3' };
     private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
     private relayoutQueued = false;
     private destroyed = false;

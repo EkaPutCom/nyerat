@@ -9,6 +9,7 @@ import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
 import Pango from 'gi://Pango';
 import type { Heading } from '../editor/highlighter.js';
+import { _ } from '../i18n.js';
 
 // Satu baris outline: hanya yang memengaruhi tampilannya. Nomor baris tujuan klik dibaca dari daftar heading terbaru.
 export class HeadingItem extends GObject.Object {
@@ -54,7 +55,7 @@ export class Outline {
             if (heading) this.onJump(heading.line);
         });
 
-        const placeholder = new Gtk.Label({ label: 'Belum ada heading', margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16, valign: Gtk.Align.START });
+        const placeholder = new Gtk.Label({ label: _('Belum ada heading'), margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16, valign: Gtk.Align.START });
         placeholder.add_css_class('dim-label');
         const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vexpand: true, child: this.list });
         const pages = new Gtk.Stack();
@@ -63,7 +64,7 @@ export class Outline {
         pages.visible_child_name = 'empty';
         this.store.connect('items-changed', () => { pages.visible_child_name = this.store.n_items ? 'list' : 'empty'; });
 
-        const title = new Gtk.Label({ label: 'OUTLINE', xalign: 0, margin_start: 16, margin_top: 4, margin_bottom: 8 });
+        const title = new Gtk.Label({ label: _('OUTLINE'), xalign: 0, margin_start: 16, margin_top: 4, margin_bottom: 8 });
         title.add_css_class('side-title');
         this.widget = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
         this.widget.append(title);

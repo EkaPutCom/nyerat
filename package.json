@@ -19,7 +19,8 @@
     "bench:save": "npm run build && xvfb-run -a -s '-screen 0 1280x800x24' env GDK_BACKEND=x11 gjs -m dist/bench.js --save=bench/$(date +%Y%m%d-%H%M%S).json",
     "bench:compare": "npm run build && xvfb-run -a -s '-screen 0 1280x800x24' env GDK_BACKEND=x11 gjs -m dist/bench.js --compare=bench/baseline.json",
     "test:live": "npm run build && set -a && . ./.env && set +a && gjs -m dist/live-test.js",
-    "docs": "npm run build && XDG_CONFIG_HOME=$(mktemp -d) gjs -m dist/capture.js"
+    "docs": "npm run build && XDG_CONFIG_HOME=$(mktemp -d) gjs -m dist/capture.js",
+    "pot": "sh scripts/pot.sh"
   },
   "devDependencies": {
     "@girs/adw-1": "^5.5.0",

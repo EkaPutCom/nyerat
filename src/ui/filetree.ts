@@ -17,8 +17,9 @@ import Pango from 'gi://Pango';
 import { createFile, createFolder, moveEntry, renameEntry, trashEntry } from '../fileops.js';
 import { newBoard, serializeBoard } from '../markdown/kanban.js';
 import { confirmDialog, promptDialog, showError } from './dialogs.js';
-import { onClick, pack } from '../gtkutil.js';
+import { after, onClick, pack, type Awaitable } from '../gtkutil.js';
 import { popupMenu, separator, type MenuEntry } from './menu.js';
+import { _, fmt } from '../i18n.js';
 
 export const MARKDOWN_EXTENSIONS = ['.md', '.markdown', '.mdown', '.mkd'];
 const SKIPPED_FOLDERS = new Set(['node_modules']);
@@ -85,11 +86,15 @@ export class FileTree {
     onMoved: (from: string, to: string) => void = () => {};  // file/folder dipindah atau diganti namanya
     onDeleted: (path: string) => void = () => {};            // file/folder dibuang ke sampah
 
-    // Dapat diganti di tes: dialog yang menahan program tidak bisa dipakai di sana.
-    dialogs = {
-        prompt: (title: string, label: string, value?: string): string | null => promptDialog(this.parentWindow(), { title, label, value }),
-        confirm: (message: string, detail: string): boolean => confirmDialog(this.parentWindow(), message, detail),
-        error: (message: string): void => showError(this.parentWindow(), message),
+    // Dapat diganti di tes dengan jawaban langsung; dialog asli menjawab lewat Promise.
+    dialogs: {
+        prompt: (title: string, label: string, value?: string) => Awaitable<string | null>;
+        confirm: (message: string, detail: string) => Awaitable<boolean>;
+        error: (message: string) => void;
+    } = {
+        prompt: (title, label, value) => promptDialog(this.parentWindow(), { title, label, value }),
+        confirm: (message, detail) => confirmDialog(this.parentWindow(), message, detail),
+        error: message => void showError(this.parentWindow(), message),
     };
 
     private readonly rootStore = new Gio.ListStore({ item_type: FileNode.$gtype });
@@ -118,9 +123,9 @@ export class FileTree {
 
         // Tampilan saat belum ada folder yang dibuka.
         const empty = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, valign: Gtk.Align.CENTER, margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16 });
-        const hint = new Gtk.Label({ label: 'Belum ada folder yang dibuka', wrap: true, justify: Gtk.Justification.CENTER });
+        const hint = new Gtk.Label({ label: _('Belum ada folder yang dibuka'), wrap: true, justify: Gtk.Justification.CENTER });
         hint.add_css_class('dim-label');
-        const button = new Gtk.Button({ label: 'Buka Folder…', action_name: 'app.open-folder', halign: Gtk.Align.CENTER });
+        const button = new Gtk.Button({ label: _('Buka Folder…'), action_name: 'app.open-folder', halign: Gtk.Align.CENTER });
         empty.append(hint);
         empty.append(button);
 
@@ -128,7 +133,7 @@ export class FileTree {
         this.pages.add_named(empty, 'empty');
         this.pages.add_named(scroll, 'tree');
 
-        this.title = new Gtk.Label({ label: 'BERKAS', xalign: 0, margin_start: 16, margin_top: 4, margin_bottom: 8,
+        this.title = new Gtk.Label({ label: _('BERKAS'), xalign: 0, margin_start: 16, margin_top: 4, margin_bottom: 8,
             ellipsize: Pango.EllipsizeMode.END });
         this.title.add_css_class('side-title');
 
@@ -196,7 +201,7 @@ export class FileTree {
         this.root = path;
 
         if (!path) {
-            this.title.label = 'BERKAS';
+            this.title.label = _('BERKAS');
             this.title.tooltip_text = null;
             this.pages.visible_child_name = 'empty';
             return;
@@ -365,9 +370,12 @@ export class FileTree {
 
     // Tanya nama lalu buat file/folder di dir. File baru langsung dibuka di editor.
     // `board`: file berisi papan kanban kosong, langsung tampil sebagai papan saat dibuka.
-    create(kind: 'file' | 'folder' | 'board', dir: string): string | null {
-        const title = kind === 'file' ? 'File Baru' : kind === 'board' ? 'Papan Kanban Baru' : 'Folder Baru';
-        const name = this.dialogs.prompt(title, kind === 'folder' ? 'Nama folder' : 'Nama file');
+    create(kind: 'file' | 'folder' | 'board', dir: string): Awaitable<string | null> {
+        const title = kind === 'file' ? _('File Baru') : kind === 'board' ? _('Papan Kanban Baru') : _('Folder Baru');
+        return after(this.dialogs.prompt(title, kind === 'folder' ? _('Nama folder') : _('Nama file')), name => this.createNamed(kind, dir, name));
+    }
+
+    private createNamed(kind: 'file' | 'folder' | 'board', dir: string, name: string | null): string | null {
         if (name === null) return null;
         let path: string;
         try {
@@ -384,9 +392,12 @@ export class FileTree {
     }
 
     // Ganti nama file/folder lewat dialog.
-    rename(path: string): string | null {
+    rename(path: string): Awaitable<string | null> {
         const isDir = isDirectory(path);
-        const name = this.dialogs.prompt('Ganti Nama', isDir ? 'Nama folder' : 'Nama file', GLib.path_get_basename(path));
+        return after(this.dialogs.prompt(_('Ganti Nama'), isDir ? _('Nama folder') : _('Nama file'), GLib.path_get_basename(path)), name => this.renameTo(path, name));
+    }
+
+    private renameTo(path: string, name: string | null): string | null {
         if (name === null) return null;
         let target: string | null;
         try {
@@ -403,11 +414,14 @@ export class FileTree {
     }
 
     // Buang ke Tempat Sampah setelah konfirmasi.
-    remove(path: string): boolean {
+    remove(path: string): Awaitable<boolean> {
         const isDir = isDirectory(path);
         const name = GLib.path_get_basename(path);
-        const detail = isDir ? 'Folder beserta seluruh isinya akan dipindahkan ke Tempat Sampah.' : 'File akan dipindahkan ke Tempat Sampah.';
-        if (!this.dialogs.confirm(`Hapus “${name}”?`, detail)) return false;
+        const detail = isDir ? _('Folder beserta seluruh isinya akan dipindahkan ke Tempat Sampah.') : _('File akan dipindahkan ke Tempat Sampah.');
+        return after(this.dialogs.confirm(fmt(_('Hapus “{name}”?'), { name }), detail), yes => yes && this.trash(path));
+    }
+
+    private trash(path: string): boolean {
         try {
             trashEntry(path);
         } catch (e) {
@@ -423,14 +437,14 @@ export class FileTree {
     contextMenu(rowPath: string | null): MenuEntry[] {
         const dir = this.targetDir(rowPath);
         const entries: MenuEntry[] = [
-            { label: 'File Baru…', enabled: dir !== null, run: () => { if (dir) this.create('file', dir); } },
-            { label: 'Folder Baru…', enabled: dir !== null, run: () => { if (dir) this.create('folder', dir); } },
-            { label: 'Papan Kanban Baru…', enabled: dir !== null, run: () => { if (dir) this.create('board', dir); } },
+            { label: _('File Baru…'), enabled: dir !== null, run: () => { if (dir) this.create('file', dir); } },
+            { label: _('Folder Baru…'), enabled: dir !== null, run: () => { if (dir) this.create('folder', dir); } },
+            { label: _('Papan Kanban Baru…'), enabled: dir !== null, run: () => { if (dir) this.create('board', dir); } },
         ];
         if (rowPath) {
             entries.push(separator());
-            entries.push({ label: 'Ganti Nama…', enabled: true, run: () => this.rename(rowPath) });
-            entries.push({ label: 'Hapus', enabled: true, run: () => this.remove(rowPath) });
+            entries.push({ label: _('Ganti Nama…'), enabled: true, run: () => this.rename(rowPath) });
+            entries.push({ label: _('Hapus'), enabled: true, run: () => this.remove(rowPath) });
         }
         return entries;
     }

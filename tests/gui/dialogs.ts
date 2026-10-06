@@ -1,12 +1,12 @@
 // Tes GUI: dialog libadwaita sungguhan (Adw.Dialog dan Adw.AlertDialog), bukan tiruan.
-// Dialog bersifat blocking, jadi interaksinya dijadwalkan dari timer selagi main loop bersarang berjalan.
+// Dialog menjawab lewat Promise; interaksinya dijadwalkan dari timer selagi settle() menunggu jawabannya.
 
 import GLib from 'gi://GLib';
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gio from 'gi://Gio';
 import { descendants } from '../widgets.js';
-import { section, test, eq, ok } from '../framework.js';
+import { section, test, eq, ok, settle } from '../framework.js';
 import { PreferencesDialog } from '../../src/ui/preferences.js';
 import { CommandPalette } from '../../src/ui/palette.js';
 import { confirmDialog, findDialog, promptDialog } from '../../src/ui/dialogs.js';
@@ -17,14 +17,14 @@ export function dialogTests(c: GuiContext): void {
     section('Dialog libadwaita');
 
     // Jalankan `act` setelah dialog `title` tampil (dicoba berulang), lalu kembalikan hasil `open`.
-    const drive = <T>(title: string, open: () => T, act: (dialog: Adw.Dialog) => void): T => {
+    const drive = <T>(title: string, open: () => Promise<T>, act: (dialog: Adw.Dialog) => void): T => {
         let tries = 0;
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
             const dialog = findDialog(title);
             if (dialog) { act(dialog); return GLib.SOURCE_REMOVE; }
             return ++tries < 100 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
         });
-        return open();
+        return settle(open());
     };
     // close() selama animasi buka diabaikan Adw.Dialog; ulangi sampai dialog benar-benar tertutup.
     const closeWhenReady = (dialog: Adw.Dialog): void => {
@@ -71,7 +71,7 @@ export function dialogTests(c: GuiContext): void {
                 }
                 return ++tries < 100 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
             });
-            return confirmDialog(w.win, 'Hapus kartu ini?', 'Tidak bisa dikembalikan.');
+            return settle(confirmDialog(w.win, 'Hapus kartu ini?', 'Tidak bisa dikembalikan.'));
         };
         eq(pick('Hapus'), true, 'Hapus');
         eq(pick('Batal'), false, 'Batal');

@@ -1,7 +1,7 @@
 // Dialog standar: pilih file, konfirmasi simpan, pesan error, tentang.
-// Dialog memakai libadwaita (Adw.Dialog, Adw.AlertDialog) dan bersifat modal serta blocking
-// (main loop bersarang lewat runModal(), pengganti gtk_dialog_run() yang dihapus GTK 4), jadi
-// hasilnya bisa langsung dikembalikan.
+// Dialog memakai libadwaita (Adw.Dialog, Adw.AlertDialog), bersifat modal, dan mengembalikan Promise
+// yang selesai saat dijawab (modal() di gtkutil.ts). Tidak ada main loop bersarang: pemanggil
+// melanjutkan lewat after()/await, sehingga handler lain tidak berjalan di tengah-tengahnya.
 
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -10,18 +10,19 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import { attachWikiCompleter } from '../editor/wikicomplete.js';
-import { childrenOf, onKeyPress, runModal } from '../gtkutil.js';
-import { APP_NAME, APP_VERSION } from '../config.js';
+import { childrenOf, modal, onKeyPress } from '../gtkutil.js';
+import { APP_ID, APP_NAME, APP_VERSION } from '../config.js';
 import { AGENT_NAME, composeCard, DUE_INPUT, splitCard, withDueDate } from '../markdown/kanban.js';
 import type { HarnessAsk, HarnessReply } from '../agent/harness.js';
+import { _, fmt } from '../i18n.js';
 
 type FilterSetup = [label: string, setup: (filter: Gtk.FileFilter) => void];
 
 export const FILTERS = {
-    markdown: ['Markdown', f => ['*.md', '*.markdown', '*.mdown', '*.txt'].forEach(p => f.add_pattern(p))],
-    image: ['Gambar', f => f.add_mime_type('image/*')],
-    html: ['HTML', f => f.add_pattern('*.html')],
-    all: ['Semua file', f => f.add_pattern('*')],
+    markdown: [_('Markdown'), f => ['*.md', '*.markdown', '*.mdown', '*.txt'].forEach(p => f.add_pattern(p))],
+    image: [_('Gambar'), f => f.add_mime_type('image/*')],
+    html: [_('HTML'), f => f.add_pattern('*.html')],
+    all: [_('Semua file'), f => f.add_pattern('*')],
 } satisfies Record<string, FilterSetup>;
 
 export type FilterName = keyof typeof FILTERS;
@@ -36,7 +37,7 @@ export interface ChooseFileOptions {
 }
 
 // Mengembalikan path yang dipilih, atau null jika dibatalkan.
-export function chooseFile(parent: Gtk.Window, { title, save = false, selectFolder = false, filters = [], name = null, folder = null }: ChooseFileOptions): string | null {
+export function chooseFile(parent: Gtk.Window, { title, save = false, selectFolder = false, filters = [], name = null, folder = null }: ChooseFileOptions): Promise<string | null> {
     const dialog = new Gtk.FileDialog({ title, modal: true });
     if (filters.length) {
         const list = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype });
@@ -53,7 +54,7 @@ export function chooseFile(parent: Gtk.Window, { title, save = false, selectFold
     if (folder) dialog.set_initial_folder(Gio.File.new_for_path(folder));
     if (name) dialog.set_initial_name(name);
     // Dialog simpan GTK 4 (dan portal) sudah menanyakan sebelum menimpa file.
-    return runModal<string | null>(finish => {
+    return modal<string | null>(finish => {
         const done = (pick: () => Gio.File | null) => {
             try {
                 finish(pick()?.get_path() ?? null);
@@ -96,8 +97,8 @@ function entriesIn(widget: Gtk.Widget): Gtk.Entry[] {
 //
 // Dialog menempel pada jendela induk dan ditutup dengan force_close() begitu selesai, sehingga
 // tidak ada yang tertinggal saat proses keluar.
-function modalWindow(parent: Gtk.Window | null, title: string, width: number, content: Gtk.Widget, buttons: string[],
-    cancel: number, preferred: number, accept: (index: number) => boolean = () => true): number {
+async function modalWindow(parent: Gtk.Window | null, title: string, width: number, content: Gtk.Widget, buttons: string[],
+    cancel: number, preferred: number, accept: (index: number) => boolean = () => true): Promise<number> {
     const host = hostWindow(parent);
     if (!host) return cancel;
     const dialog = new Adw.Dialog({ title, content_width: width });
@@ -108,7 +109,7 @@ function modalWindow(parent: Gtk.Window | null, title: string, width: number, co
     const view = new Adw.ToolbarView({ content: box });
     view.add_top_bar(new Adw.HeaderBar());
     dialog.set_child(view);
-    const answer = runModal<number>(finish => {
+    const answer = await modal<number>(finish => {
         buttons.forEach((label, i) => {
             const button = new Gtk.Button({ label });
             if (i === preferred) {
@@ -134,9 +135,9 @@ function modalWindow(parent: Gtk.Window | null, title: string, width: number, co
 
 // Pesan singkat dengan beberapa tombol (Adw.AlertDialog). `destructive` = indeks tombol yang
 // berbahaya (merah); tombol `preferred` yang lain disorot sebagai saran.
-function alert(parent: Gtk.Window | null, message: string, detail: string | null, buttons: string[], cancel: number, preferred: number, destructive = -1): number {
+function alert(parent: Gtk.Window | null, message: string, detail: string | null, buttons: string[], cancel: number, preferred: number, destructive = -1): Promise<number> {
     const host = hostWindow(parent);
-    if (!host) return cancel;
+    if (!host) return Promise.resolve(cancel);
     const dialog = new Adw.AlertDialog({ heading: message, body: detail ?? '' });
     buttons.forEach((label, i) => {
         dialog.add_response(String(i), label);
@@ -145,35 +146,39 @@ function alert(parent: Gtk.Window | null, message: string, detail: string | null
     });
     dialog.set_default_response(String(preferred));
     dialog.set_close_response(String(cancel));
-    return runModal<number>(finish => {
+    return modal<number>(finish => {
         dialog.connect('response', (_d, id) => finish(Number(id)));
         dialog.present(host);
     });
 }
 
-export function askSaveChanges(parent: Gtk.Window, documentName: string): 'save' | 'discard' | 'cancel' {
-    const answer = alert(parent, `Simpan perubahan pada “${documentName}”?`, 'Perubahan akan hilang jika tidak disimpan.',
-        ['Jangan Simpan', 'Batal', 'Simpan'], 1, 2, 0);
+export async function askSaveChanges(parent: Gtk.Window, documentName: string): Promise<'save' | 'discard' | 'cancel'> {
+    const answer = await alert(parent, fmt(_('Simpan perubahan pada “{name}”?'), { name: documentName }), _('Perubahan akan hilang jika tidak disimpan.'),
+        [_('Jangan Simpan'), _('Batal'), _('Simpan')], 1, 2, 0);
     return answer === 2 ? 'save' : answer === 0 ? 'discard' : 'cancel';
 }
 
-export function showError(parent: Gtk.Window | null, message: string): void {
-    alert(parent, message, null, ['Tutup'], 0, 0);
+export async function showError(parent: Gtk.Window | null, message: string): Promise<void> {
+    await alert(parent, message, null, [_('Tutup')], 0, 0);
 }
 
 export function showAbout(parent: Gtk.Window): void {
     const dialog = new Adw.AboutDialog({
-        application_name: APP_NAME, version: APP_VERSION, application_icon: 'accessories-text-editor',
+        application_name: APP_NAME, version: APP_VERSION, application_icon: APP_ID,
         developer_name: 'Eka Putra', license_type: Gtk.License.MIT_X11,
-        comments: 'Personal workbench AI agent untuk catatan, dokumen, riset, dan rencana, dengan GTK 4, libadwaita, dan GJS.',
+        comments: _('Personal workbench AI agent untuk catatan, dokumen, riset, dan rencana, dengan GTK 4, libadwaita, dan GJS.'),
+        website: 'https://nyerat.ekaput.com/', support_url: 'https://nyerat.ekaput.com/docs/',
+        developers: ['Eka Putra'], copyright: '© 2026 Eka Putra',
+        // Penerjemah: ganti dengan nama Anda (satu per baris), mis. "Nama <surel>".
+        translator_credits: _('translator-credits'),
     });
     dialog.present(parent);
 }
 
 // Jendela formulir modal: isi di atas, tombol Batal/`accept` di bawah. `validate` dipanggil
 // saat tombol utama ditekan; false = jendela tetap terbuka. true = diterima.
-function formDialog(parent: Gtk.Window | null, title: string, width: number, content: Gtk.Widget, accept: string, validate: () => boolean = () => true): boolean {
-    return modalWindow(parent, title, width, content, ['Batal', accept], 0, 1, i => i === 0 || validate()) === 1;
+async function formDialog(parent: Gtk.Window | null, title: string, width: number, content: Gtk.Widget, accept: string, validate: () => boolean = () => true): Promise<boolean> {
+    return await modalWindow(parent, title, width, content, [_('Batal'), accept], 0, 1, i => i === 0 || validate()) === 1;
 }
 
 // ---------- Dialog untuk papan kanban ----------
@@ -193,11 +198,11 @@ export interface DueField {
 }
 
 export function dueField(text: string): DueField {
-    const entry = new Gtk.Entry({ text, activates_default: true, hexpand: true, placeholder_text: 'YYYY-MM-DD' });
+    const entry = new Gtk.Entry({ text, activates_default: true, hexpand: true, placeholder_text: _('YYYY-MM-DD') });
     entry.connect('changed', () => entry.remove_css_class('error'));
     const calendar = new Gtk.Calendar();
-    const today = new Gtk.Button({ label: 'Hari ini', hexpand: true });
-    const clear = new Gtk.Button({ label: 'Kosongkan', hexpand: true });
+    const today = new Gtk.Button({ label: _('Hari ini'), hexpand: true });
+    const clear = new Gtk.Button({ label: _('Kosongkan'), hexpand: true });
     const actions = new Gtk.Box({ spacing: 6 });
     actions.append(today);
     actions.append(clear);
@@ -205,7 +210,7 @@ export function dueField(text: string): DueField {
     content.append(calendar);
     content.append(actions);
     const popover = new Gtk.Popover({ child: content });
-    const button = new Gtk.MenuButton({ icon_name: 'x-office-calendar-symbolic', tooltip_text: 'Pilih tanggal', popover });
+    const button = new Gtk.MenuButton({ icon_name: 'x-office-calendar-symbolic', tooltip_text: _('Pilih tanggal'), popover });
 
     // Saat membuka, kalender menunjuk tanggal di kolom; `syncing` mencegah pilihan itu menulis balik ke kolom.
     let syncing = false;
@@ -234,13 +239,13 @@ export function dueField(text: string): DueField {
 // Dialog sunting kartu: judul (satu baris) dan catatan (banyak baris).
 // Mengembalikan isi baru, atau null jika dibatalkan.
 // listNotes: berkas Markdown di folder kerja, untuk saran saat mengetik [[ di catatan.
-export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, heading = 'Sunting Kartu', listNotes?: () => string[]): CardDraft | null {
+export async function editCardDialog(parent: Gtk.Window | null, card: CardDraft, heading = _('Sunting Kartu'), listNotes?: () => string[]): Promise<CardDraft | null> {
     const parts = splitCard(card.text);
     const title = new Gtk.Entry({ text: parts.title, activates_default: true, hexpand: true });
-    const tags = new Gtk.Entry({ text: parts.tags.join(' '), activates_default: true, hexpand: true, placeholder_text: 'tag1 tag2' });
+    const tags = new Gtk.Entry({ text: parts.tags.join(' '), activates_default: true, hexpand: true, placeholder_text: _('tag1 tag2') });
     const dueInput = dueField(parts.due);
     const due = dueInput.entry;
-    const agent = new Gtk.Entry({ text: parts.agent ?? '', activates_default: true, hexpand: true, placeholder_text: 'mis. pi (kosong = tidak ditugaskan)' });
+    const agent = new Gtk.Entry({ text: parts.agent ?? '', activates_default: true, hexpand: true, placeholder_text: _('mis. pi (kosong = tidak ditugaskan)') });
     agent.connect('changed', () => agent.remove_css_class('error'));
     const notes = new Gtk.TextView({ wrap_mode: Gtk.WrapMode.WORD_CHAR, left_margin: 6, right_margin: 6, top_margin: 6, bottom_margin: 6 });
     notes.buffer.set_text(card.notes.join('\n'), -1);
@@ -249,15 +254,15 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
     const completer = listNotes ? attachWikiCompleter(notes, listNotes) : null;
 
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, vexpand: true });
-    box.append(new Gtk.Label({ label: 'Judul', xalign: 0 }));
+    box.append(new Gtk.Label({ label: _('Judul'), xalign: 0 }));
     box.append(title);
-    box.append(new Gtk.Label({ label: 'Tag (pisahkan dengan spasi)', xalign: 0 }));
+    box.append(new Gtk.Label({ label: _('Tag (pisahkan dengan spasi)'), xalign: 0 }));
     box.append(tags);
-    box.append(new Gtk.Label({ label: 'Tenggat', xalign: 0 }));
+    box.append(new Gtk.Label({ label: _('Tenggat'), xalign: 0 }));
     box.append(dueInput.widget);
-    box.append(new Gtk.Label({ label: 'Dikerjakan oleh', xalign: 0 }));
+    box.append(new Gtk.Label({ label: _('Dikerjakan oleh'), xalign: 0 }));
     box.append(agent);
-    box.append(new Gtk.Label({ label: listNotes ? 'Catatan · [[Nama]] menautkan catatan lain sebagai konteks agent' : 'Catatan', xalign: 0, wrap: true }));
+    box.append(new Gtk.Label({ label: listNotes ? _('Catatan · [[Nama]] menautkan catatan lain sebagai konteks agent') : _('Catatan'), xalign: 0, wrap: true }));
     box.append(frame);
 
     // Ctrl+Enter menyimpan dari kolom catatan (Enter biasa membuat baris baru).
@@ -268,7 +273,7 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
     }, Gtk.PropagationPhase.CAPTURE);
 
     // Tenggat harus kosong atau berformat tanggal; selain itu dialog tetap terbuka.
-    const accepted = formDialog(parent, heading, 440, box, 'Simpan', () => {
+    const accepted = await formDialog(parent, heading, 440, box, _('Simpan'), () => {
         const name = agent.text.trim().replace(/^@+/, '').toLowerCase();
         if (name && !AGENT_NAME.test(name)) {
             agent.add_css_class('error');
@@ -290,18 +295,18 @@ export function editCardDialog(parent: Gtk.Window | null, card: CardDraft, headi
 }
 
 // Meminta satu baris teks. null jika dibatalkan.
-export function promptDialog(parent: Gtk.Window | null, options: { title: string; label: string; value?: string }): string | null {
+export async function promptDialog(parent: Gtk.Window | null, options: { title: string; label: string; value?: string }): Promise<string | null> {
     const entry = new Gtk.Entry({ text: options.value ?? '', activates_default: true });
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 });
     box.append(new Gtk.Label({ label: options.label, xalign: 0 }));
     box.append(entry);
-    const accepted = formDialog(parent, options.title, 360, box, 'OK');
+    const accepted = await formDialog(parent, options.title, 360, box, _('OK'));
     const value = entry.text.trim();
     return accepted && value ? value : null;
 }
 
-export function confirmDialog(parent: Gtk.Window | null, message: string, detail?: string): boolean {
-    return alert(parent, message, detail ?? null, ['Batal', 'Hapus'], 0, 1, 1) === 1;
+export async function confirmDialog(parent: Gtk.Window | null, message: string, detail?: string): Promise<boolean> {
+    return await alert(parent, message, detail ?? null, [_('Batal'), _('Hapus')], 0, 1, 1) === 1;
 }
 
 // ---------- Dialog harness eksternal ----------
@@ -327,7 +332,7 @@ function textArea(prefill = ''): { widget: Gtk.Widget; text: () => string; view:
 }
 
 // Jawab permintaan harness. null = "Nanti" (harness tetap menunggu).
-export function harnessAskDialog(parent: Gtk.Window | null, ask: HarnessAsk, agent: string): HarnessReply | null {
+export async function harnessAskDialog(parent: Gtk.Window | null, ask: HarnessAsk, agent: string): Promise<HarnessReply | null> {
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, vexpand: true });
     const heading = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 60 });
     heading.set_markup(`<b>${GLib.markup_escape_text(ask.title, -1)}</b>`);
@@ -339,7 +344,7 @@ export function harnessAskDialog(parent: Gtk.Window | null, ask: HarnessAsk, age
     let focus: Gtk.Widget | null = null;
     if (ask.kind === 'question' || ask.kind === 'editor') {
         const area = textArea(ask.prefill);
-        box.append(new Gtk.Label({ label: ask.kind === 'question' ? 'Jawaban Anda' : 'Isi', xalign: 0 }));
+        box.append(new Gtk.Label({ label: ask.kind === 'question' ? _('Jawaban Anda') : _('Isi'), xalign: 0 }));
         box.append(area.widget);
         value = area.text;
         focus = area.view;
@@ -354,35 +359,35 @@ export function harnessAskDialog(parent: Gtk.Window | null, ask: HarnessAsk, age
         value = () => ask.options[options.findIndex(o => o.active)] ?? '';
     }
     if (ask.timeout) {
-        const hint = new Gtk.Label({ label: `${agent} memakai jawaban bawaannya bila tidak dijawab dalam ${Math.round(ask.timeout / 1000)} detik.`, xalign: 0, wrap: true });
+        const hint = new Gtk.Label({ label: fmt(_('{agent} memakai jawaban bawaannya bila tidak dijawab dalam {seconds} detik.'), { agent, seconds: Math.round(ask.timeout / 1000) }), xalign: 0, wrap: true });
         hint.add_css_class('dim-label');
         box.append(hint);
     }
 
     // modalWindow memfokuskan tombol bawaan setelah jendela tampil; kotak isian direbut kembali sesudahnya.
     if (focus) GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { focus!.grab_focus(); return GLib.SOURCE_REMOVE; });
-    const title = `Jawab ${agent}`;
+    const title = fmt(_('Jawab {agent}'), { agent });
     if (ask.kind === 'confirm') {
-        const i = modalWindow(parent, title, 460, box, ['Nanti', 'Tolak', 'Izinkan'], 0, 2);
+        const i = await modalWindow(parent, title, 460, box, [_('Nanti'), _('Tolak'), _('Izinkan')], 0, 2);
         return i === 0 ? null : { confirmed: i === 2 };
     }
-    const skip = ask.kind === 'question' ? 'Akhiri tanpa membalas' : 'Lewati';
-    const send = ask.kind === 'select' ? 'Pilih' : 'Kirim';
-    const i = modalWindow(parent, title, 520, box, ['Nanti', skip, send], 0, 2, k => k !== 2 || !!value().trim() || ask.kind === 'editor');
+    const skip = ask.kind === 'question' ? _('Akhiri tanpa membalas') : _('Lewati');
+    const send = ask.kind === 'select' ? _('Pilih') : _('Kirim');
+    const i = await modalWindow(parent, title, 520, box, [_('Nanti'), skip, send], 0, 2, k => k !== 2 || !!value().trim() || ask.kind === 'editor');
     return i === 0 ? null : i === 1 ? { cancelled: true } : { value: value() };
 }
 
 // Teks bebas untuk harness (arahan saat bekerja, balasan setelah selesai). context = jawaban terakhir harness.
-export function harnessTextDialog(parent: Gtk.Window | null, options: { title: string; label: string; context?: string }): string | null {
+export async function harnessTextDialog(parent: Gtk.Window | null, options: { title: string; label: string; context?: string }): Promise<string | null> {
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, vexpand: true });
     if (options.context) {
-        box.append(new Gtk.Label({ label: 'Jawaban terakhir', xalign: 0 }));
+        box.append(new Gtk.Label({ label: _('Jawaban terakhir'), xalign: 0 }));
         box.append(quoted(options.context));
     }
     box.append(new Gtk.Label({ label: options.label, xalign: 0 }));
     const area = textArea();
     box.append(area.widget);
     GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { area.view.grab_focus(); return GLib.SOURCE_REMOVE; });
-    const accepted = modalWindow(parent, options.title, 520, box, ['Batal', 'Kirim'], 0, 1, i => i === 0 || !!area.text().trim()) === 1;
+    const accepted = await modalWindow(parent, options.title, 520, box, [_('Batal'), _('Kirim')], 0, 1, i => i === 0 || !!area.text().trim()) === 1;
     return accepted ? area.text().trim() : null;
 }

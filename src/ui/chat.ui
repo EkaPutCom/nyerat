@@ -16,7 +16,7 @@
         <property name="margin-end">6</property>
         <child>
           <object class="GtkLabel">
-            <property name="label">ASISTEN</property>
+            <property name="label" translatable="yes">ASISTEN</property>
             <property name="xalign">0</property>
             <property name="margin-start">16</property>
             <property name="hexpand">true</property>
@@ -29,21 +29,21 @@
           <object class="GtkButton" id="clearButton">
             <property name="icon-name">edit-clear-all-symbolic</property>
             <property name="has-frame">false</property>
-            <property name="tooltip-text">Percakapan baru</property>
+            <property name="tooltip-text" translatable="yes">Percakapan baru</property>
           </object>
         </child>
         <child>
           <object class="GtkButton" id="logButton">
             <property name="icon-name">utilities-terminal-symbolic</property>
             <property name="has-frame">false</property>
-            <property name="tooltip-text">Log agent: penalaran, alat yang dipakai, dan hasilnya</property>
+            <property name="tooltip-text" translatable="yes">Log agent: penalaran, alat yang dipakai, dan hasilnya</property>
           </object>
         </child>
         <child>
           <object class="GtkMenuButton" id="historyButton">
             <property name="icon-name">document-open-recent-symbolic</property>
             <property name="has-frame">false</property>
-            <property name="tooltip-text">Percakapan sebelumnya</property>
+            <property name="tooltip-text" translatable="yes">Percakapan sebelumnya</property>
             <property name="popover">
               <object class="GtkPopover" id="historyPopover">
                 <property name="child">
@@ -60,7 +60,7 @@
                     </style>
                     <child>
                       <object class="GtkLabel">
-                        <property name="label">Percakapan sebelumnya</property>
+                        <property name="label" translatable="yes">Percakapan sebelumnya</property>
                         <property name="xalign">0</property>
                         <style>
                           <class name="side-title"/>
@@ -91,7 +91,7 @@
           <object class="GtkMenuButton" id="settingsButton">
             <property name="icon-name">emblem-system-symbolic</property>
             <property name="has-frame">false</property>
-            <property name="tooltip-text">Pengaturan asisten</property>
+            <property name="tooltip-text" translatable="yes">Pengaturan asisten</property>
             <property name="popover">
               <object class="GtkPopover" id="settingsPopover">
                 <property name="child">
@@ -107,7 +107,7 @@
                     </style>
                     <child>
                       <object class="GtkLabel">
-                        <property name="label">API key DeepSeek</property>
+                        <property name="label" translatable="yes">API key DeepSeek</property>
                         <property name="xalign">0</property>
                         <style>
                           <class name="side-title"/>
@@ -120,7 +120,7 @@
                         <child>
                           <object class="GtkEntry" id="keyEntry">
                             <property name="visibility">false</property>
-                            <property name="placeholder-text">sk-…</property>
+                            <property name="placeholder-text" translatable="yes">sk-…</property>
                             <property name="width-chars">28</property>
                             <property name="input-purpose">password</property>
                             <property name="hexpand">true</property>
@@ -128,12 +128,12 @@
                         </child>
                         <child>
                           <object class="GtkButton" id="saveKeyButton">
-                            <property name="label">Simpan</property>
+                            <property name="label" translatable="yes">Simpan</property>
                           </object>
                         </child>
                         <child>
                           <object class="GtkButton" id="forgetKeyButton">
-                            <property name="label">Hapus</property>
+                            <property name="label" translatable="yes">Hapus</property>
                           </object>
                         </child>
                       </object>
@@ -150,7 +150,7 @@
                     </child>
                     <child>
                       <object class="GtkLabel">
-                        <property name="label">Model</property>
+                        <property name="label" translatable="yes">Model</property>
                         <property name="xalign">0</property>
                         <style>
                           <class name="side-title"/>
@@ -158,23 +158,23 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkComboBoxText" id="modelCombo"/>
+                      <object class="GtkDropDown" id="modelDrop"/>
                     </child>
                     <child>
                       <object class="GtkCheckButton" id="thinkingCheck">
-                        <property name="label">Berpikir mendalam</property>
-                        <property name="tooltip-text">Model menalar lebih lama sebelum menjawab: biasanya lebih teliti, tetapi lebih lambat dan lebih mahal</property>
+                        <property name="label" translatable="yes">Berpikir mendalam</property>
+                        <property name="tooltip-text" translatable="yes">Model menalar lebih lama sebelum menjawab: biasanya lebih teliti, tetapi lebih lambat dan lebih mahal</property>
                       </object>
                     </child>
                     <child>
                       <object class="GtkCheckButton" id="saveCheck">
-                        <property name="label">Simpan riwayat percakapan di folder</property>
-                        <property name="tooltip-text">Tiap percakapan ditulis sebagai berkas Markdown di &lt;folder kerja&gt;/.nyerat/chats. Isinya memuat kutipan dokumen; folder .nyerat tidak ikut Git kecuali Anda menghapus .nyerat/.gitignore</property>
+                        <property name="label" translatable="yes">Simpan riwayat percakapan di folder</property>
+                        <property name="tooltip-text" translatable="yes">Tiap percakapan ditulis sebagai berkas Markdown di &lt;folder kerja&gt;/.nyerat/chats. Isinya memuat kutipan dokumen; folder .nyerat tidak ikut Git kecuali Anda menghapus .nyerat/.gitignore</property>
                       </object>
                     </child>
                     <child>
                       <object class="GtkLabel">
-                        <property name="label">Dokumen yang disertakan sebagai konteks (atur lewat tombol Konteks) dikirim ke server DeepSeek setiap kali Anda bertanya.</property>
+                        <property name="label" translatable="yes">Dokumen yang disertakan sebagai konteks (atur lewat tombol Konteks) dikirim ke server DeepSeek setiap kali Anda bertanya.</property>
                         <property name="xalign">0</property>
                         <property name="wrap">true</property>
                         <property name="max-width-chars">36</property>
@@ -232,7 +232,7 @@
                 </style>
                 <child>
                   <object class="GtkLabel">
-                    <property name="label">Yang dikirim ke model</property>
+                    <property name="label" translatable="yes">Yang dikirim ke model</property>
                     <property name="xalign">0</property>
                     <style>
                       <class name="side-title"/>
@@ -241,20 +241,20 @@
                 </child>
                 <child>
                   <object class="GtkCheckButton" id="contextDocument">
-                    <property name="label">Dokumen yang sedang dibuka</property>
-                    <property name="tooltip-text">Isi lengkap dokumen aktif (bila terlalu panjang: bagian di sekitar kursor)</property>
+                    <property name="label" translatable="yes">Dokumen yang sedang dibuka</property>
+                    <property name="tooltip-text" translatable="yes">Isi lengkap dokumen aktif (bila terlalu panjang: bagian di sekitar kursor)</property>
                   </object>
                 </child>
                 <child>
                   <object class="GtkCheckButton" id="contextSelection">
-                    <property name="label">Teks yang dipilih</property>
-                    <property name="tooltip-text">Kalimat yang sedang disorot di editor</property>
+                    <property name="label" translatable="yes">Teks yang dipilih</property>
+                    <property name="tooltip-text" translatable="yes">Kalimat yang sedang disorot di editor</property>
                   </object>
                 </child>
                 <child>
                   <object class="GtkCheckButton" id="contextProject">
-                    <property name="label">Berkas lain di folder</property>
-                    <property name="tooltip-text">Peta proyek, potongan relevan, berkas yang di-@mention, dan izin bagi asisten untuk mencari dan membaca dokumen sendiri</property>
+                    <property name="label" translatable="yes">Berkas lain di folder</property>
+                    <property name="tooltip-text" translatable="yes">Peta proyek, potongan relevan, berkas yang di-@mention, dan izin bagi asisten untuk mencari dan membaca dokumen sendiri</property>
                   </object>
                 </child>
                 <child>
@@ -268,7 +268,7 @@
                 </child>
                 <child>
                   <object class="GtkLabel">
-                    <property name="label">Opsional: ketik @namaberkas di pesan untuk langsung melampirkan berkas utuh. Asisten juga dapat mencari dan membaca berkas lain sendiri.</property>
+                    <property name="label" translatable="yes">Opsional: ketik @namaberkas di pesan untuk langsung melampirkan berkas utuh. Asisten juga dapat mencari dan membaca berkas lain sendiri.</property>
                     <property name="xalign">0</property>
                     <property name="wrap">true</property>
                     <property name="max-width-chars">36</property>
@@ -317,7 +317,7 @@
         <child>
           <object class="GtkButton" id="sendButton">
             <property name="icon-name">go-up-symbolic</property>
-            <property name="tooltip-text">Kirim (Enter)</property>
+            <property name="tooltip-text" translatable="yes">Kirim (Enter)</property>
             <property name="valign">end</property>
           </object>
         </child>

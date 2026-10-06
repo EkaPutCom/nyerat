@@ -8,7 +8,7 @@
 //   drag                  geser gambar
 //   Esc                   tutup
 //
-// Gambar digambar dengan cairo pada skala zoom, bukan dibuatkan salinan yang
+// Gambar digambar GSK sebagai tekstur berskala (snapshot), bukan dibuatkan salinan yang
 // diperbesar, jadi zoom 800% pada foto besar tidak menghabiskan memori.
 
 import Adw from 'gi://Adw?version=1';
@@ -16,8 +16,11 @@ import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
-import cairo from 'cairo';
-import { onKeyPress, pack } from '../gtkutil.js';
+import GObject from 'gi://GObject';
+import Graphene from 'gi://Graphene';
+import Gsk from 'gi://Gsk';
+import { onKeyPress, textureFromPixbuf } from '../gtkutil.js';
+import { _, fmt } from '../i18n.js';
 
 export const MIN_ZOOM = 0.05;
 export const MAX_ZOOM = 8;
@@ -36,9 +39,25 @@ type Mode = 'fit-cap' | 'fit' | 'manual';
 // Titik gambar (ix, iy) yang harus tetap berada di posisi (vx, vy) pada area tampilan saat zoom.
 interface Focus { ix: number; iy: number; vx: number; vy: number }
 
+// Area gambar: tekstur digambar memenuhi ukuran widget (size request = ukuran gambar × zoom).
+// Pengganti DrawingArea + Gdk.cairo_set_source_pixbuf() yang usang sejak GTK 4.20.
+class ZoomArea extends Gtk.Widget {
+    static { GObject.registerClass({ GTypeName: 'NyeratZoomArea' }, this); }
+    texture: Gdk.Texture | null = null;
+    zoom = 1;
+
+    override vfunc_snapshot(snapshot: Gtk.Snapshot): void {
+        if (!this.texture) return;
+        const bounds = new Graphene.Rect().init(0, 0, this.get_width(), this.get_height());
+        // Diperbesar banyak: tampilkan piksel apa adanya, bukan dikaburkan.
+        const filter = this.zoom >= 3 ? Gsk.ScalingFilter.NEAREST : this.zoom < 1 ? Gsk.ScalingFilter.TRILINEAR : Gsk.ScalingFilter.LINEAR;
+        snapshot.append_scaled_texture(this.texture, filter, bounds);
+    }
+}
+
 export class ImageViewer {
-    readonly window: Gtk.Window;
-    readonly area: Gtk.DrawingArea;
+    readonly window: Adw.Window;
+    readonly area: ZoomArea;
     zoom = 1;
     closed = false;
 
@@ -51,23 +70,16 @@ export class ImageViewer {
     constructor(parent: Gtk.Window | null, private readonly pixbuf: GdkPixbuf.Pixbuf, title: string) {
         const width = pixbuf.get_width(), height = pixbuf.get_height();
 
-        this.window = new Gtk.Window({
+        this.window = new Adw.Window({
             transient_for: parent, modal: true, title,
             ...this.initialSize(parent, width, height),
         });
         const header = new Adw.HeaderBar();
-        const titles = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER });
-        for (const [text, css] of [[title, 'title'], [`${width} × ${height} px`, 'subtitle']]) {
-            const label = new Gtk.Label({ label: text, ellipsize: 3 });
-            label.add_css_class(css);
-            titles.append(label);
-        }
-        header.set_title_widget(titles);
-        this.window.set_titlebar(header);
+        header.set_title_widget(new Adw.WindowTitle({ title, subtitle: fmt(_('{width} × {height} px'), { width, height }) }));
 
         // Tidak bisa difokuskan: tombol ditangani di tingkat jendela, dan fokus hanya menambah garis putus-putus di sekitar gambar.
-        this.area = new Gtk.DrawingArea({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, can_focus: false });
-        this.area.set_draw_func((_area, cr) => this.draw(cr));
+        this.area = new ZoomArea({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, can_focus: false });
+        this.area.texture = textureFromPixbuf(pixbuf);
         const motion = new Gtk.EventControllerMotion();
         motion.connect('motion', (_m, x, y) => { this.pointer = [x, y]; });
         motion.connect('leave', () => { this.pointer = null; });
@@ -102,16 +114,16 @@ export class ImageViewer {
             return b;
         };
         const bar = new Gtk.Box({ spacing: 6, margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6, halign: Gtk.Align.CENTER });
-        bar.append(button('−', 'Perkecil (−)', () => this.zoomOut()));
+        bar.append(button('−', _('Perkecil (−)'), () => this.zoomOut()));
         bar.append(this.percent);
-        bar.append(button('+', 'Perbesar (+)', () => this.zoomIn()));
-        bar.append(button('Pas', 'Pas layar (F)', () => this.fit()));
-        bar.append(button('100%', 'Ukuran asli (0)', () => this.actual()));
+        bar.append(button('+', _('Perbesar (+)'), () => this.zoomIn()));
+        bar.append(button(_('Pas'), _('Pas layar (F)'), () => this.fit()));
+        bar.append(button('100%', _('Ukuran asli (0)'), () => this.actual()));
 
-        const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-        pack(box, this.scroller, true);
-        box.append(bar);
-        this.window.set_child(box);
+        const view = new Adw.ToolbarView({ content: this.scroller });
+        view.add_top_bar(header);
+        view.add_bottom_bar(bar);
+        this.window.set_content(view);
 
         onKeyPress(this.window, keyval => this.handleKey(keyval));
         // Jendela dihancurkan (GTK 4 tidak memancarkan "destroy" selama objeknya dipegang JavaScript).
@@ -187,6 +199,7 @@ export class ImageViewer {
         const w = Math.round(this.pixbuf.get_width() * this.zoom), h = Math.round(this.pixbuf.get_height() * this.zoom);
         this.area.set_size_request(w, h);
         this.percent.label = `${Math.round(this.zoom * 100)}%`;
+        this.area.zoom = this.zoom;
         this.area.queue_draw();
 
         // Ukuran baru baru berlaku setelah tata letak, jadi atur posisi gulir sesudahnya.
@@ -219,18 +232,7 @@ export class ImageViewer {
         this.refit();
     }
 
-    // ---------- Gambar dan masukan ----------
-
-    private draw(cr: cairo.Context): void {
-        cr.scale(this.zoom, this.zoom);
-        Gdk.cairo_set_source_pixbuf(cr, this.pixbuf, 0, 0);
-        // Diperbesar banyak: tampilkan piksel apa adanya, bukan dikaburkan.
-        // Tipe cairo di @girs tidak memuat Pattern.setFilter, padahal ada saat runtime GJS.
-        const source = cr.getSource() as unknown as { setFilter(filter: number): void };
-        source.setFilter(this.zoom >= 3 ? cairo.Filter.NEAREST : cairo.Filter.GOOD);
-        cr.paint();
-        cr.$dispose();
-    }
+    // ---------- Masukan ----------
 
     // true = tombol sudah ditangani.
     handleKey(keyval: number): boolean {

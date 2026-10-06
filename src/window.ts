@@ -16,8 +16,10 @@ import Gdk from 'gi://Gdk?version=4.0';
 import Adw from 'gi://Adw?version=1';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 
-import { APP_NAME } from './config.js';
+import { APP_ID, APP_NAME } from './config.js';
+import { addBundledIcons, after, type Awaitable } from './gtkutil.js';
 import { type AppSettings } from './settings.js';
 import { readTextFile, writeTextFile, writeTextFileAsync, waitForWrites, fileExists } from './files.js';
 import { markdownToHtml } from './markdown/html.js';
@@ -50,8 +52,9 @@ import { Orchestrator } from './orchestrator.js';
 import { cardProject, checkProjectFolder, HARNESSES, isActive, PROJECT_NAME, type LinkedNote, type HarnessAsk, type HarnessReply, type Run } from './agent/harness.js';
 import { LogViewer } from './ui/logviewer.js';
 import type { MenuEntry } from './ui/menu.js';
+import { _, fmt } from './i18n.js';
 
-const UNTITLED = 'Tanpa Judul';
+const UNTITLED = _('Tanpa Judul');
 // Jeda tanpa ketikan sebelum auto save menulis ke disk.
 const AUTOSAVE_DELAY_MS = 1000;
 
@@ -66,7 +69,7 @@ function fitToScreen(width: number, height: number): [number, number] {
     const area = monitor.get_geometry();
     return [Math.min(width, area.width), Math.min(height, area.height)];
 }
-const MODE_LABELS: Record<Mode, string> = { source: 'Source', focus: 'Fokus', typewriter: 'Typewriter' };
+const MODE_LABELS: Record<Mode, string> = { source: _('Source'), focus: _('Fokus'), typewriter: _('Typewriter') };
 
 // Pilihan tampilan yang bisa diubah dari menu.
 export type Option = 'sidebar' | 'chat' | 'dark' | 'autosave' | Mode;
@@ -99,12 +102,17 @@ export class MainWindow {
     readonly tabBar: TabBar;
     readonly board: KanbanBoard;
     readonly orchestrator: Orchestrator;
-    // Dialog pemilih folder proyek menahan program, jadi bisa diganti di tes.
-    harnessDialogs = {
-        chooseFolder: (title: string): string | null => chooseFile(this.win, { title, selectFolder: true }),
-        answer: (ask: HarnessAsk, agent: string): HarnessReply | null => harnessAskDialog(this.win, ask, agent),
-        text: (options: { title: string; label: string; context?: string }): string | null => harnessTextDialog(this.win, options),
+    // Dialog harness bisa diganti di tes dengan jawaban langsung; dialog asli menjawab lewat Promise.
+    harnessDialogs: {
+        chooseFolder: (title: string) => Awaitable<string | null>;
+        answer: (ask: HarnessAsk, agent: string) => Awaitable<HarnessReply | null>;
+        text: (options: { title: string; label: string; context?: string }) => Awaitable<string | null>;
+    } = {
+        chooseFolder: title => chooseFile(this.win, { title, selectFolder: true }),
+        answer: (ask, agent) => harnessAskDialog(this.win, ask, agent),
+        text: options => harnessTextDialog(this.win, options),
     };
+    private closing = false;   // penutupan jendela sudah dikonfirmasi lewat dialog
     private readonly runLogs = new Map<number, LogViewer>();
     readonly chat: ChatPanel;
     readonly chatSplit: Adw.OverlaySplitView;
@@ -198,14 +206,14 @@ export class MainWindow {
         // Hanya simpan dokumen berkas yang ada perubahannya; tanpa berkas, jangan memunculkan dialog simpan.
         this.history.beforeCommit = () => this.saveOpenFiles();
         this.history.onCommitted = () => {
-            this.toast('Berhasil di-commit');
+            this.toast(_('Berhasil di-commit'));
             this.syncHistory(true);
         };
         this.history.onOpenChanges = file => {
             const viewer = new HistoryViewer(this.win, file, null, this.dark);
             viewer.beforeCommit = () => this.saveOpenFiles();
             viewer.onCommitted = () => {
-                this.toast('Berhasil di-commit');
+                this.toast(_('Berhasil di-commit'));
                 this.syncHistory(true);
             };
             viewer.show();
@@ -257,7 +265,8 @@ export class MainWindow {
         // Tata letak
         const [width, height] = fitToScreen(settings.width, settings.height);
         this.win = new Adw.ApplicationWindow({ application: app, default_width: width, default_height: height });
-        this.win.set_icon_name('accessories-text-editor');
+        addBundledIcons(this.win.get_display());
+        this.win.set_icon_name(APP_ID);
         const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true });
         column.append(this.tabBar.widget);
         column.append(this.findBar);
@@ -275,8 +284,20 @@ export class MainWindow {
         const toolbar = new Adw.ToolbarView({ content: this.toasts });
         toolbar.add_top_bar(this.header);
         this.win.set_content(toolbar);
-        // true = batalkan penutupan (ada perubahan yang tidak jadi dibuang).
-        this.win.connect('close-request', () => !this.onClose());
+        this.addBreakpoints();
+        // true = tahan penutupan. Bila ada dokumen yang perlu ditanyakan, jendela ditahan dulu lalu
+        // ditutup lagi setelah semua dialog dijawab setuju.
+        this.win.connect('close-request', () => {
+            if (this.closing) return false;
+            const allowed = this.onClose();
+            if (typeof allowed === 'boolean') return !allowed;
+            void allowed.then(yes => {
+                if (!yes) return;
+                this.closing = true;
+                this.win.close();
+            });
+            return true;
+        });
         // Jendela dihancurkan (ditutup, atau destroy() di tes). GTK 4 tidak memancarkan "destroy"
         // untuk widget yang masih dipegang JavaScript, jadi timer komponen dihentikan di sini.
         this.win.connect('unrealize', () => this.dispose());
@@ -291,10 +312,13 @@ export class MainWindow {
         Adw.StyleManager.get_default().connect('notify::dark', () => {
             if (this.settings.dark === null && Adw.StyleManager.get_default().dark !== this.dark) this.setDark(null);
         });
+        // Aksen sistem berubah (libadwaita ≥ 1.6): warnai ulang tag teks; libadwaita lama tidak punya properti ini.
+        if (GObject.Object.find_property.call(Adw.StyleManager, 'accent-color'))
+            Adw.StyleManager.get_default().connect('notify::accent-color', () => this.setDark(this.colorScheme));
         settings.gsettings.connect('changed', (_gs, key) => this.onSettingChanged(key));
         // Visibilitas panel mengikuti GSettings dua arah; efek sampingnya dipasang pada perubahan widgetnya.
-        settings.gsettings.bind('sidebar', this.sidebar.widget, 'show-sidebar', Gio.SettingsBindFlags.DEFAULT);
-        settings.gsettings.bind('chat', this.chatSplit, 'show-sidebar', Gio.SettingsBindFlags.DEFAULT);
+        this.bindPanel('sidebar', this.sidebar.widget);
+        this.bindPanel('chat', this.chatSplit);
         this.sidebar.widget.connect('notify::show-sidebar', () => this.syncHistory());
         this.chatSplit.connect('notify::show-sidebar', () => {
             if (!this.chatSplit.show_sidebar) return;
@@ -430,8 +454,11 @@ export class MainWindow {
     }
 
     // Tutup tab (bertanya jika ada perubahan). Menutup satu-satunya tab mengosongkan dokumennya.
-    closeTab(doc: Doc = this.doc): boolean {
-        if (!this.confirmDiscard(doc)) return false;
+    closeTab(doc: Doc = this.doc): Awaitable<boolean> {
+        return after(this.confirmDiscard(doc), yes => yes && this.docs.includes(doc) && this.removeTab(doc));
+    }
+
+    private removeTab(doc: Doc): boolean {
         if (this.docs.length === 1) {
             this.resetDocument(doc);
             return true;
@@ -478,11 +505,46 @@ export class MainWindow {
         if (!opened.length) return false;
         for (const [doc, cursor] of opened) doc.editor.restoreCursor(cursor);
         this.activate(active ?? opened[opened.length - 1][0]);
-        if (missing) this.toast(`${missing} berkas dari sesi terakhir tidak ditemukan`);
+        if (missing) this.toast(fmt(_('{missing} berkas dari sesi terakhir tidak ditemukan'), { missing }));
         return true;
     }
 
     // ---------- Pengaturan tampilan ----------
+
+    // gsettings.bind(key, split, 'show-sidebar') ditambah perilaku saat jendela menyempit. Tanpa pin,
+    // OverlaySplitView menyembunyikan panel saat melipat dan selalu membukanya lagi saat melebar, sehingga panel
+    // yang sengaja ditutup ikut terbuka. Dengan pin, hal itu diatur di sini: melipat menutup panel (pengaturan
+    // ikut false supaya tombol header tetap sesuai), melebar memulihkan pengaturan sebelum melipat.
+    private readonly widePanels = new Map<'sidebar' | 'chat', boolean>();   // pengaturan panel sebelum melipat
+
+    private bindPanel(key: 'sidebar' | 'chat', split: Adw.OverlaySplitView): void {
+        const gs = this.settings.gsettings;
+        split.pin_sidebar = true;
+        gs.bind(key, split, 'show-sidebar', Gio.SettingsBindFlags.DEFAULT);
+        split.connect('notify::collapsed', () => {
+            if (split.collapsed) {
+                this.widePanels.set(key, gs.get_boolean(key));
+                gs.set_boolean(key, false);
+            } else if (this.widePanels.has(key)) {
+                gs.set_boolean(key, this.widePanels.get(key)!);
+                this.widePanels.delete(key);
+            }
+        });
+    }
+
+    // Tata letak adaptif (HIG): di jendela sempit panel samping tidak lagi memakan lebar editor, tetapi
+    // melayang di atasnya (OverlaySplitView collapsed) dan tertutup saat konten diklik. Panel Asisten
+    // (360) melipat lebih dulu daripada sidebar (240). Ukuran minimum jendela wajib ada untuk breakpoint.
+    private addBreakpoints(): void {
+        this.win.set_size_request(360, 294);
+        const narrow = new Adw.Breakpoint({ condition: Adw.BreakpointCondition.parse('max-width: 900sp') });
+        narrow.add_setter(this.chatSplit, 'collapsed', true);
+        this.win.add_breakpoint(narrow);
+        const phone = new Adw.Breakpoint({ condition: Adw.BreakpointCondition.parse('max-width: 600sp') });
+        phone.add_setter(this.chatSplit, 'collapsed', true);
+        phone.add_setter(this.sidebar.widget, 'collapsed', true);
+        this.win.add_breakpoint(phone);
+    }
 
     // dark null = ikuti tema sistem.
     setDark(dark: boolean | null): void {
@@ -584,20 +646,20 @@ export class MainWindow {
         }
         const root = this.noteRoot(doc);
         if (!root) {
-            this.toast('Buka folder atau simpan dokumen dulu untuk mengikuti tautan [[catatan]]');
+            this.toast(_('Buka folder atau simpan dokumen dulu untuk mengikuti tautan [[catatan]]'));
             return;
         }
         const from = doc.file?.startsWith(`${root}/`) ? doc.file.slice(root.length + 1) : null;
         const found = resolveWikiLink(link.target, listMarkdownFiles(root), from);
         const rel = found ?? newNotePath(link.target, from);
         if (!rel) {
-            this.toast(`Nama catatan tidak valid: ${link.target}`);
+            this.toast(fmt(_('Nama catatan tidak valid: {target}'), { target: link.target }));
             return;
         }
         const path = GLib.build_filenamev([root, ...rel.split('/')]);
         if (!found) GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
         if (!this.openInTab(path)) return;
-        if (!found) this.toast(`Catatan baru: ${rel} (tersimpan setelah diisi)`);
+        if (!found) this.toast(fmt(_('Catatan baru: {rel} (tersimpan setelah diisi)'), { rel }));
         else if (link.heading) this.jumpToHeading(this.doc, link.heading);
     }
 
@@ -625,7 +687,7 @@ export class MainWindow {
         const want = heading.trim().toLowerCase();
         const found = doc.editor.headings.find(h => h.text.trim().toLowerCase() === want);
         if (found) doc.editor.jumpToLine(found.line);
-        else this.toast(`Bagian tidak ditemukan: ${heading}`);
+        else this.toast(fmt(_('Bagian tidak ditemukan: {heading}'), { heading }));
     }
 
     // ---------- Papan kanban ----------
@@ -669,7 +731,7 @@ export class MainWindow {
     // Menu/pintasan "Tampilan Papan": berganti antara papan dan teks untuk dokumen kanban.
     toggleBoardView(on: boolean): void {
         if (on && !isKanban(this.editor.getText())) {
-            this.toast('Dokumen ini bukan papan kanban (butuh "kanban: true" di frontmatter)');
+            this.toast(_('Dokumen ini bukan papan kanban (butuh "kanban: true" di frontmatter)'));
             this.setBoardMode(false);
             return;
         }
@@ -712,79 +774,96 @@ export class MainWindow {
         const active = run && isActive(run.status) ? run : null;
         const agent = cardMeta(card.text).agent;
         const entries: MenuEntry[] = Object.values(HARNESSES).map(spec => ({
-            label: `Kerjakan dengan ${spec.label}`,
+            label: fmt(_('Kerjakan dengan {label}'), { label: spec.label }),
             enabled: !!file && !active && card.done !== true,
             run: () => this.runHarness(at, spec.name),
         }));
-        if (active?.status === 'waiting') entries.push({ label: `Jawab ${active.agent}…`, run: () => this.answerHarness(active) });
-        if (active?.status === 'working') entries.push({ label: `Beri Arahan ${active.agent}…`, run: () => this.steerHarness(active) });
-        if (run && !active && run.result?.sessionId) entries.push({ label: `Balas ${run.agent}…`, run: () => this.replyHarness(run) });
-        if (active) entries.push({ label: active.status === 'queued' ? 'Batalkan Antrean' : `Hentikan ${active.agent}`, run: () => this.orchestrator.stop(active) });
-        if (run) entries.push({ label: `Lihat Log ${run.agent}`, run: () => this.showRunLog(run) });
-        if (agent && !active) entries.push({ label: 'Lepas Penugasan', run: () => this.board.commit(updateCard(this.board.getBoard(), at, { text: assignCard(card.text, null) })) });
+        if (active?.status === 'waiting') entries.push({ label: fmt(_('Jawab {agent}…'), { agent: active.agent }), run: () => this.answerHarness(active) });
+        if (active?.status === 'working') entries.push({ label: fmt(_('Beri Arahan {agent}…'), { agent: active.agent }), run: () => this.steerHarness(active) });
+        if (run && !active && run.result?.sessionId) entries.push({ label: fmt(_('Balas {agent}…'), { agent: run.agent }), run: () => this.replyHarness(run) });
+        if (active) entries.push({ label: active.status === 'queued' ? _('Batalkan Antrean') : fmt(_('Hentikan {agent}'), { agent: active.agent }), run: () => this.orchestrator.stop(active) });
+        if (run) entries.push({ label: fmt(_('Lihat Log {agent}'), { agent: run.agent }), run: () => this.showRunLog(run) });
+        if (agent && !active) entries.push({ label: _('Lepas Penugasan'), run: () => this.board.commit(updateCard(this.board.getBoard(), at, { text: assignCard(card.text, null) })) });
         const project = cardProject(this.board.getBoard(), card);
-        if (project && this.settings.projects[project]) entries.push({ label: 'Ganti Folder Proyek…', run: () => this.chooseProjectFolder(project) });
+        if (project && this.settings.projects[project]) entries.push({ label: _('Ganti Folder Proyek…'), run: () => this.chooseProjectFolder(project) });
         return entries;
     }
 
     // Jalankan harness untuk kartu di papan aktif. Folder proyek ditanyakan sekali lalu diingat di pengaturan.
     runHarness(at: Position, agent: string): void {
         const file = this.file;
-        if (!file) { this.toast('Simpan papan dulu sebelum menugaskan kartu'); return; }
+        if (!file) { this.toast(_('Simpan papan dulu sebelum menugaskan kartu')); return; }
         const card = this.board.getBoard().columns[at.column]?.cards[at.index];
         if (!card) return;
-        let project = cardProject(this.board.getBoard(), card);
-        if (!project || !this.settings.projects[project]) {
-            const folder = this.chooseProjectFolder(project);
+        const project = cardProject(this.board.getBoard(), card);
+        if (project && this.settings.projects[project]) {
+            this.startHarness(file, at, agent, project);
+            return;
+        }
+        void after(this.chooseProjectFolder(project), folder => {
             if (!folder) return;
+            // Dialog folder bisa lama terbuka: kartu yang ditugaskan harus masih ada di papan yang sama.
+            if (this.file !== file || this.board.getBoard().columns[at.column]?.cards[at.index]?.text !== card.text) {
+                this.toast(_('Papan berubah selama memilih folder; tugaskan ulang kartunya'));
+                return;
+            }
             if (!project) {
                 // Belum ada nama proyek: pakai nama foldernya dan catat di kartu supaya giliran berikutnya tidak bertanya lagi.
-                project = folder.name;
-                const tagged = `${card.text} #proyek/${project}`;
+                const tagged = `${card.text} #proyek/${folder.name}`;
                 this.board.commit(updateCard(this.board.getBoard(), at, { text: tagged }));
             }
-        }
+            this.startHarness(file, at, agent, project ?? folder.name);
+        });
+    }
+
+    private startHarness(file: string, at: Position, agent: string, project: string): void {
         const error = this.orchestrator.start(file, this.board.getBoard(), at, agent, project, this.settings.projects[project], GLib.path_get_basename(file));
-        if (error) this.toast(`Tidak bisa menjalankan ${agent}: ${error}`);
+        if (error) this.toast(fmt(_('Tidak bisa menjalankan {agent}: {error}'), { agent, error }));
     }
 
     // Pilih folder untuk proyek `name` (atau proyek baru bila null) dan simpan pemetaannya.
-    private chooseProjectFolder(name: string | null): { name: string; path: string } | null {
-        const path = this.harnessDialogs.chooseFolder(name ? `Folder proyek “${name}”` : 'Pilih folder proyek');
+    private chooseProjectFolder(name: string | null): Awaitable<{ name: string; path: string } | null> {
+        return after(this.harnessDialogs.chooseFolder(name ? fmt(_('Folder proyek “{name}”'), { name }) : _('Pilih folder proyek')), path => this.mapProjectFolder(name, path));
+    }
+
+    private mapProjectFolder(name: string | null, path: string | null): { name: string; path: string } | null {
         if (!path) return null;
         const project = name ?? GLib.path_get_basename(path).replace(/\s+/g, '-');
-        const problem = !PROJECT_NAME.test(project) ? `nama folder "${project}" tidak bisa dipakai sebagai nama proyek` : checkProjectFolder(path, this.fileTree.root);
-        if (problem) { this.toast(`Folder proyek ditolak: ${problem}`); return null; }
+        const problem = !PROJECT_NAME.test(project) ? fmt(_('nama folder "{name}" tidak bisa dipakai sebagai nama proyek'), { name: project }) : checkProjectFolder(path, this.fileTree.root);
+        if (problem) { this.toast(fmt(_('Folder proyek ditolak: {problem}'), { problem })); return null; }
         this.settings.projects = { ...this.settings.projects, [project]: path };
         return { name: project, path };
     }
 
     answerHarness(run: Run): void {
         if (!run.ask) return;
-        const reply = this.harnessDialogs.answer(run.ask, run.agent);
-        if (!reply) return;   // Nanti: harness tetap menunggu
-        const error = this.orchestrator.answer(run, reply);
-        if (error) this.toast(`Jawaban tidak terkirim: ${error}`);
+        void after(this.harnessDialogs.answer(run.ask, run.agent), reply => {
+            if (!reply) return;   // Nanti: harness tetap menunggu
+            const error = this.orchestrator.answer(run, reply);
+            if (error) this.toast(fmt(_('Jawaban tidak terkirim: {error}'), { error }));
+        });
     }
 
     private steerHarness(run: Run): void {
-        const text = this.harnessDialogs.text({ title: `Arahan untuk ${run.agent}`, label: `${run.agent} menerimanya sebelum langkah berikutnya, tanpa menghentikan pekerjaan.` });
-        if (!text) return;
-        const error = this.orchestrator.steer(run, text);
-        this.toast(error ? `Arahan tidak terkirim: ${error}` : `Arahan dikirim ke ${run.agent}`);
+        void after(this.harnessDialogs.text({ title: fmt(_('Arahan untuk {agent}'), { agent: run.agent }), label: fmt(_('{agent} menerimanya sebelum langkah berikutnya, tanpa menghentikan pekerjaan.'), { agent: run.agent }) }), text => {
+            if (!text) return;
+            const error = this.orchestrator.steer(run, text);
+            this.toast(error ? fmt(_('Arahan tidak terkirim: {error}'), { error }) : fmt(_('Arahan dikirim ke {agent}'), { agent: run.agent }));
+        });
     }
 
     private replyHarness(run: Run): void {
-        const text = this.harnessDialogs.text({ title: `Balas ${run.agent}`, label: `Sesi ${run.agent} dilanjutkan dengan balasan ini; kartu kembali dikerjakan.`, context: run.result?.summary || undefined });
-        if (!text) return;
-        const error = this.orchestrator.resume(run, text);
-        if (error) this.toast(`Tidak bisa membalas ${run.agent}: ${error}`);
+        void after(this.harnessDialogs.text({ title: fmt(_('Balas {agent}'), { agent: run.agent }), label: fmt(_('Sesi {agent} dilanjutkan dengan balasan ini; kartu kembali dikerjakan.'), { agent: run.agent }), context: run.result?.summary || undefined }), text => {
+            if (!text) return;
+            const error = this.orchestrator.resume(run, text);
+            if (error) this.toast(fmt(_('Tidak bisa membalas {agent}: {error}'), { agent: run.agent, error }));
+        });
     }
 
     showRunLog(run: Run): LogViewer {
         const open = this.runLogs.get(run.id);
         if (open?.window.get_realized()) { open.show(); return open; }
-        const viewer = new LogViewer(this.win, run.trace, `Log ${run.agent} — ${run.title}`);
+        const viewer = new LogViewer(this.win, run.trace, fmt(_('Log {agent} — {title}'), { agent: run.agent, title: run.title }));
         this.runLogs.set(run.id, viewer);
         viewer.show();
         return viewer;
@@ -889,7 +968,7 @@ export class MainWindow {
         const changes = doc.changes;
         writeTextFileAsync(path, doc.editor.getText(), error => {
             if (error) {
-                this.toast(`Auto save gagal: ${errorMessage(error)}`);
+                this.toast(fmt(_('Auto save gagal: {error}'), { error: errorMessage(error) }));
             } else if (this.docs.includes(doc) && doc.file === path && doc.changes === changes) {
                 // Teks tidak berubah selama ditulis: isi di disk sama dengan buffer.
                 doc.editor.buffer.set_modified(false);
@@ -908,7 +987,7 @@ export class MainWindow {
             writeTextFile(doc.file, doc.editor.getText());
         } catch (e) {
             // Bukan dialog: auto save terus mencoba, dan dialog berulang mengganggu mengetik.
-            this.toast(`Auto save gagal: ${errorMessage(e)}`);
+            this.toast(fmt(_('Auto save gagal: {error}'), { error: errorMessage(e) }));
             return false;
         }
         doc.editor.buffer.set_modified(false);
@@ -949,12 +1028,25 @@ export class MainWindow {
     }
 
     // Jika ada perubahan, tanya dulu. true = boleh lanjut membuang dokumen ini.
-    confirmDiscard(doc: Doc = this.doc): boolean {
+    // Tanpa perubahan yang perlu ditanyakan, jawabannya langsung (tanpa Promise).
+    confirmDiscard(doc: Doc = this.doc): Awaitable<boolean> {
         if (this.autosave(doc)) return true;
         this.activate(doc);   // pengguna perlu melihat dokumen mana yang ditanyakan
-        const answer = askSaveChanges(this.win, this.nameOf(doc));
-        if (answer === 'save') return this.save();
-        return answer === 'discard';
+        return askSaveChanges(this.win, this.nameOf(doc)).then(answer => {
+            if (answer !== 'save') return answer === 'discard';
+            this.activate(doc);
+            return this.save();
+        });
+    }
+
+    // Tanyakan dokumen satu per satu; berhenti pada jawaban Batal pertama.
+    private confirmDiscardAll(docs: Doc[]): Awaitable<boolean> {
+        for (let i = 0; i < docs.length; i++) {
+            const answer = this.confirmDiscard(docs[i]);
+            if (answer === false) return false;
+            if (answer !== true) return answer.then(yes => yes && this.confirmDiscardAll(docs.slice(i + 1)));
+        }
+        return true;
     }
 
     // Simpan semua dokumen berfile yang berubah (sebelum commit git). Dokumen tanpa file tidak disentuh.
@@ -1008,7 +1100,7 @@ export class MainWindow {
         try {
             return fileExists(absolute) ? readTextFile(absolute) : '';  // file baru jika belum ada
         } catch (e) {
-            showError(this.win, `Gagal membuka file:\n${errorMessage(e)}`);
+            void showError(this.win, fmt(_('Gagal membuka file:\n{error}'), { error: errorMessage(e) }));
             return null;
         }
     }
@@ -1053,8 +1145,8 @@ export class MainWindow {
         if (!this.openInTab(path)) this.fileTree.reveal(this.file);  // kembalikan sorotan ke file yang masih terbuka
     }
 
-    chooseFolder(): void {
-        const path = chooseFile(this.win, { title: 'Buka Folder', selectFolder: true, folder: this.fileTree.root });
+    async chooseFolder(): Promise<void> {
+        const path = await chooseFile(this.win, { title: _('Buka Folder'), selectFolder: true, folder: this.fileTree.root });
         if (path) this.openFolder(path);
     }
 
@@ -1072,8 +1164,8 @@ export class MainWindow {
         this.settings.sidebar = true;
     }
 
-    open(): void {
-        const path = chooseFile(this.win, { title: 'Buka Markdown', filters: ['markdown', 'all'] });
+    async open(): Promise<void> {
+        const path = await chooseFile(this.win, { title: _('Buka Markdown'), filters: ['markdown', 'all'] });
         if (path) this.openInTab(path);
     }
 
@@ -1082,29 +1174,32 @@ export class MainWindow {
             writeTextFile(path, text);
             return true;
         } catch (e) {
-            showError(this.win, `Gagal menyimpan:\n${errorMessage(e)}`);
+            void showError(this.win, fmt(_('Gagal menyimpan:\n{error}'), { error: errorMessage(e) }));
             return false;
         }
     }
 
-    save(): boolean {
+    // Dokumen berfile disimpan seketika (hasil boolean); dokumen baru menunggu dialog Simpan Sebagai.
+    save(): Awaitable<boolean> {
         if (!this.file) return this.saveAs();
         if (!this.write(this.file, this.editor.getText())) return false;
         this.editor.buffer.set_modified(false);
         this.cancelAutosave(this.doc);
-        this.toast('Tersimpan');
+        this.toast(_('Tersimpan'));
         return true;
     }
 
-    saveAs(): boolean {
-        let path = chooseFile(this.win, {
-            title: 'Simpan Markdown', save: true, filters: ['markdown', 'all'],
+    async saveAs(): Promise<boolean> {
+        const doc = this.doc;
+        let path = await chooseFile(this.win, {
+            title: _('Simpan Markdown'), save: true, filters: ['markdown', 'all'],
             name: this.file ? this.documentName : `${this.suggestName()}.md`,
             // Dokumen baru disimpan di folder yang sedang dibuka.
             folder: this.file ? null : this.fileTree.root,
         });
-        if (!path) return false;
+        if (!path || !this.docs.includes(doc)) return false;
         if (!/\.[^/]+$/.test(GLib.path_get_basename(path))) path += '.md';
+        this.activate(doc);
         this.file = path;
         this.updateTitle();
         if (!this.save()) return false;
@@ -1115,21 +1210,23 @@ export class MainWindow {
         return true;
     }
 
-    exportHtml(): void {
+    async exportHtml(): Promise<void> {
         const base = this.file ? this.documentName.replace(/\.[^.]+$/, '') : this.suggestName();
-        const path = chooseFile(this.win, {
-            title: 'Ekspor HTML', save: true, filters: ['html', 'all'], name: `${base}.html`,
+        const text = this.editor.getText(), title = this.editor.headings[0]?.text || base;
+        const path = await chooseFile(this.win, {
+            title: _('Ekspor HTML'), save: true, filters: ['html', 'all'], name: `${base}.html`,
             folder: this.file ? GLib.path_get_dirname(this.file) : null,
         });
         if (!path) return;
-        const html = markdownToHtml(this.editor.getText(), this.editor.headings[0]?.text || base);
-        if (this.write(path, html)) this.toast(`Diekspor ke ${GLib.path_get_basename(path)}`);
+        const html = markdownToHtml(text, title);
+        if (this.write(path, html)) this.toast(fmt(_('Diekspor ke {name}'), { name: GLib.path_get_basename(path) }));
     }
 
     // Sisipkan ![nama](path). Path dibuat relatif terhadap file jika memungkinkan.
-    insertImage(): void {
-        let path = chooseFile(this.win, { title: 'Pilih Gambar', filters: ['image'] });
-        if (!path) return;
+    async insertImage(): Promise<void> {
+        const doc = this.doc;
+        let path = await chooseFile(this.win, { title: _('Pilih Gambar'), filters: ['image'] });
+        if (!path || doc !== this.doc) return;
         if (this.file) {
             const dir = Gio.File.new_for_path(GLib.path_get_dirname(this.file));
             path = dir.get_relative_path(Gio.File.new_for_path(path)) ?? path;
@@ -1139,8 +1236,13 @@ export class MainWindow {
     }
 
     // true = jendela boleh ditutup. Tiap dokumen yang berubah ditanyakan satu per satu.
-    onClose(): boolean {
-        for (const doc of [...this.docs]) if (!this.confirmDiscard(doc)) return false;
+    onClose(): Awaitable<boolean> {
+        return after(this.confirmDiscardAll([...this.docs]), yes => yes && this.rememberWindow());
+    }
+
+    private rememberWindow(): true {
+        // Ditutup selagi sempit: simpan pengaturan panel untuk tata letak lebar, bukan keadaan terlipat.
+        for (const [key, value] of this.widePanels) this.settings.gsettings.set_boolean(key, value);
         // Setelah konfirmasi: dokumen baru yang disimpan lewat dialog sudah punya file.
         this.rememberTabs();
         // Di GTK 4 ukuran default mengikuti ukuran jendela saat ini.

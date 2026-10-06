@@ -9,6 +9,7 @@ import { wrapSelection, insertLink, insertBlock, togglePrefix, setHeading } from
 import { showAbout } from './ui/dialogs.js';
 import { PreferencesDialog } from './ui/preferences.js';
 import { CommandPalette } from './ui/palette.js';
+import { showShortcuts } from './ui/shortcuts.js';
 import type Adw from 'gi://Adw?version=1';
 import type { TableCommand } from './editor/tableedit.js';
 import type { MainWindow, Option } from './window.js';
@@ -68,6 +69,7 @@ export function registerActions(app: Adw.Application, w: MainWindow): void {
     action('quit', ['<Control>q'], () => w.win.close());
     action('preferences', ['<Control>comma'], () => new PreferencesDialog(w.settings).present(w.win));
     action('command-palette', ['<Control><Shift>p'], () => new CommandPalette(app).present(w.win));
+    action('shortcuts', ['<Control>question'], () => showShortcuts(app, w.win));
     action('about', null, () => showAbout(w.win));
     action('find', ['<Control>f'], () => w.findBar.open());
 

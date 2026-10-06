@@ -232,6 +232,12 @@ function main(app: Adw.Application): void {
     const ctx = GLib.MainContext.default();
     const pump = () => { for (let i = 0; i < 200 && ctx.pending(); i++) ctx.iteration(false); };
     const settle = (n = 12) => { for (let i = 0; i < n; i++) { pump(); GLib.usleep(15000); } };
+    // Dialog menjawab lewat Promise; tangkapan dijadwalkan timer lalu dialog ditutup, jadi tunggu jawabannya.
+    const waitPromise = (promise: Promise<unknown>) => {
+        let done = false;
+        void promise.finally(() => { done = true; });
+        for (let i = 0; i < 2000 && !done; i++) { pump(); GLib.usleep(5000); }
+    };
     const waitMermaid = () => {
         for (let i = 0; i < 3000 && ed.mermaid.blocks.some(b => b.busy || b.timer); i++) { pump(); GLib.usleep(10000); }
         settle();
@@ -746,7 +752,7 @@ function main(app: Adw.Application): void {
         if (dialog) { widgetPixbuf(dialog)?.savev(`${OUT}/kanban-kartu.png`, 'png', [], []); dialog.close(); }
         return GLib.SOURCE_REMOVE;
     });
-    editCardDialog(w.win, { text: 'Riset pengguna #riset @{2026-10-10 09:00}', notes: ['Wawancara lima pengguna aktif.'] });
+    waitPromise(editCardDialog(w.win, { text: 'Riset pengguna #riset @{2026-10-10 09:00}', notes: ['Wawancara lima pengguna aktif.'] }));
 
     // ───────── Orkestrator: kartu dikerjakan pi (tiruan RPC, tanpa API) ─────────
     const piDir = GLib.dir_make_tmp('nyerat-pi-XXXXXX');
@@ -803,7 +809,7 @@ function main(app: Adw.Application): void {
             if (dialog) { widgetPixbuf(dialog)?.savev(`${OUT}/pi-jawab.png`, 'png', [], []); dialog.close(); }
             return GLib.SOURCE_REMOVE;
         });
-        harnessAskDialog(w.win, ask, 'pi');
+        waitPromise(harnessAskDialog(w.win, ask, 'pi'));
     }
     const done = runOf('Checkout');
     if (done) {
@@ -825,7 +831,7 @@ function main(app: Adw.Application): void {
     w.win.destroy();
 }
 
-const app = new Adw.Application({ application_id: 'id.eka.Nyerat.Capture', flags: Gio.ApplicationFlags.NON_UNIQUE });
+const app = new Adw.Application({ application_id: 'com.ekaput.Nyerat.Capture', flags: Gio.ApplicationFlags.NON_UNIQUE });
 app.connect('activate', () => {
     app.hold();
     GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {

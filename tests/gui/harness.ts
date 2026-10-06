@@ -8,7 +8,7 @@ import { parseBoard } from '../../src/markdown/kanban.js';
 import { findEntry } from '../../src/ui/menu.js';
 import { findDialog, harnessAskDialog } from '../../src/ui/dialogs.js';
 import { descendants, widgetPixbuf } from '../widgets.js';
-import { section, test, eq, ok, contains, tmp, optVal } from '../framework.js';
+import { section, test, eq, ok, contains, tmp, optVal, settle } from '../framework.js';
 import type { HarnessAsk, HarnessReply } from '../../src/agent/harness.js';
 import type { GuiContext } from './context.js';
 
@@ -280,7 +280,7 @@ export function harnessTests(c: GuiContext): void {
                     if (dialog) { widgetPixbuf(dialog)?.savev(`${shot}-${name}.png`, 'png', [], []); dialog.close(); }
                     return GLib.SOURCE_REMOVE;
                 });
-                harnessAskDialog(w.win, ask, 'pi');
+                settle(harnessAskDialog(w.win, ask, 'pi'));
             };
             capture(runOf('Checkout')!.ask!, 'jawab-izin');
             capture({ kind: 'question', id: null, title: 'pi bertanya', message: 'Sudah saya cek struktur proyek.\n\nCheckout QRIS bisa memakai SDK resmi (lebih lengkap) atau API langsung (lebih ringan). Mau pakai yang mana?', options: [], prefill: '', timeout: null }, 'jawab-tanya');

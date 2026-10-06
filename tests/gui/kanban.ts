@@ -9,7 +9,7 @@ import { dueField, editCardDialog, findDialog } from '../../src/ui/dialogs.js';
 import { findEntry, type MenuEntry } from '../../src/ui/menu.js';
 import { childrenOf } from '../../src/gtkutil.js';
 import { descendants, widgetPixbuf } from '../widgets.js';
-import { section, test, eq, ok, tmp, optVal } from '../framework.js';
+import { section, test, eq, ok, tmp, optVal, settle } from '../framework.js';
 import { BOARD } from '../fixtures.js';
 import type { GuiContext } from './context.js';
 
@@ -371,7 +371,7 @@ export function kanbanBoardTests(c: GuiContext): void {
                     if (dialog) { widgetPixbuf(dialog)?.savev(`${shot}-dialog${dark ? '-gelap' : ''}.png`, 'png', [], []); dialog.close(); }
                     return GLib.SOURCE_REMOVE;
                 });
-                editCardDialog(w.win, { text: 'Tulis laporan #kerja @{2026-10-20}', notes: ['Ikuti keputusan di [[Catatan Rapat]].'] }, 'Tambah Kartu', () => ['Catatan Rapat.md']);
+                settle(editCardDialog(w.win, { text: 'Tulis laporan #kerja @{2026-10-20}', notes: ['Ikuti keputusan di [[Catatan Rapat]].'] }, 'Tambah Kartu', () => ['Catatan Rapat.md']));
             }
             w.setOption('dark', false);
             pump();

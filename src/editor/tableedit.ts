@@ -12,6 +12,7 @@ import {
     parseTable, renderRow, renderTable, setAlign, splitRow, type Align, type TableRange,
 } from '../markdown/table.js';
 import { iterAtLine } from '../gtkutil.js';
+import { _ } from '../i18n.js';
 
 export type TableCommand =
     | 'row-below' | 'row-above' | 'col-right' | 'col-left' | 'delete-row' | 'delete-col'
@@ -145,7 +146,7 @@ const ALIGN_OF: Partial<Record<TableCommand, Align>> = { 'align-left': 'left', '
 // dirapikan (lebar kolom disamakan), karena menambah/menghapus kolom mengubah lebarnya.
 export function runTableCommand(buffer: Gtk.TextBuffer, command: TableCommand): CommandResult {
     const at = whereIsCursor(buffer);
-    if (!at) return { ok: false, reason: 'Kursor harus berada di dalam tabel' };
+    if (!at) return { ok: false, reason: _('Kursor harus berada di dalam tabel') };
     const { table, lines, row, col, columns } = at;
     let model = parseTable(lines.slice(table.start, table.end + 1));
     let cursorRow = row, cursorCol = col;
@@ -157,11 +158,11 @@ export function runTableCommand(buffer: Gtk.TextBuffer, command: TableCommand): 
             cursorRow = row + 1;
             break;
         case 'row-above':
-            if (row === 0) return { ok: false, reason: 'Tidak bisa menyisipkan baris di atas judul tabel' };
+            if (row === 0) return { ok: false, reason: _('Tidak bisa menyisipkan baris di atas judul tabel') };
             model = insertRow(model, body);
             break;
         case 'delete-row':
-            if (row === 0) return { ok: false, reason: 'Baris judul tidak bisa dihapus' };
+            if (row === 0) return { ok: false, reason: _('Baris judul tidak bisa dihapus') };
             model = deleteRow(model, body);
             cursorRow = Math.min(row, model.rows.length);
             break;
@@ -173,7 +174,7 @@ export function runTableCommand(buffer: Gtk.TextBuffer, command: TableCommand): 
             model = insertColumn(model, col);
             break;
         case 'delete-col':
-            if (columns <= 1) return { ok: false, reason: 'Kolom terakhir tidak bisa dihapus' };
+            if (columns <= 1) return { ok: false, reason: _('Kolom terakhir tidak bisa dihapus') };
             model = deleteColumn(model, col);
             cursorCol = Math.min(col, columns - 2);
             break;

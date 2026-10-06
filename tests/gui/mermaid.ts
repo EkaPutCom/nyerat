@@ -125,7 +125,7 @@ export function mermaidTests(c: GuiContext): void {
         waitMermaid();
         const b = diagrams()[0];
         eq(b.status, 'ok', `status (${b.error})`);
-        eq(pixel(b, 0, 0), [0x1f, 0x20, 0x23], 'piksel pojok (gelap)');
+        eq(pixel(b, 0, 0), [0x1e, 0x1e, 0x1e], 'piksel pojok (gelap)');
         action('dark');
         waitMermaid();
         eq(pixel(diagrams()[0], 0, 0), [255, 255, 255], 'piksel pojok (terang lagi)');

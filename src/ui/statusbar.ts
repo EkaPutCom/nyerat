@@ -8,6 +8,7 @@ import GObject from 'gi://GObject';
 import { cpLength } from '../editor/offsets.js';
 import { uiTemplate } from '../gtkutil.js';
 import template from './statusbar.ui?raw';
+import { _, fmt } from '../i18n.js';
 
 export class StatusBar extends Gtk.Box {
     static {
@@ -46,12 +47,12 @@ export class StatusBar extends Gtk.Box {
     }
 
     setCursor(line: number, column: number): void {
-        this.cursorText = `Baris ${line + 1}, Kolom ${column + 1}`;
+        this.cursorText = fmt(_('Baris {line}, Kolom {column}'), { line: line + 1, column: column + 1 });
         this.render();
     }
 
     setModes(names: string[]): void {
-        this.modes = names.length ? `Mode: ${names.join(' · ')}` : '';
+        this.modes = names.length ? fmt(_('Mode: {modes}'), { modes: names.join(' · ') }) : '';
         this.left.label = this.modes;
     }
 

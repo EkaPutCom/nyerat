@@ -2,7 +2,9 @@
 // Tidak meng-import modul proyek lain, jadi boleh dipakai dari mana saja.
 
 import Gtk from 'gi://Gtk?version=4.0';
-import GLib from 'gi://GLib';
+import Gdk from 'gi://Gdk?version=4.0';
+import GdkPixbuf from 'gi://GdkPixbuf';
+import Gio from 'gi://Gio';
 
 // Iter di awal baris `line`. GTK 4 mengembalikan [ok, iter]; jika baris di luar dokumen,
 // iter-nya tetap diisi akhir buffer (perilaku yang sama dengan GTK 3).
@@ -46,21 +48,27 @@ export function removeChildren(widget: Gtk.Widget): void {
     for (const child of childrenOf(widget)) removeWidget(child);
 }
 
-// Jalankan main loop bersarang sampai `start` memanggil finish(nilai), lalu kembalikan nilainya.
-// GTK 4 menghapus gtk_dialog_run(); ini menggantikannya supaya dialog modal tetap bisa
-// dipakai seperti fungsi biasa (pemanggil langsung mendapat jawabannya).
-export function runModal<T>(start: (finish: (value: T) => void) => void): T {
-    let result!: T;
-    let done = false;
-    const loop = GLib.MainLoop.new(null, false);
-    start(value => {
-        if (done) return;
-        done = true;
-        result = value;
-        loop.quit();
+// Nilai yang mungkin baru tersedia nanti: dialog asli mengembalikan Promise, tiruannya di tes nilai biasa.
+export type Awaitable<T> = T | Promise<T>;
+
+// Dialog modal tanpa main loop bersarang (GTK 4 sengaja menghapus gtk_dialog_run(): main loop di dalam
+// handler membuat kode lain berjalan di tengah-tengah handler itu). `start` menampilkan dialog dan memanggil
+// finish(nilai) sekali saat dijawab; panggilan berikutnya diabaikan.
+export function modal<T>(start: (finish: (value: T) => void) => void): Promise<T> {
+    return new Promise(resolve => {
+        let done = false;
+        start(value => {
+            if (done) return;
+            done = true;
+            resolve(value);
+        });
     });
-    if (!done) loop.run();
-    return result;
+}
+
+// Lanjutkan dengan nilai yang mungkin masih Promise. Nilai biasa (tiruan dialog di tes, atau jalur yang
+// tidak perlu bertanya) diproses seketika sehingga hasilnya juga sinkron; Promise diproses setelah selesai.
+export function after<T, R>(value: Awaitable<T>, next: (value: T) => Awaitable<R>): Awaitable<R> {
+    return value instanceof Promise ? value.then(next) : next(value);
 }
 
 // Klik tombol mouse pada widget (pengganti sinyal button-press-event). `handler` menerima
@@ -95,3 +103,29 @@ export function pack(box: Gtk.Box, child: Gtk.Widget, expand = false): void {
 
 // Isi Gtk.Template dari berkas .ui yang dibundel sebagai teks (`import xml from './x.ui?raw'`).
 export const uiTemplate = (xml: string): Uint8Array => new TextEncoder().encode(xml);
+
+// Pixbuf → Gdk.Texture. Gtk.Picture.new_for_pixbuf() dan Gdk.Texture.new_for_pixbuf() sudah usang
+// (GTK 4.12/4.20); data piksel pixbuf (RGB/RGBA 8 bit, tanpa premultiply) disalin apa adanya.
+export function textureFromPixbuf(pixbuf: GdkPixbuf.Pixbuf): Gdk.Texture {
+    const format = pixbuf.get_has_alpha() ? Gdk.MemoryFormat.R8G8B8A8 : Gdk.MemoryFormat.R8G8B8;
+    return Gdk.MemoryTexture.new(pixbuf.get_width(), pixbuf.get_height(), format, pixbuf.read_pixel_bytes(), pixbuf.get_rowstride());
+}
+
+// Gdk.Texture → pixbuf RGBA, pengganti Gdk.pixbuf_get_from_texture() yang usang sejak GTK 4.12.
+export function pixbufFromTexture(texture: Gdk.Texture): GdkPixbuf.Pixbuf {
+    const downloader = Gdk.TextureDownloader.new(texture);
+    downloader.set_format(Gdk.MemoryFormat.R8G8B8A8);
+    const [bytes, stride] = downloader.download_bytes();
+    return GdkPixbuf.Pixbuf.new_from_bytes(bytes, GdkPixbuf.Colorspace.RGB, true, 8, texture.get_width(), texture.get_height(), stride);
+}
+
+// Saat dijalankan dari dist/ (belum dipasang), ikon aplikasi ada di dist/icons (disalin vite.config.ts),
+// bukan di tema hicolor sistem. Aman dipanggil berulang: jalur yang sudah ada tidak ditambahkan lagi.
+export function addBundledIcons(display: Gdk.Display): void {
+    let dir = Gio.File.new_for_uri(import.meta.url).get_parent();
+    if (dir && !dir.get_child('icons').query_exists(null)) dir = dir.get_parent();   // dari dist/chunks/
+    const icons = dir?.get_child('icons');
+    if (!icons?.query_exists(null)) return;
+    const theme = Gtk.IconTheme.get_for_display(display);
+    if (!theme.get_search_path()?.includes(icons.get_path()!)) theme.add_search_path(icons.get_path()!);
+}

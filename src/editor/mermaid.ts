@@ -24,7 +24,8 @@ import { mermaidRenderer, type DiagramTheme } from './mermaidrender.js';
 import { dbmlToMermaid } from '../markdown/dbml.js';
 import { setTagGroup, setTagRanges, type Range } from './tagsync.js';
 import { OverlaySlots } from './overlays.js';
-import { iterAtLine, onClick, removeChildren } from '../gtkutil.js';
+import { iterAtLine, onClick, removeChildren, textureFromPixbuf } from '../gtkutil.js';
+import { _ } from '../i18n.js';
 
 const GAP = 12;             // jarak di atas dan bawah diagram
 const NOTE_HEIGHT = 24;     // tinggi pesan "Merender…" / galat
@@ -70,7 +71,7 @@ export class MermaidLayer {
     onActivate: (line: number) => void = () => {};                        // diagram diklik sekali
     onZoom: (pixbuf: GdkPixbuf.Pixbuf, title: string) => void = () => {};  // diagram diklik dua kali
 
-    private theme: DiagramTheme = { dark: false, bg: '#ffffff', fg: '#333333', accent: '#4183c4', node: '#f3f4f4' };
+    private theme: DiagramTheme = { dark: false, bg: '#ffffff', fg: '#333333', accent: '#1c71d8', node: '#f3f4f4' };
     private cursor: [number, number] = [-1, -1];
     private signature = '';
     private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
@@ -295,7 +296,7 @@ export class MermaidLayer {
     }
 
     zoom(block: Block): void {
-        if (block.pixbuf) this.onZoom(block.pixbuf, block.kind === 'dbml' ? 'Diagram DBML' : 'Diagram Mermaid');
+        if (block.pixbuf) this.onZoom(block.pixbuf, block.kind === 'dbml' ? _('Diagram DBML') : _('Diagram Mermaid'));
     }
 
     // Bangun ulang isi widget sesuai status dan lebar kolom saat ini.
@@ -320,10 +321,10 @@ export class MermaidLayer {
             const h = Math.max(1, Math.round(pb.get_height() * scale));
             const scaled = (scale < 1 ? pb.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR) : null) ?? pb;
             // Gtk.Image di GTK 4 berukuran ikon; Picture tampil seukuran gambarnya.
-            const image = Gtk.Picture.new_for_pixbuf(scaled);
+            const image = Gtk.Picture.new_for_paintable(textureFromPixbuf(scaled));
             image.set_can_shrink(false);
             image.set_halign(Gtk.Align.START);
-            image.set_tooltip_text('Klik ganda untuk memperbesar');
+            image.set_tooltip_text(_('Klik ganda untuk memperbesar'));
             block.content.append(image);
             block.height = h;
         } else {

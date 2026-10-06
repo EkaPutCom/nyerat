@@ -51,6 +51,7 @@ import type { LineSpan } from './tagsync.js';
 import type { HighlightResult, Heading, Marker } from './highlighter.js';
 import type { Palette } from '../ui/theme.js';
 import { iterAtLine } from '../gtkutil.js';
+import { _, fmt } from '../i18n.js';
 
 const TEXT_WIDTH = 780;  // lebar kolom teks maksimum, dalam piksel
 
@@ -598,7 +599,7 @@ export class MarkdownView {
             try {
                 launcher!.launch_finish(result);
             } catch {
-                if (!this.destroyed) this.onMessage(`Tidak bisa membuka ${url}`);
+                if (!this.destroyed) this.onMessage(fmt(_('Tidak bisa membuka {url}'), { url }));
             }
         });
     }

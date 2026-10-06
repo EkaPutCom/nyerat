@@ -10,6 +10,7 @@ import {
     rpcPrompt, rpcSteer, rpcUiResponse, RunQueue, stageColumn, type HarnessAsk, type HarnessReply, type HarnessSpec, type LinkedNote, type PiSignal, type Run,
 } from './agent/harness.js';
 import type { WikiLink } from './markdown/wikilink.js';
+import { _, fmt } from './i18n.js';
 
 export interface HarnessProcess {
     write(line: string): boolean;   // satu perintah JSONL ke stdin; false bila stdin sudah tertutup atau gagal
@@ -167,7 +168,7 @@ export class Orchestrator {
     // Mengembalikan pesan galat atau null.
     start(boardFile: string, board: Board, at: Position, agent: string, project: string, folder: string, boardName: string): string | null {
         const spec = HARNESSES[agent];
-        if (!spec) return `harness "${agent}" tidak dikenal`;
+        if (!spec) return fmt(_('harness "{agent}" tidak dikenal'), { agent });
         const card = board.columns[at.column]?.cards[at.index];
         if (!card) return 'kartu tidak ditemukan';
         if (this.queue.active(boardFile, card.text)) return 'kartu ini sedang dikerjakan';
@@ -187,7 +188,7 @@ export class Orchestrator {
             board: boardFile, card: text, title: shortTitle(text), agent, project, folder,
             prompt: buildPrompt(assigned, project, boardName, notes), session: null,
         });
-        run.trace.add('turn', `${spec.label} untuk “${run.title}”`, `Folder proyek: ${folder}\n\n${run.prompt}`);
+        run.trace.add('turn', fmt(_('{agent} untuk “{title}”'), { agent: spec.label, title: run.title }), `${fmt(_('Folder proyek: {folder}'), { folder })}\n\n${run.prompt}`);
         this.enqueue(run);
         return null;
     }
@@ -201,7 +202,7 @@ export class Orchestrator {
         if (!GLib.file_test(previous.folder, GLib.FileTest.IS_DIR)) return `folder proyek tidak ada: ${previous.folder}`;
         // Log yang sama dipakai lagi supaya percakapan dengan harness terbaca utuh.
         const run = this.queue.add({ ...previous, prompt: text, session: previous.result.sessionId }, previous.trace);
-        run.trace.add('turn', 'Balasan Anda', text);
+        run.trace.add('turn', _('Balasan Anda'), text);
         this.enqueue(run);
         return null;
     }
@@ -216,10 +217,10 @@ export class Orchestrator {
             if ('value' in reply && reply.value.trim()) {
                 live.reader.restart();
                 if (!live.proc.write(rpcPrompt(reply.value.trim(), `nyerat-${++this.prompts}`))) return 'pi tidak lagi menerima masukan';
-                run.trace.add('turn', 'Jawaban Anda', reply.value.trim());
+                run.trace.add('turn', _('Jawaban Anda'), reply.value.trim());
             } else {
                 // Tidak dibalas: run selesai seperti biasa dengan jawaban terakhir pi.
-                run.trace.add('note', 'Diakhiri tanpa membalas');
+                run.trace.add('note', _('Diakhiri tanpa membalas'));
                 run.status = 'working';
                 run.ask = null;
                 live.proc.closeInput();
@@ -228,7 +229,7 @@ export class Orchestrator {
             }
         } else {
             if (!live.proc.write(rpcUiResponse(ask.id!, reply))) return 'pi tidak lagi menerima masukan';
-            run.trace.add('note', `Jawaban: ${describeReply(ask, reply)}`, ask.title);
+            run.trace.add('note', fmt(_('Jawaban: {reply}'), { reply: describeReply(ask, reply) }), ask.title);
         }
         run.status = 'working';
         run.ask = null;
@@ -243,7 +244,7 @@ export class Orchestrator {
         if (!text) return 'arahan kosong';
         if (!live?.proc || run.status !== 'working') return 'pi tidak sedang bekerja';
         if (!live.proc.write(rpcSteer(text))) return 'pi tidak lagi menerima masukan';
-        run.trace.add('turn', 'Arahan Anda', text);
+        run.trace.add('turn', _('Arahan Anda'), text);
         return null;
     }
 
@@ -269,7 +270,7 @@ export class Orchestrator {
         const spec = HARNESSES[run.agent];
         this.live.set(run.id, { reader: new PiReader(run.trace), proc: null, stopped: false, askTimer: 0 });
         if (run.status === 'working') this.launch(run);
-        else this.host.changed(run, `${spec.label} sedang mengerjakan kartu lain di ${run.project}; kartu ini menunggu giliran`);
+        else this.host.changed(run, fmt(_('{agent} sedang mengerjakan kartu lain di {project}; kartu ini menunggu giliran'), { agent: spec.label, project: run.project }));
     }
 
     private launch(run: Run): void {
@@ -277,15 +278,15 @@ export class Orchestrator {
         const live = this.live.get(run.id)!;
         const program = this.program(spec);
         if (!program) {
-            run.trace.add('error', `${spec.label} tidak ditemukan`, `Program "${spec.program}" tidak ada di PATH atau ~/.local/bin.`);
-            this.finish(run, 127, `program "${spec.program}" tidak ditemukan`);
+            run.trace.add('error', fmt(_('{agent} tidak ditemukan'), { agent: spec.label }), fmt(_('Program "{program}" tidak ada di PATH atau ~/.local/bin.'), { program: spec.program }));
+            this.finish(run, 127, fmt(_('program "{program}" tidak ditemukan'), { program: spec.program }));
             return;
         }
         const doing = this.editCard(run.board, run.card, (b, pos) => {
             const column = stageColumn(b, 'doing');
             return column < 0 || column === pos.column ? b : moveCard(b, pos, { column, index: Infinity });
         });
-        if (doing) run.trace.add('note', 'Kartu tidak dipindah', doing);
+        if (doing) run.trace.add('note', _('Kartu tidak dipindah'), doing);
         try {
             live.proc = this.spawn([program, ...spec.args(run.title, run.session)], run.folder, {
                 line: text => {
@@ -301,7 +302,7 @@ export class Orchestrator {
         }
         live.proc.write(rpcGetState());
         live.proc.write(rpcPrompt(run.prompt, `nyerat-${++this.prompts}`));
-        this.host.changed(run, `${spec.label} mulai mengerjakan “${run.title}”`);
+        this.host.changed(run, fmt(_('{agent} mulai mengerjakan “{title}”'), { agent: spec.label, title: run.title }));
     }
 
     private onSignal(run: Run, signal: PiSignal): void {
@@ -320,19 +321,19 @@ export class Orchestrator {
                     if (run.ask === ask) {
                         run.ask = null;
                         run.status = 'working';
-                        run.trace.add('note', 'Waktu menjawab habis', `${spec.label} memakai jawaban bawaannya untuk: ${ask.title}`);
+                        run.trace.add('note', _('Waktu menjawab habis'), fmt(_('{agent} memakai jawaban bawaannya untuk: {question}'), { agent: spec.label, question: ask.title }));
                         this.host.changed(run, null);
                     }
                     return GLib.SOURCE_REMOVE;
                 });
             }
-            this.host.changed(run, `${spec.label} menunggu jawaban: ${signal.ask.title}`);
+            this.host.changed(run, fmt(_('{agent} menunggu jawaban: {question}'), { agent: spec.label, question: signal.ask.title }));
             return;
         }
         // Giliran selesai: pertanyaan → tunggu balasan pengguna; selain itu tutup stdin dan biarkan harness keluar.
         if (!live.stopped && endsWithQuestion(live.reader.answer)) {
-            this.wait(run, { kind: 'question', id: null, title: `${spec.label} bertanya`, message: live.reader.answer, options: [], prefill: '', timeout: null });
-            this.host.changed(run, `${spec.label} bertanya tentang “${run.title}”`);
+            this.wait(run, { kind: 'question', id: null, title: fmt(_('{label} bertanya'), { label: spec.label }), message: live.reader.answer, options: [], prefill: '', timeout: null });
+            this.host.changed(run, fmt(_('{agent} bertanya tentang “{title}”'), { agent: spec.label, title: run.title }));
         } else live.proc.closeInput();
     }
 
@@ -358,7 +359,7 @@ export class Orchestrator {
                 const review = stageColumn(noted, 'review');
                 return run.result!.ok && review >= 0 && review !== pos.column ? moveCard(noted, pos, { column: review, index: Infinity }) : noted;
             });
-            if (error) run.trace.add('note', 'Papan tidak diperbarui', error);
+            if (error) run.trace.add('note', _('Papan tidak diperbarui'), error);
         }
         const message = live.stopped ? `${spec.label} dihentikan: “${run.title}”`
             : run.result.ok ? `${spec.label} selesai: “${run.title}”` : `${spec.label} gagal: ${run.result.error}`;

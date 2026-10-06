@@ -61,7 +61,9 @@ export function chatTests(c: GuiContext): void {
     test('panel dibuka lewat opsi chat; pengaturan tersimpan', () => {
         ok(!w.chatSplit.show_sidebar, 'awalnya tertutup');
         w.setOption('chat', true);   // aksi aplikasi sudah diarahkan ke jendela tes folder, jadi lewat jendela ini langsung
-        pump();
+        // Tunggu panel selesai ditata: popover pengaturan (tes berikutnya) dari tombol yang belum punya
+        // posisi di monitor memicu Gdk-CRITICAL gdk_monitor_get_geometry.
+        for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
         ok(w.chatSplit.show_sidebar, 'tidak terbuka');
         eq(w.settings.chat, true);
     });
@@ -253,7 +255,7 @@ export function chatTests(c: GuiContext): void {
     test('model yang dipilih disimpan ke pengaturan', () => {
         panel.setModel('deepseek-v4-pro');
         eq(panel.model, 'deepseek-v4-pro');
-        panel.modelCombo.set_active_id('deepseek-flash');
+        panel.modelDrop.set_selected(0);  // deepseek-flash
         eq(w.settings.chatModel, 'deepseek-flash');
     });
 

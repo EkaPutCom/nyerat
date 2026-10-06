@@ -28,8 +28,9 @@ import { cellMarkup, escapeMarkup, NOTE_URI, type MarkupColors } from '../markdo
 import { parseWikiLink, wikiLinksIn, type WikiLink } from '../markdown/wikilink.js';
 import { confirmDialog, editCardDialog, promptDialog, type CardDraft } from './dialogs.js';
 import type { Palette } from './theme.js';
-import { childrenOf, onClick, onKeyPress, pack, removeChildren } from '../gtkutil.js';
+import { after, childrenOf, onClick, onKeyPress, pack, removeChildren, type Awaitable } from '../gtkutil.js';
 import { popupMenu, separator, type MenuEntry } from './menu.js';
+import { _, fmt, pgettext } from '../i18n.js';
 
 const COLUMN_WIDTH = 290;
 const DRAG_THRESHOLD = 6;     // piksel penunjuk bergerak sebelum klik dianggap menyeret
@@ -37,14 +38,19 @@ const EDGE = 48;              // jarak dari tepi (piksel) yang memicu gulir otom
 const SCROLL_SPEED = 14;
 const TAG_COLORS = 8;
 const RUN_ICON: Record<CardRunStatus, string> = { queued: '◌', working: '●', waiting: '⏸', done: '✓', failed: '✕', stopped: '■' };
-const RUN_LABEL: Record<CardRunStatus, string> = { queued: 'antre', working: 'bekerja', waiting: 'menunggu jawaban', done: 'selesai', failed: 'gagal', stopped: 'dihentikan' };
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const RUN_LABEL: Record<CardRunStatus, string> = { queued: _('antre'), working: _('bekerja'), waiting: _('menunggu jawaban'), done: _('selesai'), failed: _('gagal'), stopped: _('dihentikan') };
+// Singkatan bulan untuk label tenggat; konteks gettext karena "Mei"/"Jan" sendirian ambigu bagi penerjemah.
+const MONTHS = (): string[] => [
+    pgettext('bulan singkat', 'Jan'), pgettext('bulan singkat', 'Feb'), pgettext('bulan singkat', 'Mar'), pgettext('bulan singkat', 'Apr'),
+    pgettext('bulan singkat', 'Mei'), pgettext('bulan singkat', 'Jun'), pgettext('bulan singkat', 'Jul'), pgettext('bulan singkat', 'Agu'),
+    pgettext('bulan singkat', 'Sep'), pgettext('bulan singkat', 'Okt'), pgettext('bulan singkat', 'Nov'), pgettext('bulan singkat', 'Des'),
+];
 
-// Dialog bisa diganti (misalnya di tes) karena dialog asli menahan program sampai ditutup.
+// Dialog bisa diganti (misalnya di tes dengan jawaban langsung); dialog asli menjawab lewat Promise.
 export interface BoardDialogs {
-    editCard(parent: Gtk.Window | null, card: CardDraft, title?: string, listNotes?: () => string[]): CardDraft | null;
-    prompt(parent: Gtk.Window | null, options: { title: string; label: string; value?: string }): string | null;
-    confirm(parent: Gtk.Window | null, message: string, detail?: string): boolean;
+    editCard(parent: Gtk.Window | null, card: CardDraft, title?: string, listNotes?: () => string[]): Awaitable<CardDraft | null>;
+    prompt(parent: Gtk.Window | null, options: { title: string; label: string; value?: string }): Awaitable<string | null>;
+    confirm(parent: Gtk.Window | null, message: string, detail?: string): Awaitable<boolean>;
 }
 
 // Penugasan kartu ke harness eksternal (diisi jendela). Kartu dikenali dari teksnya.
@@ -98,7 +104,7 @@ export class KanbanBoard {
 
     private board: Board = newBoard([]);
     private readonly row: Gtk.Box;
-    private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#4183c4', mark: '#fff3a3' };
+    private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#1c71d8', mark: '#fff3a3' };
     private adding: Adding = null;
     private renderQueued = false;
     private press: PressState | null = null;
@@ -192,7 +198,7 @@ export class KanbanBoard {
         title.add_css_class('kanban-column-title');
         const titleBox = new Gtk.Box();
         titleBox.append(title);
-        titleBox.set_tooltip_text('Klik ganda untuk mengganti nama');
+        titleBox.set_tooltip_text(_('Klik ganda untuk mengganti nama'));
         onClick(titleBox, count => {
             if (count !== 2) return false;
             this.renameColumnPrompt(c);
@@ -200,7 +206,7 @@ export class KanbanBoard {
         });
         const count = new Gtk.Label({ label: String(column.cards.length) });
         count.add_css_class('kanban-count');
-        const more = new Gtk.Button({ label: '⋯', has_frame: false, tooltip_text: 'Menu daftar' });
+        const more = new Gtk.Button({ label: '⋯', has_frame: false, tooltip_text: _('Menu daftar') });
         more.connect('clicked', () => popupMenu(more, this.columnMenu(c)));
         const header = new Gtk.Box({ spacing: 6 });
         pack(header, titleBox, true);
@@ -228,7 +234,7 @@ export class KanbanBoard {
         widget.add_css_class('kanban-card');
         if (card.done) widget.add_css_class('kanban-card-done');
 
-        const check = new Gtk.CheckButton({ active: card.done === true, valign: Gtk.Align.START, tooltip_text: 'Tandai selesai' });
+        const check = new Gtk.CheckButton({ active: card.done === true, valign: Gtk.Align.START, tooltip_text: _('Tandai selesai') });
         check.connect('toggled', () => this.commit(toggleDone(this.board, { column: c, index: i })));
         const label = new Gtk.Label({ use_markup: true, xalign: 0, wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR, hexpand: true, width_chars: 10 });
         label.add_css_class('kanban-card-text');
@@ -251,7 +257,7 @@ export class KanbanBoard {
         if (noteLinks.length) inner.append(linkBox);
         for (const link of noteLinks) {
             const ref = `${link.target}${link.heading ? `#${link.heading}` : ''}`;
-            const label = new Gtk.Label({ xalign: 0, ellipsize: Pango.EllipsizeMode.END, tooltip_text: `Buka catatan ${ref} (ikut menjadi konteks agent)` });
+            const label = new Gtk.Label({ xalign: 0, ellipsize: Pango.EllipsizeMode.END, tooltip_text: fmt(_('Buka catatan {ref} (ikut menjadi konteks agent)'), { ref }) });
             label.add_css_class('kanban-note-link');
             label.set_markup(`<a href="${escapeMarkup(NOTE_URI + encodeURIComponent(ref))}">↗ ${escapeMarkup(link.alias || ref)}</a>`);
             label.connect('activate-link', (_l, uri: string) => this.activateNote(uri));
@@ -289,7 +295,7 @@ export class KanbanBoard {
         };
         if (agent) {
             const label = chip(`${status ? RUN_ICON[status] : '◇'} ${agent}${status ? ` · ${RUN_LABEL[status]}` : ''}`, 'kanban-agent', `kanban-agent-${status ?? 'idle'}`);
-            label.set_tooltip_text(status === 'waiting' ? `${agent} menunggu jawaban Anda: klik kanan kartu → Jawab ${agent}…` : status ? `${agent}: ${RUN_LABEL[status]} (klik kanan kartu untuk log)` : `Ditugaskan ke ${agent}; klik kanan kartu → Kerjakan dengan ${agent}`);
+            label.set_tooltip_text(status === 'waiting' ? fmt(_('{agent} menunggu jawaban Anda: klik kanan kartu → Jawab {agent}…'), { agent }) : status ? fmt(_('{agent}: {status} (klik kanan kartu untuk log)'), { agent, status: RUN_LABEL[status] }) : fmt(_('Ditugaskan ke {agent}; klik kanan kartu → Kerjakan dengan {agent}'), { agent }));
         }
         for (const tag of tags) chip(`#${tag}`, `kanban-tag-${this.tagColor(tag)}`);
         if (due) chip(`📅 ${this.formatDue(due)}`, 'kanban-due', `kanban-due-${dueStatus(due, this.today())}`);
@@ -308,7 +314,7 @@ export class KanbanBoard {
     formatDue(due: string): string {
         const [y, m, d] = due.split('-').map(Number);
         const sameYear = this.today().startsWith(`${y}-`);
-        return `${d} ${MONTHS[m - 1]}${sameYear ? '' : ` ${y}`}`;
+        return `${d} ${MONTHS()[m - 1]}${sameYear ? '' : ` ${y}`}`;
     }
 
     // ---------- Tambah kartu dan daftar ----------
@@ -321,9 +327,9 @@ export class KanbanBoard {
             cancel();
             return true;
         });
-        const ok = new Gtk.Button({ label: 'Tambah' });
+        const ok = new Gtk.Button({ label: _('Tambah') });
         ok.connect('clicked', () => { if (entry.text.trim()) add(entry.text); });
-        const close = new Gtk.Button({ label: '✕', has_frame: false, tooltip_text: 'Batal (Esc)' });
+        const close = new Gtk.Button({ label: '✕', has_frame: false, tooltip_text: _('Batal (Esc)') });
         close.connect('clicked', cancel);
         const box = new Gtk.Box({ spacing: 4 });
         pack(box, entry, true);
@@ -333,7 +339,7 @@ export class KanbanBoard {
     }
 
     private buildAddCard(c: number): Gtk.Button {
-        const button = new Gtk.Button({ label: '+ Tambah kartu', has_frame: false, halign: Gtk.Align.FILL });
+        const button = new Gtk.Button({ label: _('+ Tambah kartu'), has_frame: false, halign: Gtk.Align.FILL });
         (button.get_child() as Gtk.Label).xalign = 0;
         button.add_css_class('kanban-add');
         button.connect('clicked', () => this.showAddCard(c));
@@ -343,7 +349,7 @@ export class KanbanBoard {
     private buildAddList(): Gtk.Box {
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, width_request: COLUMN_WIDTH, valign: Gtk.Align.START });
         box.add_css_class('kanban-add-list');
-        const button = new Gtk.Button({ label: '+ Tambah daftar', has_frame: false });
+        const button = new Gtk.Button({ label: _('+ Tambah daftar'), has_frame: false });
         button.connect('clicked', () => this.showAddList());
         const { box: entryBox, entry } = this.entryRow('Nama daftar…', text => this.commit(addColumn(this.board, text)), () => this.hideAdd());
         entry.set_name('kanban-entry-list');
@@ -357,11 +363,12 @@ export class KanbanBoard {
 
     // Kartu baru diisi lewat dialog yang sama dengan sunting kartu.
     showAddCard(column: number): void {
-        const draft = this.dialogs.editCard(this.parent, { text: '', notes: [] }, 'Tambah Kartu', this.listNotes ?? undefined);
-        if (!draft?.text) return;
-        const index = this.board.columns[column]?.cards.length ?? 0;
-        const added = addCard(this.board, column, draft.text);
-        this.commit(updateCard(added, { column, index }, { notes: draft.notes }));
+        void after(this.dialogs.editCard(this.parent, { text: '', notes: [] }, _('Tambah Kartu'), this.listNotes ?? undefined), draft => {
+            if (!draft?.text) return;
+            const index = this.board.columns[column]?.cards.length ?? 0;
+            const added = addCard(this.board, column, draft.text);
+            this.commit(updateCard(added, { column, index }, { notes: draft.notes }));
+        });
     }
 
     showAddList(): void {
@@ -393,22 +400,28 @@ export class KanbanBoard {
     editCard(column: number, index: number): void {
         const card = this.board.columns[column]?.cards[index];
         if (!card) return;
-        const result = this.dialogs.editCard(this.parent, { text: card.text, notes: card.notes }, undefined, this.listNotes ?? undefined);
-        if (result?.text) this.commit(updateCard(this.board, { column, index }, { text: result.text, notes: result.notes }));
+        void after(this.dialogs.editCard(this.parent, { text: card.text, notes: card.notes }, undefined, this.listNotes ?? undefined), result => {
+            // Papan bisa berubah selama dialog terbuka; kartu yang sama dicari lagi lewat posisinya.
+            if (result?.text && this.board.columns[column]?.cards[index]?.text === card.text)
+                this.commit(updateCard(this.board, { column, index }, { text: result.text, notes: result.notes }));
+        });
     }
 
     renameColumnPrompt(column: number): void {
         const current = this.board.columns[column]?.title;
         if (current === undefined) return;
-        const name = this.dialogs.prompt(this.parent, { title: 'Ganti Nama Daftar', label: 'Nama daftar', value: current });
-        if (name) this.commit(renameColumn(this.board, column, name));
+        void after(this.dialogs.prompt(this.parent, { title: _('Ganti Nama Daftar'), label: _('Nama daftar'), value: current }), name => {
+            if (name && this.board.columns[column]?.title === current) this.commit(renameColumn(this.board, column, name));
+        });
     }
 
     deleteColumnConfirm(column: number): void {
         const col = this.board.columns[column];
         if (!col) return;
-        const detail = col.cards.length ? `${col.cards.length} kartu di dalamnya ikut terhapus.` : undefined;
-        if (this.dialogs.confirm(this.parent, `Hapus daftar “${col.title}”?`, detail)) this.commit(deleteColumn(this.board, column));
+        const detail = col.cards.length ? fmt(_('{count} kartu di dalamnya ikut terhapus.'), { count: col.cards.length }) : undefined;
+        void after(this.dialogs.confirm(this.parent, fmt(_('Hapus daftar “{title}”?'), { title: col.title }), detail), yes => {
+            if (yes && this.board.columns[column]?.title === col.title) this.commit(deleteColumn(this.board, column));
+        });
     }
 
     // ---------- Menu ----------
@@ -422,24 +435,24 @@ export class KanbanBoard {
                 : { label: target.title, run: () => this.commit(moveCard(this.board, at, { column: t, index: Infinity })) })
             .filter((e): e is MenuEntry => e !== null);
         return [
-            { label: 'Sunting…', run: () => this.editCard(column, index) },
-            { label: card.done ? 'Tandai Belum Selesai' : 'Tandai Selesai', run: () => this.commit(toggleDone(this.board, at)) },
-            { label: 'Pindahkan ke', enabled: this.board.columns.length > 1, submenu: move },
-            { label: 'Naik', enabled: index > 0, run: () => this.commit(moveCard(this.board, at, { column, index: index - 1 })) },
-            { label: 'Turun', enabled: index < col.cards.length - 1, run: () => this.commit(moveCard(this.board, at, { column, index: index + 1 })) },
+            { label: _('Sunting…'), run: () => this.editCard(column, index) },
+            { label: card.done ? _('Tandai Belum Selesai') : _('Tandai Selesai'), run: () => this.commit(toggleDone(this.board, at)) },
+            { label: _('Pindahkan ke'), enabled: this.board.columns.length > 1, submenu: move },
+            { label: _('Naik'), enabled: index > 0, run: () => this.commit(moveCard(this.board, at, { column, index: index - 1 })) },
+            { label: _('Turun'), enabled: index < col.cards.length - 1, run: () => this.commit(moveCard(this.board, at, { column, index: index + 1 })) },
             ...(this.harness ? [separator(), ...this.harness.menu(card, at)] : []),
             separator(),
-            { label: 'Hapus', run: () => this.commit(deleteCard(this.board, at)) },
+            { label: _('Hapus'), run: () => this.commit(deleteCard(this.board, at)) },
         ];
     }
 
     columnMenu(column: number): MenuEntry[] {
         return [
-            { label: 'Ganti Nama…', run: () => this.renameColumnPrompt(column) },
-            { label: 'Geser ke Kiri', enabled: column > 0, run: () => this.commit(moveColumn(this.board, column, column - 1)) },
-            { label: 'Geser ke Kanan', enabled: column < this.board.columns.length - 1, run: () => this.commit(moveColumn(this.board, column, column + 1)) },
+            { label: _('Ganti Nama…'), run: () => this.renameColumnPrompt(column) },
+            { label: _('Geser ke Kiri'), enabled: column > 0, run: () => this.commit(moveColumn(this.board, column, column - 1)) },
+            { label: _('Geser ke Kanan'), enabled: column < this.board.columns.length - 1, run: () => this.commit(moveColumn(this.board, column, column + 1)) },
             separator(),
-            { label: 'Hapus Daftar…', run: () => this.deleteColumnConfirm(column) },
+            { label: _('Hapus Daftar…'), run: () => this.deleteColumnConfirm(column) },
         ];
     }
 

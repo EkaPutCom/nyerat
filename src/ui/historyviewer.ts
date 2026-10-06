@@ -10,10 +10,11 @@ import { commitContent, commitDiff, commitFile, workingDiff, type TextResult } f
 import { parseDiff, type Commit, type DiffLine } from '../gitlog.js';
 import { replaceAllText } from '../editor/view.js';
 import { iterAtLine, onKeyPress, pack } from '../gtkutil.js';
+import { _, fmt } from '../i18n.js';
 
 const DIFF_COLORS = {
     light: { add: '#dafbe1', del: '#ffebe9', hunk: '#0969da' },
-    dark: { add: '#17331f', del: '#3d1a1c', hunk: '#6cb6ff' },
+    dark: { add: '#17331f', del: '#3d1a1c', hunk: '#78aeed' },
 };
 
 // Tampilan diff bersama (riwayat Git dan usulan perubahan agent): tag warna di buffer, lalu isi baris berjenis.
@@ -55,7 +56,7 @@ export function createDiffView(): Gtk.TextView {
 }
 
 export class HistoryViewer {
-    readonly window: Gtk.Window;
+    readonly window: Adw.Window;
     readonly diffView: Gtk.TextView;
     readonly contentView: Gtk.TextView;
     readonly stack: Gtk.Stack;
@@ -67,16 +68,15 @@ export class HistoryViewer {
     onCommitted: () => void = () => {};
 
     constructor(parent: Gtk.Window | null, file: string, readonly commit: Commit | null, dark: boolean) {
-        this.window = new Gtk.Window({
+        this.window = new Adw.Window({
             transient_for: parent, default_width: 860, default_height: 620,
         });
-        const title = commit ? commit.subject || '(tanpa pesan)' : 'Perubahan belum di-commit';
+        const title = commit ? commit.subject || _('(tanpa pesan)') : _('Perubahan belum di-commit');
         const detail = commit
             ? `${commit.short} · ${commit.author} · ${GLib.DateTime.new_from_unix_local(commit.time).format('%d %b %Y %H:%M')}`
-            : `${GLib.path_get_basename(file)} · dibandingkan dengan commit terakhir`;
+            : fmt(_('{name} · dibandingkan dengan commit terakhir'), { name: GLib.path_get_basename(file) });
         // Judul header dipakai StackSwitcher, jadi info commit ditaruh di atas isi.
         const header = new Adw.HeaderBar();
-        this.window.set_titlebar(header);
         this.window.set_title(title);
         const subject = new Gtk.Label({ label: title, xalign: 0, wrap: true });
         subject.set_markup(`<b>${GLib.markup_escape_text(title, -1)}</b>`);
@@ -89,10 +89,10 @@ export class HistoryViewer {
         this.diffView = this.createView();
         this.contentView = this.createView();
         this.stack = new Gtk.Stack({ transition_type: Gtk.StackTransitionType.CROSSFADE, transition_duration: 100 });
-        this.stack.add_titled(this.scrolled(this.diffView), 'diff', 'Perubahan');
+        this.stack.add_titled(this.scrolled(this.diffView), 'diff', _('Perubahan'));
         // Perubahan yang belum di-commit tidak punya "versi"; isi terbarunya sudah ada di editor.
         if (commit) {
-            this.stack.add_titled(this.scrolled(this.contentView), 'content', 'Isi versi ini');
+            this.stack.add_titled(this.scrolled(this.contentView), 'content', _('Isi versi ini'));
             header.set_title_widget(new Gtk.StackSwitcher({ stack: this.stack }));
         }
         const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
@@ -100,8 +100,8 @@ export class HistoryViewer {
         body.append(new Gtk.Separator());
         pack(body, this.stack, true);
 
-        this.messageEntry = new Gtk.Entry({ placeholder_text: 'Pesan commit', hexpand: true });
-        this.commitButton = new Gtk.Button({ label: 'Commit file ini' });
+        this.messageEntry = new Gtk.Entry({ placeholder_text: _('Pesan commit'), hexpand: true });
+        this.commitButton = new Gtk.Button({ label: _('Commit file ini') });
         this.commitButton.add_css_class('suggested-action');
         this.status = new Gtk.Label({ xalign: 0, wrap: true, visible: false, margin_start: 12, margin_end: 12, margin_bottom: 8 });
         if (!commit) {
@@ -114,7 +114,9 @@ export class HistoryViewer {
             this.commitButton.connect('clicked', () => this.doCommit(file));
             this.messageEntry.connect('activate', () => this.doCommit(file));
         }
-        this.window.set_child(body);
+        const view = new Adw.ToolbarView({ content: body });
+        view.add_top_bar(header);
+        this.window.set_content(view);
 
         // Jendela dihancurkan (GTK 4 tidak memancarkan "destroy" selama objeknya dipegang JavaScript).
         this.window.connect('unrealize', () => { this.closed = true; });
@@ -143,7 +145,7 @@ export class HistoryViewer {
         if (this.closed) return;
         if (!result.ok) {
             this.commitButton.set_sensitive(true);
-            return this.showStatus(`Commit gagal: ${result.message}`);
+            return this.showStatus(fmt(_('Commit gagal: {message}'), { message: result.message }));
         }
         this.onCommitted();
         this.window.destroy();
@@ -176,17 +178,17 @@ export class HistoryViewer {
     private showDiff(result: TextResult): void {
         if (this.closed) return;
         const buffer = this.diffView.buffer;
-        if (!result.ok) return buffer.set_text(`Gagal membaca perubahan:\n${result.message}`, -1);
+        if (!result.ok) return buffer.set_text(fmt(_('Gagal membaca perubahan:\n{message}'), { message: result.message }), -1);
         const lines = parseDiff(result.text);
         if (!lines.length) return buffer.set_text(this.commit
-            ? 'Tidak ada perubahan isi pada commit ini (misalnya hanya ganti nama)'
-            : 'Tidak ada perubahan yang belum di-commit', -1);
+            ? _('Tidak ada perubahan isi pada commit ini (misalnya hanya ganti nama)')
+            : _('Tidak ada perubahan yang belum di-commit'), -1);
         fillDiff(this.diffView, lines);
     }
 
     private showContent(result: TextResult): void {
         if (this.closed) return;
         replaceAllText(this.contentView, () =>
-            this.contentView.buffer.set_text(result.ok ? result.text : `Gagal membaca isi file:\n${result.message}`, -1));
+            this.contentView.buffer.set_text(result.ok ? result.text : fmt(_('Gagal membaca isi file:\n{message}'), { message: result.message }), -1));
     }
 }

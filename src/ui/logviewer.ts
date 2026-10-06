@@ -7,9 +7,10 @@ import Gdk from 'gi://Gdk?version=4.0';
 import GLib from 'gi://GLib';
 import { AgentTrace, type TraceEvent, type TraceKind } from '../agent/trace.js';
 import { onKeyPress, pack } from '../gtkutil.js';
+import { _, fmt } from '../i18n.js';
 
 const KIND_ICON: Record<TraceKind, string> = { turn: '▶', round: '◆', reasoning: '💭', text: '✎', tool: '🔧', usage: '∑', note: '■', error: '⚠' };
-const KIND_FILTER: [string, TraceKind[]][] = [['Semua', []], ['Alat', ['tool']], ['Penalaran', ['reasoning']], ['Model', ['round', 'text']]];
+const KIND_FILTER = (): [string, TraceKind[]][] => [[_('Semua'), []], [_('Alat'), ['tool']], [_('Penalaran'), ['reasoning']], [_('Model'), ['round', 'text']]];
 
 interface Row {
     box: Gtk.Box;
@@ -19,7 +20,7 @@ interface Row {
 }
 
 export class LogViewer {
-    readonly window: Gtk.Window;
+    readonly window: Adw.Window;
     readonly list: Gtk.Box;
     private readonly scroller: Gtk.ScrolledWindow;
     private readonly summary: Gtk.Label;
@@ -29,21 +30,20 @@ export class LogViewer {
     private stick = true;
     private stickIdle = 0;
 
-    constructor(parent: Gtk.Window | null, private readonly trace: AgentTrace, title = 'Log agent') {
-        this.window = new Gtk.Window({ transient_for: parent, default_width: 760, default_height: 640, title });
+    constructor(parent: Gtk.Window | null, private readonly trace: AgentTrace, title = _('Log agent')) {
+        this.window = new Adw.Window({ transient_for: parent, default_width: 760, default_height: 640, title });
         const header = new Adw.HeaderBar();
-        this.window.set_titlebar(header);
 
-        const copy = new Gtk.Button({ label: 'Salin semua', tooltip_text: 'Salin seluruh log sebagai teks' });
+        const copy = new Gtk.Button({ label: _('Salin semua'), tooltip_text: _('Salin seluruh log sebagai teks') });
         copy.connect('clicked', () => this.window.get_clipboard().set(this.trace.text()));
-        const clear = new Gtk.Button({ label: 'Bersihkan', tooltip_text: 'Kosongkan tampilan log (percakapan tidak terpengaruh)' });
+        const clear = new Gtk.Button({ label: _('Bersihkan'), tooltip_text: _('Kosongkan tampilan log (percakapan tidak terpengaruh)') });
         clear.connect('clicked', () => this.trace.clear());
         header.pack_start(copy);
         header.pack_start(clear);
 
         const filters = new Gtk.Box({ spacing: 4, margin_start: 10, margin_end: 10, margin_top: 8, margin_bottom: 4 });
         let first: Gtk.ToggleButton | null = null;
-        for (const [label, kinds] of KIND_FILTER) {
+        for (const [label, kinds] of KIND_FILTER()) {
             const button = new Gtk.ToggleButton({ label, active: !first });
             if (first) button.set_group(first); else first = button;
             button.connect('toggled', () => { if (button.active) { this.filter = kinds; this.applyFilter(); } });
@@ -72,7 +72,9 @@ export class LogViewer {
         body.append(filters);
         body.append(new Gtk.Separator());
         pack(body, this.scroller, true);
-        this.window.set_child(body);
+        const view = new Adw.ToolbarView({ content: body });
+        view.add_top_bar(header);
+        this.window.set_content(view);
 
         this.trace.onChange = () => this.queueRefresh();
         this.window.connect('unrealize', () => this.dispose());
@@ -140,7 +142,7 @@ export class LogViewer {
         this.applyFilter();
         const tools = events.filter(e => e.kind === 'tool').length;
         const rounds = events.filter(e => e.kind === 'round').length;
-        this.summary.set_text(events.length ? `${rounds} putaran model · ${tools} panggilan alat` : 'Belum ada kegiatan. Kirim pertanyaan ke Asisten.');
+        this.summary.set_text(events.length ? fmt(_('{rounds} putaran model · {tools} panggilan alat'), { rounds, tools }) : _('Belum ada kegiatan. Kirim pertanyaan ke Asisten.'));
     }
 
     private applyFilter(): void {

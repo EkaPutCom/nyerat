@@ -22,7 +22,8 @@ import GLib from 'gi://GLib';
 import type { ImageRef } from './highlighter.js';
 import { setTagGroup, type Range } from './tagsync.js';
 import { OverlaySlots } from './overlays.js';
-import { iterAtLine, onClick, removeChildren } from '../gtkutil.js';
+import { iterAtLine, onClick, removeChildren, textureFromPixbuf } from '../gtkutil.js';
+import { _, fmt } from '../i18n.js';
 
 const MAX_HEIGHT = 480;  // tinggi maksimum gambar, dalam piksel
 const GAP = 12;          // jarak di atas dan bawah gambar
@@ -154,12 +155,12 @@ export class ImageLayer {
     // Gambar ke-`index` di baris `line` dalam ukuran penuh (bukan yang diperkecil untuk tampilan).
     imageAt(line: number, index = 0): ImageLookup {
         const item = this.blocks.find(b => b.line === line)?.items[index];
-        if (!item) return { ok: false, reason: 'Tidak ada gambar di baris ini' };
+        if (!item) return { ok: false, reason: _('Tidak ada gambar di baris ini') };
         if (item.entry?.status === 'ok' && item.entry.pixbuf) {
             const name = item.uri.split('/').pop() ?? item.uri;
             return { ok: true, pixbuf: item.entry.pixbuf, title: item.alt || GLib.uri_unescape_string(name, null) || name };
         }
-        return { ok: false, reason: item.entry?.status === 'error' ? 'Gambar tidak bisa dimuat' : 'Gambar belum selesai dimuat' };
+        return { ok: false, reason: item.entry?.status === 'error' ? _('Gambar tidak bisa dimuat') : _('Gambar belum selesai dimuat') };
     }
 
     // images dari highlighter.ts
@@ -253,14 +254,14 @@ export class ImageLayer {
                 const h = Math.max(1, Math.round(pb.get_height() * scale));
                 const scaled = (scale < 1 ? pb.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR) : null) ?? pb;
                 // Gtk.Image di GTK 4 berukuran ikon; Picture tampil seukuran gambarnya.
-                widget = Gtk.Picture.new_for_pixbuf(scaled);
+                widget = Gtk.Picture.new_for_paintable(textureFromPixbuf(scaled));
                 (widget as Gtk.Picture).set_can_shrink(false);
-                widget.set_tooltip_text(`${item.alt || item.uri}\nKlik ganda untuk memperbesar`);
+                widget.set_tooltip_text(fmt(_('{name}\nKlik ganda untuk memperbesar'), { name: item.alt || item.uri }));
                 height += h;
             } else {
                 const text = item.entry?.status === 'error'
-                    ? `⚠ Gambar tidak bisa dimuat: ${item.alt || GLib.uri_unescape_string(item.uri, null) || item.uri}`
-                    : `Memuat gambar ${item.alt}…`;
+                    ? fmt(_('⚠ Gambar tidak bisa dimuat: {name}'), { name: item.alt || GLib.uri_unescape_string(item.uri, null) || item.uri })
+                    : fmt(_('Memuat gambar {name}…'), { name: item.alt });
                 // Tanpa wrap: widget di dalam TextView hanya diberi lebar minimum,
                 // sehingga label yang dibungkus akan terpotong per kata.
                 widget = new Gtk.Label({ label: text, xalign: 0 });

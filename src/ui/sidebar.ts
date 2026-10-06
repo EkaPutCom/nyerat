@@ -4,6 +4,7 @@
 
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
+import { _ } from '../i18n.js';
 
 export type SidebarPage = 'files' | 'outline' | 'history';
 
@@ -15,9 +16,9 @@ export class Sidebar {
 
     constructor(files: Gtk.Widget, outline: Gtk.Widget, history: Gtk.Widget) {
         this.stack = new Gtk.Stack({ transition_type: Gtk.StackTransitionType.CROSSFADE, transition_duration: 100, vexpand: true });
-        this.stack.add_titled(files, 'files', 'Berkas');
-        this.stack.add_titled(outline, 'outline', 'Outline');
-        this.stack.add_titled(history, 'history', 'Riwayat');
+        this.stack.add_titled(files, 'files', _('Berkas'));
+        this.stack.add_titled(outline, 'outline', _('Outline'));
+        this.stack.add_titled(history, 'history', _('Riwayat'));
         this.stack.connect('notify::visible-child-name', () => this.onPageChanged(this.page));
 
         const switcher = new Gtk.StackSwitcher({ stack: this.stack, halign: Gtk.Align.CENTER, margin_top: 10, margin_bottom: 10, margin_start: 4, margin_end: 4 });

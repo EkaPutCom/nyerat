@@ -30,6 +30,7 @@ import { escapeMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from './theme.js';
 import { childrenOf, onKeyPress, pack, uiTemplate } from '../gtkutil.js';
 import template from './chat.ui?raw';
+import { _, fmt } from '../i18n.js';
 
 // Yang perlu diketahui panel dari jendela.
 export interface ChatHost {
@@ -45,23 +46,27 @@ export interface ChatHost {
 }
 
 const SOURCE_TEXT: Record<KeySource, string> = {
-    env: 'Memakai key dari variabel lingkungan DEEPSEEK_API_KEY.',
-    keyring: 'Key tersimpan di keyring sistem.',
-    file: 'Key tersimpan di ~/.config/nyerat/deepseek.key (keyring tidak tersedia).',
+    env: _('Memakai key dari variabel lingkungan DEEPSEEK_API_KEY.'),
+    keyring: _('Key tersimpan di keyring sistem.'),
+    file: _('Key tersimpan di ~/.config/nyerat/deepseek.key (keyring tidak tersedia).'),
 };
 
 const SUGGESTIONS = [
-    'Ringkas dokumen ini dalam beberapa poin',
-    'Apa saja yang belum selesai atau belum sinkron di folder ini?',
-    'Susun rencana langkah berikutnya dari catatan saya',
+    _('Ringkas dokumen ini dalam beberapa poin'),
+    _('Apa saja yang belum selesai atau belum sinkron di folder ini?'),
+    _('Susun rencana langkah berikutnya dari catatan saya'),
 ];
 
-const KIND_LABEL = { map: 'Peta', active: 'Dokumen', selection: 'Pilihan', mention: 'Lampiran', excerpt: 'Potongan' } as const;
+const KIND_LABEL = { map: _('Peta'), active: _('Dokumen'), selection: _('Pilihan'), mention: _('Lampiran'), excerpt: _('Potongan') };
 
 const fmtTokens = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1).replace('.', ',')} rb` : `${n}`;
 
-const usageText = (u: Usage, toolCalls: number, applied = 0): string =>
-    `${fmtTokens(u.prompt)} masuk${u.cached ? ` (${fmtTokens(u.cached)} dari cache)` : ''} · ${fmtTokens(u.completion)} keluar${toolCalls ? ` · ${toolCalls} penelusuran` : ''}${applied ? ` · ${applied} perubahan diterapkan` : ''}`;
+const usageText = (u: Usage, toolCalls: number, applied = 0): string => [
+    fmt(u.cached ? _('{prompt} masuk ({cached} dari cache)') : _('{prompt} masuk'), { prompt: fmtTokens(u.prompt), cached: fmtTokens(u.cached) }),
+    fmt(_('{completion} keluar'), { completion: fmtTokens(u.completion) }),
+    ...toolCalls ? [fmt(_('{count} penelusuran'), { count: toolCalls })] : [],
+    ...applied ? [fmt(_('{count} perubahan diterapkan'), { count: applied })] : [],
+].join(' · ');
 
 interface Bubble {
     label: Gtk.Label;
@@ -76,7 +81,7 @@ export class ChatPanel extends Gtk.Box {
             Template: uiTemplate(template),
             Children: [
                 'input', 'sendButton', 'messages', 'scroller', 'contextButton', 'settingsButton', 'historyButton',
-                'saveCheck', 'keyEntry', 'keyStatus', 'modelCombo', 'thinkingCheck', 'contextList', 'chatList',
+                'saveCheck', 'keyEntry', 'keyStatus', 'modelDrop', 'thinkingCheck', 'contextList', 'chatList',
             ],
             InternalChildren: [
                 'clearButton', 'logButton', 'historyPopover', 'settingsPopover', 'contextPopover', 'saveKeyButton', 'forgetKeyButton',
@@ -95,7 +100,7 @@ export class ChatPanel extends Gtk.Box {
     declare readonly saveCheck: Gtk.CheckButton;
     declare readonly keyEntry: Gtk.Entry;
     declare readonly keyStatus: Gtk.Label;
-    declare readonly modelCombo: Gtk.ComboBoxText;
+    declare readonly modelDrop: Gtk.DropDown;
     declare readonly thinkingCheck: Gtk.CheckButton;
     declare private readonly contextList: Gtk.Box;
     declare private readonly chatList: Gtk.Box;
@@ -124,7 +129,7 @@ export class ChatPanel extends Gtk.Box {
     options: ContextOptions = { activeDocument: true, selection: true, project: true };
     budget = DEFAULT_BUDGET;
 
-    private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#4183c4', mark: '#fff3a3' };
+    private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#1c71d8', mark: '#fff3a3' };
     private readonly bubbles: Bubble[] = [];
     readonly empty: Gtk.Box;           // petunjuk awal; tampil selama percakapan kosong
     private generation = 0;
@@ -155,9 +160,9 @@ export class ChatPanel extends Gtk.Box {
         this._saveKeyButton.connect('clicked', () => void this.saveKey());
         this.keyEntry.connect('activate', () => void this.saveKey());
         this._forgetKeyButton.connect('clicked', () => void this.forgetKey());
-        for (const m of DEEPSEEK_MODELS) this.modelCombo.append(m, m);
-        this.modelCombo.connect('changed', () => {
-            const id = this.modelCombo.get_active_id();
+        this.modelDrop.set_model(Gtk.StringList.new(DEEPSEEK_MODELS));
+        this.modelDrop.connect('notify::selected', () => {
+            const id = DEEPSEEK_MODELS[this.modelDrop.get_selected()];
             if (!id || id === this.model) return;
             this.model = id;
             this.onModelChanged(id);
@@ -234,7 +239,7 @@ export class ChatPanel extends Gtk.Box {
     // Nama model lama atau tak dikenal (mis. dari pengaturan versi sebelumnya) diganti model bawaan.
     setModel(model: string): void {
         this.model = DEEPSEEK_MODELS.includes(model) ? model : DEEPSEEK_MODELS[0];
-        this.modelCombo.set_active_id(this.model);
+        this.modelDrop.set_selected(DEEPSEEK_MODELS.indexOf(this.model));
     }
 
     setThinking(thinking: boolean): void {
@@ -301,7 +306,7 @@ export class ChatPanel extends Gtk.Box {
         this.cardsBox = answer.cards;
         this.cancellable = new Gio.Cancellable();
         this.sendButton.set_icon_name('media-playback-stop-symbolic');
-        this.sendButton.set_tooltip_text('Hentikan');
+        this.sendButton.set_tooltip_text(_('Hentikan'));
         this.stick = true;
 
         const requestRoot = this.host.root();
@@ -336,7 +341,7 @@ export class ChatPanel extends Gtk.Box {
             }, this.cancellable);
             if (generation !== this.generation) return;
             this.render(answer.bubble);
-            if (result.cancelled) answer.footer.set_text(answer.bubble.text || result.toolCalls ? 'Dihentikan' : 'Dihentikan sebelum ada jawaban');
+            if (result.cancelled) answer.footer.set_text(answer.bubble.text || result.toolCalls ? _('Dihentikan') : _('Dihentikan sebelum ada jawaban'));
             else if (result.usage) answer.footer.set_text(usageText(result.usage, result.toolCalls, result.applied));
             answer.footer.set_visible(!!answer.footer.get_text());
             this.persist();
@@ -351,7 +356,7 @@ export class ChatPanel extends Gtk.Box {
         } finally {
             this.cancellable = null;
             this.sendButton.set_icon_name('go-up-symbolic');
-            this.sendButton.set_tooltip_text('Kirim (Enter)');
+            this.sendButton.set_tooltip_text(_('Kirim (Enter)'));
             this.updateContextSummary();
         }
     }
@@ -375,7 +380,7 @@ export class ChatPanel extends Gtk.Box {
         try {
             this.chatPath = saveChat(root, { title: this.chatTitle, model: this.model, created: this.chatCreated, turns: [...history], work: this.session.work, events: this.session.events }, this.chatPath);
         } catch (e) {
-            this.addNote(`Riwayat percakapan tidak tersimpan: ${e instanceof Error ? e.message : e}`, true);
+            this.addNote(fmt(_('Riwayat percakapan tidak tersimpan: {error}'), { error: e instanceof Error ? e.message : String(e) }), true);
         }
     }
 
@@ -408,8 +413,8 @@ export class ChatPanel extends Gtk.Box {
             this.addNote(journalText(this.session.events));
             for (const event of this.session.events.filter(e => e.changes.length).slice(-20)) {
                 const row = new Gtk.Box({ spacing: 6, halign: Gtk.Align.START });
-                const review = new Gtk.Button({ label: `Lihat diff · ${event.changes.length} berkas`, tooltip_text: event.changes.map(c => c.file).join('\n') });
-                review.connect('clicked', () => new ProposalViewer(this.host.window?.() ?? null, event.changes, this.dark, () => 'Riwayat hanya dapat dibaca', true).show());
+                const review = new Gtk.Button({ label: fmt(_('Lihat diff · {count} berkas'), { count: event.changes.length }), tooltip_text: event.changes.map(c => c.file).join('\n') });
+                review.connect('clicked', () => new ProposalViewer(this.host.window?.() ?? null, event.changes, this.dark, () => _('Riwayat hanya dapat dibaca'), true).show());
                 row.append(review);
                 if (event.status === 'applied' && this.host.applyBatch) row.append(this.undoButton(event.changes, null));
                 this.messages.append(row);
@@ -418,7 +423,7 @@ export class ChatPanel extends Gtk.Box {
         if (this.session.work) {
             this.addNote(workText(this.session.work), false, 'chat-work');
             if (this.session.work.status !== 'complete') {
-                const resume = new Gtk.Button({ label: 'Lanjutkan pekerjaan', halign: Gtk.Align.START });
+                const resume = new Gtk.Button({ label: _('Lanjutkan pekerjaan'), halign: Gtk.Align.START });
                 resume.connect('clicked', () => { resume.set_sensitive(false); void this.ask('Lanjutkan pekerjaan yang tersimpan. Baca isi aktual, periksa journal, dan jangan ulangi perubahan yang sudah diterapkan.'); });
                 this.messages.append(resume);
             }
@@ -443,7 +448,7 @@ export class ChatPanel extends Gtk.Box {
         const popover = this.historyButton.get_popover();
         for (const chat of chats) {
             const row = new Gtk.Box({ spacing: 2 });
-            const open = new Gtk.Button({ has_frame: false, tooltip_text: `${chat.created.replace('T', ' ')} · ${chat.turns / 2 | 0} tanya-jawab` });
+            const open = new Gtk.Button({ has_frame: false, tooltip_text: fmt(_('{date} · {turns} tanya-jawab'), { date: chat.created.replace('T', ' '), turns: chat.turns / 2 | 0 }) });
             const text = new Gtk.Label({ label: chat.title, xalign: 0, ellipsize: 3, max_width_chars: 30 });
             const date = new Gtk.Label({ label: chat.created.slice(0, 10), xalign: 0 });
             date.add_css_class('side-meta');
@@ -457,7 +462,7 @@ export class ChatPanel extends Gtk.Box {
             });
             const remove = Gtk.Button.new_from_icon_name('user-trash-symbolic');
             remove.set_has_frame(false);
-            remove.set_tooltip_text('Buang ke Tempat Sampah');
+            remove.set_tooltip_text(_('Buang ke Tempat Sampah'));
             remove.connect('clicked', () => {
                 try {
                     deleteChat(chat.path);
@@ -504,14 +509,14 @@ export class ChatPanel extends Gtk.Box {
                 parts.push(item.label);
             }
         }
-        for (const [file, n] of excerpts) parts.push(`${n} potongan dari ${file}`);
-        if (built.unknownMentions.length) parts.push(`tidak ditemukan: ${built.unknownMentions.map(m => `@${m}`).join(', ')}`);
-        return `Konteks: ${parts.join(' · ')}`;
+        for (const [file, n] of excerpts) parts.push(fmt(_('{count} potongan dari {file}'), { count: n, file }));
+        if (built.unknownMentions.length) parts.push(fmt(_('tidak ditemukan: {names}'), { names: built.unknownMentions.map(m => `@${m}`).join(', ') }));
+        return fmt(_('Konteks: {parts}'), { parts: parts.join(' · ') });
     }
 
     private setContextSummary(built: BuiltContext): void {
         // Tanpa panah sendiri: MenuButton GTK 4 berlabel sudah menampilkan panah arah popover-nya.
-        this.contextButton.set_label(`Konteks · ≈${fmtTokens(built.tokens)} token`);
+        this.contextButton.set_label(fmt(_('Konteks · ≈{tokens} token'), { tokens: fmtTokens(built.tokens) }));
     }
 
     // Membangun konteks menyentuh seluruh proyek, jadi ringkasan hanya diperbarui saat panel terlihat
@@ -541,8 +546,8 @@ export class ChatPanel extends Gtk.Box {
         };
         if (!built.items.length) add('Tidak ada konteks dokumen yang dikirim.', true);
         for (const item of built.items) add(`${KIND_LABEL[item.kind]}: ${item.label} · ${fmtTokens(item.tokens)}`);
-        add(`Total ≈${fmtTokens(built.tokens)} token dari anggaran ${fmtTokens(this.budget)}`, true);
-        for (const m of built.unknownMentions) add(`Berkas @${m} tidak ditemukan di folder proyek.`, true);
+        add(fmt(_('Total ≈{tokens} token dari anggaran {budget}'), { tokens: fmtTokens(built.tokens), budget: fmtTokens(this.budget) }), true);
+        for (const m of built.unknownMentions) add(fmt(_('Berkas @{name} tidak ditemukan di folder proyek.'), { name: m }), true);
         this.setContextSummary(built);
     }
 
@@ -550,7 +555,7 @@ export class ChatPanel extends Gtk.Box {
 
     private async refreshKeyStatus(): Promise<void> {
         const found = await this.keyStore.get();
-        this.keyStatus.set_text(found ? SOURCE_TEXT[found.source] : 'Belum ada key. Buat di platform.deepseek.com.');
+        this.keyStatus.set_text(found ? SOURCE_TEXT[found.source] : _('Belum ada key. Buat di platform.deepseek.com.'));
     }
 
     private async saveKey(): Promise<void> {
@@ -561,7 +566,7 @@ export class ChatPanel extends Gtk.Box {
             this.keyEntry.set_text('');
             this.keyStatus.set_text(SOURCE_TEXT[source]);
         } catch (e) {
-            this.keyStatus.set_text(`Gagal menyimpan: ${e instanceof Error ? e.message : e}`);
+            this.keyStatus.set_text(fmt(_('Gagal menyimpan: {error}'), { error: e instanceof Error ? e.message : String(e) }));
         }
     }
 
@@ -575,7 +580,7 @@ export class ChatPanel extends Gtk.Box {
     private buildEmptyState(): Gtk.Box {
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: 8 });
         const intro = new Gtk.Label({
-            label: 'Tanyakan atau minta bantuan apa saja soal pekerjaan Anda. Asisten membaca dokumen yang terbuka dan potongan relevan dari berkas lain di folder.',
+            label: _('Tanyakan atau minta bantuan apa saja soal pekerjaan Anda. Asisten membaca dokumen yang terbuka dan potongan relevan dari berkas lain di folder.'),
             xalign: 0, wrap: true, max_width_chars: 38,
         });
         intro.add_css_class('side-meta');
@@ -634,7 +639,7 @@ export class ChatPanel extends Gtk.Box {
         const cards = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, visible: false });
         const thinkingLabel = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 40, selectable: true });
         thinkingLabel.add_css_class('chat-thinking');
-        const thinking = new Gtk.Expander({ label: 'Proses berpikir', visible: false });
+        const thinking = new Gtk.Expander({ label: _('Proses berpikir'), visible: false });
         thinking.set_child(thinkingLabel);
         const footer = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, selectable: true, visible: false, use_markup: true });
         footer.add_css_class('side-meta');
@@ -674,7 +679,7 @@ export class ChatPanel extends Gtk.Box {
     private propose(change: Change | Change[]): Promise<ProposalResult> {
         const proposalRoot = this.host.root();
         const changes = Array.isArray(change) ? change : [change];
-        const description = Array.isArray(change) ? `Paket perubahan · ${changes.length} berkas` : describeChange(change);
+        const description = Array.isArray(change) ? fmt(_('Paket perubahan · {count} berkas'), { count: changes.length }) : describeChange(change);
         const reasonText = changes.map(c => `${c.file}: ${c.reason}`).join('\n');
         const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
         card.add_css_class('chat-proposal');
@@ -687,9 +692,9 @@ export class ChatPanel extends Gtk.Box {
             card.append(reason);
         }
         const diff = changes.map(c => diffPreview(c.before, c.after)).reduce((a, b) => ({ added: a.added + b.added, removed: a.removed + b.removed }), { added: 0, removed: 0 });
-        const status = new Gtk.Label({ label: `+${diff.added} −${diff.removed} · menunggu keputusan Anda`, xalign: 0, wrap: true, max_width_chars: 44 });
+        const status = new Gtk.Label({ label: fmt(_('+{added} −{removed} · menunggu keputusan Anda'), { added: diff.added, removed: diff.removed }), xalign: 0, wrap: true, max_width_chars: 44 });
         status.add_css_class('side-meta');
-        const review = new Gtk.Button({ label: 'Tinjau perubahan', halign: Gtk.Align.START });
+        const review = new Gtk.Button({ label: _('Tinjau perubahan'), halign: Gtk.Align.START });
         review.add_css_class('suggested-action');
         card.append(status);
         card.append(review);
@@ -720,13 +725,13 @@ export class ChatPanel extends Gtk.Box {
                     const note = viewer.note ? { note: viewer.note } : {};
                     if (applied && viewer.accepted) {
                         const kept = viewer.accepted.map(i => changes[i]);
-                        finish({ applied: true, accepted: viewer.accepted, ...note }, `Diterapkan ${kept.length} dari ${changes.length} berkas.`);
+                        finish({ applied: true, accepted: viewer.accepted, ...note }, fmt(_('Diterapkan {applied} dari {count} berkas.'), { applied: kept.length, count: changes.length }));
                         if (this.host.applyBatch) card.append(this.undoButton(kept, status));
                     } else if (applied) {
-                        finish({ applied: true, ...note }, 'Diterapkan.');
+                        finish({ applied: true, ...note }, _('Diterapkan.'));
                         if (this.host.applyBatch) card.append(this.undoButton(changes, status));
-                    } else if (viewer.error) finish({ applied: false, error: viewer.error, ...note }, `Gagal diterapkan: ${viewer.error}`, true);
-                    else finish({ applied: false, ...note }, viewer.note ? `Ditolak: ${viewer.note}` : 'Ditolak.');
+                    } else if (viewer.error) finish({ applied: false, error: viewer.error, ...note }, fmt(_('Gagal diterapkan: {error}'), { error: viewer.error }), true);
+                    else finish({ applied: false, ...note }, viewer.note ? fmt(_('Ditolak: {note}'), { note: viewer.note }) : _('Ditolak.'));
                 };
                 this.viewer = viewer;
                 viewer.show();
@@ -734,7 +739,7 @@ export class ChatPanel extends Gtk.Box {
             review.connect('clicked', open);
             this.cancellable?.connect(() => {
                 const viewer = this.viewer;
-                finish({ applied: false }, 'Dibatalkan.');
+                finish({ applied: false }, _('Dibatalkan.'));
                 viewer?.close();
             });
             open();
@@ -745,14 +750,14 @@ export class ChatPanel extends Gtk.Box {
     // jadi gagal (tanpa menimpa apa pun) bila berkasnya sudah disunting lagi sejak itu. Journal mencatatnya supaya
     // agent tahu perubahan itu tidak berlaku lagi.
     private undoButton(changes: Change[], status: Gtk.Label | null): Gtk.Button {
-        const button = new Gtk.Button({ label: 'Urungkan', halign: Gtk.Align.START, tooltip_text: 'Kembalikan berkas ke isi sebelum perubahan ini' });
+        const button = new Gtk.Button({ label: _('Urungkan'), halign: Gtk.Align.START, tooltip_text: _('Kembalikan berkas ke isi sebelum perubahan ini') });
         button.connect('clicked', () => {
             if (this.busy) { this.addNote('Tunggu agent selesai sebelum mengurungkan perubahan.', true); return; }
             const root = this.host.root();
             const error = this.host.applyBatch ? this.host.applyBatch([...changes].reverse().map(invertChange)) : 'penerapan tidak tersedia';
-            if (error) { this.addNote(`Tidak dapat diurungkan: ${error}`, true); return; }
+            if (error) { this.addNote(fmt(_('Tidak dapat diurungkan: {error}'), { error }), true); return; }
             button.hide();
-            status?.set_text('Diurungkan.');
+            status?.set_text(_('Diurungkan.'));
             for (const event of this.session.events) {
                 if (event.status !== 'applied' || !event.changes.some(c => changes.includes(c))) continue;
                 event.status = 'reverted';

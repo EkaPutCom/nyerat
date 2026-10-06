@@ -20,12 +20,13 @@
 // diagram tidak membayar biayanya. Diagram dirender satu per satu (antrean), dan hasilnya
 // disimpan di cache per (tema, kode).
 
-import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import type GdkPixbuf from 'gi://GdkPixbuf';
 import type WebKit from 'gi://WebKit?version=6.0';
 import type JavaScriptCore from 'gi://JavaScriptCore?version=6.0';
+import { pixbufFromTexture } from '../gtkutil.js';
+import { _ } from '../i18n.js';
 
 const PAD = 12;              // ruang di sekeliling diagram pada gambar hasil
 const MAX_SIZE = 8000;       // diagram yang lebih besar dari ini (piksel) ditolak
@@ -122,7 +123,7 @@ export class MermaidRenderer {
         this.current = this.queue.shift()!;
         this.timeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, TIMEOUT_SECONDS, () => {
             this.timeout = 0;
-            if (this.current) this.finish(this.current, { ok: false, error: 'Waktu merender habis' }, false);
+            if (this.current) this.finish(this.current, { ok: false, error: _('Waktu merender habis') }, false);
             return GLib.SOURCE_REMOVE;
         });
         this.run(this.current);
@@ -159,7 +160,7 @@ export class MermaidRenderer {
             import('gi://WebKit?version=6.0').then(module => {
                 this.webkit = module.default;
             }, () => {
-                this.failure = 'WebKitGTK tidak terpasang (paket gir1.2-webkit-6.0)';
+                this.failure = _('WebKitGTK tidak terpasang (paket gir1.2-webkit-6.0)');
             }).then(() => {
                 this.loading = false;
                 this.next();
@@ -183,7 +184,7 @@ export class MermaidRenderer {
             this.next();
         });
         view.connect('load-failed', () => {
-            this.failure = 'Gagal memuat Mermaid';
+            this.failure = _('Gagal memuat Mermaid');
             this.next();
         });
         const base = GLib.path_get_dirname(script);
@@ -254,7 +255,7 @@ export class MermaidRenderer {
         }
         const w = Math.ceil(msg.w ?? 0) + 2 * PAD, h = Math.ceil(msg.h ?? 0) + 2 * PAD;
         if (w > MAX_SIZE || h > MAX_SIZE) {
-            this.finish(job, { ok: false, error: 'Diagram terlalu besar' });
+            this.finish(job, { ok: false, error: _('Diagram terlalu besar') });
             return;
         }
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, SETTLE_MS, () => {
@@ -273,8 +274,7 @@ export class MermaidRenderer {
                 // Pada layar HiDPI snapshot berukuran piksel perangkat.
                 const sw = texture.get_width(), sh = texture.get_height();
                 const factor = Math.max(1, view.get_scale_factor());
-                const full = Gdk.pixbuf_get_from_texture(texture);
-                if (!full) throw new Error('Snapshot kosong');
+                const full = pixbufFromTexture(texture);
                 const cw = Math.min(sw, w * factor), ch = Math.min(sh, h * factor);
                 let pixbuf = full.new_subpixbuf(0, 0, cw, ch);
                 if (factor > 1) pixbuf = pixbuf.scale_simple(Math.round(cw / factor), Math.round(ch / factor), 2 /* BILINEAR */) ?? pixbuf;

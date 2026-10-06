@@ -9,14 +9,15 @@ import Pango from 'gi://Pango';
 import { commitFiles, fileLog, repoChanges, workingState, type GitFailure } from '../git.js';
 import { relativeTime, type ChangeKind, type Commit, type FileChange } from '../gitlog.js';
 import { pack, removeChildren } from '../gtkutil.js';
+import { _, fmt } from '../i18n.js';
 
 // Commit yang dimuat per permintaan; riwayat panjang dimuat bertahap.
 const PAGE_SIZE = 100;
 
 const FAILURE_TEXT: Record<GitFailure, string> = {
     'no-git': 'git tidak terpasang',
-    'no-repo': 'Berkas ini tidak berada di repositori git',
-    'failed': 'Riwayat tidak dapat dibaca',
+    'no-repo': _('Berkas ini tidak berada di repositori git'),
+    'failed': _('Riwayat tidak dapat dibaca'),
 };
 
 const KIND_MARK: Record<ChangeKind, string> = { modified: 'M', added: 'A', deleted: 'D', renamed: 'R', untracked: 'U' };
@@ -67,11 +68,11 @@ export class History {
 
         // Judul mengembang di dalam header saja; sidebar tidak ikut mengembang karena lebarnya
         // diatur width_request dan Box utama memberi sisa ruang ke kolom editor yang hexpand.
-        const title = new Gtk.Label({ label: 'RIWAYAT', xalign: 0, margin_start: 16 });
+        const title = new Gtk.Label({ label: _('RIWAYAT'), xalign: 0, margin_start: 16 });
         title.add_css_class('side-title');
         const refresh = Gtk.Button.new_from_icon_name('view-refresh-symbolic');
         refresh.set_has_frame(false);
-        refresh.set_tooltip_text('Muat ulang riwayat');
+        refresh.set_tooltip_text(_('Muat ulang riwayat'));
         refresh.connect('clicked', () => this.refresh());
         const header = new Gtk.Box({ margin_top: 4, margin_bottom: 8, margin_end: 6 });
         pack(header, title, true);
@@ -79,7 +80,7 @@ export class History {
 
         this.changes = new Gtk.Button({ visible: false, margin_start: 8, margin_end: 8, margin_bottom: 8 });
         this.changes.set_has_frame(false);
-        this.changes.set_tooltip_text('Lihat perubahan terhadap commit terakhir');
+        this.changes.set_tooltip_text(_('Lihat perubahan terhadap commit terakhir'));
         this.changes.connect('clicked', () => { if (this.file) this.onOpenChanges(this.file); });
 
         this.changedList = new Gtk.ListBox({ activate_on_single_click: true });
@@ -92,8 +93,8 @@ export class History {
             hscrollbar_policy: Gtk.PolicyType.NEVER, propagate_natural_height: true, max_content_height: 240,
         });
         changedScroll.set_child(this.changedList);
-        this.messageEntry = new Gtk.Entry({ placeholder_text: 'Pesan commit' });
-        this.commitButton = new Gtk.Button({ label: 'Commit' });
+        this.messageEntry = new Gtk.Entry({ placeholder_text: _('Pesan commit') });
+        this.commitButton = new Gtk.Button({ label: _('Commit') });
         this.commitButton.add_css_class('suggested-action');
         this.commitStatus = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 24, visible: false });
         this.commitStatus.add_css_class('dim-label');
@@ -115,7 +116,7 @@ export class History {
         pages.add_named(this.note, 'note');
         pages.visible_child_name = 'note';
         this.store.connect('items-changed', () => { pages.visible_child_name = this.store.n_items ? 'list' : 'note'; });
-        this.more = new Gtk.Button({ label: 'Muat lebih banyak', margin_top: 8, margin_bottom: 8, margin_start: 8, margin_end: 8, visible: false });
+        this.more = new Gtk.Button({ label: _('Muat lebih banyak'), margin_top: 8, margin_bottom: 8, margin_start: 8, margin_end: 8, visible: false });
         this.more.connect('clicked', () => this.load(this.commits.length, false));
 
         // hexpand false: judul di header mengembang, dan GTK 4 meneruskannya ke atas sampai sidebar.
@@ -140,11 +141,11 @@ export class History {
         this.changes.set_visible(false);
         if (!same) this.setChanged([]);
         if (!file) {
-            this.note.set_text('Simpan dokumen ke berkas, lalu riwayat git-nya tampil di sini');
+            this.note.set_text(_('Simpan dokumen ke berkas, lalu riwayat git-nya tampil di sini'));
             this.loadChanges();
             return;
         }
-        if (!same) this.note.set_text('Memuat…');
+        if (!same) this.note.set_text(_('Memuat…'));
         this.load(0, same);
         this.loadChanges();
     }
@@ -167,7 +168,7 @@ export class History {
         if (token !== this.token) return;
         this.setChanged(repo.ok ? repo.changes : []);
         if (!state || !state.ok || state.state === 'clean') return this.changes.set_visible(false);
-        this.changes.set_label(state.state === 'untracked' ? '● File baru, belum di-commit' : '● Perubahan belum di-commit');
+        this.changes.set_label(state.state === 'untracked' ? _('● File baru, belum di-commit') : _('● Perubahan belum di-commit'));
         this.changes.set_visible(true);
     }
 
@@ -184,7 +185,7 @@ export class History {
         for (const change of changes) {
             const rel = dir && change.path.startsWith(dir + '/') ? change.path.slice(dir.length + 1) : change.path;
             const check = new Gtk.CheckButton({ active: !this.unchecked.has(change.path) });
-            check.set_tooltip_text('Ikut di-commit');
+            check.set_tooltip_text(_('Ikut di-commit'));
             check.connect('toggled', () => {
                 if (check.active) this.unchecked.delete(change.path); else this.unchecked.add(change.path);
                 this.updateCommitButton();
@@ -200,7 +201,7 @@ export class History {
             const row = new Gtk.ListBoxRow({ child: box, tooltip_text: change.path });
             this.changedList.insert(row, -1);
         }
-        this.changedBox.set_label(`Belum di-commit (${changes.length})`);
+        this.changedBox.set_label(fmt(_('Belum di-commit ({count})'), { count: changes.length }));
         this.updateCommitButton();
         this.changedBox.set_visible(changes.length > 0);
     }
@@ -212,7 +213,7 @@ export class History {
 
     private updateCommitButton(): void {
         const n = this.selected().length;
-        this.commitButton.set_label(n ? `Commit ${n} file` : 'Commit');
+        this.commitButton.set_label(n ? fmt(_('Commit {n} file'), { n }) : _('Commit'));
         this.commitButton.set_sensitive(n > 0);
     }
 
@@ -230,7 +231,7 @@ export class History {
         this.commitButton.set_sensitive(false);
         const result = await commitFiles(files, message);
         this.updateCommitButton();
-        if (!result.ok) return this.showCommitStatus(`Commit gagal: ${result.message}`);
+        if (!result.ok) return this.showCommitStatus(fmt(_('Commit gagal: {message}'), { message: result.message }));
         this.messageEntry.set_text('');
         this.commitStatus.set_visible(false);
         this.onCommitted();
@@ -257,7 +258,7 @@ export class History {
             const shown = this.commits.slice(0, result.commits.length);
             if (keep && shown.length === result.commits.length && shown.every((c, i) => c.hash === result.commits[i].hash)) return;
             this.clear();
-            this.note.set_text('Belum ada commit untuk berkas ini');
+            this.note.set_text(_('Belum ada commit untuk berkas ini'));
         }
         const now = Math.floor(Date.now() / 1000);
         this.commits.push(...result.commits);
@@ -280,7 +281,7 @@ export class History {
             const listItem = item as Gtk.ListItem;
             const { commit, now } = listItem.item as CommitItem;
             const box = listItem.child as Gtk.Box;
-            (box.get_first_child() as Gtk.Label).label = commit.subject || '(tanpa pesan)';
+            (box.get_first_child() as Gtk.Label).label = commit.subject || _('(tanpa pesan)');
             (box.get_last_child() as Gtk.Label).label = `${commit.short} · ${commit.author} · ${relativeTime(commit.time, now)}`;
             box.set_tooltip_text(`${commit.subject}\n${commit.author}\n${GLib.DateTime.new_from_unix_local(commit.time).format('%d %b %Y %H:%M')}`);
         });
