@@ -193,7 +193,7 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 - Tiap jawaban diberi rincian konteks yang dikirim dan pemakaian token (termasuk bagian yang dilayani dari cache, dan jumlah penelusuran). **Dokumen yang disertakan dikirim ke server DeepSeek**; matikan saklar *Berkas lain di folder* dan *Dokumen yang sedang dibuka* untuk bertanya tanpa mengirim dokumen
 - **Log agent (pemantauan).** Tombol terminal di kepala panel Asisten membuka jendela *Log agent*: lini masa tiap giliran yang diperbarui langsung selagi agent bekerja, berisi putaran model (jumlah pesan dan alat yang ditawarkan, token masuk/cache/keluar), proses berpikir model per putaran, tiap panggilan alat dengan argumen JSON, hasil yang dikembalikan ke model, status, dan lamanya, serta galat dan penghentian. Filter Semua/Alat/Penalaran/Model, *Salin semua*, dan *Bersihkan*. Log hanya ada di memori selama aplikasi berjalan (maks. 2000 kejadian, detail dipotong 20 rb karakter), tidak dikirim ke model, tidak ditulis ke berkas percakapan, dan dikosongkan oleh *Percakapan baru*
 - **Riwayat percakapan tersimpan per folder.** Tiap percakapan ditulis sebagai satu berkas Markdown di `<folder kerja>/.nyerat/chats/` (mis. `2026-10-04-adakah-keputusan-rapat-yang-belum-masuk-rencana.md`, berisi frontmatter `judul`/`model`/`dibuat` lalu giliran `## Anda` dan `## Asisten`), diperbarui setelah tiap giliran dan pada checkpoint tindakan. Frontmatter `pekerjaan` dan `tindakan` menyimpan tujuan, langkah, verifikasi, keputusan, serta snapshot sebelum/sesudah untuk melihat diff lagi. Proses berpikir model tidak disimpan. Tombol jam di kepala panel membuka daftar percakapan di folder itu (terbaru dulu): klik untuk memulihkannya dan melanjutkan di berkas yang sama (riwayatnya ikut dikirim ke model), atau ikon sampah untuk membuangnya ke Tempat Sampah. *Percakapan baru* (ikon sapu) memulai berkas baru. Riwayat berisi kutipan naskah, jadi `.nyerat/` otomatis diberi `.gitignore` berisi `*` (hapus berkas itu bila ingin meng-commit-nya); folder bertitik tidak tampil di pohon Berkas dan tidak dibaca asisten sebagai naskah. Saklar *Simpan riwayat percakapan di folder* di pengaturan panel (roda gigi) mematikannya; tanpa folder yang dibuka tidak ada yang disimpan
-- API key diambil dari variabel lingkungan `DEEPSEEK_API_KEY`, atau diisi di pengaturan panel (ikon roda gigi) dan disimpan di keyring sistem; jika keyring tidak tersedia, di `~/.config/nyerat/deepseek.key` (mode 0600). Key tidak ditulis ke `settings.json`
+- API key diambil dari variabel lingkungan `DEEPSEEK_API_KEY`, atau diisi di pengaturan panel (ikon roda gigi) dan disimpan di keyring sistem; jika keyring tidak tersedia, di `~/.config/nyerat/deepseek.key` (mode 0600). Key tidak ditulis ke pengaturan
 
 **Lainnya**
 - Cari teks, undo/redo, hitungan kata dan karakter, posisi kursor
@@ -237,6 +237,8 @@ Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `
 | F9 | Mode typewriter |
 | Ctrl+Shift+D | Mode gelap |
 | Ctrl+Shift+A | Tampilkan/sembunyikan panel Asisten |
+| Ctrl+Shift+P | Palet perintah: cari dan jalankan perintah apa pun |
+| Ctrl+, | Preferensi |
 | Enter / Shift+Enter | Di kotak pesan Asisten: kirim / baris baru |
 
 ## Tes
@@ -323,6 +325,7 @@ scripts/dev.mjs           npm run dev: build ulang + buka ulang aplikasi + cek t
 scripts/capture.ts        potret editor dan buat PNG/GIF untuk docs/assets/
 scripts/gifenc.d.ts       deklarasi tipe gifenc untuk script capture
 docs/                     landing page statis dan aset tangkapan layar
+data/                     schema GSettings (dikompilasi ke dist/ saat build)
 dist/                     hasil build (tidak masuk git)
 src/
 ├── main.ts               titik masuk: hanya memanggil main() dari app.ts
@@ -330,9 +333,10 @@ src/
 ├── gtkutil.ts            pembantu GTK 4 untuk semua lapisan: iter baris, anak widget, klik/tombol, dialog modal (runModal), pack()
 ├── app.ts                membuat Gtk.Application dan jendela
 ├── window.ts             MainWindow: menyusun komponen, mengelola dokumen/tab, buka/simpan/ekspor
-├── actions.ts            semua aksi menu dan shortcut keyboard
+├── actions.ts            semua Gio.Action aplikasi dan shortcut-nya (toggle pengaturan memakai Gio.Settings.create_action)
 ├── config.ts             nama, ID, versi aplikasi, dan font
-├── settings.ts           baca/tulis ~/.config/nyerat/settings.json
+├── settings.ts           AppSettings: properti bertipe di atas Gio.Settings (schema di data/id.eka.Nyerat.gschema.xml)
+├── commands.ts           nama aksi untuk palet perintah
 ├── files.ts              baca/tulis file teks UTF-8
 ├── fileops.ts            buat, ganti nama, hapus (ke sampah), dan pindahkan file/folder di disk (tanpa GTK; dipakai pohon berkas)
 ├── orchestrator.ts       menjalankan harness eksternal (pi) untuk kartu kanban di folder proyek: proses, antrean, pembaruan papan
@@ -393,17 +397,20 @@ src/
 │   └── offsets.ts        konversi posisi UTF-16 ↔ code point
 │
 └── ui/                   komponen antarmuka
-    ├── headerbar.ts      tombol dan menu ☰
-    ├── sidebar.ts        sidebar bertab: Berkas, Outline, dan Riwayat
-    ├── filetree.ts       tab Berkas: pohon folder, menu klik kanan, seret-lepas, dipantau dengan Gio.FileMonitor
-    ├── outline.ts        tab Outline: daftar heading
-    ├── history.ts        tab Riwayat: commit git untuk file aktif
+    ├── *.ui              tata letak deklaratif (Gtk.Template) untuk headerbar, statusbar, findbar, preferences, palette, dan chat; dibundel Vite sebagai teks (`?raw`)
+    ├── headerbar.ts      tombol dan menu ☰ (headerbar.ui)
+    ├── preferences.ts    Adw.PreferencesDialog yang terikat ke GSettings (Ctrl+,)
+    ├── palette.ts        palet perintah Ctrl+Shift+P: Gio.ListStore → FilterListModel → ListView di atas Gio.Action
+    ├── sidebar.ts        sidebar bertab (Adw.OverlaySplitView): Berkas, Outline, dan Riwayat
+    ├── filetree.ts       tab Berkas: Gio.ListStore per folder → Gtk.TreeListModel → ListView + TreeExpander, menu klik kanan, seret-lepas, dipantau dengan Gio.FileMonitor
+    ├── outline.ts        tab Outline: Gio.ListStore heading di ListView
+    ├── history.ts        tab Riwayat: commit git untuk file aktif (ListView)
     ├── historyviewer.ts  jendela baca satu commit: diff dan isi versi itu
     ├── logviewer.ts      jendela Log agent: lini masa kegiatan agent, diperbarui langsung
     ├── proposalviewer.ts jendela tinjau usulan perubahan agent: diff yang sama, centang per berkas paket, catatan untuk agent, tombol Tolak/Terapkan
     ├── findbar.ts        bilah pencarian (targetnya berpindah mengikuti tab aktif)
-    ├── tabbar.ts         baris tab dokumen (tampil jika ada ≥ 2 dokumen)
-    ├── statusbar.ts      hitungan kata, posisi kursor, pesan singkat
+    ├── tabbar.ts         Adw.TabBar + Adw.TabView untuk tab dokumen (tampil jika ada ≥ 2 dokumen)
+    ├── statusbar.ts      hitungan kata dan posisi kursor (pemberitahuan singkat lewat Adw.Toast di window.ts)
     ├── dialogs.ts        pilih file, konfirmasi simpan, error, tentang
     ├── menu.ts           menu konteks sebagai data (MenuEntry) → Gtk.PopoverMenu
     ├── imageviewer.ts    penampil gambar dengan zoom (cairo)
@@ -539,7 +546,9 @@ Nyerat berjalan di GTK 4, GtkSourceView 5, dan WebKitGTK 6.0. Beberapa perilaku 
 - **Dialog modal lewat main loop bersarang.** `gtk_dialog_run()` sudah tidak ada. `runModal()` (`gtkutil.ts`) menjalankan `GLib.MainLoop` sampai dialog menjawab, sehingga `chooseFile()`, `askSaveChanges()`, dan dialog kanban tetap mengembalikan jawabannya langsung. Pemilih berkas memakai `Gtk.FileDialog` (sudah menanyakan sebelum menimpa; di desktop yang punya xdg-desktop-portal, dialognya dibuka portal). Pesan dan formulir (sunting kartu, prompt) adalah `Gtk.Window` modal sendiri (`modalWindow()` di `ui/dialogs.ts`), bukan `Gtk.AlertDialog` dan tanpa `destroy_with_parent`: keduanya menghubungkan dialog ke sinyal `destroy` jendela induk, dan saat proses keluar GJS bisa memfinalisasi induk lebih dulu sehingga muncul GLib-GObject-CRITICAL.
 - **`hexpand`/`vexpand` diteruskan ke atas.** Di GTK 4, widget yang punya anak mengembang ikut mengembang. Sidebar, tab Riwayat, tab Berkas, dan panel Asisten diberi `hexpand: false` eksplisit, supaya tidak ikut dibagi ruang sisa jendela (dijaga tes `tab riwayat tidak membuat sidebar mengembang`). `pack(box, child, expand)` di `gtkutil.ts` menggantikan `pack_start()` dan menyetel ekspansi sesuai orientasi box.
 - **Seleksi jangan sampai kosong di tengah suntingan.** Di X11, seleksi yang sempat kosong melepas clipboard PRIMARY, dan GTK 4 membatalkan seleksi berikutnya begitu server mengonfirmasi pelepasan itu. `wrapSelection()` (`editor/editing.ts`) karena itu hanya menyisipkan/menghapus penanda di kedua ujung, tanpa menghapus seluruh seleksi dulu; tanpa itu Ctrl+B kedua tidak melepas `**`.
-- **Pohon berkas (GtkTreeView) dan seret-lepas.** Seret memakai `Gtk.DragSource`/`Gtk.DropTarget` sendiri, bukan DnD model TreeView (yang akan memindahkan baris model, padahal yang dipindah berkas di disk). Penanda tujuan memakai seleksi baris, **bukan** `set_drag_dest_row()`: tanpa DnD model, GTK 4.14 crash (segfault) saat menggambar penanda itu. Ikon drag diambil dari tema ikon; widget sebagai ikon (`GtkDragIcon`) memicu Gtk-CRITICAL saat drag selesai.
+- **Pohon berkas (TreeListModel + ListView) dan seret-lepas.** Tiap folder adalah `Gio.ListStore<FileNode>`; `Gtk.TreeListModel` memanggil fungsi pembuat anak juga hanya untuk memeriksa apakah baris bisa dibuka, jadi isi folder disimpan di `dirStores` dan dibaca sekali. Seret memakai `Gtk.DragSource`/`Gtk.DropTarget` pada ListView; baris di titik kursor dicari lewat `pick()` (baris adalah anak langsung ListView, isinya `TreeExpander`). Penanda tujuan memakai seleksi baris. Ikon drag diambil dari tema ikon; widget sebagai ikon (`GtkDragIcon`) memicu Gtk-CRITICAL saat drag selesai.
+- **Gtk.Template tanpa glib-compile-resources.** Berkas `.ui` diimpor sebagai teks (`import xml from './x.ui?raw'`) dan diberikan ke `Template:` sebagai `Uint8Array` (`uiTemplate()` di `gtkutil.ts`); tidak ada GResource yang perlu dikompilasi. `Adw.HeaderBar` kelas final, jadi `HeaderBar` membungkusnya dalam `Adw.Bin`.
+- **Pengaturan di GSettings.** Schema ada di `data/` dan dikompilasi ke `dist/` oleh plugin Vite; `settings.ts` memuatnya dari folder bundel, tanpa instalasi sistem. Toggle di menu (`sidebar`, `chat`, `focus`, `typewriter`, `autosave`) adalah `Gio.Settings.create_action`, sidebar dan panel Asisten terikat dengan `Gio.Settings.bind` ke `show-sidebar`, dan `MainWindow.onSettingChanged` menerapkan sisanya (termasuk perubahan dari dialog preferensi).
 - **Menu konteks sebagai data.** `Gtk.Menu` sudah tidak ada. Menu klik kanan (pohon berkas, kartu, daftar) dibangun sebagai `MenuEntry[]` (`ui/menu.ts`) lalu diubah menjadi `Gtk.PopoverMenu` beraksi `menu.*`; tes cukup mencari entri dan memanggil `run()`.
 - **Tangkapan layar.** `gdk_pixbuf_get_from_window()` sudah tidak ada. `tests/widgets.ts` menggambar widget lewat `Gtk.WidgetPaintable` lalu merendernya menjadi tekstur dengan renderer jendelanya (dipakai `--screenshot` dan `scripts/capture.ts`).
 
@@ -724,9 +733,9 @@ Contoh menambah format baru, misalnya `^superskrip^`:
 
 ## Pengaturan
 
-Disimpan di `$XDG_CONFIG_HOME/nyerat/settings.json` (bawaan `~/.config/nyerat/settings.json`): mode gelap, sidebar dan tab yang terakhir dipilih (Berkas, Outline, atau Riwayat), folder yang terakhir dibuka, tab berfile yang terbuka saat jendela ditutup (urutan, tab aktif, dan posisi kursor), mode fokus, mode typewriter, auto save, ukuran jendela, panel Asisten (terbuka atau tidak) beserta model dan mode berpikirnya, pemetaan nama proyek → folder untuk harness eksternal (`projects`), dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
+Disimpan di GSettings (schema `id.eka.Nyerat`, jalur `/id/eka/Nyerat/`; lihat `dconf-editor` atau `gsettings list-recursively id.eka.Nyerat` bila schema dipasang): tema warna (`color-scheme`: ikuti sistem, terang, gelap), sidebar dan tab yang terakhir dipilih (Berkas, Outline, atau Riwayat), folder yang terakhir dibuka, tab berfile yang terbuka saat jendela ditutup (urutan, tab aktif, dan posisi kursor), mode fokus, mode typewriter, auto save, ukuran jendela, panel Asisten (terbuka atau tidak) beserta model dan mode berpikirnya, pemetaan nama proyek → folder untuk harness eksternal (`projects`), dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
 
-Nilai bawaan: sidebar terbuka pada tab Outline, panel Asisten tertutup dengan model `deepseek-flash` tanpa mode berpikir, fokus/typewriter mati, ukuran jendela 1100 × 760 piksel, dan mode gelap mengikuti tema sistem (`dark: null`). Setelah mode gelap dipilih lewat menu, pilihan itu disimpan. Ukuran awal jendela dibatasi ke area kerja monitor. Mode source dan pilihan tampilan papan/teks tidak disimpan antar proses.
+Nilai bawaan: sidebar terbuka pada tab Outline, panel Asisten tertutup dengan model `deepseek-flash` tanpa mode berpikir, fokus/typewriter mati, ukuran jendela 1100 × 760 piksel, dan tema warna mengikuti sistem (`color-scheme = 'system'`). Setelah tema dipilih lewat menu atau Preferensi (Ctrl+,), pilihan itu disimpan. Ukuran awal jendela dibatasi ke area kerja monitor. Mode source dan pilihan tampilan papan/teks tidak disimpan antar proses.
 
 ## Keterbatasan
 
