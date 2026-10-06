@@ -1,6 +1,6 @@
 // Identitas aplikasi dan konstanta bersama.
 
-export const APP_ID = 'id.eka.Nyerat';
+export const APP_ID = 'com.ekaput.Nyerat';
 export const APP_NAME = 'Nyerat';
 export const APP_VERSION = '1.0';
 

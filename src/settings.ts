@@ -1,4 +1,4 @@
-// Pengaturan pengguna di GSettings (schema: data/id.eka.Nyerat.gschema.xml).
+// Pengaturan pengguna di GSettings (schema: data/com.ekaput.Nyerat.gschema.xml).
 //
 // AppSettings hanya membungkus Gio.Settings dengan properti bertipe, jadi kode lain tetap
 // menulis `settings.autosave = true`. Setiap penulisan langsung disimpan; tidak ada save().
@@ -17,15 +17,19 @@ export interface SavedTab {
 
 export type SidebarPage = 'files' | 'outline' | 'history';
 
-// Berkas schema yang sudah dikompilasi ada di samping bundel (dist/), lihat vite.config.ts.
+// Saat dijalankan dari dist/, schema yang sudah dikompilasi ada di samping bundel (lihat vite.config.ts).
+// Saat terpasang (Meson/Flatpak), schema ada di direktori schema sistem dan tidak ada salinan di samping bundel.
 function loadSchema(): Gio.SettingsSchema {
     // Kode bersama dibundel ke dist/chunks/, jadi cari juga satu tingkat di atasnya.
     let folder = Gio.File.new_for_uri(import.meta.url).get_parent()!;
     if (!folder.get_child('gschemas.compiled').query_exists(null)) folder = folder.get_parent()!;
     const dir = folder.get_path()!;
-    const source = Gio.SettingsSchemaSource.new_from_directory(dir, Gio.SettingsSchemaSource.get_default(), false);
-    const schema = source.lookup(APP_ID, false);
-    if (!schema) throw new Error(`schema ${APP_ID} tidak ditemukan di ${dir}`);
+    const system = Gio.SettingsSchemaSource.get_default();
+    const source = folder.get_child('gschemas.compiled').query_exists(null)
+        ? Gio.SettingsSchemaSource.new_from_directory(dir, system, false)
+        : system;
+    const schema = source?.lookup(APP_ID, true) ?? null;
+    if (!schema) throw new Error(`schema ${APP_ID} tidak ditemukan di ${dir} maupun direktori schema sistem`);
     return schema;
 }
 

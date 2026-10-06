@@ -374,7 +374,7 @@ async function runGuiBench(app: Adw.Application, n: number): Promise<void> {
 const CHILD = opt('child');
 
 function runGuiInProcess(): void {
-    const app = new Adw.Application({ application_id: 'id.eka.Nyerat.Bench', flags: Gio.ApplicationFlags.NON_UNIQUE });
+    const app = new Adw.Application({ application_id: 'com.ekaput.Nyerat.Bench', flags: Gio.ApplicationFlags.NON_UNIQUE });
     app.connect('activate', () => {
         app.hold();
         void (async () => {

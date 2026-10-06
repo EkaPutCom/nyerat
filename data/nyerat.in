@@ -1,0 +1,3 @@
+#!/bin/sh
+# Peluncur Nyerat terpasang (dibuat Meson dari data/nyerat.in).
+exec @GJS@ -m @PKGDATADIR@/nyerat.js "$@"

@@ -2,7 +2,7 @@
 // modul digabung menjadi file ESM yang dijalankan GJS. Dev server dan HMR tidak
 // dipakai karena ini aplikasi GTK, bukan halaman web.
 
-import { copyFileSync } from 'node:fs';
+import { copyFileSync, cpSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -20,13 +20,22 @@ const compileSchemas = (): Plugin => ({
     name: 'compile-gschemas',
     writeBundle(options) {
         const dir = options.dir ?? 'dist';
-        copyFileSync('data/id.eka.Nyerat.gschema.xml', `${dir}/id.eka.Nyerat.gschema.xml`);
+        copyFileSync('data/com.ekaput.Nyerat.gschema.xml', `${dir}/com.ekaput.Nyerat.gschema.xml`);
         execFileSync('glib-compile-schemas', ['--strict', dir]);
     },
 });
 
+// Ikon aplikasi disalin ke dist/icons supaya `npm start` tetap menampilkan ikon tanpa dipasang;
+// app.ts menambahkannya ke jalur pencarian tema ikon. Versi terpasang memakai hicolor sistem.
+const copyIcons = (): Plugin => ({
+    name: 'copy-icons',
+    writeBundle(options) {
+        cpSync('data/icons', `${options.dir ?? 'dist'}/icons`, { recursive: true });
+    },
+});
+
 export default defineConfig({
-    plugins: [copyMermaid(), compileSchemas()],
+    plugins: [copyMermaid(), compileSchemas(), copyIcons()],
     build: {
         outDir: 'dist',
         emptyOutDir: true,

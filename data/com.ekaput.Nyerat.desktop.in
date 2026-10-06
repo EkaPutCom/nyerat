@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Nyerat
+GenericName=Personal Workbench
+Comment=Catatan, dokumen, riset, dan rencana bersama agent AI
+Exec=nyerat %F
+Icon=com.ekaput.Nyerat
+Terminal=false
+Categories=Office;TextEditor;GTK;GNOME;
+MimeType=text/markdown;text/x-markdown;inode/directory;
+Keywords=markdown;catatan;editor;kanban;agent;AI;
+StartupNotify=true
+DBusActivatable=false
