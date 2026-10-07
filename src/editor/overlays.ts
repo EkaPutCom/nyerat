@@ -76,16 +76,21 @@ export class OverlaySlots {
     // Taruh slot di (x, y) koordinat buffer.
     place(slot: Gtk.Box, x: number, y: number): void {
         this.view.move_overlay(slot, x, y);
+        slot.set_opacity(1);
     }
 
     // Slot kosong yang terlihat, belum diposisikan (pemanggil memakai place()).
+    // Transparan sampai place() pertama: overlay baru berada di (0, 0) dan, tanpa ini,
+    // gambar/tabel sempat berkedip di pojok kiri atas sebelum dipindahkan ke barisnya.
     acquire(): Gtk.Box {
         const slot = this.free.pop();
         if (slot) {
+            slot.set_opacity(0);
             slot.set_visible(true);
             return slot;
         }
         const fresh = new Gtk.Box();
+        fresh.set_opacity(0);
         this.view.add_overlay(fresh, 0, 0);
         this.container = fresh.get_parent();
         return fresh;
