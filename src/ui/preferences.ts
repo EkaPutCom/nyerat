@@ -19,13 +19,14 @@ export class PreferencesDialog extends Adw.PreferencesDialog {
         GObject.registerClass({
             GTypeName: 'NyeratPreferencesDialog',
             Template: uiTemplate(template),
-            InternalChildren: ['colorScheme', 'focus', 'typewriter', 'autosave', 'chatModel', 'chatModels', 'chatThinking', 'chatSave'],
+            InternalChildren: ['colorScheme', 'focus', 'typewriter', 'home', 'autosave', 'chatModel', 'chatModels', 'chatThinking', 'chatSave'],
         }, this);
     }
 
     declare _colorScheme: Adw.ComboRow;
     declare _focus: Adw.SwitchRow;
     declare _typewriter: Adw.SwitchRow;
+    declare _home: Adw.SwitchRow;
     declare _autosave: Adw.SwitchRow;
     declare _chatModel: Adw.ComboRow;
     declare _chatModels: Gtk.StringList;
@@ -38,6 +39,7 @@ export class PreferencesDialog extends Adw.PreferencesDialog {
         const flags = Gio.SettingsBindFlags.DEFAULT;
         gs.bind('focus', this._focus, 'active', flags);
         gs.bind('typewriter', this._typewriter, 'active', flags);
+        gs.bind('home', this._home, 'active', flags);
         gs.bind('autosave', this._autosave, 'active', flags);
         gs.bind('chat-thinking', this._chatThinking, 'active', flags);
         gs.bind('chat-save', this._chatSave, 'active', flags);

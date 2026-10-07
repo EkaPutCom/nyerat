@@ -8,6 +8,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { APP_ID } from './config.js';
+import type { RecentFile } from './markdown/home.js';
 
 // Tab berfile yang terbuka saat jendela terakhir ditutup, dipulihkan pada pembukaan berikutnya.
 export interface SavedTab {
@@ -66,6 +67,8 @@ export class AppSettings {
     set focus(value: boolean) { this.gsettings.set_boolean('focus', value); }
     get autosave(): boolean { return this.gsettings.get_boolean('autosave'); }
     set autosave(value: boolean) { this.gsettings.set_boolean('autosave', value); }
+    get home(): boolean { return this.gsettings.get_boolean('home'); }
+    set home(value: boolean) { this.gsettings.set_boolean('home', value); }
     get welcomed(): boolean { return this.gsettings.get_boolean('welcomed'); }
     set welcomed(value: boolean) { this.gsettings.set_boolean('welcomed', value); }
     get width(): number { return this.gsettings.get_int('width'); }
@@ -84,6 +87,13 @@ export class AppSettings {
     }
     set tabs(value: SavedTab[]) {
         this.gsettings.set_value('tabs', new GLib.Variant('a(si)', value.map(t => [t.file, t.cursor] as [string, number])));
+    }
+
+    get recentFiles(): RecentFile[] {
+        return (this.gsettings.get_value('recent-files').deepUnpack() as [string, number][]).map(([path, time]) => ({ path, time: Number(time) }));
+    }
+    set recentFiles(value: RecentFile[]) {
+        this.gsettings.set_value('recent-files', new GLib.Variant('a(sx)', value.map(r => [r.path, r.time] as [string, number])));
     }
 
     get projects(): Record<string, string> {

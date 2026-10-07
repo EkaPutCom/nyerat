@@ -159,7 +159,7 @@ export function tabTests(c: GuiContext): void {
     // ---------- Pemulihan tab ----------
     section('Pemulihan tab');
     const bab3 = put('bab-3.md', '# Bab Tiga\n\nBaris kedua.\n\nBaris ketiga yang dituju kursor.\n');
-    const settingsFor = (extra: Partial<AppSettings>): AppSettings => AppSettings.inMemory({ welcomed: true, dark: false, autosave: false, ...extra });
+    const settingsFor = (extra: Partial<AppSettings>): AppSettings => AppSettings.inMemory({ welcomed: true, home: false, dark: false, autosave: false, ...extra });
     // Jendela kedua mendaftarkan ulang aksi aplikasi; hancurkan lalu kembalikan aksi ke jendela tes utama.
     const closeWindow = (win: MainWindow) => {
         win.win.destroy();

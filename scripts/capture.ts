@@ -226,7 +226,7 @@ git add rencana/ && git commit -m "Perbarui jadwal rilis"
 
 function main(app: Adw.Application): void {
     GLib.mkdir_with_parents(OUT, 0o755);
-    const settings = AppSettings.inMemory({ welcomed: true, dark: false, sidebarPage: 'outline', width: 1280, height: 780 });
+    const settings = AppSettings.inMemory({ welcomed: true, home: false, dark: false, sidebarPage: 'outline', width: 1280, height: 780 });
     const w = new MainWindow(app, settings, null);
     const ed = w.editor, buf = ed.buffer;
     const ctx = GLib.MainContext.default();

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beranda · Dokumentasi Nyerat</title>
+<meta name="description" content="Beranda Nyerat: tab yang merangkum berkas terakhir, agent yang berjalan, tenggat kanban, dan inbox yang belum diproses.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Ruang kerja</p>
+<h1>Beranda</h1>
+<p class="lead">Tab Beranda merangkum apa yang bisa kamu lanjutkan hari ini: berkas terakhir, agent yang sedang berjalan, tenggat dari papan kanban, dan inbox yang belum diproses. Semuanya dibaca langsung dari berkas Markdown di folder kerja, tanpa database.</p>
+
+<h2 id="membuka">Membuka Beranda</h2>
+<ul>
+  <li>Beranda terbuka sendiri saat Nyerat dimulai tanpa tab tersimpan, dan saat tab terakhir ditutup.</li>
+  <li><kbd>Alt</kbd>+<kbd>Home</kbd> atau menu ☰ → <em>Beranda</em> membukanya kapan saja. Hanya ada satu tab Beranda, ditandai ikon rumah.</li>
+  <li>Tab Beranda ikut dicatat dan dipulihkan bersama tab berkas.</li>
+  <li>Tidak ingin Beranda muncul sendiri? Matikan <em>Beranda</em> di Preferensi (<kbd>Ctrl</kbd>+<kbd>,</kbd>). Setelah itu, menutup tab terakhir kembali mengosongkan dokumen seperti sebelumnya.</li>
+</ul>
+
+<h2 id="isi">Isi Beranda</h2>
+<ul>
+  <li><strong>Lanjutkan:</strong> sampai tiga kartu berkas terakhir, satu kartu per folder, supaya tiap kartu mewakili tempat kerja yang berbeda.</li>
+  <li><strong>Agent:</strong> kartu <code>@pi</code> yang sedang bekerja, antre, atau menunggu jawabanmu. Klik baris yang menunggu untuk langsung menjawab; yang bekerja membuka log-nya; yang antre membuka papannya. Bagian ini hanya tampil bila ada agent yang berjalan.</li>
+  <li><strong>Tenggat:</strong> kartu dari semua papan kanban di folder kerja yang belum selesai dan tenggatnya (<code>@{YYYY-MM-DD}</code>) sudah lewat, hari ini, besok, atau lusa. Status ditulis sebagai teks (<em>Terlambat 2 hari</em>, <em>Hari ini</em>, <em>Besok</em>), bukan hanya warna. Kartu di kolom <em>Selesai</em> atau yang sudah dicentang tidak ikut. Nama proyek diambil dari tag <code>#proyek/…</code> atau frontmatter <code>proyek:</code> papannya.</li>
+  <li><strong>Inbox:</strong> berkas inbox yang masih punya item belum dicentang, beserta jumlahnya.</li>
+  <li><strong>Berkas terbaru:</strong> berkas lain yang baru dibuka, dengan folder dan usianya.</li>
+</ul>
+
+<h2 id="tugas">Menyelesaikan tugas</h2>
+<p>Centang kotak di depan tugas untuk menandainya selesai: Nyerat menulis <code>[x]</code> ke kartu di papannya. Bila papan itu sedang terbuka, perubahan masuk lewat editornya sebagai satu langkah undo. Tugas tetap terlihat sampai Beranda digambar ulang, jadi centang yang keliru bisa langsung dibatalkan. Jika kartunya sudah berubah sejak Beranda dibaca, centang ditolak dan papan tidak disentuh. Klik judul tugas untuk membuka papannya.</p>
+
+<h2 id="data">Dari mana datanya</h2>
+<ul>
+  <li>Tenggat dan inbox dibaca dari berkas Markdown di folder kerja yang sedang dibuka (memakai cache menurut waktu ubah, maksimal 300 berkas). Tab yang belum disimpan dibaca dari editornya.</li>
+  <li>Daftar berkas terakhir disimpan di pengaturan (<code>recent-files</code>, 30 berkas).</li>
+  <li>Beranda dihitung ulang setiap kali ditampilkan, saat jendela kembali aktif (misalnya setelah <code>git pull</code> atau suntingan dari editor lain), dan saat status agent berubah.</li>
+</ul>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

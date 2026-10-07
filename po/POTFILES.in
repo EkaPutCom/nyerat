@@ -14,6 +14,7 @@ src/ui/dialogs.ts
 src/ui/filetree.ts
 src/ui/history.ts
 src/ui/historyviewer.ts
+src/ui/home.ts
 src/ui/imageviewer.ts
 src/ui/inbox.ts
 src/ui/kanban.ts

@@ -103,7 +103,7 @@ export function folderTests(c: GuiContext): void {
         eq(w.file, GLib.build_filenamev([proj, 'sub', 'dalam', 'd.md']), 'file yang terbuka tidak berubah');
     });
     test('folder sebagai argumen membuka folder itu', () => {
-        const w2 = new MainWindow(app, AppSettings.inMemory({ welcomed: true, dark: false }), proj);
+        const w2 = new MainWindow(app, AppSettings.inMemory({ welcomed: true, home: false, dark: false }), proj);
         pump();
         eq(w2.fileTree.root, proj, 'root jendela kedua');
         eq(w2.file, null, 'tidak ada file yang dibuka');
@@ -112,7 +112,7 @@ export function folderTests(c: GuiContext): void {
         pump();
     });
     test('folder terakhir dipulihkan tanpa memaksa sidebar terbuka', () => {
-        const w3 = new MainWindow(app, AppSettings.inMemory({ welcomed: true, dark: false, folder: proj, sidebar: false }), null);
+        const w3 = new MainWindow(app, AppSettings.inMemory({ welcomed: true, home: false, dark: false, folder: proj, sidebar: false }), null);
         pump();
         eq(w3.fileTree.root, proj, 'root');
         ok(!w3.sidebar.visible, 'sidebar dipaksa terbuka');
@@ -121,7 +121,7 @@ export function folderTests(c: GuiContext): void {
         pump();
     });
     test('panel Asisten yang terbuka sejak awal langsung menampilkan ringkasan konteks', () => {
-        const w4 = new MainWindow(app, AppSettings.inMemory({ welcomed: true, dark: false, folder: proj, chat: true }), null);
+        const w4 = new MainWindow(app, AppSettings.inMemory({ welcomed: true, home: false, dark: false, folder: proj, chat: true }), null);
         pump();
         ok(w4.chatSplit.show_sidebar, 'panel Asisten tidak terbuka');
         ok(w4.chat.contextButton.get_label()?.startsWith('Konteks · ≈'), `ringkasan konteks kosong: "${w4.chat.contextButton.get_label()}"`);

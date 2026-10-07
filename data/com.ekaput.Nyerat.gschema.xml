@@ -67,6 +67,14 @@
       <default>-1</default>
       <summary>Indeks tab aktif di tabs, -1 = tidak ada</summary>
     </key>
+    <key name="home" type="b">
+      <default>true</default>
+      <summary>Tampilkan Beranda saat tidak ada dokumen yang terbuka</summary>
+    </key>
+    <key name="recent-files" type="a(sx)">
+      <default>[]</default>
+      <summary>Berkas yang terakhir dibuka untuk Beranda: (path, detik Unix), terbaru dulu</summary>
+    </key>
     <key name="projects" type="a{ss}">
       <default>{}</default>
       <summary>Nama proyek ke folder, untuk harness eksternal yang mengerjakan kartu kanban</summary>

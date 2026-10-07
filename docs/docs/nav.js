@@ -19,6 +19,7 @@ const PAGES = [
     ['diagram.html', 'Diagram Mermaid dan DBML'],
     ['kanban.html', 'Papan kanban'],
     ['inbox.html', 'Inbox'],
+    ['beranda.html', 'Beranda'],
     ['berkas.html', 'Berkas, tab, dan sidebar'],
     ['git.html', 'Riwayat Git'],
   ]],

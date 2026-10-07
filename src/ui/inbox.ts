@@ -26,6 +26,18 @@ import { _, fmt, ngettext } from '../i18n.js';
 
 const MAX_WIDTH = 720;
 
+// "10 menit lalu", "1 jam lalu", "3 hari lalu"; lebih lama dari seminggu berupa tanggal. Dipakai juga Beranda.
+export function ageLabel(captured: Date, now: Date): string {
+    const age: Age = ageOf(captured, now);
+    switch (age.unit) {
+        case 'now': return _('baru saja');
+        case 'minutes': return fmt(ngettext('{n} menit lalu', '{n} menit lalu', age.n), { n: age.n });
+        case 'hours': return fmt(ngettext('{n} jam lalu', '{n} jam lalu', age.n), { n: age.n });
+        case 'days': return fmt(ngettext('{n} hari lalu', '{n} hari lalu', age.n), { n: age.n });
+        default: return captured.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: captured.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
+    }
+}
+
 export interface InboxDialogs {
     editNote(parent: Gtk.Window | null, item: CardDraft, title?: string, listNotes?: () => string[]): Awaitable<CardDraft | null>;
 }
@@ -151,16 +163,8 @@ export class InboxView {
         return { title, description: rest.map(l => l.trim()).filter(Boolean).join(' ') };
     }
 
-    // "10 menit lalu", "1 jam lalu", "3 hari lalu"; lebih lama dari seminggu berupa tanggal.
     ageLabel(captured: Date): string {
-        const age: Age = ageOf(captured, this.now());
-        switch (age.unit) {
-            case 'now': return _('baru saja');
-            case 'minutes': return fmt(ngettext('{n} menit lalu', '{n} menit lalu', age.n), { n: age.n });
-            case 'hours': return fmt(ngettext('{n} jam lalu', '{n} jam lalu', age.n), { n: age.n });
-            case 'days': return fmt(ngettext('{n} hari lalu', '{n} hari lalu', age.n), { n: age.n });
-            default: return captured.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: captured.getFullYear() === this.now().getFullYear() ? undefined : 'numeric' });
-        }
+        return ageLabel(captured, this.now());
     }
 
     private buildRow(i: number): Gtk.ListBoxRow {

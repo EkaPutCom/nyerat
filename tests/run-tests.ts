@@ -11,6 +11,7 @@
 //   gjs -m dist/run-tests.js --shot-tree-menu=/tmp/m  simpan tangkapan menu klik kanan pohon berkas dan papan kanban baru (/tmp/m-menu.png, -papan.png)
 //   gjs -m dist/run-tests.js --shot-wikilink=/tmp/w   simpan tangkapan saran [[catatan]] terang/gelap (/tmp/w-terang.png, -terang-saran.png, -gelap*.png)
 //   gjs -m dist/run-tests.js --shot-gnome=/tmp/g      simpan tangkapan jendela sempit, dialog pintasan, tema terang/gelap (/tmp/g-sempit.png, -pintasan.png, -terang.png, -gelap.png)
+//   gjs -m dist/run-tests.js --shot-home=/tmp/b       simpan tangkapan Beranda terang/gelap/sempit (/tmp/b-terang.png, -gelap.png, -sempit.png)
 //   gjs -m dist/run-tests.js --shot-due=/tmp/d        simpan tangkapan kalender tenggat dan dialog kartu terang/gelap (/tmp/d-kalender.png, -dialog.png, -dialog-gelap.png)
 //
 // Tes GUI membuka jendela sungguhan, jadi perlu sesi desktop (X11/Wayland).
@@ -32,6 +33,7 @@ import { settingsTests } from './unit/settings.js';
 import { tableTests } from './unit/table.js';
 import { kanbanModelTests } from './unit/kanban.js';
 import { inboxModelTests } from './unit/inbox.js';
+import { homeModelTests } from './unit/home.js';
 import { codeLanguageTests } from './unit/codelang.js';
 import { htmlTests } from './unit/html.js';
 import { dbmlTests } from './unit/dbml.js';
@@ -70,6 +72,7 @@ import { gnomeTests } from './gui/gnome.js';
 import { robustnessTests } from './gui/robust.js';
 import { historyTests } from './gui/history.js';
 import { tabTests } from './gui/tabs.js';
+import { homeTests } from './gui/home.js';
 
 setRoot(import.meta.url);
 
@@ -81,6 +84,7 @@ function runUnitTests(): void {
     tableTests();
     kanbanModelTests();
     inboxModelTests();
+    homeModelTests();
     codeLanguageTests();
     htmlTests();
     dbmlTests();
@@ -119,6 +123,12 @@ function runGuiTests(app: Adw.Application): void {
         c.w.win.destroy();
         return;
     }
+    if (opt('only-home')) {
+        homeTests(c);
+        c.buf.set_modified(false);
+        c.w.win.destroy();
+        return;
+    }
     if (opt('only-folder-mouse')) {
         folderMouseTests(c);
         c.buf.set_modified(false);
@@ -152,6 +162,7 @@ function runGuiTests(app: Adw.Application): void {
     windowSizeTests(c);
     gnomeTests(c);
     tabTests(c);
+    homeTests(c);
     historyTests(c);
     chatTests(c);
     robustnessTests(c);

@@ -5,6 +5,7 @@
 
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
+import Gio from 'gi://Gio';
 
 export class TabBar {
     readonly widget: Adw.TabBar;
@@ -66,6 +67,12 @@ export class TabBar {
         if (!page) return;
         page.title = title;
         page.tooltip = tooltip ?? '';
+    }
+
+    // Ikon simbolik di depan judul (mis. Beranda); null = tanpa ikon seperti tab dokumen.
+    setIcon(id: number, icon: string | null): void {
+        const page = this.pages.get(id);
+        if (page) page.icon = icon ? Gio.ThemedIcon.new(icon) : null;
     }
 
     setActive(id: number): void {

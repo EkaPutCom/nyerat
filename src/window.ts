@@ -48,6 +48,8 @@ import { registerActions, TEXT_ACTIONS } from './actions.js';
 import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
 import { InboxView } from './ui/inbox.js';
+import { HomeView, RESUME_CARDS, type HomeData, type HomeEntry } from './ui/home.js';
+import { dueTasks, localDate, moveRecent, openInboxes, rememberRecent, splitRecent, type RecentFile, type Task } from './markdown/home.js';
 import { isInbox, newInbox, parseInbox, serializeInbox, type Inbox } from './markdown/inbox.js';
 import { assignCard, cardMeta, countCards, isKanban, newBoard, parseBoard, serializeBoard, updateCard, type Board, type Card, type Position } from './markdown/kanban.js';
 import { Orchestrator } from './orchestrator.js';
@@ -57,6 +59,11 @@ import type { MenuEntry } from './ui/menu.js';
 import { _, fmt } from './i18n.js';
 
 const UNTITLED = _('Tanpa Judul');
+const HOME = _('Beranda');
+// Penanda tab Beranda di daftar tab tersimpan (bukan path berkas).
+const HOME_TAB = 'nyerat:beranda';
+// Aksi yang tidak berarti di Beranda (tidak ada teks untuk disimpan atau diurungkan).
+const DOCUMENT_ACTIONS = ['save', 'save-as', 'export-html', 'undo', 'redo', 'kanban-view'];
 // Jeda tanpa ketikan sebelum auto save menulis ke disk.
 const AUTOSAVE_DELAY_MS = 1000;
 
@@ -81,6 +88,7 @@ interface Doc {
     id: number;
     editor: MarkdownView;
     file: string | null;          // path dokumen, null = belum pernah disimpan
+    home: boolean;                // tab Beranda: editornya tidak dipakai, isi tab adalah HomeView
     textOverride: boolean;        // pengguna memilih tampilan teks untuk papan kanban ini
     boardText: string;            // teks yang terakhir ditulis/dibaca papan; untuk mengenali perubahan dari luar (undo)
     reloadQueued: boolean;
@@ -104,6 +112,7 @@ export class MainWindow {
     readonly tabBar: TabBar;
     readonly board: KanbanBoard;
     readonly inbox: InboxView;
+    readonly home: HomeView;
     readonly orchestrator: Orchestrator;
     // Dialog harness bisa diganti di tes dengan jawaban langsung; dialog asli menjawab lewat Promise.
     harnessDialogs: {
@@ -126,6 +135,7 @@ export class MainWindow {
     private docs: Doc[] = [];
     private doc: Doc;                 // dokumen aktif
     private nextId = 1;
+    private restoring = false;        // tab sesi lalu sedang dibuka lagi: jangan dicatat sebagai baru dibuka
     private palette: Palette | null = null;
     dark: boolean;
     private colorScheme: boolean | null = null;   // pilihan terakhir yang diterapkan setDark (null = ikuti sistem)
@@ -146,6 +156,7 @@ export class MainWindow {
         this.statusBar = new StatusBar();
         this.board = new KanbanBoard();
         this.inbox = new InboxView();
+        this.home = new HomeView();
         this.chat = new ChatPanel();
         this.header = new HeaderBar();
 
@@ -162,6 +173,7 @@ export class MainWindow {
             linkedNotes: (file, links) => this.linkedNotes(file, links),
             changed: (run, message) => {
                 if (this.boardMode && this.file === run.board) this.board.queueRender();
+                this.refreshHome();
                 if (message) this.toast(message);
             },
         });
@@ -171,6 +183,13 @@ export class MainWindow {
             const root = this.noteRoot(this.doc);
             return root ? listMarkdownFiles(root) : [];
         };
+        this.home.onOpenFile = path => this.openInTab(path);
+        this.home.onOpenTask = task => this.openWorkspaceFile(task.file);
+        this.home.onToggleTask = (task, done) => this.toggleTask(task, done);
+        this.home.onOpenInbox = file => this.openWorkspaceFile(file);
+        this.home.onOpenRun = id => this.openRun(id);
+        this.home.onOpenFolder = () => void this.chooseFolder();
+        this.home.onNewDocument = () => this.newDocument();
         this.board.onOpenNote = link => this.openNote(link);
         this.board.listNotes = () => {
             const root = this.noteRoot(this.doc);
@@ -197,6 +216,7 @@ export class MainWindow {
                 doc.file = moved;  // dokumen yang terbuka ikut pindah; isi buffer tidak berubah
                 this.refreshTitle(doc);
             }
+            this.settings.recentFiles = moveRecent(this.settings.recentFiles, from, to);
             this.syncHistory(true);
         };
         this.fileTree.onDeleted = path => {
@@ -282,6 +302,7 @@ export class MainWindow {
         column.append(this.findBar);
         this.content.add_named(this.board.widget, 'board');
         this.content.add_named(this.inbox.widget, 'inbox');
+        this.content.add_named(this.home.widget, 'home');
         column.append(this.content);
         column.append(this.statusBar);
         // Panel Asisten di kanan, selebar tetap; sisanya untuk editor.
@@ -314,7 +335,9 @@ export class MainWindow {
         this.win.connect('unrealize', () => this.dispose());
         // Commit baru biasanya dibuat di luar aplikasi; saat kembali ke jendela, muat ulang riwayat.
         this.win.connect('notify::is-active', () => {
-            if (this.win.is_active) this.syncHistory(true);
+            if (!this.win.is_active) return;
+            this.syncHistory(true);
+            this.refreshHome();   // berkas bisa berubah di luar aplikasi (git pull, agent, editor lain)
         });
 
         registerActions(app, this);
@@ -350,6 +373,8 @@ export class MainWindow {
         } else if (!settings.welcomed) {
             this.editor.setText(WELCOME);
             settings.welcomed = true;
+        } else if (settings.home) {
+            this.openHome();
         } else {
             this.editor.setText('');
         }
@@ -389,7 +414,7 @@ export class MainWindow {
     // Buat dokumen kosong beserta editornya, tanpa mengaktifkannya.
     private addDoc(): Doc {
         const editor = new MarkdownView();
-        const doc: Doc = { id: this.nextId++, editor, file: null, textOverride: false, boardText: '', reloadQueued: false, autosaveTimer: 0, lastChange: 0, changes: 0 };
+        const doc: Doc = { id: this.nextId++, editor, file: null, home: false, textOverride: false, boardText: '', reloadQueued: false, autosaveTimer: 0, lastChange: 0, changes: 0 };
         // Callback editor hanya berlaku saat dokumennya aktif; yang di latar tidak menyentuh outline dan status bar.
         editor.onHighlighted = ({ headings, words, characters }) => {
             if (doc !== this.doc) return;
@@ -437,6 +462,7 @@ export class MainWindow {
         this.autosave(previous);   // meninggalkan tab = titik aman untuk menyimpan
         this.findBar.setTarget(doc.editor.buffer, doc.editor.view);
         this.tabBar.setActive(doc.id);
+        if (doc.file) this.rememberRecent(doc.file);
         this.outline.update(doc.editor.headings);
         this.syncMode();
         this.updateTitle();
@@ -447,13 +473,14 @@ export class MainWindow {
 
     // Nama tab/judul untuk dokumen.
     private nameOf(doc: Doc): string {
+        if (doc.home) return HOME;
         return doc.file ? GLib.path_get_basename(doc.file) : UNTITLED;
     }
 
     // Dokumen tanpa file dan tanpa perubahan tidak ada isinya yang perlu dipertahankan,
     // jadi boleh dipakai ulang untuk file yang dibuka berikutnya.
     private isPristine(doc: Doc): boolean {
-        return !doc.file && !doc.editor.buffer.get_modified();
+        return !doc.home && !doc.file && !doc.editor.buffer.get_modified();
     }
 
     // Tab sesudah/sebelum yang aktif (berputar).
@@ -471,7 +498,9 @@ export class MainWindow {
 
     private removeTab(doc: Doc): boolean {
         if (this.docs.length === 1) {
+            if (doc.home && this.settings.home) return true;
             this.resetDocument(doc);
+            if (this.settings.home) this.makeHome(doc);
             return true;
         }
         const index = this.docs.indexOf(doc);
@@ -492,8 +521,8 @@ export class MainWindow {
     private rememberTabs(): void {
         const docs = this.tabBar.ids()
             .map(id => this.docs.find(d => d.id === id))
-            .filter((d): d is Doc => !!d?.file);
-        this.settings.tabs = docs.map(d => ({ file: d.file!, cursor: d.editor.cursorOffset }));
+            .filter((d): d is Doc => !!d && (!!d.file || d.home));
+        this.settings.tabs = docs.map(d => ({ file: d.home ? HOME_TAB : d.file!, cursor: d.home ? 0 : d.editor.cursorOffset }));
         this.settings.activeTab = docs.indexOf(this.doc);
     }
 
@@ -504,7 +533,14 @@ export class MainWindow {
         const opened: [Doc, number][] = [];
         let active: Doc | null = null;
         let missing = 0;
+        this.restoring = true;
         for (const [i, tab] of saved.entries()) {
+            if (tab?.file === HOME_TAB) {
+                this.openHome();
+                opened.push([this.doc, 0]);
+                if (i === this.settings.activeTab) active = this.doc;
+                continue;
+            }
             if (typeof tab?.file !== 'string' || !fileExists(tab.file) || isDirectory(tab.file)) {
                 missing++;
                 continue;
@@ -513,6 +549,7 @@ export class MainWindow {
             opened.push([this.doc, Number(tab.cursor) || 0]);
             if (i === this.settings.activeTab) active = this.doc;
         }
+        this.restoring = false;
         if (!opened.length) return false;
         for (const [doc, cursor] of opened) doc.editor.restoreCursor(cursor);
         this.activate(active ?? opened[opened.length - 1][0]);
@@ -712,8 +749,16 @@ export class MainWindow {
         return this.content.visible_child_name === 'inbox';
     }
 
+    get homeMode(): boolean {
+        return this.content.visible_child_name === 'home';
+    }
+
     // Dokumen kanban tampil sebagai papan dan dokumen inbox sebagai inbox, kecuali pengguna memilih tampilan teks.
     private syncMode(): void {
+        if (this.doc.home) {
+            this.setView('home');
+            return;
+        }
         const text = this.editor.getText();
         const structured = !this.doc.textOverride;
         this.setView(structured && isKanban(text) ? 'board' : structured && isInbox(text) ? 'inbox' : 'text');
@@ -723,8 +768,13 @@ export class MainWindow {
         this.setView(on ? 'board' : 'text');
     }
 
-    private setView(view: 'board' | 'inbox' | 'text'): void {
-        if (view === 'board') {
+    private setView(view: 'board' | 'inbox' | 'home' | 'text'): void {
+        this.statusBar.set_visible(view !== 'home');
+        if (view === 'home') {
+            this.findBar.close();
+            this.content.visible_child_name = 'home';
+            this.home.render(this.homeData());
+        } else if (view === 'board') {
             this.board.setBoard(parseBoard(this.editor.getText()));
             this.doc.boardText = this.editor.getText();
             this.findBar.close();
@@ -743,16 +793,21 @@ export class MainWindow {
             this.editor.view.grab_focus();
         }
         const action = this.app.lookup_action('kanban-view');
-        if (action instanceof Gio.SimpleAction) action.set_state(GLib.Variant.new_boolean(view !== 'text'));
+        if (action instanceof Gio.SimpleAction) action.set_state(GLib.Variant.new_boolean(view === 'board' || view === 'inbox'));
         this.syncActionsEnabled();
     }
 
     // Aksi penyunting teks mati selama papan kanban tampil (teksnya tersembunyi).
     syncActionsEnabled(): void {
-        const board = this.boardMode || this.inboxMode;
+        const home = this.homeMode;
+        const board = this.boardMode || this.inboxMode || home;
         for (const name of TEXT_ACTIONS) {
             const action = this.app.lookup_action(name);
             if (action instanceof Gio.SimpleAction) action.set_enabled(!board);
+        }
+        for (const name of DOCUMENT_ACTIONS) {
+            const action = this.app.lookup_action(name);
+            if (action instanceof Gio.SimpleAction) action.set_enabled(!home);
         }
     }
 
@@ -777,6 +832,108 @@ export class MainWindow {
     newInboxDocument(): void {
         this.resetDocument(this.blankDocument(), serializeInbox(newInbox()));
         this.inbox.focusCapture();
+    }
+
+    // ---------- Beranda ----------
+
+    // Alt+Home: pindah ke tab Beranda, atau buka bila belum ada (memakai tab kosong yang aktif bila ada).
+    openHome(): void {
+        const open = this.docs.find(d => d.home);
+        if (open) {
+            if (open === this.doc) this.refreshHome();
+            else this.activate(open);
+            return;
+        }
+        this.makeHome(this.isPristine(this.doc) ? this.doc : this.addDoc());
+    }
+
+    private makeHome(doc: Doc): void {
+        doc.home = true;
+        doc.file = null;
+        doc.textOverride = false;
+        this.tabBar.setIcon(doc.id, 'user-home-symbolic');
+        this.activate(doc);
+        this.syncMode();
+        this.updateTitle();
+        this.fileTree.reveal(null);
+    }
+
+    // Gambar ulang Beranda bila sedang tampil; data dihitung ulang dari berkas setiap kali.
+    refreshHome(): void {
+        if (this.doc.home && this.homeMode) this.home.render(this.homeData());
+    }
+
+    private rememberRecent(path: string): void {
+        if (this.restoring) return;
+        this.settings.recentFiles = rememberRecent(this.settings.recentFiles, path, Math.floor(Date.now() / 1000));
+    }
+
+    homeData(now = new Date()): HomeData {
+        const root = this.fileTree.root;
+        const recent = this.settings.recentFiles.filter(r => fileExists(r.path) && !isDirectory(r.path));
+        const { resume, others } = splitRecent(recent, RESUME_CARDS);
+        // Papan dan inbox dibaca lewat cache readProject (menurut waktu ubah); tab yang belum disimpan dibaca dari editornya.
+        const files = root ? readProject(root, null) : [];
+        for (const doc of this.docs) {
+            if (!doc.file || !doc.editor.buffer.get_modified()) continue;
+            const entry = files.find(f => f.name === this.projectName(doc.file));
+            if (entry) entry.text = doc.editor.getText();
+        }
+        const realName = GLib.get_real_name();
+        return {
+            now,
+            name: realName && realName !== 'Unknown' ? realName.split(/\s+/)[0] : null,
+            workspace: root,
+            resume: resume.map(r => this.homeEntry(r, true)),
+            recent: others.map(r => this.homeEntry(r, false)),
+            tasks: dueTasks(files, localDate(now), cardProject),
+            runs: this.orchestrator.queue.runs.filter(r => isActive(r.status)).map(r => ({ id: r.id, agent: r.agent, title: r.title, status: r.status })),
+            inboxes: openInboxes(files),
+        };
+    }
+
+    // Kartu: nama folder di atas nama berkas. Daftar: nama berkas di atas foldernya (relatif terhadap folder kerja bila di dalamnya).
+    private homeEntry(r: RecentFile, card: boolean): HomeEntry {
+        const root = this.fileTree.root;
+        const dir = GLib.path_get_dirname(r.path), file = GLib.path_get_basename(r.path);
+        if (card) return { path: r.path, title: GLib.path_get_basename(dir), subtitle: file, time: r.time };
+        const folder = root && dir === root ? GLib.path_get_basename(root)
+            : root && dir.startsWith(`${root}/`) ? dir.slice(root.length + 1)
+            : dir.replace(GLib.get_home_dir(), '~');
+        return { path: r.path, title: file, subtitle: folder, time: r.time };
+    }
+
+    private openWorkspaceFile(name: string): void {
+        const root = this.fileTree.root;
+        if (root) this.openInTab(GLib.build_filenamev([root, ...name.split('/')]));
+    }
+
+    // Centang dari Beranda: tulis ke papannya (lewat editor bila terbuka). Kartu yang sudah berubah tidak disentuh.
+    private toggleTask(task: Task, done: boolean): boolean {
+        const root = this.fileTree.root;
+        if (!root) return false;
+        let changed = false;
+        const error = this.updateBoardFile(GLib.build_filenamev([root, ...task.file.split('/')]), board => {
+            const card = board.columns[task.at.column]?.cards[task.at.index];
+            if (card?.text !== task.card) { changed = true; return board; }
+            return updateCard(board, task.at, { done: done ? true : task.box ? false : null });
+        });
+        if (error || changed) {
+            this.toast(error ? fmt(_('Tidak bisa mengubah kartu: {error}'), { error }) : _('Kartu sudah berubah; buka papannya untuk memeriksa'));
+            // Ditunda: baris yang dicentang masih menjalankan handler-nya.
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { this.refreshHome(); return GLib.SOURCE_REMOVE; });
+            return false;
+        }
+        return true;
+    }
+
+    // Agent yang menunggu jawaban langsung ditanya; yang bekerja ditunjukkan log-nya; yang antre membuka papannya.
+    private openRun(id: number): void {
+        const run = this.orchestrator.queue.runs.find(r => r.id === id);
+        if (!run) return;
+        if (run.status === 'waiting') this.answerHarness(run);
+        else if (run.status === 'working') this.showRunLog(run);
+        else this.openInTab(run.board);
     }
 
     // ---------- Riwayat git ----------
@@ -1071,6 +1228,11 @@ export class MainWindow {
         const name = this.nameOf(doc);
         this.tabBar.setTitle(doc.id, `${mark}${name}`, doc.file);
         if (doc !== this.doc) return;
+        if (doc.home) {
+            this.header.setTitle(name, this.fileTree.root ? GLib.path_get_basename(this.fileTree.root) : APP_NAME);
+            this.win.set_title(`${name} — ${APP_NAME}`);
+            return;
+        }
         this.header.setTitle(`${mark}${name}`, doc.file ? GLib.path_get_dirname(doc.file).replace(GLib.get_home_dir(), '~') : APP_NAME);
         this.win.set_title(`${mark}${name} — ${APP_NAME}`);
     }
@@ -1119,6 +1281,8 @@ export class MainWindow {
     private resetDocument(doc: Doc, text = ''): void {
         this.activate(doc);
         doc.file = null;
+        doc.home = false;
+        this.tabBar.setIcon(doc.id, null);
         doc.editor.setText(text);
         doc.textOverride = false;
         this.syncMode();
@@ -1136,6 +1300,7 @@ export class MainWindow {
     private show(absolute: string, text: string): void {
         // this.file diisi sebelum setText(): path gambar relatif dihitung dari foldernya.
         this.file = absolute;
+        this.rememberRecent(absolute);
         this.editor.setText(text);
         this.doc.textOverride = false;
         this.syncMode();
@@ -1207,6 +1372,8 @@ export class MainWindow {
         this.fileTree.reveal(this.file);
         this.syncHistory();
         this.settings.folder = absolute;
+        if (this.doc.home) this.updateTitle();
+        this.refreshHome();
         if (!show) return;
         this.sidebar.setPage('files');
         this.settings.sidebar = true;
@@ -1229,6 +1396,7 @@ export class MainWindow {
 
     // Dokumen berfile disimpan seketika (hasil boolean); dokumen baru menunggu dialog Simpan Sebagai.
     save(): Awaitable<boolean> {
+        if (this.doc.home) return true;
         if (!this.file) return this.saveAs();
         if (!this.write(this.file, this.editor.getText())) return false;
         this.editor.buffer.set_modified(false);
@@ -1239,6 +1407,7 @@ export class MainWindow {
 
     async saveAs(): Promise<boolean> {
         const doc = this.doc;
+        if (doc.home) return false;
         let path = await chooseFile(this.win, {
             title: _('Simpan Markdown'), save: true, filters: ['markdown', 'all'],
             name: this.file ? this.documentName : `${this.suggestName()}.md`,
@@ -1259,6 +1428,7 @@ export class MainWindow {
     }
 
     async exportHtml(): Promise<void> {
+        if (this.doc.home) return;
         const base = this.file ? this.documentName.replace(/\.[^.]+$/, '') : this.suggestName();
         const text = this.editor.getText(), title = this.editor.headings[0]?.text || base;
         const path = await chooseFile(this.win, {

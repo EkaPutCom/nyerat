@@ -3,6 +3,10 @@
   <menu id="mainMenu">
     <section>
       <item>
+        <attribute name="label" translatable="yes">Beranda</attribute>
+        <attribute name="action">app.home</attribute>
+      </item>
+      <item>
         <attribute name="label" translatable="yes">Buka Folder…</attribute>
         <attribute name="action">app.open-folder</attribute>
       </item>

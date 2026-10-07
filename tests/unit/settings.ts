@@ -15,6 +15,8 @@ export function settingsTests(): void {
         eq(s.projects, {}, 'projects');
         eq(s.sidebarPage, 'outline', 'sidebarPage');
         eq(s.activeTab, -1, 'activeTab');
+        eq(s.home, true, 'home');
+        eq(s.recentFiles, [], 'recentFiles');
     });
     test('pengaturan ditulis lalu dibaca kembali, termasuk tipe majemuk', () => {
         const s = AppSettings.inMemory();
@@ -24,6 +26,8 @@ export function settingsTests(): void {
         s.tabs = [{ file: '/tmp/a.md', cursor: 7 }, { file: '/tmp/b.md', cursor: 0 }];
         s.projects = { toko: '/tmp/toko' };
         s.sidebarPage = 'history';
+        s.recentFiles = [{ path: '/tmp/a.md', time: 1791360000 }];
+        eq(s.recentFiles, [{ path: '/tmp/a.md', time: 1791360000 }], 'recentFiles');
         eq(s.focus, true, 'focus');
         eq(s.dark, false, 'dark');
         eq(s.folder, '/tmp/proyek', 'folder');

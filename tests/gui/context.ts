@@ -36,7 +36,7 @@ export interface GuiContext {
 
 export function createContext(app: Adw.Application): GuiContext {
     // Auto save mati: banyak tes membuka file sungguhan (dokumen contoh, README) lalu mengeditnya.
-    const settings = AppSettings.inMemory({ welcomed: true, dark: false, autosave: false });
+    const settings = AppSettings.inMemory({ welcomed: true, home: false, dark: false, autosave: false });
     const w = new MainWindow(app, settings, null);
     const ed = w.editor;
     const buf = ed.buffer;

@@ -41,6 +41,12 @@
           <object class="AdwPreferencesGroup">
             <property name="title" translatable="yes">Berkas</property>
             <child>
+              <object class="AdwSwitchRow" id="home">
+                <property name="title" translatable="yes">Beranda</property>
+                <property name="subtitle" translatable="yes">Tampilkan saat tidak ada dokumen yang terbuka</property>
+              </object>
+            </child>
+            <child>
               <object class="AdwSwitchRow" id="autosave">
                 <property name="title" translatable="yes">Simpan otomatis</property>
                 <property name="subtitle" translatable="yes">Berlaku untuk dokumen yang sudah punya file</property>

@@ -6,7 +6,7 @@ import { _ } from './i18n.js';
 // Aksi yang tidak ada di sini (misalnya untuk tiap judul atau perintah tabel) tidak muncul di palet.
 export const COMMAND_LABELS: Record<string, string> = {
     'new': _('Dokumen Baru'), 'open': _('Buka File…'), 'open-folder': _('Buka Folder…'), 'save': _('Simpan'), 'save-as': _('Simpan Sebagai…'),
-    'export-html': _('Ekspor HTML…'), 'close-tab': _('Tutup Tab'), 'next-tab': _('Tab Berikutnya'), 'prev-tab': _('Tab Sebelumnya'),
+    'export-html': _('Ekspor HTML…'), 'home': _('Beranda'), 'close-tab': _('Tutup Tab'), 'next-tab': _('Tab Berikutnya'), 'prev-tab': _('Tab Sebelumnya'),
     'find': _('Cari'), 'undo': _('Urungkan'), 'redo': _('Ulangi'),
     'bold': _('Tebal'), 'italic': _('Miring'), 'strike': _('Coret'), 'inline-code': _('Kode Sebaris'), 'highlight': _('Sorot'), 'link': _('Sisipkan Tautan'),
     'image': _('Sisipkan Gambar…'), 'zoom-image': _('Perbesar Gambar'), 'codeblock': _('Sisipkan Blok Kode'), 'table': _('Sisipkan Tabel'),
