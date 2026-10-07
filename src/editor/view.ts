@@ -217,7 +217,10 @@ export class MarkdownView {
         // Margin dihitung dari lebar area yang terlihat (page_size adjustment horizontal,
         // diisi TextView saat dialokasikan), bukan dari lebar TextView yang ikut ditentukan
         // margin itu sendiri. GTK 4 tidak punya sinyal size-allocate.
+        // Transparan sampai margin pertama terpasang: tanpa ini frame pertama editor baru
+        // tergambar dengan margin 0 (teks menempel di kiri) sebelum idle di updateMargins().
         const hadj = this.widget.get_hadjustment();
+        this.widget.set_opacity(0);
         hadj.connect('changed', () => this.updateMargins(hadj.get_page_size()));
         // Fase CAPTURE: berjalan sebelum penanganan tombol/klik bawaan GtkSourceView
         // (indentasi otomatis, Tab, menaruh kursor), sama seperti handler GTK 3 yang mendahuluinya.
@@ -348,6 +351,7 @@ export class MarkdownView {
 
     // Kolom teks di tengah: margin kiri/kanan mengikuti lebar jendela.
     private updateMargins(width: number): void {
+        if (width <= 0) return;   // belum dialokasikan; tunggu lebar yang sebenarnya
         const m = Math.max(36, Math.floor((width - TEXT_WIDTH) / 2));
         if (m === this.margin && width === this.width) return;
         this.margin = m;
@@ -361,6 +365,7 @@ export class MarkdownView {
             this.images.setMaxWidth(width - 2 * m);
             this.tableLayer.setMaxWidth(width - 2 * m);
             this.mermaid.setMaxWidth(width - 2 * m);
+            this.widget.set_opacity(1);
             return GLib.SOURCE_REMOVE;
         });
     }
