@@ -47,6 +47,8 @@ import { chooseFile, askSaveChanges, showError, harnessAskDialog, harnessTextDia
 import { registerActions, TEXT_ACTIONS } from './actions.js';
 import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
+import { InboxView } from './ui/inbox.js';
+import { isInbox, newInbox, parseInbox, serializeInbox, type Inbox } from './markdown/inbox.js';
 import { assignCard, cardMeta, countCards, isKanban, newBoard, parseBoard, serializeBoard, updateCard, type Board, type Card, type Position } from './markdown/kanban.js';
 import { Orchestrator } from './orchestrator.js';
 import { cardProject, checkProjectFolder, HARNESSES, isActive, PROJECT_NAME, type LinkedNote, type HarnessAsk, type HarnessReply, type Run } from './agent/harness.js';
@@ -101,6 +103,7 @@ export class MainWindow {
     readonly statusBar: StatusBar;
     readonly tabBar: TabBar;
     readonly board: KanbanBoard;
+    readonly inbox: InboxView;
     readonly orchestrator: Orchestrator;
     // Dialog harness bisa diganti di tes dengan jawaban langsung; dialog asli menjawab lewat Promise.
     harnessDialogs: {
@@ -142,6 +145,7 @@ export class MainWindow {
         this.sidebar = new Sidebar(this.fileTree.widget, this.outline.widget, this.history.widget);
         this.statusBar = new StatusBar();
         this.board = new KanbanBoard();
+        this.inbox = new InboxView();
         this.chat = new ChatPanel();
         this.header = new HeaderBar();
 
@@ -161,6 +165,12 @@ export class MainWindow {
                 if (message) this.toast(message);
             },
         });
+        this.inbox.onChange = inbox => this.writeInbox(inbox);
+        this.inbox.onOpenNote = link => this.openNote(link);
+        this.inbox.listNotes = () => {
+            const root = this.noteRoot(this.doc);
+            return root ? listMarkdownFiles(root) : [];
+        };
         this.board.onOpenNote = link => this.openNote(link);
         this.board.listNotes = () => {
             const root = this.noteRoot(this.doc);
@@ -271,6 +281,7 @@ export class MainWindow {
         column.append(this.tabBar.widget);
         column.append(this.findBar);
         this.content.add_named(this.board.widget, 'board');
+        this.content.add_named(this.inbox.widget, 'inbox');
         column.append(this.content);
         column.append(this.statusBar);
         // Panel Asisten di kanan, selebar tetap; sisanya untuk editor.
@@ -383,7 +394,7 @@ export class MainWindow {
         editor.onHighlighted = ({ headings, words, characters }) => {
             if (doc !== this.doc) return;
             this.outline.update(headings);
-            if (!this.boardMode) this.statusBar.setDocumentCounts(words, characters);
+            if (!this.boardMode && !this.inboxMode) this.statusBar.setDocumentCounts(words, characters);
         };
         editor.onCursorMoved = (line, column) => {
             if (doc !== this.doc) return;
@@ -554,6 +565,7 @@ export class MainWindow {
         this.palette = palette;
         for (const doc of this.docs) doc.editor.setPalette(palette);
         this.board.setPalette(palette);
+        this.inbox.setPalette(palette);
         this.chat.setPalette(palette);
     }
 
@@ -696,18 +708,34 @@ export class MainWindow {
         return this.content.visible_child_name === 'board';
     }
 
-    // Dokumen kanban tampil sebagai papan, kecuali pengguna memilih tampilan teks.
+    get inboxMode(): boolean {
+        return this.content.visible_child_name === 'inbox';
+    }
+
+    // Dokumen kanban tampil sebagai papan dan dokumen inbox sebagai inbox, kecuali pengguna memilih tampilan teks.
     private syncMode(): void {
-        this.setBoardMode(isKanban(this.editor.getText()) && !this.doc.textOverride);
+        const text = this.editor.getText();
+        const structured = !this.doc.textOverride;
+        this.setView(structured && isKanban(text) ? 'board' : structured && isInbox(text) ? 'inbox' : 'text');
     }
 
     setBoardMode(on: boolean): void {
-        if (on) {
+        this.setView(on ? 'board' : 'text');
+    }
+
+    private setView(view: 'board' | 'inbox' | 'text'): void {
+        if (view === 'board') {
             this.board.setBoard(parseBoard(this.editor.getText()));
             this.doc.boardText = this.editor.getText();
             this.findBar.close();
             this.content.visible_child_name = 'board';
             this.showBoardCounts(this.board.getBoard());
+        } else if (view === 'inbox') {
+            this.inbox.setInbox(parseInbox(this.editor.getText()));
+            this.doc.boardText = this.editor.getText();
+            this.findBar.close();
+            this.content.visible_child_name = 'inbox';
+            this.statusBar.setInboxCounts(this.inbox.getInbox().items.length);
         } else {
             this.content.visible_child_name = `doc-${this.doc.id}`;
             this.statusBar.setCounts(this.editor.getText());
@@ -715,33 +743,40 @@ export class MainWindow {
             this.editor.view.grab_focus();
         }
         const action = this.app.lookup_action('kanban-view');
-        if (action instanceof Gio.SimpleAction) action.set_state(GLib.Variant.new_boolean(on));
+        if (action instanceof Gio.SimpleAction) action.set_state(GLib.Variant.new_boolean(view !== 'text'));
         this.syncActionsEnabled();
     }
 
     // Aksi penyunting teks mati selama papan kanban tampil (teksnya tersembunyi).
     syncActionsEnabled(): void {
-        const board = this.boardMode;
+        const board = this.boardMode || this.inboxMode;
         for (const name of TEXT_ACTIONS) {
             const action = this.app.lookup_action(name);
             if (action instanceof Gio.SimpleAction) action.set_enabled(!board);
         }
     }
 
-    // Menu/pintasan "Tampilan Papan": berganti antara papan dan teks untuk dokumen kanban.
+    // Menu/pintasan "Tampilan Papan": berganti antara papan/inbox dan teks untuk dokumen kanban atau inbox.
     toggleBoardView(on: boolean): void {
-        if (on && !isKanban(this.editor.getText())) {
-            this.toast(_('Dokumen ini bukan papan kanban (butuh "kanban: true" di frontmatter)'));
+        const text = this.editor.getText();
+        if (on && !isKanban(text) && !isInbox(text)) {
+            this.toast(_('Dokumen ini bukan papan kanban atau inbox (butuh "kanban: true" atau "inbox: true" di frontmatter)'));
             this.setBoardMode(false);
             return;
         }
         this.doc.textOverride = !on;
-        this.setBoardMode(on);
+        this.syncMode();
     }
 
     // Dokumen baru berisi papan kanban kosong.
     newBoardDocument(): void {
         this.resetDocument(this.blankDocument(), serializeBoard(newBoard()));
+    }
+
+    // Dokumen baru berisi inbox kosong.
+    newInboxDocument(): void {
+        this.resetDocument(this.blankDocument(), serializeInbox(newInbox()));
+        this.inbox.focusCapture();
     }
 
     // ---------- Riwayat git ----------
@@ -755,6 +790,14 @@ export class MainWindow {
 
     private showBoardCounts(board: Board): void {
         this.statusBar.setBoardCounts(board.columns.length, countCards(board));
+    }
+
+    // Perubahan dari inbox → teks dokumen (satu langkah undo).
+    private writeInbox(inbox: Inbox): void {
+        const text = serializeInbox(inbox);
+        this.doc.boardText = text;
+        this.editor.replaceText(text);
+        this.statusBar.setInboxCounts(inbox.items.length);
     }
 
     // Perubahan dari papan → teks dokumen (satu langkah undo).
@@ -891,21 +934,26 @@ export class MainWindow {
     }
 
     private queueBoardReload(doc: Doc): void {
-        if (doc !== this.doc || !this.boardMode || doc.reloadQueued) return;
+        if (doc !== this.doc || !(this.boardMode || this.inboxMode) || doc.reloadQueued) return;
         doc.reloadQueued = true;
         // Ditunda: undo mengubah teks dalam beberapa langkah, dan yang dibaca harus hasil akhirnya.
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             doc.reloadQueued = false;
             if (doc !== this.doc || !this.docs.includes(doc)) return GLib.SOURCE_REMOVE;
             const text = doc.editor.getText();
-            if (!this.boardMode || text === doc.boardText) return GLib.SOURCE_REMOVE;
-            if (isKanban(text)) {
-                this.board.setBoard(parseBoard(text));
+            if (!(this.boardMode || this.inboxMode) || text === doc.boardText) return GLib.SOURCE_REMOVE;
+            if (this.boardMode ? isKanban(text) : isInbox(text)) {
                 doc.boardText = text;
-                this.showBoardCounts(this.board.getBoard());
+                if (this.boardMode) {
+                    this.board.setBoard(parseBoard(text));
+                    this.showBoardCounts(this.board.getBoard());
+                } else {
+                    this.inbox.setInbox(parseInbox(text));
+                    this.statusBar.setInboxCounts(this.inbox.getInbox().items.length);
+                }
             } else {
-                doc.textOverride = true;   // bukan papan lagi (misalnya frontmatter terhapus)
-                this.setBoardMode(false);
+                doc.textOverride = true;   // bukan papan/inbox lagi (misalnya frontmatter terhapus)
+                this.setView('text');
             }
             return GLib.SOURCE_REMOVE;
         });

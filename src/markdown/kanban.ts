@@ -71,7 +71,7 @@ export function isKanban(text: string): boolean {
     return false;
 }
 
-const trimBlankEnds = (lines: string[]): string[] => {
+export const trimBlankEnds = (lines: string[]): string[] => {
     let a = 0, b = lines.length;
     while (a < b && !lines[a].trim()) a++;
     while (b > a && !lines[b - 1].trim()) b--;
@@ -83,7 +83,7 @@ const nextNonBlank = (lines: string[], from: number): string | undefined => {
     return undefined;
 };
 
-function parseColumn(title: string, lines: string[]): Column {
+export function parseColumn(title: string, lines: string[]): Column {
     const column: Column = { title, intro: [], cards: [], outro: [] };
     let current: Card | null = null;
     for (let i = 0; i < lines.length; i++) {

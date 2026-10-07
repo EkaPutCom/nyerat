@@ -18,6 +18,7 @@ const PAGES = [
     ['editor.html', 'Editor Markdown'],
     ['diagram.html', 'Diagram Mermaid dan DBML'],
     ['kanban.html', 'Papan kanban'],
+    ['inbox.html', 'Inbox'],
     ['berkas.html', 'Berkas, tab, dan sidebar'],
     ['git.html', 'Riwayat Git'],
   ]],

@@ -6,6 +6,7 @@
 //   gjs -m dist/run-tests.js --mouse                 tambah klik mouse sungguhan (pointer akan bergerak)
 //   gjs -m dist/run-tests.js --screenshot=a.png      simpan tangkapan layar jendela editor
 //   gjs -m dist/run-tests.js --shot-proposal=/tmp/p  simpan tangkapan jendela tinjau usulan agent (/tmp/p-<n>-tinjau.png dan -utama.png)
+//   gjs -m dist/run-tests.js --shot-inbox=/tmp/i     simpan tangkapan inbox terang/gelap (/tmp/i-terang.png, /tmp/i-gelap.png)
 //   gjs -m dist/run-tests.js --shot-harness=/tmp/h   simpan tangkapan papan dengan kartu pi bekerja/antre dan log pi (/tmp/h-papan.png, -log.png)
 //   gjs -m dist/run-tests.js --shot-tree-menu=/tmp/m  simpan tangkapan menu klik kanan pohon berkas dan papan kanban baru (/tmp/m-menu.png, -papan.png)
 //   gjs -m dist/run-tests.js --shot-wikilink=/tmp/w   simpan tangkapan saran [[catatan]] terang/gelap (/tmp/w-terang.png, -terang-saran.png, -gelap*.png)
@@ -30,6 +31,7 @@ import { wikiLinkTests } from './unit/wikilink.js';
 import { settingsTests } from './unit/settings.js';
 import { tableTests } from './unit/table.js';
 import { kanbanModelTests } from './unit/kanban.js';
+import { inboxModelTests } from './unit/inbox.js';
 import { codeLanguageTests } from './unit/codelang.js';
 import { htmlTests } from './unit/html.js';
 import { dbmlTests } from './unit/dbml.js';
@@ -57,6 +59,7 @@ import { codeColorTests } from './gui/codecolor.js';
 import { mermaidTests } from './gui/mermaid.js';
 import { tableGridTests } from './gui/table.js';
 import { kanbanBoardTests } from './gui/kanban.js';
+import { inboxTests } from './gui/inbox.js';
 import { kanbanMouseTests } from './gui/kanban-mouse.js';
 import { folderTests } from './gui/folder.js';
 import { folderMouseTests } from './gui/folder-mouse.js';
@@ -77,6 +80,7 @@ function runUnitTests(): void {
     settingsTests();
     tableTests();
     kanbanModelTests();
+    inboxModelTests();
     codeLanguageTests();
     htmlTests();
     dbmlTests();
@@ -135,6 +139,7 @@ function runGuiTests(app: Adw.Application): void {
     tableGridTests(c);
     mermaidTests(c);
     kanbanBoardTests(c);
+    inboxTests(c);
     harnessTests(c);
     dialogTests(c);
     // Tes folder membuat jendela lain dan mengganti aksi aplikasi. Periksa undo/redo

@@ -15,6 +15,7 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
 import { createFile, createFolder, moveEntry, renameEntry, trashEntry } from '../fileops.js';
+import { newInbox, serializeInbox } from '../markdown/inbox.js';
 import { newBoard, serializeBoard } from '../markdown/kanban.js';
 import { confirmDialog, promptDialog, showError } from './dialogs.js';
 import { after, onClick, pack, type Awaitable } from '../gtkutil.js';
@@ -370,17 +371,17 @@ export class FileTree {
 
     // Tanya nama lalu buat file/folder di dir. File baru langsung dibuka di editor.
     // `board`: file berisi papan kanban kosong, langsung tampil sebagai papan saat dibuka.
-    create(kind: 'file' | 'folder' | 'board', dir: string): Awaitable<string | null> {
-        const title = kind === 'file' ? _('File Baru') : kind === 'board' ? _('Papan Kanban Baru') : _('Folder Baru');
+    create(kind: 'file' | 'folder' | 'board' | 'inbox', dir: string): Awaitable<string | null> {
+        const title = kind === 'file' ? _('File Baru') : kind === 'board' ? _('Papan Kanban Baru') : kind === 'inbox' ? _('Inbox Baru') : _('Folder Baru');
         return after(this.dialogs.prompt(title, kind === 'folder' ? _('Nama folder') : _('Nama file')), name => this.createNamed(kind, dir, name));
     }
 
-    private createNamed(kind: 'file' | 'folder' | 'board', dir: string, name: string | null): string | null {
+    private createNamed(kind: 'file' | 'folder' | 'board' | 'inbox', dir: string, name: string | null): string | null {
         if (name === null) return null;
         let path: string;
         try {
             path = kind === 'folder' ? createFolder(dir, name)
-                : createFile(dir, name, kind === 'board' ? serializeBoard(newBoard()) : '');
+                : createFile(dir, name, kind === 'board' ? serializeBoard(newBoard()) : kind === 'inbox' ? serializeInbox(newInbox()) : '');
         } catch (e) {
             this.dialogs.error((e as Error).message);
             return null;
@@ -440,6 +441,7 @@ export class FileTree {
             { label: _('File Baru…'), enabled: dir !== null, run: () => { if (dir) this.create('file', dir); } },
             { label: _('Folder Baru…'), enabled: dir !== null, run: () => { if (dir) this.create('folder', dir); } },
             { label: _('Papan Kanban Baru…'), enabled: dir !== null, run: () => { if (dir) this.create('board', dir); } },
+            { label: _('Inbox Baru…'), enabled: dir !== null, run: () => { if (dir) this.create('inbox', dir); } },
         ];
         if (rowPath) {
             entries.push(separator());

@@ -15,7 +15,7 @@ export const COMMAND_LABELS: Record<string, string> = {
     'table-col-right': _('Tabel: Tambah Kolom di Kanan'), 'table-col-left': _('Tabel: Tambah Kolom di Kiri'), 'table-delete-col': _('Tabel: Hapus Kolom'),
     'table-align-left': _('Tabel: Rata Kiri'), 'table-align-center': _('Tabel: Rata Tengah'), 'table-align-right': _('Tabel: Rata Kanan'),
     'table-format': _('Tabel: Rapikan'),
-    'kanban-new': _('Papan Kanban Baru'), 'kanban-view': _('Tampilan Papan Kanban'),
+    'kanban-new': _('Papan Kanban Baru'), 'inbox-new': _('Inbox Baru'), 'kanban-view': _('Tampilan Papan/Inbox'),
     'sidebar': _('Sidebar'), 'chat': _('Asisten'), 'source': _('Mode Source'), 'focus': _('Mode Fokus'), 'typewriter': _('Mode Typewriter'),
     'dark': _('Mode Gelap'), 'autosave': _('Auto Save'), 'preferences': _('Preferensi'), 'shortcuts': _('Pintasan Keyboard'), 'about': _('Tentang Nyerat'), 'quit': _('Keluar'),
     'command-palette': _('Palet Perintah'),

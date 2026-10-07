@@ -8,7 +8,7 @@ import GObject from 'gi://GObject';
 import { cpLength } from '../editor/offsets.js';
 import { uiTemplate } from '../gtkutil.js';
 import template from './statusbar.ui?raw';
-import { _, fmt } from '../i18n.js';
+import { _, fmt, ngettext } from '../i18n.js';
 
 export class StatusBar extends Gtk.Box {
     static {
@@ -42,6 +42,13 @@ export class StatusBar extends Gtk.Box {
     // Ringkasan papan kanban; menggantikan hitungan kata dan posisi kursor selama papan tampil.
     setBoardCounts(lists: number, cards: number): void {
         this.counts = `${lists} daftar · ${cards} kartu`;
+        this.cursorText = '';
+        this.render();
+    }
+
+    // Ringkasan inbox selama inbox tampil.
+    setInboxCounts(items: number): void {
+        this.counts = fmt(ngettext('{n} catatan', '{n} catatan', items), { n: items });
         this.cursorText = '';
         this.render();
     }

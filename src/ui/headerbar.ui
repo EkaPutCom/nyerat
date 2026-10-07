@@ -102,7 +102,11 @@
         <attribute name="action">app.kanban-new</attribute>
       </item>
       <item>
-        <attribute name="label" translatable="yes">Tampilan Papan Kanban</attribute>
+        <attribute name="label" translatable="yes">Inbox Baru</attribute>
+        <attribute name="action">app.inbox-new</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Tampilan Papan/Inbox</attribute>
         <attribute name="action">app.kanban-view</attribute>
       </item>
     </section>

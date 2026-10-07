@@ -60,6 +60,7 @@ export function registerActions(app: Adw.Application, w: MainWindow): void {
 
     // Papan kanban
     action('kanban-new', null, () => w.newBoardDocument());
+    action('inbox-new', null, () => w.newInboxDocument());
     const view = Gio.SimpleAction.new_stateful('kanban-view', null, GLib.Variant.new_boolean(false));
     view.connect('change-state', (_a, value) => { if (value) w.toggleBoardView(value.get_boolean()); });
     app.add_action(view);

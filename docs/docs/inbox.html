@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inbox · Dokumentasi Nyerat</title>
+<meta name="description" content="Inbox Nyerat: tempat menangkap ide, tautan, dan catatan cepat sebagai berkas Markdown biasa, dengan usia relatif, tag, dan sunting lewat dialog.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<main class="doc">
+<p class="eyebrow">Ruang kerja</p>
+<h1>Inbox</h1>
+<p class="lead">Berkas Markdown dengan <code>inbox: true</code> dibuka sebagai inbox: tempat menangkap ide, tautan, dan catatan cepat untuk diproses nanti. Seperti papan kanban, isinya tetap teks Markdown biasa.</p>
+
+<h2 id="format">Format berkas</h2>
+<pre><code>---
+inbox: true
+---
+
+# Inbox
+
+Tempat menangkap ide, catatan, dan hal yang perlu diproses nanti.
+
+- Ide: Muara bisa memakai SQLite #idea ➕ 2026-10-07 14:22
+  catatan item (baris yang diindentasi)
+- Baca artikel tentang GNOME HIG #read ➕ 2026-10-07 13:32</code></pre>
+<ul>
+  <li>Setiap butir daftar adalah satu catatan. Judul <code>#</code> dan paragraf sebelum butir pertama menjadi judul dan deskripsi halaman.</li>
+  <li><code>#tag</code> tampil sebagai chip; <code>➕ tanggal jam</code> adalah waktu tangkap yang dipakai untuk label usia ("10 menit lalu", "1 jam lalu", "3 hari lalu"; lebih dari seminggu menjadi tanggal). Catatan tanpa waktu tetap sah.</li>
+  <li>Baris yang diindentasi di bawah butir adalah isi catatannya; teks lain di bawah daftar dipertahankan apa adanya.</li>
+</ul>
+
+<h2 id="bekerja">Bekerja dengan inbox</h2>
+<ul>
+  <li><strong>Tangkap cepat:</strong> ketik di isian paling atas lalu <kbd>Enter</kbd>. Catatan masuk di paling atas dengan waktu saat itu.</li>
+  <li><em>Catatan Baru</em> membuka dialog dengan judul, tag, dan catatan. Klik sebuah catatan untuk menyuntingnya; waktu tangkapnya dipertahankan.</li>
+  <li>Tombol ✕ membuang catatan. Undo dan redo berlaku untuk semua perubahan.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> beralih antara tampilan inbox dan teks.</li>
+</ul>
+
+<h2 id="membuat">Membuat inbox</h2>
+<ul>
+  <li>Menu ☰ → <em>Inbox Baru</em> membuat inbox kosong yang belum bernama.</li>
+  <li>Klik kanan di pohon berkas → <em>Inbox Baru…</em> langsung membuatnya sebagai berkas di folder itu.</li>
+</ul>
+</main>
+<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

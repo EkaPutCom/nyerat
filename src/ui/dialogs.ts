@@ -12,6 +12,7 @@ import Pango from 'gi://Pango';
 import { attachWikiCompleter } from '../editor/wikicomplete.js';
 import { childrenOf, modal, onKeyPress } from '../gtkutil.js';
 import { APP_ID, APP_NAME, APP_VERSION } from '../config.js';
+import { composeItem, itemMeta } from '../markdown/inbox.js';
 import { AGENT_NAME, composeCard, DUE_INPUT, splitCard, withDueDate } from '../markdown/kanban.js';
 import type { HarnessAsk, HarnessReply } from '../agent/harness.js';
 import { _, fmt } from '../i18n.js';
@@ -290,6 +291,47 @@ export async function editCardDialog(parent: Gtk.Window | null, card: CardDraft,
     const [start, end] = notes.buffer.get_bounds();
     return {
         text: composeCard({ title: title.text, tags: tags.text.split(/[\s,]+/), due: due.text, agent: agent.text }),
+        notes: notes.buffer.get_text(start, end, true).replace(/\s+$/, '').split('\n').filter((l, i, all) => all.length > 1 || l !== ''),
+    };
+}
+
+// Sunting catatan inbox: judul, tag, dan catatan. `item.text` null = catatan baru.
+export async function editNoteDialog(parent: Gtk.Window | null, item: CardDraft, heading = _('Sunting Catatan'), listNotes?: () => string[]): Promise<CardDraft | null> {
+    const meta = itemMeta(item.text);
+    const title = new Gtk.Entry({ text: meta.title, activates_default: true, hexpand: true, placeholder_text: _('Ide, tautan, atau catatan cepat') });
+    const tags = new Gtk.Entry({ text: meta.tags.join(' '), activates_default: true, hexpand: true, placeholder_text: _('tag1 tag2') });
+    const notes = new Gtk.TextView({ wrap_mode: Gtk.WrapMode.WORD_CHAR, left_margin: 6, right_margin: 6, top_margin: 6, bottom_margin: 6 });
+    notes.buffer.set_text(item.notes.join('\n'), -1);
+    const frame = new Gtk.ScrolledWindow({ min_content_height: 140, has_frame: true, hexpand: true, vexpand: true });
+    frame.set_child(notes);
+    const completer = listNotes ? attachWikiCompleter(notes, listNotes) : null;
+
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, vexpand: true });
+    box.append(new Gtk.Label({ label: _('Judul'), xalign: 0 }));
+    box.append(title);
+    box.append(new Gtk.Label({ label: _('Tag (pisahkan dengan spasi)'), xalign: 0 }));
+    box.append(tags);
+    box.append(new Gtk.Label({ label: _('Catatan'), xalign: 0 }));
+    box.append(frame);
+
+    // Ctrl+Enter menyimpan dari kolom catatan (Enter biasa membuat baris baru).
+    onKeyPress(notes, (keyval, state) => {
+        if ((keyval !== Gdk.KEY_Return && keyval !== Gdk.KEY_KP_Enter) || !(state & Gdk.ModifierType.CONTROL_MASK)) return false;
+        (notes.get_ancestor(Adw.Dialog.$gtype) as Adw.Dialog | null)?.get_default_widget()?.activate();
+        return true;
+    }, Gtk.PropagationPhase.CAPTURE);
+
+    const accepted = await formDialog(parent, heading, 440, box, _('Simpan'), () => {
+        if (title.text.trim()) return true;
+        title.add_css_class('error');
+        title.grab_focus();
+        return false;
+    });
+    completer?.destroy();
+    if (!accepted) return null;
+    const [start, end] = notes.buffer.get_bounds();
+    return {
+        text: composeItem(title.text, tags.text.split(/[\s,]+/), item.text),
         notes: notes.buffer.get_text(start, end, true).replace(/\s+$/, '').split('\n').filter((l, i, all) => all.length > 1 || l !== ''),
     };
 }

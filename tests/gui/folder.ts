@@ -143,8 +143,8 @@ export function folderTests(c: GuiContext): void {
     w.file = null;
     buf.set_modified(false);
 
-    test('menu klik kanan berisi File Baru, Folder Baru, dan Papan Kanban Baru', () => {
-        eq(menuLabels(ft.contextMenu(null)), ['File Baru…', 'Folder Baru…', 'Papan Kanban Baru…']);
+    test('menu klik kanan berisi File Baru, Folder Baru, Papan Kanban Baru, dan Inbox Baru', () => {
+        eq(menuLabels(ft.contextMenu(null)), ['File Baru…', 'Folder Baru…', 'Papan Kanban Baru…', 'Inbox Baru…']);
     });
     test('klik kanan area kosong membuat file di root dan membukanya', () => {
         prompts.push('kosong-baru');
@@ -239,8 +239,8 @@ export function folderTests(c: GuiContext): void {
 
     const abs = (...p: string[]) => GLib.build_filenamev([proj, ...p]);
     test('menu baris menambah Ganti Nama dan Hapus; area kosong tidak', () => {
-        eq(menuLabels(ft.contextMenu(abs0('a.md'))).filter(l => l), ['File Baru…', 'Folder Baru…', 'Papan Kanban Baru…', 'Ganti Nama…', 'Hapus']);
-        eq(menuLabels(ft.contextMenu(null)), ['File Baru…', 'Folder Baru…', 'Papan Kanban Baru…']);
+        eq(menuLabels(ft.contextMenu(abs0('a.md'))).filter(l => l), ['File Baru…', 'Folder Baru…', 'Papan Kanban Baru…', 'Inbox Baru…', 'Ganti Nama…', 'Hapus']);
+        eq(menuLabels(ft.contextMenu(null)), ['File Baru…', 'Folder Baru…', 'Papan Kanban Baru…', 'Inbox Baru…']);
     });
     test('ganti nama file dan folder memperbarui pohon dan disk', () => {
         write('lama.md');

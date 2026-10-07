@@ -87,6 +87,10 @@ const buildCss = (p: Palette): string => `
     .kanban-card-done .kanban-card-text { color: alpha(currentColor, 0.5); }
     .kanban-placeholder { background-color: alpha(@accent_bg_color, 0.16); border: 2px dashed @accent_color; border-radius: 8px; }
     .kanban-add-list { background-color: alpha(@window_fg_color, 0.05); border-radius: 10px; padding: 6px; }
+    list.inbox-list { background-color: transparent; }
+    list.inbox-list > row { background-color: @card_bg_color; color: @card_fg_color; border: 1px solid alpha(@card_fg_color, 0.12); border-radius: 10px; margin-bottom: 8px; }
+    list.inbox-list > row:hover { border-color: @accent_color; }
+    .inbox-tag { border-radius: 9px; padding: 1px 8px; font-size: 11px; background-color: alpha(@accent_bg_color, 0.18); color: @accent_color; }
     .kanban-chip { border-radius: 9px; padding: 0 8px; font-size: 11px; color: #ffffff; background-color: #6b7280; }
     .kanban-notes { background-color: transparent; color: alpha(currentColor, 0.55); padding: 0 2px; }
     .kanban-card-text link, .kanban-note-link link { color: @accent_color; }
