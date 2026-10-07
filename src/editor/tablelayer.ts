@@ -20,7 +20,7 @@ import { parseTable, type TableRange } from '../markdown/table.js';
 import { cellMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from '../ui/theme.js';
 import { setTagGroup, setTagRanges, type Range } from './tagsync.js';
-import { iterAtLine, onClick } from '../gtkutil.js';
+import { iterAtLine, lineSpanOffsets, onClick } from '../gtkutil.js';
 import { OverlaySlots } from './overlays.js';
 
 const BORDER = 1;       // tebal garis sel (sama dengan CSS di ui/theme.ts)
@@ -229,6 +229,7 @@ export class TableLayer {
 
     // Samakan teks, ruang kosong, dan widget dengan keadaan sekarang.
     private sync(): void {
+        const iter = this.buffer.get_start_iter();
         const hide: Range[] = [];
         const gaps = new Map<Gtk.TextTag, Range[]>();
         for (const block of this.blocks) {
@@ -236,15 +237,12 @@ export class TableLayer {
             if (!block.collapsed) { block.widget?.set_visible(false); continue; }
             block.height = this.tableHeight(block);
 
-            const first = iterAtLine(this.buffer, block.start).get_offset();
-            const lastLine = iterAtLine(this.buffer, block.end);
-            const afterLast = lastLine.copy();
-            afterLast.forward_to_line_end();
-            hide.push([first, afterLast.get_offset()]);
+            const [first, lastLine, end] = lineSpanOffsets(iter, block.start, block.end);
+            hide.push([first, end]);
 
             const gap = this.gapTag(this.reserved(block));
             if (!gaps.has(gap)) gaps.set(gap, []);
-            gaps.get(gap)!.push([lastLine.get_offset(), afterLast.get_offset()]);
+            gaps.get(gap)!.push([lastLine, end]);
         }
         setTagRanges(this.buffer, this.hideTag, hide);
         setTagGroup(this.buffer, this.gapTags.values(), gaps);

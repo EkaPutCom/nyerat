@@ -5,7 +5,7 @@
 import Gtk from 'gi://Gtk?version=4.0';
 import GObject from 'gi://GObject';
 
-import { cpLength } from '../editor/offsets.js';
+import { cpLength, countWords } from '../editor/offsets.js';
 import { uiTemplate } from '../gtkutil.js';
 import template from './statusbar.ui?raw';
 import { _, fmt, ngettext } from '../i18n.js';
@@ -30,7 +30,7 @@ export class StatusBar extends Gtk.Box {
 
     setCounts(text: string): void {
         // Simbol Markdown tidak dihitung sebagai kata.
-        const words = (text.match(/[^\s#>*_`~=|-]+/g) || []).length;
+        const words = countWords(text);
         this.setDocumentCounts(words, cpLength(text));
     }
 

@@ -21,7 +21,7 @@ import type Gtk from 'gi://Gtk?version=4.0';
 import { RE, isTableSeparator } from '../markdown/syntax.js';
 import { findTables, type TableRange } from '../markdown/table.js';
 import { parseInline } from '../markdown/inline.js';
-import { makeCpMap, cpLength } from './offsets.js';
+import { makeCpMap, cpLength, countWords } from './offsets.js';
 import { type TagName, type Tags } from './tags.js';
 import type { LineSpan, LineTagger } from './tagsync.js';
 import { iterAtLine } from '../gtkutil.js';
@@ -376,7 +376,7 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
     }
 
     cache?.end();
-    const lineWords = lines.map(line => (line.match(/[^\s#>*_`~=|-]+/g) ?? []).length);
+    const lineWords = lines.map(countWords);
     return { text, lines, markers, headings, images, codeBlocks, tables, starts, spans, lineWords, reparsed: [0, lines.length - 1],
         words: lineWords.reduce((a, b) => a + b, 0), characters: cpLength(text),
         checkpoints: checkpoints(lines, codeBlocks, tables) };

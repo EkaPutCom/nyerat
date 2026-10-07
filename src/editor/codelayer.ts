@@ -22,7 +22,7 @@ import type { CodeHighlighter } from './codehighlight.js';
 import { diagramKind } from './mermaid.js';
 import { setTagGroup, setTagRanges, type Range } from './tagsync.js';
 import { OverlaySlots } from './overlays.js';
-import { iterAtLine, onClick } from '../gtkutil.js';
+import { iterAtLine, lineSpanOffsets, onClick } from '../gtkutil.js';
 
 const GAP = 12;         // jarak di atas dan bawah kotak
 const HIDDEN_LINE = 2;  // tinggi satu baris yang disembunyikan (lihat tablelayer.ts)
@@ -196,6 +196,7 @@ export class CodeLayer {
 
     // Samakan teks, ruang kosong, dan widget dengan keadaan sekarang.
     private sync(): void {
+        const iter = this.buffer.get_start_iter();
         const hide: Range[] = [];
         const gaps = new Map<Gtk.TextTag, Range[]>();
         for (const block of this.blocks) {
@@ -203,15 +204,12 @@ export class CodeLayer {
             if (!block.collapsed) { block.widget?.set_visible(false); continue; }
             block.height = block.lines * this.measureLine() + 2 * PAD_Y;
 
-            const first = iterAtLine(this.buffer, block.start).get_offset();
-            const lastLine = iterAtLine(this.buffer, block.end);
-            const afterLast = lastLine.copy();
-            afterLast.forward_to_line_end();
-            hide.push([first, afterLast.get_offset()]);
+            const [first, lastLine, end] = lineSpanOffsets(iter, block.start, block.end);
+            hide.push([first, end]);
 
             const gap = this.gapTag(this.reserved(block));
             if (!gaps.has(gap)) gaps.set(gap, []);
-            gaps.get(gap)!.push([lastLine.get_offset(), afterLast.get_offset()]);
+            gaps.get(gap)!.push([lastLine, end]);
         }
         setTagRanges(this.buffer, this.hideTag, hide);
         setTagGroup(this.buffer, this.gapTags.values(), gaps);

@@ -533,3 +533,44 @@ Sisa selisih yang tidak dianggap regresi kode:
 Validasi: `npm test` **574 lulus, 0 gagal**, log bersih; tes baru memeriksa tag `codehide`
 tepat di baris tiap blok setelah kursor keluar-masuk dan baris disisipkan di atas blok.
 Baseline tidak diganti.
+
+### Putaran kedua: iter yang dipakai ulang dan penghitung kata (2026-10-07)
+
+Profil per metode (renderer cairo supaya waktu menggambar tidak bercampur) dengan pembungkus
+waktu pada panggilan `GtkTextBuffer`. Saat membuka mixed 30 KB ada ±3.100 `get_iter_at_offset`
+dan 400 `get_iter_at_line` per buka. Microbench GJS (20.000 panggilan): `get_iter_at_offset`
+36.7 ms vs `set_offset()` pada iter yang ada 11.9 ms; `get_iter_at_line` 49.5 vs `set_line()`
+11.3 ms; `apply_tag` dengan dua iter baru 65.6 vs dua iter dipakai ulang 37.3 ms. Membuat
+boxed `TextIter` baru di GJS jauh lebih mahal daripada pencarian posisinya.
+
+- `tagsync.ts`: `setTagRanges()` dan `LineTagger` memakai `IterPair` (dua iter, `set_offset`).
+  Memasang/melepas tag tidak membatalkan iter, hanya perubahan teks.
+- Lapisan kode, tabel, dan mermaid menghitung offset blok dengan satu iter (`lineSpanOffsets()`).
+- `LineTagger`: baris tak dikenal yang sedikit (≤ 8, mis. baris yang baru disunting) hanya
+  dilepas dari tag sintaks yang memang terpasang (telusur toggle), bukan ±31 `remove_tag` per
+  ketukan.
+- Jumlah kata per baris (`countWords()`, juga status bar) dihitung dengan loop kode karakter,
+  bukan `match(/…/g)` yang membuat satu string per kata (±100.000 string per buka naskah 651 KB).
+  Microbench 322.586 kata: 35–44 → 12.8 ms. Tes unit membandingkannya dengan regex lama pada
+  500 string acak (spasi Unicode, emoji, simbol Markdown).
+
+Profil per buka (median dari 6): mixed 30 KB jeda sinkron maks 69.5 → 51.7 ms; buku 651 KB
+111.3 → 87.2 ms, parser (`HighlightCache.update`) 26.5 → 16.7 ms. Mengetik: `LineTagger`
+0.37 → 0.18 ms per ketukan. Sisa terbesar membuka adalah `GtkTextBuffer.set_text()` sendiri
+(±23 ms mixed, ±44 ms buku).
+
+Bench lengkap (Xvfb GL, 10 pengulangan) terhadap baseline:
+
+| buka: jeda terpanjang | Baseline | Putaran pertama | Sesudah putaran kedua |
+| --- | ---: | ---: | ---: |
+| mixed 7 KB | 20.48 | 21.04–22.07 | 15.91 |
+| mixed 15 KB | 26.44 | 29.44–29.68 | 22.16 |
+| mixed 30 KB | 44.13 | 53.42–54.34 | 41.38 |
+| buku 81 KB | 16.18 | 16.44–17.73 | 14.49 |
+| buku 325 KB | 46.66 | 49.13–51.10 | 39.86 |
+| buku 651 KB | 97.44 | 95.10–107.42 | 79.79 |
+
+Ketik per karakter mixed 30 KB 1.52 ms (baseline 1.69), buku 651 KB 2.97 (2.87). Pindah
+kursor dan Enter tetap berfluktuasi antar-run di Xvfb GL (mis. kursor buku 651 KB 32–59 ms
+pada tiga run tanpa perubahan jalur kursor di antaranya); lihat catatan frame llvmpipe di atas.
+Validasi: `npm test` **575 lulus, 0 gagal**, log bersih. Baseline tidak diganti.

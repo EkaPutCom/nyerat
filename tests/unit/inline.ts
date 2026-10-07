@@ -1,6 +1,6 @@
 // Tes parseInline.
 
-import { makeCpMap, cpLength } from '../../src/editor/offsets.js';
+import { makeCpMap, cpLength, countWords } from '../../src/editor/offsets.js';
 import { parseInline } from '../../src/markdown/inline.js';
 import { section, test, eq, ok } from '../framework.js';
 
@@ -46,5 +46,16 @@ export function inlineTests(): void {
     test('makeCpMap menghitung emoji sebagai satu karakter', () => {
         const map = makeCpMap('🎉ab');
         eq([map(0), map(2), map(3), map(4)], [0, 1, 2, 3]);
+    });
+    test('countWords sama dengan regex pemisah kata', () => {
+        const words = (s: string) => (s.match(/[^\s#>*_`~=|-]+/g) ?? []).length;
+        const pieces = ['kata', ' ', '\t', '\n', '\u00a0', '\u2003', '\u3000', '\ufeff', '\u2028', '#', '>', '*', '_', '`', '~', '=', '|', '-', 'é', '🎉', '“', '1.', '[x]'];
+        let seed = 7;
+        const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+        for (let n = 0; n < 500; n++) {
+            const s = Array.from({ length: Math.floor(random() * 30) }, () => pieces[Math.floor(random() * pieces.length)]).join('');
+            eq(countWords(s), words(s), JSON.stringify(s));
+        }
+        eq(countWords(''), 0, 'string kosong');
     });
 }

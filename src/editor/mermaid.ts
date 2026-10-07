@@ -24,7 +24,7 @@ import { mermaidRenderer, type DiagramTheme } from './mermaidrender.js';
 import { dbmlToMermaid } from '../markdown/dbml.js';
 import { setTagGroup, setTagRanges, type Range } from './tagsync.js';
 import { OverlaySlots } from './overlays.js';
-import { iterAtLine, onClick, removeChildren, textureFromPixbuf } from '../gtkutil.js';
+import { iterAtLine, lineSpanOffsets, onClick, removeChildren, textureFromPixbuf } from '../gtkutil.js';
 import { _ } from '../i18n.js';
 
 const GAP = 12;             // jarak di atas dan bawah diagram
@@ -234,6 +234,7 @@ export class MermaidLayer {
 
     // Samakan teks, ruang kosong, dan widget dengan keadaan sekarang.
     private sync(): void {
+        const iter = this.buffer.get_start_iter();
         const hide: Range[] = [];
         const gaps = new Map<Gtk.TextTag, Range[]>();
         for (const block of this.blocks) {
@@ -241,13 +242,11 @@ export class MermaidLayer {
             block.widget.set_visible(this.enabled);
             if (!this.enabled || block.end >= this.buffer.get_line_count()) continue;
 
-            const afterLast = iterAtLine(this.buffer, block.end);
-            afterLast.forward_to_line_end();
-            const end = afterLast.get_offset();
-            if (block.collapsed) hide.push([iterAtLine(this.buffer, block.start).get_offset(), end]);
+            const [first, lastLine, end] = lineSpanOffsets(iter, block.start, block.end);
+            if (block.collapsed) hide.push([first, end]);
             const gap = this.gapTag(block.height + 2 * GAP);
             if (!gaps.has(gap)) gaps.set(gap, []);
-            gaps.get(gap)!.push([iterAtLine(this.buffer, block.end).get_offset(), end]);
+            gaps.get(gap)!.push([lastLine, end]);
         }
         setTagRanges(this.buffer, this.hideTag, hide);
         setTagGroup(this.buffer, this.gapTags.values(), gaps);

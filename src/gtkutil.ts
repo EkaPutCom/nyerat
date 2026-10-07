@@ -12,6 +12,18 @@ export function iterAtLine(buffer: Gtk.TextBuffer, line: number): Gtk.TextIter {
     return buffer.get_iter_at_line(line)[1];
 }
 
+// Offset awal baris `first` dan akhir baris `last` (sebelum newline-nya), dengan satu iter
+// yang dipakai ulang: di GJS membuat iter baru per baris 4× lebih mahal daripada set_line().
+// Baris harus ada di dokumen.
+export function lineSpanOffsets(iter: Gtk.TextIter, first: number, last: number): [start: number, lastLineStart: number, end: number] {
+    iter.set_line(first);
+    const start = iter.get_offset();
+    iter.set_line(last);
+    const lastLineStart = iter.get_offset();
+    if (!iter.ends_line()) iter.forward_to_line_end();
+    return [start, lastLineStart, iter.get_offset()];
+}
+
 // Anak langsung sebuah widget, urut dari pertama. GTK 4 tidak punya get_children().
 export function childrenOf(widget: Gtk.Widget): Gtk.Widget[] {
     const result: Gtk.Widget[] = [];

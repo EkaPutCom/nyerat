@@ -54,9 +54,29 @@ export function subtract(a: Range[], b: Range[]): Range[] {
 export function setTagRanges(buffer: Gtk.TextBuffer, tag: Gtk.TextTag, wanted: Range[]): void {
     const want = normalize(wanted);
     const have = tagRanges(buffer, tag);
-    const iter = (n: number) => buffer.get_iter_at_offset(n);
-    for (const [a, b] of subtract(have, want)) buffer.remove_tag(tag, iter(a), iter(b));
-    for (const [a, b] of subtract(want, have)) buffer.apply_tag(tag, iter(a), iter(b));
+    const span = new IterPair(buffer);
+    for (const [a, b] of subtract(have, want)) buffer.remove_tag(tag, ...span.at(a, b));
+    for (const [a, b] of subtract(want, have)) buffer.apply_tag(tag, ...span.at(a, b));
+}
+
+// Dua iter yang dipakai ulang untuk rentang [a, b). Membuat iter baru (get_iter_at_offset)
+// di GJS 3× lebih mahal daripada set_offset() pada iter yang sudah ada, dan saat membuka
+// dokumen ada ribuan rentang tag. Memasang/melepas tag tidak membatalkan iter; hanya
+// perubahan teks yang membatalkannya, jadi IterPair tidak boleh dipakai melewati suntingan.
+export class IterPair {
+    private readonly start: Gtk.TextIter;
+    private readonly end: Gtk.TextIter;
+
+    constructor(buffer: Gtk.TextBuffer) {
+        this.start = buffer.get_start_iter();
+        this.end = this.start.copy();
+    }
+
+    at(a: number, b: number): [Gtk.TextIter, Gtk.TextIter] {
+        this.start.set_offset(a);
+        this.end.set_offset(b);
+        return [this.start, this.end];
+    }
 }
 
 // Seperti setTagRanges untuk sekelompok tag sekaligus; tag yang tidak disebut di `wanted`
@@ -78,6 +98,9 @@ export type LineSpan = [tag: Gtk.TextTag, start: number, end: number];
 
 const sameSpans = (a: LineSpan[], b: LineSpan[]): boolean =>
     a.length === b.length && a.every((s, k) => s[0] === b[k][0] && s[1] === b[k][1] && s[2] === b[k][2]);
+
+// Rentang baris tak dikenal sekecil ini dibersihkan dengan tagsIn(), bukan semua tag.
+const FEW_LINES = 8;
 
 export class LineTagger {
     private applied: (LineSpan[] | null)[] = [];   // null = belum diketahui, pasang ulang
@@ -143,12 +166,25 @@ export class LineTagger {
         return !this.pending;
     }
 
+    // Tag yang dikelola tagger ini dan terpasang di [s, e). Baris yang baru disunting biasanya
+    // hanya punya beberapa tag: menelusuri toggle lebih murah daripada remove_tag untuk
+    // semua tag (±30 panggilan per ketukan).
+    private tagsIn(s: Gtk.TextIter, e: Gtk.TextIter): Set<Gtk.TextTag> {
+        const found = new Set<Gtk.TextTag>();
+        const add = (tags: Gtk.TextTag[]) => { for (const tag of tags) if (this.allTags.includes(tag)) found.add(tag); };
+        add(s.get_tags());
+        const it = s.copy();
+        while (it.forward_to_tag_toggle(null) && it.compare(e) < 0) add(it.get_toggled_tags(true));
+        return found;
+    }
+
     // Kunjungi baris lineAt(0..count-1) (urut naik) dan samakan tagnya dengan spansOf.
     // skipDeferred: lewati baris tak dikenal yang ditunda (lihat defer()).
     private run(count: number, lineAt: (k: number) => number, spansOf: (line: number) => LineSpan[], starts: number[], skipDeferred: boolean): void {
         const buf = this.buffer;
         const total = buf.get_char_count();
-        const at = (line: number) => buf.get_iter_at_offset(starts[line] ?? total);
+        const span = new IterPair(buf);
+        const lines = (first: number, last: number) => span.at(starts[first] ?? total, starts[last + 1] ?? total);
         const deferred = (line: number) => skipDeferred && line >= this.deferFrom && !this.applied[line];
         for (let k = 0; k < count; k++) {
             const i = lineAt(k);
@@ -161,8 +197,8 @@ export class LineTagger {
                 let n = k;
                 while (n + 1 < count && lineAt(n + 1) === lineAt(n) + 1 && !this.applied[lineAt(n + 1)] && !deferred(lineAt(n + 1))) n++;
                 const j = lineAt(n);
-                const s = at(i), e = at(j + 1);
-                for (const tag of this.allTags) buf.remove_tag(tag, s, e);
+                const [s, e] = lines(i, j);
+                for (const tag of j - i < FEW_LINES ? this.tagsIn(s, e) : this.allTags) buf.remove_tag(tag, s, e);
                 // Saat membuka/paste dokumen, gabungkan rentang tag yang bertemu
                 // supaya GTK tidak menerima ribuan operasi untuk blok kode panjang.
                 const ranges = new Map<Gtk.TextTag, Range[]>();
@@ -176,15 +212,15 @@ export class LineTagger {
                 }
                 for (const [tag, wanted] of ranges)
                     for (const [a, b] of normalize(wanted))
-                        buf.apply_tag(tag, buf.get_iter_at_offset(a), buf.get_iter_at_offset(b));
+                        buf.apply_tag(tag, ...span.at(a, b));
                 k = n;
                 continue;
             } else {
-                const s = at(i), e = at(i + 1);
+                const [s, e] = lines(i, i);
                 for (const tag of new Set(prev.map(p => p[0]))) buf.remove_tag(tag, s, e);
             }
             for (const [tag, a, b] of want)
-                buf.apply_tag(tag, buf.get_iter_at_offset(starts[i] + a), buf.get_iter_at_offset(starts[i] + b));
+                buf.apply_tag(tag, ...span.at(starts[i] + a, starts[i] + b));
             this.applied[i] = want;
         }
     }
