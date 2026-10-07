@@ -167,7 +167,7 @@ export function showAbout(parent: Gtk.Window): void {
     const dialog = new Adw.AboutDialog({
         application_name: APP_NAME, version: APP_VERSION, application_icon: APP_ID,
         developer_name: 'Eka Putra', license_type: Gtk.License.MIT_X11,
-        comments: _('Personal workbench AI agent untuk catatan, dokumen, riset, dan rencana, dengan GTK 4, libadwaita, dan GJS.'),
+        comments: _('Personal workbench for humans and AI agents, dibuat dengan GTK 4, libadwaita, dan GJS.'),
         website: 'https://nyerat.ekaput.com/', support_url: 'https://nyerat.ekaput.com/docs/',
         developers: ['Eka Putra'], copyright: '© 2026 Eka Putra',
         // Penerjemah: ganti dengan nama Anda (satu per baris), mis. "Nama <surel>".

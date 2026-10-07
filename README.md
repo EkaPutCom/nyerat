@@ -1,12 +1,12 @@
 # Nyerat
 
-Nyerat adalah **personal workbench AI agent** untuk desktop Linux: ruang kerja pribadi tempat Anda dan agent AI mengerjakan catatan, dokumen, riset, rencana, dan tugas dengan konteks yang sama. Agent tidak berhenti pada jawaban: ia menelusuri berkas Anda, lalu mengusulkan tindakan nyata (membuat berkas, mengubah teks, memindahkan kartu tugas) sebagai selisih yang Anda tinjau dan setujui dulu. Fondasinya editor Markdown dengan tampilan langsung terformat, papan kanban, dan riwayat Git. Dibuat dengan **GTK 4**, **GtkSourceView 5**, dan **GJS** (JavaScript untuk GNOME). Kodenya ditulis dalam **TypeScript** dan dibundel dengan **Vite**.
+Nyerat adalah **personal workbench for humans and AI agents** di desktop Linux: ruang kerja pribadi tempat Anda dan agent AI mengerjakan catatan, dokumen, riset, rencana, dan tugas dengan konteks yang sama. Agent tidak berhenti pada jawaban: ia menelusuri berkas Anda, lalu mengusulkan tindakan nyata (membuat berkas, mengubah teks, memindahkan kartu tugas) sebagai selisih yang Anda tinjau dan setujui dulu. Fondasinya editor Markdown dengan tampilan langsung terformat, papan kanban, dan riwayat Git. Dibuat dengan **GTK 4**, **GtkSourceView 5**, dan **GJS** (JavaScript untuk GNOME). Kodenya ditulis dalam **TypeScript** dan dibundel dengan **Vite**.
 
 Tidak ada panel pratinjau terpisah: teks langsung tampil terformat. Sintaks Markdown seperti `#`, `**`, `` ` `` dan `[](url)` disembunyikan, lalu muncul lagi saat kursor berada di baris tersebut.
 
 Landing page-nya ada di [`docs/`](docs/index.html) dan hanya menampilkan fitur agent; dokumentasi fitur lengkap per topik ada di [`docs/docs/`](docs/docs/index.html) (HTML statis; aktifkan GitHub Pages dari folder `/docs` pada branch `main` untuk menayangkannya). Tangkapan layar dibuat oleh [`scripts/capture.ts`](scripts/capture.ts).
 
-## Goal: personal workbench AI agent
+## Goal: personal workbench for humans and AI agents
 
 Tujuan Nyerat adalah menjadi ruang kerja pribadi tempat pengguna dan agent AI bekerja dengan konteks yang sama: catatan, dokumen, riset, keputusan, rencana, dan tugas dalam satu folder kerja. Agent membantu memahami informasi, menyusun rencana, dan menuntaskan pekerjaan dengan hasil yang dapat diperiksa pengguna. Menulis tetap menjadi salah satu alur kerja utama. Prinsip pengembangannya:
 
