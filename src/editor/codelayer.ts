@@ -110,14 +110,14 @@ export class CodeLayer {
     update(codeBlocks: CodeBlock[], force = false): void {
         const unused = [...this.blocks];
         const next: Block[] = [];
-        let changed = force;
+        let changed = force, moved = false;
         for (const found of codeBlocks) {
             if (!found.closed || found.text.trim() === '' || diagramKind(found)) continue;
             const key = `${found.lang}\0${found.text}`;
             const k = unused.findIndex(b => b.key === key);
             if (k >= 0) {
                 const block = unused.splice(k, 1)[0];
-                changed ||= block.start !== found.startLine || block.end !== found.endLine;
+                moved ||= block.start !== found.startLine || block.end !== found.endLine;
                 block.start = found.startLine;
                 block.end = found.endLine;
                 next.push(block);
@@ -133,14 +133,42 @@ export class CodeLayer {
         changed ||= unused.length > 0;
         for (const block of unused) this.destroyWidget(block);
         this.blocks = next;
-        if (!changed && this.blocks.every(b => b.collapsed === this.isCollapsed(b))) return;
+        if (!changed && this.blocks.every(b => b.collapsed === this.isCollapsed(b))) {
+            // Rentang tag ikut bergeser di GTK (lihat TableLayer.update()); cukup pindahkan widgetnya.
+            if (moved) this.queueRelayout();
+            return;
+        }
         this.sync();
     }
 
-    // Kursor (atau seleksi) berada di baris first..last.
+    // Kursor (atau seleksi) berada di baris first..last. Hanya blok yang berganti antara kotak
+    // dan teks mentah yang disentuh: kursor tidak mengubah teks, jadi tag blok lain tetap benar.
+    // Menelusuri tag seluruh buffer setiap kursor masuk/keluar satu blok terlalu mahal (±4 ms
+    // per perpindahan pada 100 blok, ditambah GTK menata ulang).
     setCursor(first: number, last: number): void {
         this.cursor = [first, last];
-        if (this.blocks.some(b => b.collapsed !== this.isCollapsed(b))) this.sync();
+        let changed = false;
+        for (const block of this.blocks) {
+            const collapsed = this.isCollapsed(block);
+            if (collapsed === block.collapsed) continue;
+            changed = true;
+            block.collapsed = collapsed;
+            if (collapsed) block.height = block.lines * this.measureLine() + 2 * PAD_Y;
+            else block.widget?.set_visible(false);
+            const start = iterAtLine(this.buffer, block.start);
+            const lastLine = iterAtLine(this.buffer, block.end);
+            const end = lastLine.copy();
+            end.forward_to_line_end();
+            const gap = this.gapTag(this.reserved(block));
+            if (collapsed) {
+                this.buffer.apply_tag(this.hideTag, start, end);
+                this.buffer.apply_tag(gap, lastLine, end);
+            } else {
+                this.buffer.remove_tag(this.hideTag, start, end);
+                this.buffer.remove_tag(gap, lastLine, end);
+            }
+        }
+        if (changed) this.queueRelayout();
     }
 
     private isCollapsed(block: Block): boolean {

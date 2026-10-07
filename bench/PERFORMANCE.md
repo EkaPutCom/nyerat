@@ -490,3 +490,46 @@ mengetik dan Enter bahkan lebih rendah), dan buku 651 KB tinggal **jeda membuka
 serta pindah kursor 20 baris 14.13 → 22.34 ms (±1,1 ms per gerakan). Baseline tetap
 dari Xvfb (lingkungan `npm run bench:compare`); angka desktop ini hanya pembanding.
 Validasi: `npm run test:ui` di desktop **391 lulus, 0 gagal**, log bersih.
+
+## Pemeriksaan regresi setelah fitur baru (2026-10-07)
+
+61 commit sejak baseline GTK 4 (inbox, Beranda, wikilink, indentasi daftar, blok kode sebagai
+kotak gulir, penyesuaian GNOME, dst.). `bench:compare` dan fixture buku dijalankan terhadap
+`baseline.json`/`baseline-buku.json` (X11/Xvfb, GTK 4.14.5, 10 pengulangan). Regresi besar:
+
+| Operasi | Baseline | Sebelum perbaikan | Sesudah perbaikan |
+| --- | ---: | ---: | ---: |
+| mixed 30 KB, buka: jeda terpanjang | 44.13 | 67.65 | 53.42–54.34 |
+| mixed 30 KB, pindah kursor 20 baris | 41.35 | 80.32 | 45.40–52.69 |
+| mixed 30 KB, hapus teks besar | 3.05 | 8.07 | 3.49–3.79 |
+| mixed 30 KB, undo paste besar | 3.64 | 8.05 | 3.79–4.19 |
+| buku 325 KB, buka: jeda terpanjang | 46.66 | 90.02 | 49.13–51.10 |
+| buku 651 KB, buka: jeda terpanjang | 97.44 | 139.75 | 95.10–107.42 |
+
+Kolom "sesudah" adalah dua run penuh terpisah. Bisect di worktree (mixed 100 blok, 5 pengulangan)
+dan profil per metode menunjukkan dua sumber:
+
+- **Lapisan blok kode (`codelayer.ts`, d21cfb0)** menjalankan `sync()` penuh (iter per blok,
+  diff tag seluruh buffer) setiap kursor masuk/keluar satu blok dan setiap suntingan yang hanya
+  menggeser baris: ±4 ms per panggilan pada 100 blok, ditambah GTK menata ulang. Kini sama dengan
+  `TableLayer`: `setCursor()` hanya memasang/melepas tag blok yang berganti, dan pergeseran baris
+  tanpa perubahan isi cukup memindahkan widget (tag GTK ikut bergeser). Profil 80 perpindahan
+  kursor: `CodeLayer.sync` 73.9 ms → 0.
+- **Outline (`Gio.ListStore`, b51c43b)** membuat semua item sekaligus saat membuka dokumen lain
+  (±0,1 ms per item, ±20 ms untuk 440 heading di naskah 651 KB), di dalam jeda membuka. Perubahan
+  kecil (≤ 8 item, mis. menyunting satu heading) tetap langsung; perubahan besar dicicil 25 item
+  per giliran di idle `HIGH_IDLE + 21`, setelah frame digambar dan sebelum cicilan tag editor.
+
+Sisa selisih yang tidak dianggap regresi kode:
+
+- **Enter paragraf baru** ±14–16 ms (baseline 2.5–3.2) juga di buku tanpa blok kode/tabel.
+  Profil JS ±2,6 ms per Enter. Dengan `GSK_RENDERER=cairo` (buku 50 blok) Enter 2.72 ms
+  (p95 7.30) vs GL 10.31 ms (p95 29.38): itu frame yang digambar llvmpipe di tengah pengukuran,
+  seperti yang tercatat di bagian migrasi GTK 4. Angka Enter Xvfb-GL bimodal antar-run.
+- **setText + sorot + layout** (total sampai idle) +15–24% di mixed: biaya awal lapisan kode
+  baru (`CodeLayer.sync` dan `CodeHighlighter.apply` ±4 ms per buka pada 100 blok) dan
+  penataan kotak; jeda terpanjang tetap mendekati baseline.
+
+Validasi: `npm test` **574 lulus, 0 gagal**, log bersih; tes baru memeriksa tag `codehide`
+tepat di baris tiap blok setelah kursor keluar-masuk dan baris disisipkan di atas blok.
+Baseline tidak diganti.

@@ -44,6 +44,34 @@ export function codeBlockTests(c: GuiContext): void {
         cursorTo(3); settle();
         ok(!block().collapsed, 'blok tidak terbuka');
     });
+    // setCursor() dan pergeseran baris hanya menyentuh tag blok yang berubah; hasilnya harus
+    // sama dengan sinkron penuh.
+    test('kursor keluar-masuk dan baris bergeser: tag tetap tepat di baris blok', () => {
+        //  0 atas | 2-4 blok A | 6-8 blok B | 10 bawah
+        const TWO = 'atas\n\n```js\nconst a = 1;\n```\n\n```py\nb = 2\n```\n\nbawah';
+        const exactly = (lines: number[]) => {
+            const count = buf.get_line_count();
+            for (let l = 0; l < count; l++) eq(hidden(l), lines.includes(l), `tag codehide baris ${l}`);
+        };
+        setText(TWO); cursorTo(0); settle();
+        exactly([2, 3, 4, 6, 7, 8]);
+        cursorTo(7); settle();
+        exactly([2, 3, 4]);
+        cursorTo(3); settle();
+        exactly([6, 7, 8]);
+        cursorTo(0); settle();
+        exactly([2, 3, 4, 6, 7, 8]);
+        const [, b] = ed.codeLayer.blocks;
+        const before = b.y;
+        buf.insert(iterAtLine(buf, 1), 'baru\nbaru\n', -1);
+        cursorTo(0); settle();
+        exactly([4, 5, 6, 8, 9, 10]);
+        eq([b.start, b.end], [8, 10], 'baris blok B');
+        ok(b.y > before, `kotak B tidak ikut turun (${before} → ${b.y})`);
+        const [lineY, lineH] = ed.view.get_line_yrange(iterAtLine(buf, 10));
+        ok(b.y + b.height <= lineY + lineH, 'kotak B tidak di bawah baris terakhirnya');
+        eq(text().split('\n').length, 13, 'jumlah baris');
+    });
     test('blok diagram dan blok yang belum ditutup tidak jadi kotak', () => {
         setText('```mermaid\ngraph TD\n A-->B\n```\n\n```js\nbelum ditutup'); cursorTo(5); settle();
         eq(ed.codeLayer.blocks.length, 0);

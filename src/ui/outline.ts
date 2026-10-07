@@ -26,6 +26,11 @@ export class HeadingItem extends GObject.Object {
     declare text: string;
 }
 
+const SMALL = 8;    // perubahan sebesar ini (mis. menyunting satu heading) langsung diterapkan
+const CHUNK = 25;   // item outline baru per giliran saat dicicil
+
+interface Shown { level: number; text: string }
+
 export class Outline {
     readonly store = new Gio.ListStore({ item_type: HeadingItem.$gtype });
     readonly list: Gtk.ListView;
@@ -33,6 +38,8 @@ export class Outline {
     onJump: (line: number) => void = () => {};  // heading diklik
 
     private headings: Heading[] = [];
+    private shown: Shown[] = [];   // isi store saat ini (bisa tertinggal dari headings selagi dicicil)
+    private filling = 0;
 
     constructor() {
         const factory = new Gtk.SignalListItemFactory();
@@ -77,17 +84,34 @@ export class Outline {
 
     // headings dari editor/highlighter.ts
     update(headings: Heading[]): void {
-        const previous = this.headings;
         // Pergeseran baris mengubah tujuan klik, bukan tampilan label.
         this.headings = headings;
+        if (this.filling || this.step(SMALL)) return;
+        // Membuka dokumen lain: membuat semua item sekaligus menahan main loop (±0,1 ms per item,
+        // ±20 ms untuk 440 heading). Perubahan besar dicicil di idle setelah frame digambar
+        // (GDK_PRIORITY_REDRAW = HIGH_IDLE + 20), tetapi sebelum cicilan tag editor (+22).
+        this.filling = GLib.idle_add(GLib.PRIORITY_HIGH_IDLE + 21, () => {
+            if (!this.step(CHUNK)) return GLib.SOURCE_CONTINUE;
+            this.filling = 0;
+            return GLib.SOURCE_REMOVE;
+        });
+    }
 
-        // Awalan dan akhiran yang sama dipertahankan: mengedit satu heading hanya mengganti satu item,
-        // jadi baris lain tidak digambar ulang.
-        const same = (a: Heading, b: Heading) => a.level === b.level && a.text === b.text;
-        let first = 0, oldEnd = previous.length, newEnd = headings.length;
-        while (first < oldEnd && first < newEnd && same(previous[first], headings[first])) first++;
-        while (oldEnd > first && newEnd > first && same(previous[oldEnd - 1], headings[newEnd - 1])) { oldEnd--; newEnd--; }
-        if (first === oldEnd && first === newEnd) return;
-        this.store.splice(first, oldEnd - first, headings.slice(first, newEnd).map(({ level, text }) => new HeadingItem({ level, text })));
+    // Samakan store dengan heading terbaru, paling banyak `limit` item baru (tanpa menyentuh store
+    // bila perubahannya lebih besar dari itu dan limit = SMALL). true = sudah sama.
+    // Awalan dan akhiran yang sama dipertahankan: mengedit satu heading hanya mengganti satu item,
+    // jadi baris lain tidak digambar ulang.
+    private step(limit: number): boolean {
+        const shown = this.shown, headings = this.headings;
+        const same = (a: Shown, b: Heading) => a.level === b.level && a.text === b.text;
+        let first = 0, oldEnd = shown.length, newEnd = headings.length;
+        while (first < oldEnd && first < newEnd && same(shown[first], headings[first])) first++;
+        while (oldEnd > first && newEnd > first && same(shown[oldEnd - 1], headings[newEnd - 1])) { oldEnd--; newEnd--; }
+        if (first === oldEnd && first === newEnd) return true;
+        if (limit === SMALL && newEnd - first > SMALL) return false;
+        const added = headings.slice(first, Math.min(newEnd, first + limit)).map(({ level, text }) => ({ level, text }));
+        this.shown.splice(first, oldEnd - first, ...added);
+        this.store.splice(first, oldEnd - first, added.map(({ level, text }) => new HeadingItem({ level, text })));
+        return first + added.length === newEnd;
     }
 }
