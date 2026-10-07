@@ -37,19 +37,24 @@ import { newNotePath, noteSection, resolveWikiLink, type WikiLink } from './mark
 import { projectPath } from './agent/path.js';
 import { applyBatch } from './agent/batch.js';
 import { changeFiles, cleanNewName, type Change } from './agent/changes.js';
-import { agentGit } from './git.js';
+import { agentGit, commitsBetween } from './git.js';
+import { readActivity, recordActivity } from './activity.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
 import { TabBar } from './ui/tabbar.js';
 import { HeaderBar } from './ui/headerbar.js';
 import { applyTheme, systemPrefersDark, type Palette } from './ui/theme.js';
-import { chooseFile, askSaveChanges, showError, harnessAskDialog, harnessTextDialog } from './ui/dialogs.js';
+import { chooseFile, askSaveChanges, showError, harnessAskDialog, harnessTextDialog, promptDialog } from './ui/dialogs.js';
 import { registerActions, TEXT_ACTIONS } from './actions.js';
 import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
 import { InboxView } from './ui/inbox.js';
 import { HomeView, RESUME_CARDS, type HomeData, type HomeEntry } from './ui/home.js';
 import { dueTasks, localDate, moveRecent, openInboxes, rememberRecent, splitRecent, type RecentFile, type Task } from './markdown/home.js';
+import {
+    activityLines, addNote, agentActivity, boardEvents, clock, commitActivity, harnessActivity, journalName, journalStats, mergeActivity, newJournal,
+    type Activity, type ActivityKind,
+} from './markdown/jurnal.js';
 import { isInbox, newInbox, parseInbox, serializeInbox, type Inbox } from './markdown/inbox.js';
 import { assignCard, cardMeta, countCards, isKanban, newBoard, parseBoard, serializeBoard, updateCard, type Board, type Card, type Position } from './markdown/kanban.js';
 import { Orchestrator } from './orchestrator.js';
@@ -124,8 +129,13 @@ export class MainWindow {
         answer: (ask, agent) => harnessAskDialog(this.win, ask, agent),
         text: options => harnessTextDialog(this.win, options),
     };
+    // Dialog catat cepat; di tes diganti dengan jawaban langsung.
+    journalDialogs: { capture: () => Awaitable<string | null> } = {
+        capture: () => promptDialog(this.win, { title: _('Catat ke Jurnal'), label: _('Tercatat di jurnal hari ini dengan jam sekarang.'), accept: _('Catat') }),
+    };
     private closing = false;   // penutupan jendela sudah dikonfirmasi lewat dialog
     private readonly runLogs = new Map<number, LogViewer>();
+    private readonly loggedResults = new WeakSet<object>();   // hasil harness yang sudah dicatat ke log aktivitas
     readonly chat: ChatPanel;
     readonly chatSplit: Adw.OverlaySplitView;
     private readonly content: Gtk.Stack;
@@ -172,6 +182,10 @@ export class MainWindow {
             updateBoard: (file, edit) => this.updateBoardFile(file, edit),
             linkedNotes: (file, links) => this.linkedNotes(file, links),
             changed: (run, message) => {
+                if (run.result && (run.status === 'done' || run.status === 'failed') && !this.loggedResults.has(run.result)) {
+                    this.loggedResults.add(run.result);
+                    this.record('harness', harnessActivity(HARNESSES[run.agent]?.label ?? run.agent, run.title, run.project, run.status === 'done'));
+                }
                 if (this.boardMode && this.file === run.board) this.board.queueRender();
                 this.refreshHome();
                 if (message) this.toast(message);
@@ -190,6 +204,8 @@ export class MainWindow {
         this.home.onOpenRun = id => this.openRun(id);
         this.home.onOpenFolder = () => void this.chooseFolder();
         this.home.onNewDocument = () => this.newDocument();
+        this.home.onOpenJournal = () => this.openJournal();
+        this.home.onCaptureJournal = () => this.captureJournal();
         this.board.onOpenNote = link => this.openNote(link);
         this.board.listNotes = () => {
             const root = this.noteRoot(this.doc);
@@ -659,6 +675,8 @@ export class MainWindow {
         });
         this.fileTree.refresh(root);
         if (changes.some(c => c.kind === 'delete' || c.kind === 'move')) { this.fileTree.reveal(this.file); this.syncHistory(true); }
+        const summary = error ? null : agentActivity(changes);
+        if (summary) this.record('agent', summary);
         return error;
     }
 
@@ -889,7 +907,20 @@ export class MainWindow {
             tasks: dueTasks(files, localDate(now), cardProject),
             runs: this.orchestrator.queue.runs.filter(r => isActive(r.status)).map(r => ({ id: r.id, agent: r.agent, title: r.title, status: r.status })),
             inboxes: openInboxes(files),
+            journal: root ? this.journalSummary(root, localDate(now)) : null,
         };
+    }
+
+    private journalSummary(root: string, date: string): HomeData['journal'] {
+        const path = this.journalPath(date)!;
+        const doc = this.docs.find(d => d.file === path);
+        let text: string | null = null;
+        try {
+            text = doc ? doc.editor.getText() : fileExists(path) ? readTextFile(path) : null;
+        } catch (e) {
+            // tidak terbaca: tampil sebagai belum ditulis
+        }
+        return { exists: text !== null, notes: text ? journalStats(text).notes : 0, activity: readActivity(root, date).length };
     }
 
     // Kartu: nama folder di atas nama berkas. Daftar: nama berkas di atas foldernya (relatif terhadap folder kerja bila di dalamnya).
@@ -936,6 +967,116 @@ export class MainWindow {
         else this.openInTab(run.board);
     }
 
+    // ---------- Jurnal ----------
+
+    private journalPath(date: string): string | null {
+        const root = this.fileTree.root;
+        return root ? GLib.build_filenamev([root, ...journalName(date).split('/')]) : null;
+    }
+
+    // Judul jurnal, mis. "Kamis, 8 Oktober 2026", menurut lokal sistem seperti tanggal di Beranda.
+    private journalTitle(date: string): string {
+        const [y, m, d] = date.split('-').map(Number);
+        return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    // Catat aktivitas kerja ke log harian folder kerja; tanpa folder kerja tidak ada jurnal, jadi dilewati.
+    private record(kind: ActivityKind, text: string, time = Math.floor(Date.now() / 1000)): void {
+        const root = this.fileTree.root;
+        if (root) recordActivity(root, { time, kind, text });
+    }
+
+    // Perubahan papan (di folder kerja) → aktivitas kartu.
+    private recordBoard(file: string | null, before: Board, after: Board): void {
+        const root = this.fileTree.root;
+        if (!root || !file?.startsWith(`${root}/`)) return;
+        for (const text of boardEvents(before, after, file.slice(root.length + 1))) this.record('card', text);
+    }
+
+    // Ctrl+Alt+J: buka jurnal hari ini (dibuat dari template bila belum ada), lalu lengkapi bagian Aktivitas.
+    // Mengembalikan Promise pengisian aktivitas (untuk tes), atau null bila jurnal tidak bisa dibuka.
+    openJournal(now = new Date()): Promise<void> | null {
+        const date = localDate(now);
+        const path = this.journalPath(date);
+        if (!path) {
+            this.toast(_('Buka folder kerja dulu untuk menulis jurnal'));
+            return null;
+        }
+        if (!this.docs.some(d => d.file === path) && !fileExists(path)) {
+            GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
+            if (!this.write(path, newJournal(this.journalTitle(date)))) return null;
+            this.fileTree.refresh(this.fileTree.root!);
+        }
+        if (!this.openInTab(path)) return null;
+        return this.fillJournalActivity(this.doc, date);
+    }
+
+    // Gabungkan aktivitas hari itu (log + commit git) ke bagian Aktivitas jurnal yang terbuka di `doc`.
+    // Hanya baris yang belum ada yang ditambahkan, sebagai satu langkah undo.
+    private async fillJournalActivity(doc: Doc, date: string): Promise<void> {
+        const root = this.fileTree.root, path = doc.file;
+        if (!root || !path) return;
+        const [y, m, d] = date.split('-').map(Number);
+        const since = Math.floor(new Date(y, m - 1, d).getTime() / 1000), until = Math.floor(new Date(y, m - 1, d + 1).getTime() / 1000);
+        const commits = await commitsBetween(root, since, until);
+        // git berjalan di latar: tab bisa sudah ditutup atau berganti berkas.
+        if (!this.docs.includes(doc) || doc.file !== path) return;
+        const events: Activity[] = [...readActivity(root, date), ...commits.map(c => ({ time: c.time, kind: 'commit' as const, text: commitActivity(c.short, c.subject) }))];
+        const text = doc.editor.getText();
+        const next = mergeActivity(text, activityLines(events));
+        if (next !== text) doc.editor.replaceText(next);
+    }
+
+    // Ctrl+Shift+J: catat satu baris ke jurnal hari ini tanpa meninggalkan dokumen yang sedang dikerjakan.
+    captureJournal(): void {
+        if (!this.fileTree.root) {
+            this.toast(_('Buka folder kerja dulu untuk menulis jurnal'));
+            return;
+        }
+        void after(this.journalDialogs.capture(), note => { if (note) this.addJournalNote(note); });
+    }
+
+    // Jurnal yang terbuka diubah lewat editornya (satu langkah undo); yang tidak terbuka ditulis langsung ke disk.
+    addJournalNote(note: string, now = new Date()): boolean {
+        const date = localDate(now);
+        const path = this.journalPath(date);
+        if (!path) return false;
+        const doc = this.docs.find(d => d.file === path);
+        try {
+            if (doc) doc.editor.replaceText(addNote(doc.editor.getText(), clock(now), note));
+            else {
+                waitForWrites(path);
+                const text = fileExists(path) ? readTextFile(path) : newJournal(this.journalTitle(date));
+                GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
+                writeTextFile(path, addNote(text, clock(now), note));
+                this.fileTree.refresh(this.fileTree.root!);
+            }
+        } catch (e) {
+            this.toast(fmt(_('Gagal menulis jurnal: {error}'), { error: errorMessage(e) }));
+            return false;
+        }
+        this.toast(_('Tercatat di jurnal hari ini'));
+        this.refreshHome();
+        return true;
+    }
+
+    // Tutup hari: buka jurnal, lalu minta Asisten mengusulkan ringkasan. Usulannya tetap ditinjau di jendela
+    // tinjau seperti perubahan agent lainnya; tidak ada yang ditulis tanpa persetujuan.
+    // Mengembalikan Promise pertanyaan ke Asisten (untuk tes), atau null bila tidak dijalankan.
+    summarizeJournal(): Promise<void> | null {
+        if (this.chat.busy) {
+            this.toast(_('Asisten sedang bekerja; tunggu sampai selesai'));
+            return null;
+        }
+        const filling = this.openJournal();
+        if (!filling) return null;
+        const name = this.projectName(this.file);
+        this.settings.chat = true;
+        return filling.then(() => this.chat.ask(
+            `Tutup hari: baca jurnal ${name} (dokumen aktif), lalu usulkan ringkasan singkat di bawah judul "## Ringkasan" dengan sisip_teks: ` +
+            'apa yang selesai, apa yang menghambat, dan apa yang dilanjutkan besok. Pakai hanya isi jurnal dan berkas yang ditautkannya; jangan mengubah bagian lain.'));
+    }
+
     // ---------- Riwayat git ----------
 
     // Riwayat hanya dimuat saat tabnya terlihat, supaya git tidak dipanggil percuma.
@@ -959,6 +1100,7 @@ export class MainWindow {
 
     // Perubahan dari papan → teks dokumen (satu langkah undo).
     private writeBoard(board: Board): void {
+        if (this.doc.boardText) this.recordBoard(this.file, parseBoard(this.doc.boardText), board);
         const text = serializeBoard(board);
         this.doc.boardText = text;   // mengenali perubahan ini sebagai milik papan sendiri
         this.editor.replaceText(text);
@@ -1081,9 +1223,12 @@ export class MainWindow {
             if (next === board) return null;
             if (doc === this.doc && this.boardMode) {
                 this.board.setBoard(next);
-                this.writeBoard(next);
-            } else if (doc) doc.editor.replaceText(serializeBoard(next));
+                this.writeBoard(next);   // mencatat aktivitasnya sendiri
+                return null;
+            }
+            if (doc) doc.editor.replaceText(serializeBoard(next));
             else writeTextFile(file, serializeBoard(next));
+            this.recordBoard(file, board, next);
             return null;
         } catch (e) {
             return errorMessage(e);

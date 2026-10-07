@@ -80,6 +80,13 @@ export async function commitContent(file: string, commit: Commit): Promise<TextR
     return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
 }
 
+// Commit di repositori folder `dir` dalam rentang waktu [since, until) (detik Unix), terbaru dulu.
+// Untuk bagian Aktivitas jurnal; folder tanpa git atau tanpa repo menghasilkan daftar kosong.
+export async function commitsBetween(dir: string, since: number, until: number): Promise<Commit[]> {
+    const run = await runGit(dir, ['log', `--since=@${since}`, `--until=@${until - 1}`, `--format=${LOG_FORMAT}`]);
+    return run?.status === 0 ? parseLog(run.out).filter(c => c.time >= since && c.time < until) : [];
+}
+
 export type WorkingState = 'clean' | 'modified' | 'untracked';
 
 export type StateResult =

@@ -48,6 +48,9 @@ export function registerActions(app: Adw.Application, w: MainWindow): void {
     action('new', ['<Control>n'], () => w.newDocument());
     action('close-tab', ['<Control>w'], () => w.closeTab());
     action('home', ['<Alt>Home'], () => w.openHome());
+    action('journal', ['<Control><Alt>j'], () => void w.openJournal());
+    action('journal-capture', ['<Control><Shift>j'], () => w.captureJournal());
+    action('journal-summary', null, () => void w.summarizeJournal());
     action('next-tab', ['<Control>Page_Down', '<Control>Tab'], () => w.switchTab(1));
     action('prev-tab', ['<Control>Page_Up', '<Control><Shift>Tab', '<Control><Shift>ISO_Left_Tab'], () => w.switchTab(-1));
     action('open', ['<Control>o'], () => w.open());

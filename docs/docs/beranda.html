@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Beranda · Dokumentasi Nyerat</title>
-<meta name="description" content="Beranda Nyerat: tab yang merangkum berkas terakhir, agent yang berjalan, tenggat kanban, dan inbox yang belum diproses.">
+<meta name="description" content="Beranda Nyerat: tab yang merangkum berkas terakhir, jurnal hari ini, agent yang berjalan, tenggat kanban, dan inbox yang belum diproses.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="docs.css">
 </head>
@@ -28,7 +28,7 @@
 <main class="doc">
 <p class="eyebrow">Ruang kerja</p>
 <h1>Beranda</h1>
-<p class="lead">Tab Beranda merangkum apa yang bisa kamu lanjutkan hari ini: berkas terakhir, agent yang sedang berjalan, tenggat dari papan kanban, dan inbox yang belum diproses. Semuanya dibaca langsung dari berkas Markdown di folder kerja, tanpa database.</p>
+<p class="lead">Tab Beranda merangkum apa yang bisa kamu lanjutkan hari ini: berkas terakhir, jurnal hari ini, agent yang sedang berjalan, tenggat dari papan kanban, dan inbox yang belum diproses. Semuanya dibaca langsung dari berkas Markdown di folder kerja, tanpa database.</p>
 
 <h2 id="membuka">Membuka Beranda</h2>
 <ul>
@@ -41,6 +41,7 @@
 <h2 id="isi">Isi Beranda</h2>
 <ul>
   <li><strong>Lanjutkan:</strong> sampai tiga kartu berkas terakhir, satu kartu per folder, supaya tiap kartu mewakili tempat kerja yang berbeda.</li>
+  <li><strong>Jurnal:</strong> baris <em>Jurnal hari ini</em> dengan jumlah catatan dan aktivitas hari ini. Klik untuk membuka <a href="jurnal.html">jurnal</a>, atau tombol + untuk catat cepat. Tampil bila folder kerja terbuka.</li>
   <li><strong>Agent:</strong> kartu <code>@pi</code> yang sedang bekerja, antre, atau menunggu jawabanmu. Klik baris yang menunggu untuk langsung menjawab; yang bekerja membuka log-nya; yang antre membuka papannya. Bagian ini hanya tampil bila ada agent yang berjalan.</li>
   <li><strong>Tenggat:</strong> kartu dari semua papan kanban di folder kerja yang belum selesai dan tenggatnya (<code>@{YYYY-MM-DD}</code>) sudah lewat, hari ini, besok, atau lusa. Status ditulis sebagai teks (<em>Terlambat 2 hari</em>, <em>Hari ini</em>, <em>Besok</em>), bukan hanya warna. Kartu di kolom <em>Selesai</em> atau yang sudah dicentang tidak ikut. Nama proyek diambil dari tag <code>#proyek/…</code> atau frontmatter <code>proyek:</code> papannya.</li>
   <li><strong>Inbox:</strong> berkas inbox yang masih punya item belum dicentang, beserta jumlahnya.</li>

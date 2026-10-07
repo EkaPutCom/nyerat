@@ -20,6 +20,7 @@ const PAGES = [
     ['kanban.html', 'Papan kanban'],
     ['inbox.html', 'Inbox'],
     ['beranda.html', 'Beranda'],
+    ['jurnal.html', 'Jurnal harian'],
     ['berkas.html', 'Berkas, tab, dan sidebar'],
     ['git.html', 'Riwayat Git'],
   ]],

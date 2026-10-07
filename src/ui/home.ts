@@ -6,6 +6,7 @@
 //   Lanjutkan           ┌ muara ─────┐ ┌ nyerat ────┐      satu kartu per folder
 //                       │ arch.md    │ │ roadmap.md │
 //                       └────────────┘ └────────────┘
+//   Jurnal              ┌ Jurnal hari ini  2 catatan · 4 aktivitas  [+] ┐
 //   Agent               ┌ pi · Perbaiki checkout   Menunggu jawabanmu ┐
 //   Tenggat             ┌ ☐ Implement search   Nyerat · Hari ini     ┐
 //   Inbox               ┌ inbox.md                 5 belum diproses   ┐
@@ -45,6 +46,12 @@ export interface HomeRun {
     status: RunStatus;
 }
 
+export interface HomeJournal {
+    exists: boolean;    // berkas jurnal hari ini sudah ada
+    notes: number;      // butir di bagian Catatan
+    activity: number;   // aktivitas tercatat hari ini (log), termasuk yang belum masuk ke berkas
+}
+
 export interface HomeData {
     now: Date;
     name: string | null;          // nama depan pengguna, null = sapaan tanpa nama
@@ -54,6 +61,7 @@ export interface HomeData {
     tasks: Task[];
     runs: HomeRun[];
     inboxes: InboxCount[];
+    journal: HomeJournal | null;  // null = tanpa folder kerja
 }
 
 export class HomeView {
@@ -66,6 +74,8 @@ export class HomeView {
     onOpenInbox: (file: string) => void = () => {};
     onOpenFolder: () => void = () => {};
     onNewDocument: () => void = () => {};
+    onOpenJournal: () => void = () => {};
+    onCaptureJournal: () => void = () => {};
 
     private readonly page: Gtk.Box;
     private data: HomeData | null = null;
@@ -87,6 +97,7 @@ export class HomeView {
         }
         this.page.append(this.header(data));
         if (data.resume.length) this.addSection(_('Lanjutkan'), this.resumeCards(data));
+        if (data.journal) this.addSection(_('Jurnal'), this.list([this.journalRow(data.journal)]));
         if (data.runs.length) this.addSection(_('Agent'), this.list(data.runs.map(run => this.runRow(run))));
         this.addSection(_('Tenggat'), this.taskList(data));
         if (data.inboxes.length) this.addSection(_('Inbox'), this.list(data.inboxes.map(inbox => this.inboxRow(inbox))));
@@ -191,6 +202,25 @@ export class HomeView {
             flow.append(new Gtk.FlowBoxChild({ child: card, focusable: false }));
         }
         return flow;
+    }
+
+    // ---------- Jurnal ----------
+
+    private journalRow(journal: HomeJournal): Adw.ActionRow {
+        const parts: string[] = [];
+        if (journal.notes) parts.push(fmt(ngettext('{n} catatan', '{n} catatan', journal.notes), { n: journal.notes }));
+        if (journal.activity) parts.push(fmt(ngettext('{n} aktivitas', '{n} aktivitas', journal.activity), { n: journal.activity }));
+        const subtitle = parts.length ? parts.join(' · ') : journal.exists ? _('Belum ada catatan') : _('Belum ditulis');
+        const row = this.row(_('Jurnal hari ini'), subtitle);
+        row.add_prefix(new Gtk.Image({ icon_name: 'x-office-calendar-symbolic' }));
+        const capture = new Gtk.Button({ icon_name: 'list-add-symbolic', valign: Gtk.Align.CENTER, tooltip_text: _('Catat ke Jurnal…') });
+        capture.add_css_class('flat');
+        capture.update_property([Gtk.AccessibleProperty.LABEL], [_('Catat ke Jurnal…')]);
+        capture.connect('clicked', () => this.onCaptureJournal());
+        row.add_suffix(capture);
+        row.add_suffix(new Gtk.Image({ icon_name: 'go-next-symbolic' }));
+        row.connect('activated', () => this.onOpenJournal());
+        return row;
     }
 
     // ---------- Agent ----------

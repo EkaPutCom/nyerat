@@ -336,13 +336,13 @@ export async function editNoteDialog(parent: Gtk.Window | null, item: CardDraft,
     };
 }
 
-// Meminta satu baris teks. null jika dibatalkan.
-export async function promptDialog(parent: Gtk.Window | null, options: { title: string; label: string; value?: string }): Promise<string | null> {
+// Meminta satu baris teks. null jika dibatalkan. accept = label tombol setuju (kata kerja), bawaan "OK".
+export async function promptDialog(parent: Gtk.Window | null, options: { title: string; label: string; value?: string; accept?: string }): Promise<string | null> {
     const entry = new Gtk.Entry({ text: options.value ?? '', activates_default: true });
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 });
     box.append(new Gtk.Label({ label: options.label, xalign: 0 }));
     box.append(entry);
-    const accepted = await formDialog(parent, options.title, 360, box, _('OK'));
+    const accepted = await formDialog(parent, options.title, 360, box, options.accept ?? _('OK'));
     const value = entry.text.trim();
     return accepted && value ? value : null;
 }

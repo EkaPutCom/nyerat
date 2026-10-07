@@ -16,6 +16,7 @@ import { _ } from '../i18n.js';
 export const SHORTCUT_SECTIONS = (): [title: string, actions: string[]][] => [
     [_('Berkas'), ['new', 'open', 'open-folder', 'save', 'save-as', 'export-html']],
     [_('Tab'), ['home', 'next-tab', 'prev-tab', 'close-tab']],
+    [_('Jurnal'), ['journal', 'journal-capture']],
     [_('Penyuntingan'), ['undo', 'redo', 'find']],
     [_('Format'), ['bold', 'italic', 'strike', 'inline-code', 'highlight', 'link', 'image', 'codeblock', 'table', 'quote', 'ulist', 'olist']],
     [_('Tabel'), ['table-row-below', 'table-row-above', 'table-delete-row', 'table-col-right', 'table-col-left', 'table-delete-col', 'table-format']],

@@ -12,6 +12,7 @@
 //   gjs -m dist/run-tests.js --shot-wikilink=/tmp/w   simpan tangkapan saran [[catatan]] terang/gelap (/tmp/w-terang.png, -terang-saran.png, -gelap*.png)
 //   gjs -m dist/run-tests.js --shot-gnome=/tmp/g      simpan tangkapan jendela sempit, dialog pintasan, tema terang/gelap (/tmp/g-sempit.png, -pintasan.png, -terang.png, -gelap.png)
 //   gjs -m dist/run-tests.js --shot-home=/tmp/b       simpan tangkapan Beranda terang/gelap/sempit (/tmp/b-terang.png, -gelap.png, -sempit.png)
+//   gjs -m dist/run-tests.js --shot-jurnal=/tmp/j     simpan tangkapan jurnal terang/gelap, Beranda, dan dialog catat cepat (/tmp/j-jurnal.png, -jurnal-gelap.png, -beranda.png, -catat.png)
 //   gjs -m dist/run-tests.js --shot-due=/tmp/d        simpan tangkapan kalender tenggat dan dialog kartu terang/gelap (/tmp/d-kalender.png, -dialog.png, -dialog-gelap.png)
 //
 // Tes GUI membuka jendela sungguhan, jadi perlu sesi desktop (X11/Wayland).
@@ -34,6 +35,7 @@ import { tableTests } from './unit/table.js';
 import { kanbanModelTests } from './unit/kanban.js';
 import { inboxModelTests } from './unit/inbox.js';
 import { homeModelTests } from './unit/home.js';
+import { jurnalModelTests } from './unit/jurnal.js';
 import { codeLanguageTests } from './unit/codelang.js';
 import { htmlTests } from './unit/html.js';
 import { dbmlTests } from './unit/dbml.js';
@@ -74,6 +76,7 @@ import { robustnessTests } from './gui/robust.js';
 import { historyTests } from './gui/history.js';
 import { tabTests } from './gui/tabs.js';
 import { homeTests } from './gui/home.js';
+import { jurnalTests } from './gui/jurnal.js';
 
 setRoot(import.meta.url);
 
@@ -86,6 +89,7 @@ function runUnitTests(): void {
     kanbanModelTests();
     inboxModelTests();
     homeModelTests();
+    jurnalModelTests();
     codeLanguageTests();
     htmlTests();
     dbmlTests();
@@ -120,6 +124,12 @@ function runGuiTests(app: Adw.Application): void {
     }
     if (opt('only-chat')) {
         chatTests(c);
+        c.buf.set_modified(false);
+        c.w.win.destroy();
+        return;
+    }
+    if (opt('only-jurnal')) {
+        jurnalTests(c);
         c.buf.set_modified(false);
         c.w.win.destroy();
         return;
@@ -165,6 +175,7 @@ function runGuiTests(app: Adw.Application): void {
     gnomeTests(c);
     tabTests(c);
     homeTests(c);
+    jurnalTests(c);
     historyTests(c);
     chatTests(c);
     robustnessTests(c);
