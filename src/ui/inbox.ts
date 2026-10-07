@@ -83,6 +83,7 @@ export class InboxView {
 
         this.list = new Gtk.ListBox({ selection_mode: Gtk.SelectionMode.NONE });
         this.list.add_css_class('inbox-list');
+        this.list.connect('row-activated', (_l, row: Gtk.ListBoxRow) => this.editItem(row.get_index()));
         this.empty = new Adw.StatusPage({ icon_name: 'mail-inbox-symbolic', title: _('Inbox kosong'), description: _('Tulis sesuatu di atas untuk menangkapnya.') });
         this.empty.add_css_class('compact');
 
@@ -201,7 +202,6 @@ export class InboxView {
         box.append(remove);
 
         const row = new Gtk.ListBoxRow({ child: box, activatable: true });
-        row.connect('activate', () => this.editItem(i));
         return row;
     }
 
