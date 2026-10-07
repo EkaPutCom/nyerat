@@ -28,7 +28,7 @@ const GAP = 12;         // jarak di atas dan bawah grid
 const MIN_COLUMN = 56;  // lebar kolom terkecil saat tabel harus dipersempit
 
 // Lebar kolom agar jumlahnya muat di `available`. Kolom yang sudah sempit dibiarkan,
-// sisa ruang dibagi rata ke kolom yang lebar (teksnya dipotong dengan "…").
+// sisa ruang dibagi rata ke kolom yang lebar (teksnya dibungkus ke baris berikutnya).
 export function fitColumns(natural: number[], available: number): number[] {
     const widths = [...natural];
     if (natural.reduce((a, b) => a + b, 0) <= available) return widths;
@@ -66,7 +66,9 @@ interface Geometry {
     table: ReturnType<typeof parseTable>;
     markup: string[][];
     natural: number[];
-    height: number;
+    cellWidth: number[][];    // lebar alami tiap sel (satu baris), termasuk garis
+    cellHeight: number[][];   // tinggi tiap sel bila tidak dibungkus
+    height: number;           // tinggi tabel bila tidak ada sel yang dibungkus
 }
 
 export class TableLayer {
@@ -88,6 +90,7 @@ export class TableLayer {
     private geometryUnits = 0;
     private cellSizes = new Map<string, [number, number]>();
     private cellUnits = 0;
+    private wrapSizes = new Map<string, number>();   // lebar kolom + isi sel → tinggi setelah dibungkus
     private probe: Gtk.Grid | null = null;
     private probeCells: { label: Gtk.Label; box: Gtk.Box }[] = [];
     private readonly slots: OverlaySlots;
@@ -122,6 +125,7 @@ export class TableLayer {
         this.geometryUnits = 0;
         this.cellSizes.clear();
         this.cellUnits = 0;
+        this.wrapSizes.clear();
         for (const block of this.blocks) block.geometry = null;
         this.rebuildAll();
     }
@@ -131,10 +135,10 @@ export class TableLayer {
         width = Math.max(200, Math.floor(width));
         if (width === this.maxWidth) return;
         this.maxWidth = width;
-        // Sel memakai ellipsize, bukan wrap: tinggi tidak berubah saat lebar berubah.
-        // Pakai ulang widget serta ruang tabel, termasuk tabel yang belum terlihat.
+        // Sel dibungkus, jadi tinggi tabel ikut berubah saat lebar berubah: ruang kosong di teks
+        // dihitung ulang (sync) selain widget yang sudah ada.
         for (const block of this.blocks) if (block.widget) this.resize(block);
-        this.queueRelayout();
+        this.sync();
     }
 
     setEnabled(enabled: boolean): void {
@@ -183,7 +187,7 @@ export class TableLayer {
             if (collapsed === block.collapsed) continue;
             changed = true;
             block.collapsed = collapsed;
-            if (collapsed) block.height = this.measure(block).height;
+            if (collapsed) block.height = this.tableHeight(block);
             if (!collapsed) block.widget?.set_visible(false);
 
             // Kursor tidak mengubah teks: tag tabel lain tetap benar. Jangan menelusuri
@@ -229,7 +233,7 @@ export class TableLayer {
         for (const block of this.blocks) {
             block.collapsed = this.isCollapsed(block);
             if (!block.collapsed) { block.widget?.set_visible(false); continue; }
-            block.height = this.measure(block).height;
+            block.height = this.tableHeight(block);
 
             const first = iterAtLine(this.buffer, block.start).get_offset();
             const lastLine = iterAtLine(this.buffer, block.end);
@@ -260,14 +264,14 @@ export class TableLayer {
 
     private label(): Gtk.Label {
         return new Gtk.Label({
-            use_markup: true, ellipsize: Pango.EllipsizeMode.END, hexpand: true,
+            use_markup: true, wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR, hexpand: true,
             margin_start: TABLE_CELL_PAD_X, margin_end: TABLE_CELL_PAD_X,
             margin_top: TABLE_CELL_PAD_Y, margin_bottom: TABLE_CELL_PAD_Y,
         });
     }
 
-    // Dua sel pengukur memakai CSS yang sama dengan grid. Sel tidak membungkus teks,
-    // jadi tinggi baris cukup maksimum tinggi selnya, tanpa membuat seluruh grid.
+    // Dua sel pengukur memakai CSS yang sama dengan grid, tanpa membuat seluruh grid.
+    // Ukuran alami (satu baris) dihitung di sini; tinggi setelah dibungkus: tableHeight().
     private measure(block: Block): Geometry {
         if (block.geometry) return block.geometry;
         const cached = this.geometry.get(block.key);
@@ -288,20 +292,25 @@ export class TableLayer {
         const table = parseTable(block.key.split('\n'));
         const natural = table.header.map(() => 0);
         let height = BORDER;
+        const cellWidth: number[][] = [], cellHeight: number[][] = [];
         const markup = [table.header, ...table.rows].map((row, r) => {
             let rowHeight = 0;
+            cellWidth.push([]);
+            cellHeight.push([]);
             const result = row.map((text, c) => {
                 const m = cellMarkup(text, this.colors);
                 const value = r === 0 ? `<b>${m}</b>` : m;
-                const [width, cellHeight] = this.measureCell(value, r === 0);
+                const [width, h] = this.measureCell(value, r === 0);
                 natural[c] = Math.max(natural[c], width + BORDER);
-                rowHeight = Math.max(rowHeight, cellHeight);
+                cellWidth[r].push(width + BORDER);
+                cellHeight[r].push(h);
+                rowHeight = Math.max(rowHeight, h);
                 return value;
             });
             height += rowHeight;
             return result;
         });
-        const result = { table, markup, natural, height };
+        const result = { table, markup, natural, cellWidth, cellHeight, height };
         // Boros bila naskah terus diganti: batasi cache isi tabel, bukan hanya jumlahnya.
         if (block.key.length <= 1024 * 1024) {
             while (this.geometry.size >= 256 || this.geometryUnits + block.key.length > 1024 * 1024) {
@@ -334,6 +343,36 @@ export class TableLayer {
         return size;
     }
 
+    // Tinggi tabel pada lebar sekarang: sel yang lebih lebar dari kolomnya dibungkus,
+    // sehingga barisnya lebih tinggi.
+    private tableHeight(block: Block): number {
+        const geo = this.measure(block);
+        const widths = fitColumns(geo.natural, this.maxWidth - BORDER);
+        let height = BORDER;
+        geo.markup.forEach((row, r) => {
+            let rowHeight = 0;
+            row.forEach((value, c) => {
+                const h = geo.cellWidth[r][c] <= widths[c] ? geo.cellHeight[r][c] : this.measureWrapped(value, r === 0, widths[c]);
+                rowHeight = Math.max(rowHeight, h);
+            });
+            height += rowHeight;
+        });
+        return height;
+    }
+
+    // Tinggi sel yang dibungkus pada lebar kolom `width`.
+    private measureWrapped(markup: string, header: boolean, width: number): number {
+        const key = `${header ? 'h' : 'b'}${width}:${markup}`;
+        const cached = this.wrapSizes.get(key);
+        if (cached !== undefined) return cached;
+        const cell = this.probeCells[header ? 0 : 1];
+        cell.label.set_markup(markup);
+        const height = cell.box.measure(Gtk.Orientation.VERTICAL, width)[1];
+        if (this.wrapSizes.size >= 4096) this.wrapSizes.delete(this.wrapSizes.keys().next().value!);
+        this.wrapSizes.set(key, height);
+        return height;
+    }
+
     private resize(block: Block): void {
         const { table, natural } = this.measure(block);
         const widths = fitColumns(natural, this.maxWidth - BORDER);
@@ -342,7 +381,6 @@ export class TableLayer {
             const box = grid.get_child_at(c, r)!;
             const label = box.get_first_child() as Gtk.Label;
             label.set_size_request(Math.max(1, widths[c] - 2 * TABLE_CELL_PAD_X - BORDER), -1);
-            box.set_tooltip_text(widths[c] < natural[c] ? text : null);
         }));
     }
 

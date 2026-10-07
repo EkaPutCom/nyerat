@@ -249,7 +249,10 @@ export function tableGridTests(c: GuiContext): void {
         ed.tableLayer.setMaxWidth(320);
         settleT();
         eq(tBlock().widget, widget, 'perubahan lebar membangun ulang grid');
-        eq(tBlock().height, height, 'ellipsize mengubah tinggi tabel');
+        ok(tBlock().height > height, 'sel panjang seharusnya dibungkus sehingga tabel lebih tinggi');
+        const grid = tBlock().widget!.get_first_child()!;
+        const wrapped = grid.get_allocated_height();
+        ok(Math.abs(wrapped - tBlock().height) <= 2, `ruang tabel ${tBlock().height}px tidak sama dengan tinggi grid ${wrapped}px`);
         // TextView memberi anak widget ukuran minimumnya; itulah lebar yang tampil.
         const width = tBlock().widget!.get_allocated_width();
         ok(width > 0 && width <= 320, `lebar grid ${width}px melebihi kolom 320px`);
