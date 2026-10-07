@@ -48,7 +48,7 @@ import { harnessTests as harnessModelTests } from './unit/harness.js';
 import { harnessTests } from './gui/harness.js';
 import { chatTests } from './gui/chat.js';
 import { syntaxHidingTests } from './gui/syntax.js';
-import { listTests } from './gui/lists.js';
+import { listTests, listIndentTests } from './gui/lists.js';
 import { formatTests } from './gui/format.js';
 import { fileTests } from './gui/file.js';
 import { imageTests } from './gui/image.js';
@@ -126,6 +126,7 @@ function runGuiTests(app: Adw.Application): void {
 
     syntaxHidingTests(c);
     listTests(c);
+    listIndentTests(c);
     formatTests(c);
     fileTests(c);
     imageTests(c);

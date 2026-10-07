@@ -25,6 +25,7 @@ import { makeCpMap, cpLength } from './offsets.js';
 import { type TagName, type Tags } from './tags.js';
 import type { LineSpan, LineTagger } from './tagsync.js';
 import { iterAtLine } from '../gtkutil.js';
+import { listIndentFor } from './listindent.js';
 
 // Sintaks yang boleh disembunyikan: [awal, akhir, barisPertama, barisTerakhir, baris].
 export type Marker = [start: number, end: number, firstLine: number, lastLine: number, line: number];
@@ -343,6 +344,13 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
                 const bs = off + p + m[1].length;
                 apply('bullet', bs, bs + m[2].length);
                 const q = p + m[0].length;
+                // Baris lanjutan (hasil pembungkusan) sejajar dengan teks item. Dalam kutipan
+                // margin kiri sudah diatur tag quote, jadi dilewati.
+                const hanging = p === 0 ? listIndentFor(tags) : undefined;
+                if (hanging && lineEnd > off) {
+                    const tag = hanging.tag(m[1], m[2], m[3], m[4]?.slice(0, 3) ?? '', m[4]?.slice(3) ?? '');
+                    spans[row].push([tag, 0, toCp(lineEnd) - rowStart]);
+                }
                 if (m[4]) {
                     const ts = off + p + m[1].length + m[2].length + m[3].length;
                     const checked = /x/i.test(m[4]);

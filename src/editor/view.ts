@@ -31,6 +31,7 @@ import GLib from 'gi://GLib';
 import type GdkPixbuf from 'gi://GdkPixbuf';
 import { onClick, onKeyPress } from '../gtkutil.js';
 
+import { ListIndent, registerListIndent } from './listindent.js';
 import { createTags, paintTags, setTagMargins, SYNTAX_TAGS } from './tags.js';
 import { LineTagger } from './tagsync.js';
 import { highlight, HighlightCache } from './highlighter.js';
@@ -114,6 +115,7 @@ export class MarkdownView {
     listNotes: () => string[] = () => [];
     readonly completer: WikiCompleter;
 
+    private readonly listIndent: ListIndent;
     private margin = -1;
     private width = -1;
     private cursorKey = '';
@@ -143,7 +145,11 @@ export class MarkdownView {
         });
         this.view.add_css_class('editor');
         this.tags = createTags(this.buffer);
-        this.syntaxTagger = new LineTagger(this.buffer, SYNTAX_TAGS.map(n => this.tags[n]));
+        const syntaxTags = SYNTAX_TAGS.map(n => this.tags[n]);
+        // Tag indentasi daftar dibuat sesuai kebutuhan; LineTagger perlu tahu untuk membersihkannya.
+        this.listIndent = new ListIndent(this.view, this.buffer, tag => syntaxTags.push(tag));
+        registerListIndent(this.tags, this.listIndent);
+        this.syntaxTagger = new LineTagger(this.buffer, syntaxTags);
         this.concealer = new MarkerConcealer(new LineTagger(this.buffer, [this.tags.hidden]), this.tags.hidden);
         this.dirtyStart = this.buffer.create_mark(null, this.buffer.get_start_iter(), true);
         this.dirtyEnd = this.buffer.create_mark(null, this.buffer.get_start_iter(), false);
@@ -362,6 +368,7 @@ export class MarkdownView {
             this.view.set_left_margin(m);
             this.view.set_right_margin(m);
             setTagMargins(this.tags, m);
+            this.listIndent.setMargin(m);
             this.images.setMaxWidth(width - 2 * m);
             this.tableLayer.setMaxWidth(width - 2 * m);
             this.mermaid.setMaxWidth(width - 2 * m);
