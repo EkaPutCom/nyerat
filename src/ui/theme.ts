@@ -4,7 +4,7 @@
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
-import { FONT_TEXT } from '../config.js';
+import { FONT_MONO, FONT_TEXT } from '../config.js';
 
 export interface Palette {
     bg: string; fg: string; heading: string; faint: string; dim: string;
@@ -73,6 +73,8 @@ const buildCss = (p: Palette): string => `
     .md-table { border-top: 1px solid alpha(${p.fg}, 0.28); border-left: 1px solid alpha(${p.fg}, 0.28); }
     .md-table-cell { border-right: 1px solid alpha(${p.fg}, 0.28); border-bottom: 1px solid alpha(${p.fg}, 0.28); }
     .md-table-cell label { color: ${p.fg}; font-family: ${FONT_TEXT}; font-size: 15px; }
+    .md-codeblock { background-color: ${p.codeBg}; border-radius: 6px; }
+    .md-codeblock label { color: ${p.fg}; font-family: ${FONT_MONO}; font-size: 14px; }
     .md-table-head { background-color: ${p.codeBg}; }
     scrolledwindow.kanban-board, scrolledwindow.kanban-board viewport.frame, scrolledwindow.kanban-board viewport, .kanban-row { background-color: @window_bg_color; background-image: none; }
     .kanban-row { padding: 16px; }

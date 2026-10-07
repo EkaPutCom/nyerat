@@ -16,6 +16,8 @@
 import Gtk from 'gi://Gtk?version=4.0';
 import GtkSource from 'gi://GtkSource?version=5';
 import Pango from 'gi://Pango';
+import Gdk from 'gi://Gdk?version=4.0';
+import GLib from 'gi://GLib';
 import type { CodeBlock } from './highlighter.js';
 import { setTagGroup, type Range } from './tagsync.js';
 
@@ -68,6 +70,25 @@ function styleOf(tags: Gtk.TextTag[]): Style {
     return style;
 }
 
+const UNDERLINES = ['none', 'single', 'double', 'low', 'error'];
+
+function spanAttributes(style: Style): string {
+    let attrs = '';
+    if (style.foreground) {
+        const color = new Gdk.RGBA();
+        if (color.parse(style.foreground)) {
+            const hex = (v: number) => Math.round(v * 255).toString(16).padStart(2, '0');
+            attrs += ` foreground="#${hex(color.red)}${hex(color.green)}${hex(color.blue)}"`;
+        }
+    }
+    if (style.weight !== undefined) attrs += ` weight="${style.weight}"`;
+    if (style.style === Pango.Style.ITALIC) attrs += ' style="italic"';
+    else if (style.style === Pango.Style.OBLIQUE) attrs += ' style="oblique"';
+    if (style.underline) attrs += ` underline="${UNDERLINES[style.underline] ?? 'single'}"`;
+    if (style.strikethrough) attrs += ' strikethrough="true"';
+    return attrs;
+}
+
 export class CodeHighlighter {
     // Dipanggil setiap tag gaya baru dibuat, supaya pemanggil bisa menaikkan
     // prioritas tag yang harus tetap di atas (misalnya 'dim' dan 'hidden').
@@ -116,6 +137,22 @@ export class CodeHighlighter {
             }
         }
         setTagGroup(this.buffer, this.styleTags.values(), wanted);
+    }
+
+    // Isi blok sebagai markup Pango berwarna, untuk blok kode yang dirender sebagai widget
+    // (codelayer.ts). Memakai segmen dan cache yang sama dengan apply().
+    markup(lang: string, code: string): string {
+        const chars = Array.from(code);
+        const text = (a: number, b: number) => GLib.markup_escape_text(chars.slice(a, b).join(''), -1);
+        const language = resolveLanguage(lang);
+        let out = '', pos = 0;
+        for (const [a, b, key] of language ? this.segments(language, code) : []) {
+            if (a < pos) continue;
+            out += text(pos, a);
+            out += `<span${spanAttributes(JSON.parse(key) as Style)}>${text(a, b)}</span>`;
+            pos = b;
+        }
+        return out + text(pos, chars.length);
     }
 
     private segments(language: GtkSource.Language, code: string): Segment[] {

@@ -60,6 +60,7 @@ import { imageZoomTests } from './gui/imagezoom.js';
 import { codeColorTests } from './gui/codecolor.js';
 import { mermaidTests } from './gui/mermaid.js';
 import { tableGridTests } from './gui/table.js';
+import { codeBlockTests } from './gui/codeblock.js';
 import { kanbanBoardTests } from './gui/kanban.js';
 import { inboxTests } from './gui/inbox.js';
 import { kanbanMouseTests } from './gui/kanban-mouse.js';
@@ -147,6 +148,7 @@ function runGuiTests(app: Adw.Application): void {
     imageZoomTests(c);
     codeColorTests(c);
     tableGridTests(c);
+    codeBlockTests(c);
     mermaidTests(c);
     kanbanBoardTests(c);
     inboxTests(c);

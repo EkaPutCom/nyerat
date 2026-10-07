@@ -43,6 +43,7 @@ import type { WikiLink } from '../markdown/wikilink.js';
 import { ImageLayer } from './images.js';
 import { CodeHighlighter } from './codehighlight.js';
 import { TableLayer } from './tablelayer.js';
+import { CodeLayer } from './codelayer.js';
 import { MermaidLayer } from './mermaid.js';
 import { cellStart, type TableRange } from '../markdown/table.js';
 import { enterInTable, tabInTable, runTableCommand, type TableCommand } from './tableedit.js';
@@ -95,6 +96,7 @@ export class MarkdownView {
     readonly images: ImageLayer;
     readonly code: CodeHighlighter;
     readonly tableLayer: TableLayer;
+    readonly codeLayer: CodeLayer;
     readonly mermaid: MermaidLayer;
 
     markers: Marker[] = [];
@@ -170,6 +172,13 @@ export class MarkdownView {
             const it = iterAtLine(this.buffer, line);
             it.forward_chars(cpLength(text.slice(0, cellStart(text, col))));
             this.buffer.place_cursor(it);
+            this.view.grab_focus();
+        };
+
+        this.codeLayer = new CodeLayer(this.view, this.tags.codehide, this.code);
+        // Klik kotak kode → kursor ke baris pertama isinya, sehingga blok terbuka untuk disunting.
+        this.codeLayer.onActivate = line => {
+            this.buffer.place_cursor(iterAtLine(this.buffer, line));
             this.view.grab_focus();
         };
 
@@ -249,6 +258,7 @@ export class MarkdownView {
         this.fillQueued = 0;
         this.images.destroy();
         this.tableLayer.destroy();
+        this.codeLayer.destroy();
         this.mermaid.destroy();
         this.completer.destroy();
     }
@@ -311,6 +321,7 @@ export class MarkdownView {
         paintTags(this.tags, palette);
         this.code.setScheme(palette.codeScheme);
         this.tableLayer.setPalette(palette);
+        this.codeLayer.setPalette();
         this.mermaid.setTheme({ dark: palette.dark, bg: palette.bg, fg: palette.fg, accent: palette.accent, node: palette.codeBg });
         this.highlight();  // warnai ulang blok kode dengan skema baru
     }
@@ -321,6 +332,7 @@ export class MarkdownView {
         if (name === 'source') {
             this.images.setEnabled(!enabled);
             this.tableLayer.setEnabled(!enabled);
+            this.codeLayer.setEnabled(!enabled);
             this.mermaid.setEnabled(!enabled);
         }
         this.queueCursorUpdate(true);
@@ -371,6 +383,7 @@ export class MarkdownView {
             this.listIndent.setMargin(m);
             this.images.setMaxWidth(width - 2 * m);
             this.tableLayer.setMaxWidth(width - 2 * m);
+            this.codeLayer.setMaxWidth(width - 2 * m);
             this.mermaid.setMaxWidth(width - 2 * m);
             this.widget.set_opacity(1);
             return GLib.SOURCE_REMOVE;
@@ -434,6 +447,7 @@ export class MarkdownView {
         const touches = (first: number, last: number) => edited !== null && last >= edited[0] && first <= edited[1];
         this.tableLayer.update(result.tables, result.lines, reset || result.tables.some(t => touches(t.start, t.end)));
         this.code.apply(result.codeBlocks, reset || result.codeBlocks.some(b => touches(b.startLine, b.endLine)));
+        this.codeLayer.update(result.codeBlocks, reset || result.codeBlocks.some(b => touches(b.startLine, b.endLine)));
         this.mermaid.update(result.codeBlocks);
         this.images.update(result.images);
         this.onHighlighted(result);
@@ -521,6 +535,7 @@ export class MarkdownView {
             this.concealer.apply(this.starts, l0, l1, !this.modes.source);
             dimOutsideParagraph(buf, this.tags.dim, this.lines, l0, l1, this.modes.focus);
             this.tableLayer.setCursor(l0, l1);
+            this.codeLayer.setCursor(l0, l1);
             this.mermaid.setCursor(l0, l1);
             if (this.modes.typewriter)
                 this.view.scroll_to_mark(buf.get_insert(), 0, true, 0, 0.5);

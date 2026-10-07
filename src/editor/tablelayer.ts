@@ -25,6 +25,7 @@ import { OverlaySlots } from './overlays.js';
 
 const BORDER = 1;       // tebal garis sel (sama dengan CSS di ui/theme.ts)
 const GAP = 12;         // jarak di atas dan bawah grid
+const HIDDEN_LINE = 2;  // tinggi satu baris tabel yang disembunyikan (tag tablehide, ~1 px + pembulatan)
 const MIN_COLUMN = 56;  // lebar kolom terkecil saat tabel harus dipersempit
 
 // Lebar kolom agar jumlahnya muat di `available`. Kolom yang sudah sempit dibiarkan,
@@ -196,7 +197,7 @@ export class TableLayer {
             const lastLine = iterAtLine(this.buffer, block.end);
             const end = lastLine.copy();
             end.forward_to_line_end();
-            const gap = this.gapTag(block.height + 2 * GAP);
+            const gap = this.gapTag(this.reserved(block));
             if (collapsed) {
                 this.buffer.apply_tag(this.hideTag, start, end);
                 this.buffer.apply_tag(gap, lastLine, end);
@@ -241,13 +242,20 @@ export class TableLayer {
             afterLast.forward_to_line_end();
             hide.push([first, afterLast.get_offset()]);
 
-            const gap = this.gapTag(block.height + 2 * GAP);
+            const gap = this.gapTag(this.reserved(block));
             if (!gaps.has(gap)) gaps.set(gap, []);
             gaps.get(gap)!.push([lastLine.get_offset(), afterLast.get_offset()]);
         }
         setTagRanges(this.buffer, this.hideTag, hide);
         setTagGroup(this.buffer, this.gapTags.values(), gaps);
         this.queueRelayout();
+    }
+
+    // Ruang di bawah baris terakhir: tinggi grid ditambah GAP di kedua sisi, dikurangi
+    // tinggi baris-baris tersembunyi di atasnya. Tanpa pengurangan itu grid, yang
+    // diposisikan dari baris terakhir, bergeser turun sebanyak baris tabelnya.
+    private reserved(block: Block): number {
+        return Math.max(0, block.height + 2 * GAP - (block.end - block.start + 1) * HIDDEN_LINE);
     }
 
     private gapTag(height: number): Gtk.TextTag {

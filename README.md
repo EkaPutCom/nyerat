@@ -341,9 +341,7 @@ gjs -m dist/nyerat.js tests/samples/semua-format.md
 File ini juga dipakai oleh tes otomatis, jadi jika menambah format baru, tambahkan juga contohnya di sini.
 
 ## Arsitektur
-
 ### Struktur folder
-
 ```
 package.json              script npm dan dependensi pengembangan
 tsconfig.json             pengaturan pemeriksaan tipe TypeScript
@@ -422,6 +420,7 @@ src/
 │   ├── wikicomplete.ts   saran nama catatan saat mengetik [[
 │   ├── images.ts         menampilkan gambar di bawah barisnya, dan menerima klik/klik ganda
 │   ├── tablelayer.ts     merender tabel sebagai grid yang muncul/hilang mengikuti kursor
+│   ├── codelayer.ts      merender blok kode sebagai kotak yang bisa digulir ke samping (teks mentah saat kursor di dalam)
 │   ├── mermaid.ts        menampilkan blok ```mermaid dan ```dbml sebagai diagram (pola yang sama dengan tabel)
 │   ├── mermaidrender.ts  merender kode Mermaid menjadi pixbuf lewat WebKitGTK tak terlihat
 │   ├── overlays.ts       slot widget overlay yang dipakai ulang oleh gambar, tabel, dan diagram
