@@ -1,5 +1,5 @@
-// Membaca berkas Markdown di folder proyek sebagai bahan konteks. Hasil di-cache menurut waktu ubah
-// dan ukuran, jadi membaca ulang tiap pertanyaan murah walau bukunya puluhan berkas.
+// Reads the Markdown files in the project folder as context material. The result is cached by modification time
+// and size, so re-reading on every question is cheap even if the book has dozens of files.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -13,8 +13,8 @@ const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'build']);
 
 const cache = new Map<string, { stamp: string; text: string }>();
 
-// Telusuri berkas Markdown di bawah root (tanpa yang bertitik dan folder bawaan alat) menurut abjad.
-// visit menerima info berkas, path lengkap, dan nama relatif; false = berhenti.
+// Walk the Markdown files under root (excluding dot files and the tools' built-in folders) alphabetically.
+// visit receives the file info, the full path, and the relative name; false = stop.
 function walkMarkdown(root: string, visit: (info: Gio.FileInfo, path: string, name: string) => boolean): void {
     let stopped = false;
     const walk = (dir: string, prefix: string) => {
@@ -43,15 +43,15 @@ function walkMarkdown(root: string, visit: (info: Gio.FileInfo, path: string, na
     walk(root, '');
 }
 
-// Nama relatif semua berkas Markdown di bawah root tanpa membaca isinya (untuk saran [[catatan]]).
+// Relative names of all Markdown files under root without reading their contents (for [[note]] suggestions).
 export function listMarkdownFiles(root: string, limit = 5000): string[] {
     const names: string[] = [];
     walkMarkdown(root, (_info, _path, name) => names.push(name) < limit);
     return names;
 }
 
-// Semua berkas Markdown di bawah root (tanpa yang bertitik dan folder bawaan alat), kecuali `except`.
-// Nama dikembalikan relatif terhadap root.
+// All Markdown files under root (excluding dot files and the tools' built-in folders), except `except`.
+// Names are returned relative to the root.
 export function readProject(root: string, except: string | null, fresh = false): SourceFile[] {
     const files: SourceFile[] = [];
     walkMarkdown(root, (info, path, name) => {

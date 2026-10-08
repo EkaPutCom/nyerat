@@ -1,7 +1,7 @@
-// Nyerat sebagai orkestrator harness: kartu kanban yang ditugaskan (mis. "@pi") dikerjakan program agent
-// eksternal di folder proyeknya sendiri. Di sini proses dijalankan (async), keluarannya dibaca baris demi
-// baris, permintaan izin/masukan diteruskan ke pengguna dan jawabannya dikirim balik lewat stdin, dan kartu
-// dipindah sesuai statusnya. Bagian murni (prompt, perintah RPC, pembaca JSON, antrean) ada di agent/harness.ts. Nyerat tidak menulis apa pun ke folder proyek; yang ditulis hanya papan sendiri.
+// Nyerat as a harness orchestrator: kanban cards that are assigned (e.g. "@pi") are worked on by an external agent program
+// in its own project folder. Here the process is run (async), its output is read line by
+// line, permission/input requests are passed to the user and their answers sent back through stdin, and the card
+// is moved according to its status. The pure parts (prompt, RPC commands, JSON reader, queue) are in agent/harness.ts. Nyerat writes nothing to the project folder; only its own board is written.
 
 import GLib from 'gi://GLib';
 import { assignCard, cardMeta, moveCard, updateCard, type Board, type Position } from './markdown/kanban.js';
@@ -13,8 +13,8 @@ import type { WikiLink } from './markdown/wikilink.js';
 import { _, fmt } from './i18n.js';
 
 export interface HarnessProcess {
-    write(line: string): boolean;   // satu perintah JSONL ke stdin; false bila stdin sudah tertutup atau gagal
-    closeInput(): void;             // tutup stdin: harness RPC selesai dengan tertib
+    write(line: string): boolean;   // one JSONL command to stdin; false if stdin is already closed or failed
+    closeInput(): void;             // close stdin: the RPC harness finishes in an orderly way
     stop(): void;
 }
 
@@ -23,35 +23,35 @@ export interface SpawnHandlers {
     exit(status: number, stderr: string): void;
 }
 
-// Melempar bila program tidak bisa dijalankan.
+// Throws if the program cannot be run.
 export type Spawner = (argv: string[], cwd: string, handlers: SpawnHandlers) => HarnessProcess;
 
 const STDERR_TAIL = 8000;
-const DRAIN_MS = 1500;   // tenggang membaca sisa keluaran setelah proses keluar
-const KILL_MS = 5000;    // SIGTERM tidak digubris selama ini → SIGKILL
+const DRAIN_MS = 1500;   // grace period for reading remaining output after the process exits
+const KILL_MS = 5000;    // SIGTERM ignored for this long → SIGKILL
 
-// Pipe dibaca lewat GLib.IOChannel, bukan Gio.Subprocess.get_stdout_pipe(): setelah Gtk dimuat, GJS membungkus
-// pipe itu sebagai Gio.UnixInputStream dan mencetak Gjs-WARNING "moved to a separate platform-specific library".
+// Pipes are read through GLib.IOChannel, not Gio.Subprocess.get_stdout_pipe(): after Gtk is loaded, GJS wraps
+// that pipe as a Gio.UnixInputStream and prints a Gjs-WARNING "moved to a separate platform-specific library".
 export const spawnHarness: Spawner = (argv, cwd, handlers) => {
-    // Melempar GLib.Error bila program tidak bisa dijalankan.
+    // Throws GLib.Error if the program cannot be run.
     const [, pid, stdinFd, stdout, stderrFd] = GLib.spawn_async_with_pipes(cwd, argv, null, GLib.SpawnFlags.DO_NOT_REAP_CHILD, null);
-    // stdin adalah saluran perintah (prompt, jawaban, arahan); ditutup untuk mengakhiri harness.
+    // stdin is the command channel (prompt, answers, steering); it is closed to end the harness.
     let input: GLib.IOChannel | null = GLib.IOChannel.unix_new(stdinFd);
     input.set_close_on_unref(true);
-    // Byte apa adanya dengan panjang eksplisit: string JS dengan panjang -1 tidak dijamin diakhiri NUL.
+    // Bytes as is with an explicit length: a JS string with length -1 is not guaranteed to be NUL-terminated.
     input.set_encoding(null);
     const encoder = new TextEncoder();
     const closeInput = () => {
         if (!input) return;
-        try { input.shutdown(true); } catch { /* harness sudah keluar */ }
+        try { input.shutdown(true); } catch { /* the harness already exited */ }
         input = null;
     };
     let stderr = '';
     let status = 0;
     let exited = false;
-    let pending = 3;   // stdout habis, stderr habis, proses keluar
+    let pending = 3;   // stdout exhausted, stderr exhausted, process exited
     let drainTimer = 0, killTimer = 0;
-    const streams: ((fromWatch?: boolean) => void)[] = [];   // penutup pembaca yang masih jalan
+    const streams: ((fromWatch?: boolean) => void)[] = [];   // closers of readers that are still running
     const done = () => {
         if (--pending > 0) return;
         if (drainTimer) GLib.source_remove(drainTimer);
@@ -62,7 +62,7 @@ export const spawnHarness: Spawner = (argv, cwd, handlers) => {
         handlers.exit(status, stderr);
     };
 
-    // Baris dipisah hanya pada LF, sesuai framing JSONL pi.
+    // Lines are split only at LF, matching pi's JSONL framing.
     const readLines = (fd: number, onLine: (text: string) => void) => {
         const channel = GLib.IOChannel.unix_new(fd);
         channel.set_close_on_unref(true);
@@ -72,7 +72,7 @@ export const spawnHarness: Spawner = (argv, cwd, handlers) => {
             if (!open) return;
             open = false;
             if (!fromWatch) GLib.source_remove(watch);
-            try { channel.shutdown(false); } catch { /* sudah tertutup */ }
+            try { channel.shutdown(false); } catch { /* already closed */ }
             done();
         };
         const watch = GLib.io_add_watch(channel, GLib.PRIORITY_DEFAULT, GLib.IOCondition.IN | GLib.IOCondition.HUP | GLib.IOCondition.ERR, () => {
@@ -81,7 +81,7 @@ export const spawnHarness: Spawner = (argv, cwd, handlers) => {
                 try { [status, line] = channel.read_line(); } catch { status = GLib.IOStatus.ERROR; line = ''; }
                 if (status === GLib.IOStatus.NORMAL) { onLine(line.replace(/\n$/, '')); continue; }
                 if (status === GLib.IOStatus.AGAIN) return GLib.SOURCE_CONTINUE;
-                close(true);   // EOF atau galat; sumber watch dilepas lewat nilai kembali
+                close(true);   // EOF or error; the watch source is removed through the return value
                 return GLib.SOURCE_REMOVE;
             }
         });
@@ -92,20 +92,20 @@ export const spawnHarness: Spawner = (argv, cwd, handlers) => {
 
     GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid!, (_pid, wait) => {
         exited = true;
-        // Status tunggu POSIX: 7 bit bawah = sinyal (0 = keluar normal), bit 8–15 = kode keluar.
+        // POSIX wait status: the low 7 bits = signal (0 = normal exit), bits 8–15 = exit code.
         status = (wait & 0x7f) === 0 ? (wait >> 8) & 0xff : 128 + (wait & 0x7f);
-        // Cucu proses (mis. perintah dari alat bash harness) bisa mewarisi pipe dan menahannya terbuka;
-        // jangan menunggu mereka tanpa batas.
+        // Grandchild processes (e.g. commands from the harness's bash tool) may inherit the pipe and keep it open;
+        // do not wait for them indefinitely.
         if (pending > 1) drainTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, DRAIN_MS, () => { drainTimer = 0; for (const close of streams) close(); return GLib.SOURCE_REMOVE; });
         done();
     });
-    // GLib tidak punya kill(); sinyal dikirim lewat perintah kill bawaan sistem.
-    const signal = (name: string) => { try { GLib.spawn_async(null, ['kill', `-${name}`, String(pid)], null, GLib.SpawnFlags.SEARCH_PATH, null); } catch { /* proses sudah tiada */ } };
+    // GLib has no kill(); signals are sent through the system's built-in kill command.
+    const signal = (name: string) => { try { GLib.spawn_async(null, ['kill', `-${name}`, String(pid)], null, GLib.SpawnFlags.SEARCH_PATH, null); } catch { /* the process is gone */ } };
     return {
         write: line => {
             if (!input || exited) return false;
             try {
-                // Satu perintah kecil per tulis; tulis memblokir sebentar bila pipe penuh, dan itu cukup di sini.
+                // One small command per write; a write blocks briefly if the pipe is full, and that is enough here.
                 const bytes = encoder.encode(`${line}\n`);
                 input.write_chars(bytes, bytes.length);
                 input.flush();
@@ -124,7 +124,7 @@ export const spawnHarness: Spawner = (argv, cwd, handlers) => {
     };
 };
 
-// Aplikasi yang dibuka dari menu desktop sering tidak mewarisi PATH shell (mis. ~/.local/bin dari profil).
+// Apps launched from the desktop menu often do not inherit the shell PATH (e.g. ~/.local/bin from the profile).
 export function findProgram(name: string): string | null {
     const found = GLib.find_program_in_path(name);
     if (found) return found;
@@ -138,11 +138,11 @@ export function findProgram(name: string): string | null {
 
 export interface OrchestratorHost {
     workspace(): string | null;
-    // Baca catatan yang ditautkan [[...]] dari kartu di papan itu, untuk konteks prompt.
+    // Read the notes linked with [[...]] from the cards on that board, for the prompt context.
     linkedNotes(boardFile: string, links: WikiLink[]): LinkedNote[];
-    // Ubah papan di path itu (terbuka di tab atau di disk). Mengembalikan pesan galat atau null.
+    // Change the board at that path (open in a tab or on disk). Returns an error message or null.
     updateBoard(file: string, edit: (board: Board) => Board): string | null;
-    // Status sebuah run berubah: gambar ulang papan, beri kabar.
+    // A run's status changed: redraw the board, notify.
     changed(run: Run, message: string | null): void;
 }
 
@@ -164,17 +164,17 @@ export class Orchestrator {
 
     constructor(private readonly host: OrchestratorHost) {}
 
-    // Tugaskan kartu ke harness dan jalankan (atau antrekan bila folder proyeknya sedang dikerjakan).
-    // Mengembalikan pesan galat atau null.
+    // Assign a card to a harness and run it (or queue it if the project folder is being worked on).
+    // Returns an error message or null.
     start(boardFile: string, board: Board, at: Position, agent: string, project: string, folder: string, boardName: string): string | null {
         const spec = HARNESSES[agent];
-        if (!spec) return fmt(_('harness "{agent}" tidak dikenal'), { agent });
+        if (!spec) return fmt(_('unknown harness "{agent}"'), { agent });
         const card = board.columns[at.column]?.cards[at.index];
-        if (!card) return 'kartu tidak ditemukan';
-        if (this.queue.active(boardFile, card.text)) return 'kartu ini sedang dikerjakan';
+        if (!card) return 'card not found';
+        if (this.queue.active(boardFile, card.text)) return 'this card is already being worked on';
         const problem = checkProjectFolder(folder, this.host.workspace());
         if (problem) return problem;
-        if (!GLib.file_test(folder, GLib.FileTest.IS_DIR)) return `folder proyek tidak ada: ${folder}`;
+        if (!GLib.file_test(folder, GLib.FileTest.IS_DIR)) return `the project folder does not exist: ${folder}`;
 
         const text = assignCard(card.text, agent);
         if (text !== card.text) {
@@ -188,39 +188,39 @@ export class Orchestrator {
             board: boardFile, card: text, title: shortTitle(text), agent, project, folder,
             prompt: buildPrompt(assigned, project, boardName, notes), session: null,
         });
-        run.trace.add('turn', fmt(_('{agent} untuk “{title}”'), { agent: spec.label, title: run.title }), `${fmt(_('Folder proyek: {folder}'), { folder })}\n\n${run.prompt}`);
+        run.trace.add('turn', fmt(_('{agent} for “{title}”'), { agent: spec.label, title: run.title }), `${fmt(_('Project folder: {folder}'), { folder })}\n\n${run.prompt}`);
         this.enqueue(run);
         return null;
     }
 
-    // Lanjutkan sesi run yang sudah berakhir dengan balasan pengguna (mis. pertanyaan yang tidak diakhiri "?").
+    // Continue the session of a finished run with the user's reply (e.g. a question not ending in "?").
     resume(previous: Run, message: string): string | null {
         const text = message.trim();
-        if (!text) return 'balasan kosong';
-        if (!previous.result?.sessionId) return 'sesi pi untuk kartu ini tidak diketahui';
-        if (this.queue.active(previous.board, previous.card)) return 'kartu ini sedang dikerjakan';
-        if (!GLib.file_test(previous.folder, GLib.FileTest.IS_DIR)) return `folder proyek tidak ada: ${previous.folder}`;
-        // Log yang sama dipakai lagi supaya percakapan dengan harness terbaca utuh.
+        if (!text) return 'empty reply';
+        if (!previous.result?.sessionId) return 'the pi session for this card is unknown';
+        if (this.queue.active(previous.board, previous.card)) return 'this card is already being worked on';
+        if (!GLib.file_test(previous.folder, GLib.FileTest.IS_DIR)) return `the project folder does not exist: ${previous.folder}`;
+        // The same log is reused so the conversation with the harness reads as a whole.
         const run = this.queue.add({ ...previous, prompt: text, session: previous.result.sessionId }, previous.trace);
-        run.trace.add('turn', _('Balasan Anda'), text);
+        run.trace.add('turn', _('Your reply'), text);
         this.enqueue(run);
         return null;
     }
 
-    // Jawab yang sedang ditunggu harness. Mengembalikan pesan galat atau null.
+    // Answer what the harness is waiting for. Returns an error message or null.
     answer(run: Run, reply: HarnessReply): string | null {
         const live = this.live.get(run.id);
         const ask = run.ask;
-        if (!live?.proc || run.status !== 'waiting' || !ask) return 'pi tidak sedang menunggu jawaban';
+        if (!live?.proc || run.status !== 'waiting' || !ask) return 'pi is not waiting for an answer';
         if (live.askTimer) { GLib.source_remove(live.askTimer); live.askTimer = 0; }
         if (ask.kind === 'question') {
             if ('value' in reply && reply.value.trim()) {
                 live.reader.restart();
-                if (!live.proc.write(rpcPrompt(reply.value.trim(), `nyerat-${++this.prompts}`))) return 'pi tidak lagi menerima masukan';
-                run.trace.add('turn', _('Jawaban Anda'), reply.value.trim());
+                if (!live.proc.write(rpcPrompt(reply.value.trim(), `nyerat-${++this.prompts}`))) return 'pi no longer accepts input';
+                run.trace.add('turn', _('Your answer'), reply.value.trim());
             } else {
-                // Tidak dibalas: run selesai seperti biasa dengan jawaban terakhir pi.
-                run.trace.add('note', _('Diakhiri tanpa membalas'));
+                // Not replied to: the run finishes as usual with pi's last answer.
+                run.trace.add('note', _('Ended without replying'));
                 run.status = 'working';
                 run.ask = null;
                 live.proc.closeInput();
@@ -228,8 +228,8 @@ export class Orchestrator {
                 return null;
             }
         } else {
-            if (!live.proc.write(rpcUiResponse(ask.id!, reply))) return 'pi tidak lagi menerima masukan';
-            run.trace.add('note', fmt(_('Jawaban: {reply}'), { reply: describeReply(ask, reply) }), ask.title);
+            if (!live.proc.write(rpcUiResponse(ask.id!, reply))) return 'pi no longer accepts input';
+            run.trace.add('note', fmt(_('Answer: {reply}'), { reply: describeReply(ask, reply) }), ask.title);
         }
         run.status = 'working';
         run.ask = null;
@@ -237,14 +237,14 @@ export class Orchestrator {
         return null;
     }
 
-    // Arahan tambahan selagi harness bekerja; diterima harness sebelum panggilan model berikutnya.
+    // Extra steering while the harness works; received by the harness before the next model call.
     steer(run: Run, message: string): string | null {
         const live = this.live.get(run.id);
         const text = message.trim();
-        if (!text) return 'arahan kosong';
-        if (!live?.proc || run.status !== 'working') return 'pi tidak sedang bekerja';
-        if (!live.proc.write(rpcSteer(text))) return 'pi tidak lagi menerima masukan';
-        run.trace.add('turn', _('Arahan Anda'), text);
+        if (!text) return 'empty steering';
+        if (!live?.proc || run.status !== 'working') return 'pi is not working';
+        if (!live.proc.write(rpcSteer(text))) return 'pi no longer accepts input';
+        run.trace.add('turn', _('Your steering'), text);
         return null;
     }
 
@@ -256,7 +256,7 @@ export class Orchestrator {
         else live.proc?.stop();
     }
 
-    // Jendela ditutup: hentikan semua harness supaya tidak tertinggal tanpa pemantau.
+    // The window is closed: stop all harnesses so they are not left without a monitor.
     dispose(): void {
         this.disposed = true;
         for (const run of this.queue.runs) {
@@ -270,7 +270,7 @@ export class Orchestrator {
         const spec = HARNESSES[run.agent];
         this.live.set(run.id, { reader: new PiReader(run.trace), proc: null, stopped: false, askTimer: 0 });
         if (run.status === 'working') this.launch(run);
-        else this.host.changed(run, fmt(_('{agent} sedang mengerjakan kartu lain di {project}; kartu ini menunggu giliran'), { agent: spec.label, project: run.project }));
+        else this.host.changed(run, fmt(_('{agent} is working on another card in {project}; this card is waiting its turn'), { agent: spec.label, project: run.project }));
     }
 
     private launch(run: Run): void {
@@ -278,15 +278,15 @@ export class Orchestrator {
         const live = this.live.get(run.id)!;
         const program = this.program(spec);
         if (!program) {
-            run.trace.add('error', fmt(_('{agent} tidak ditemukan'), { agent: spec.label }), fmt(_('Program "{program}" tidak ada di PATH atau ~/.local/bin.'), { program: spec.program }));
-            this.finish(run, 127, fmt(_('program "{program}" tidak ditemukan'), { program: spec.program }));
+            run.trace.add('error', fmt(_('{agent} not found'), { agent: spec.label }), fmt(_('The program "{program}" is not in PATH or ~/.local/bin.'), { program: spec.program }));
+            this.finish(run, 127, fmt(_('program "{program}" not found'), { program: spec.program }));
             return;
         }
         const doing = this.editCard(run.board, run.card, (b, pos) => {
             const column = stageColumn(b, 'doing');
             return column < 0 || column === pos.column ? b : moveCard(b, pos, { column, index: Infinity });
         });
-        if (doing) run.trace.add('note', _('Kartu tidak dipindah'), doing);
+        if (doing) run.trace.add('note', _('Card not moved'), doing);
         try {
             live.proc = this.spawn([program, ...spec.args(run.title, run.session)], run.folder, {
                 line: text => {
@@ -302,7 +302,7 @@ export class Orchestrator {
         }
         live.proc.write(rpcGetState());
         live.proc.write(rpcPrompt(run.prompt, `nyerat-${++this.prompts}`));
-        this.host.changed(run, fmt(_('{agent} mulai mengerjakan “{title}”'), { agent: spec.label, title: run.title }));
+        this.host.changed(run, fmt(_('{agent} started working on “{title}”'), { agent: spec.label, title: run.title }));
     }
 
     private onSignal(run: Run, signal: PiSignal): void {
@@ -312,7 +312,7 @@ export class Orchestrator {
         if (signal.type === 'rejected') { live.proc.closeInput(); return; }
         if (signal.type === 'ask') {
             this.wait(run, signal.ask);
-            // Harness menjawab sendiri dengan nilai bawaan setelah batas waktunya; ikuti supaya status tidak basi.
+            // The harness answers by itself with the default value after its timeout; follow along so the status does not go stale.
             if (signal.ask.timeout) {
                 const ask = signal.ask;
                 if (live.askTimer) GLib.source_remove(live.askTimer);
@@ -321,19 +321,19 @@ export class Orchestrator {
                     if (run.ask === ask) {
                         run.ask = null;
                         run.status = 'working';
-                        run.trace.add('note', _('Waktu menjawab habis'), fmt(_('{agent} memakai jawaban bawaannya untuk: {question}'), { agent: spec.label, question: ask.title }));
+                        run.trace.add('note', _('Answer time ran out'), fmt(_('{agent} used its default answer for: {question}'), { agent: spec.label, question: ask.title }));
                         this.host.changed(run, null);
                     }
                     return GLib.SOURCE_REMOVE;
                 });
             }
-            this.host.changed(run, fmt(_('{agent} menunggu jawaban: {question}'), { agent: spec.label, question: signal.ask.title }));
+            this.host.changed(run, fmt(_('{agent} is waiting for an answer: {question}'), { agent: spec.label, question: signal.ask.title }));
             return;
         }
-        // Giliran selesai: pertanyaan → tunggu balasan pengguna; selain itu tutup stdin dan biarkan harness keluar.
+        // Turn finished: a question → wait for the user's reply; otherwise close stdin and let the harness exit.
         if (!live.stopped && endsWithQuestion(live.reader.answer)) {
-            this.wait(run, { kind: 'question', id: null, title: fmt(_('{label} bertanya'), { label: spec.label }), message: live.reader.answer, options: [], prefill: '', timeout: null });
-            this.host.changed(run, fmt(_('{agent} bertanya tentang “{title}”'), { agent: spec.label, title: run.title }));
+            this.wait(run, { kind: 'question', id: null, title: fmt(_('{label} asks'), { label: spec.label }), message: live.reader.answer, options: [], prefill: '', timeout: null });
+            this.host.changed(run, fmt(_('{agent} asked about “{title}”'), { agent: spec.label, title: run.title }));
         } else live.proc.closeInput();
     }
 
@@ -359,15 +359,15 @@ export class Orchestrator {
                 const review = stageColumn(noted, 'review');
                 return run.result!.ok && review >= 0 && review !== pos.column ? moveCard(noted, pos, { column: review, index: Infinity }) : noted;
             });
-            if (error) run.trace.add('note', _('Papan tidak diperbarui'), error);
+            if (error) run.trace.add('note', _('Board not updated'), error);
         }
-        const message = live.stopped ? `${spec.label} dihentikan: “${run.title}”`
-            : run.result.ok ? `${spec.label} selesai: “${run.title}”` : `${spec.label} gagal: ${run.result.error}`;
+        const message = live.stopped ? `${spec.label} stopped: “${run.title}”`
+            : run.result.ok ? `${spec.label} finished: “${run.title}”` : `${spec.label} failed: ${run.result.error}`;
         this.host.changed(run, message);
         if (next) this.launch(next);
     }
 
-    // Kartu dicari ulang di papan terkini (pengguna mungkin sudah memindahkannya). Tidak ada → biarkan papan.
+    // The card is looked up again on the current board (the user may have moved it). Not found → leave the board alone.
     private editCard(file: string, cardText: string, edit: (board: Board, at: Position) => Board): string | null {
         let missing = false;
         const error = this.host.updateBoard(file, board => {
@@ -375,11 +375,11 @@ export class Orchestrator {
             if (!at) { missing = true; return board; }
             return edit(board, at);
         });
-        return error ?? (missing ? 'kartu tidak ditemukan di papan (teksnya mungkin sudah diubah)' : null);
+        return error ?? (missing ? 'the card was not found on the board (its text may have been changed)' : null);
     }
 }
 
-// Judul pendek untuk pesan, nama sesi pi, dan log.
+// Short title for messages, pi session names, and logs.
 function shortTitle(text: string): string {
     const title = cardMeta(text).title;
     return title.length > 60 ? `${title.slice(0, 57)}…` : title;

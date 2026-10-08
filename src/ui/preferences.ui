@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <template class="NyeratPreferencesDialog" parent="AdwPreferencesDialog">
-    <property name="title" translatable="yes">Preferensi</property>
+    <property name="title" translatable="yes">Preferences</property>
     <child>
       <object class="AdwPreferencesPage">
-        <property name="title" translatable="yes">Umum</property>
+        <property name="title" translatable="yes">General</property>
         <property name="icon-name">preferences-system-symbolic</property>
         <child>
           <object class="AdwPreferencesGroup">
-            <property name="title" translatable="yes">Tampilan</property>
+            <property name="title" translatable="yes">View</property>
             <child>
               <object class="AdwComboRow" id="colorScheme">
-                <property name="title" translatable="yes">Tema warna</property>
+                <property name="title" translatable="yes">Color scheme</property>
                 <property name="model">
                   <object class="GtkStringList">
                     <items>
-                      <item translatable="yes">Ikuti sistem</item>
-                      <item translatable="yes">Terang</item>
-                      <item translatable="yes">Gelap</item>
+                      <item translatable="yes">Follow system</item>
+                      <item translatable="yes">Light</item>
+                      <item translatable="yes">Dark</item>
                     </items>
                   </object>
                 </property>
@@ -25,31 +25,31 @@
             </child>
             <child>
               <object class="AdwSwitchRow" id="focus">
-                <property name="title" translatable="yes">Mode fokus</property>
-                <property name="subtitle" translatable="yes">Redupkan semua paragraf kecuali yang sedang disunting</property>
+                <property name="title" translatable="yes">Focus mode</property>
+                <property name="subtitle" translatable="yes">Dim all paragraphs except the one being edited</property>
               </object>
             </child>
             <child>
               <object class="AdwSwitchRow" id="typewriter">
                 <property name="title" translatable="yes">Mode typewriter</property>
-                <property name="subtitle" translatable="yes">Jaga baris yang sedang diketik tetap di tengah</property>
+                <property name="subtitle" translatable="yes">Keep the line being typed in the middle</property>
               </object>
             </child>
           </object>
         </child>
         <child>
           <object class="AdwPreferencesGroup">
-            <property name="title" translatable="yes">Berkas</property>
+            <property name="title" translatable="yes">Files</property>
             <child>
               <object class="AdwSwitchRow" id="home">
-                <property name="title" translatable="yes">Beranda</property>
-                <property name="subtitle" translatable="yes">Tampilkan saat tidak ada dokumen yang terbuka</property>
+                <property name="title" translatable="yes">Home</property>
+                <property name="subtitle" translatable="yes">Show when no document is open</property>
               </object>
             </child>
             <child>
               <object class="AdwSwitchRow" id="autosave">
-                <property name="title" translatable="yes">Simpan otomatis</property>
-                <property name="subtitle" translatable="yes">Berlaku untuk dokumen yang sudah punya file</property>
+                <property name="title" translatable="yes">Autosave</property>
+                <property name="subtitle" translatable="yes">Applies to documents that already have a file</property>
               </object>
             </child>
           </object>
@@ -58,7 +58,7 @@
     </child>
     <child>
       <object class="AdwPreferencesPage">
-        <property name="title" translatable="yes">Asisten</property>
+        <property name="title" translatable="yes">Assistant</property>
         <property name="icon-name">user-available-symbolic</property>
         <child>
           <object class="AdwPreferencesGroup">
@@ -72,14 +72,14 @@
             </child>
             <child>
               <object class="AdwSwitchRow" id="chatThinking">
-                <property name="title" translatable="yes">Mode berpikir</property>
-                <property name="subtitle" translatable="yes">Lebih teliti, tetapi lebih lambat</property>
+                <property name="title" translatable="yes">Thinking mode</property>
+                <property name="subtitle" translatable="yes">More thorough, but slower</property>
               </object>
             </child>
             <child>
               <object class="AdwSwitchRow" id="chatSave">
-                <property name="title" translatable="yes">Simpan riwayat percakapan</property>
-                <property name="subtitle" translatable="yes">Disimpan di folder kerja, di .nyerat/chats</property>
+                <property name="title" translatable="yes">Save conversation history</property>
+                <property name="subtitle" translatable="yes">Saved in the work folder, in .nyerat/chats</property>
               </object>
             </child>
           </object>

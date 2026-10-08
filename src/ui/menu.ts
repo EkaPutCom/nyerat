@@ -1,15 +1,15 @@
-// Menu konteks (klik kanan / tombol ⋯) untuk GTK 4.
+// Context menu (right click / ⋯ button) for GTK 4.
 //
-// Isi menu dinyatakan sebagai data (MenuEntry[]) supaya mudah diuji tanpa membuka popover:
-// tes cukup mencari entri berdasarkan label lalu memanggil run(). popupMenu() mengubahnya
-// menjadi Gtk.PopoverMenu, yang di GTK 4 hanya menerima Gio.MenuModel berisi nama aksi.
+// The menu contents are expressed as data (MenuEntry[]) so they are easy to test without opening a popover:
+// tests only need to find an entry by label and then call run(). popupMenu() turns it
+// into a Gtk.PopoverMenu, which in GTK 4 only accepts a Gio.MenuModel containing action names.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
-// Satu item menu. Label kosong = pemisah bagian; submenu = item berisi menu turunan.
+// One menu item. An empty label = a section separator; submenu = an item containing a child menu.
 export interface MenuEntry {
     label: string;
     enabled?: boolean;   // default true
@@ -19,7 +19,7 @@ export interface MenuEntry {
 
 export const separator = (): MenuEntry => ({ label: '' });
 
-// Cari entri berdasarkan label (juga di dalam submenu).
+// Find an entry by label (also inside submenus).
 export function findEntry(entries: MenuEntry[], label: string): MenuEntry | undefined {
     for (const entry of entries) {
         if (entry.label === label) return entry;
@@ -29,7 +29,7 @@ export function findEntry(entries: MenuEntry[], label: string): MenuEntry | unde
     return undefined;
 }
 
-// Bangun Gio.Menu dan aksinya (di grup `group`, awalan "menu.").
+// Build the Gio.Menu and its actions (in group `group`, prefix "menu.").
 function buildModel(entries: MenuEntry[], group: Gio.SimpleActionGroup, counter: { n: number }): Gio.Menu {
     const model = new Gio.Menu();
     let section = new Gio.Menu();
@@ -44,7 +44,7 @@ function buildModel(entries: MenuEntry[], group: Gio.SimpleActionGroup, counter:
         const enabled = entry.enabled !== false;
         if (entry.submenu) {
             const item = Gio.MenuItem.new_submenu(entry.label, buildModel(entry.submenu, group, counter));
-            // Submenu yang tidak aktif: diberi aksi yang mati supaya tampil redup.
+            // An inactive submenu: given a disabled action so it shows dimmed.
             if (!enabled) {
                 group.add_action(new Gio.SimpleAction({ name, enabled: false }));
                 item.set_attribute_value('submenu-action', GLib.Variant.new_string(`menu.${name}`));
@@ -54,8 +54,8 @@ function buildModel(entries: MenuEntry[], group: Gio.SimpleActionGroup, counter:
         }
         const action = new Gio.SimpleAction({ name, enabled });
         const run = entry.run;
-        // Ditunda ke idle: dialog yang dibuka dari aksi tidak boleh muncul selagi popover
-        // masih menutup, dan aksi sering menggambar ulang widget pemilik popover.
+        // Deferred to idle: a dialog opened from an action must not appear while the popover
+        // is still closing, and the action often redraws the popover owner's widget.
         if (run) action.connect('activate', () => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { run(); return GLib.SOURCE_REMOVE; }));
         group.add_action(action);
         section.append(entry.label, `menu.${name}`);
@@ -63,8 +63,8 @@ function buildModel(entries: MenuEntry[], group: Gio.SimpleActionGroup, counter:
     return model;
 }
 
-// Tampilkan menu di dekat `parent`. (x, y) = titik di koordinat parent (misalnya posisi
-// klik kanan); tanpa itu menu menunjuk ke seluruh widget (tombol ⋯).
+// Show the menu near `parent`. (x, y) = a point in the parent's coordinates (e.g. the position of a
+// right click); without it the menu points at the whole widget (the ⋯ button).
 export function popupMenu(parent: Gtk.Widget, entries: MenuEntry[], x?: number, y?: number): Gtk.PopoverMenu {
     const group = new Gio.SimpleActionGroup();
     const model = buildModel(entries, group, { n: 0 });
@@ -76,7 +76,7 @@ export function popupMenu(parent: Gtk.Widget, entries: MenuEntry[], x?: number, 
         popover.set_pointing_to(new Gdk.Rectangle({ x: Math.round(x), y: Math.round(y), width: 1, height: 1 }));
     }
     popover.set_parent(parent);
-    // Popover adalah anak widget pemiliknya; lepaskan setelah tertutup supaya tidak menumpuk.
+    // A popover is a child of its owner widget; detach it after it closes so they do not pile up.
     popover.connect('closed', () => GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         if (popover.get_parent()) popover.unparent();
         return GLib.SOURCE_REMOVE;

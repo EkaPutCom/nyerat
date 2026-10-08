@@ -1,5 +1,5 @@
-// Header bar (Adw.HeaderBar, dibungkus Adw.Bin karena kelas itu final): tombol-tombol dan menu ☰, dideklarasikan di headerbar.ui. Setiap tombol/menu
-// hanya menyebut nama aksi ("app.save"); aksinya sendiri didaftarkan di actions.ts.
+// Header bar (Adw.HeaderBar, wrapped in Adw.Bin because that class is final): the buttons and the ☰ menu, declared in headerbar.ui. Each button/menu
+// only names an action ("app.save"); the action itself is registered in actions.ts.
 
 import Adw from 'gi://Adw?version=1';
 import GObject from 'gi://GObject';

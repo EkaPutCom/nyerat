@@ -1,6 +1,6 @@
-// Bilah status di bawah editor.
-//   kiri:  mode aktif
-//   kanan: jumlah kata/karakter dan posisi kursor
+// Status bar below the editor.
+//   left:  active mode
+//   right: word/character counts and cursor position
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GObject from 'gi://GObject';
@@ -29,32 +29,32 @@ export class StatusBar extends Gtk.Box {
     get right(): Gtk.Label { return this._right; }
 
     setCounts(text: string): void {
-        // Simbol Markdown tidak dihitung sebagai kata.
+        // Markdown symbols are not counted as words.
         const words = countWords(text);
         this.setDocumentCounts(words, cpLength(text));
     }
 
     setDocumentCounts(words: number, characters: number): void {
-        this.counts = `${words} kata   ${characters} karakter`;
+        this.counts = `${words} words   ${characters} characters`;
         this.render();
     }
 
-    // Ringkasan papan kanban; menggantikan hitungan kata dan posisi kursor selama papan tampil.
+    // Kanban board summary; replaces the word count and cursor position while the board is shown.
     setBoardCounts(lists: number, cards: number): void {
-        this.counts = `${lists} daftar · ${cards} kartu`;
+        this.counts = `${lists} lists · ${cards} cards`;
         this.cursorText = '';
         this.render();
     }
 
-    // Ringkasan inbox selama inbox tampil.
+    // Inbox summary while the inbox is shown.
     setInboxCounts(items: number): void {
-        this.counts = fmt(ngettext('{n} catatan', '{n} catatan', items), { n: items });
+        this.counts = fmt(ngettext('{n} note', '{n} notes', items), { n: items });
         this.cursorText = '';
         this.render();
     }
 
     setCursor(line: number, column: number): void {
-        this.cursorText = fmt(_('Baris {line}, Kolom {column}'), { line: line + 1, column: column + 1 });
+        this.cursorText = fmt(_('Line {line}, Column {column}'), { line: line + 1, column: column + 1 });
         this.render();
     }
 

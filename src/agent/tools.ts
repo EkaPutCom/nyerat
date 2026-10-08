@@ -1,11 +1,11 @@
-// Alat yang boleh dipanggil model untuk membaca dokumen di ruang kerja sendiri (function calling). Semuanya hanya-baca dan murni:
-// bekerja di atas daftar berkas yang diberikan pemanggil (bukan disk), jadi mudah diuji dan tidak bisa keluar dari proyek.
-// Murni TypeScript tanpa GTK.
+// Tools the model may call to read documents in its own workspace (function calling). All are read-only and pure:
+// they work on the file list supplied by the caller (not the disk), so they are easy to test and cannot escape the project.
+// Pure TypeScript without GTK.
 
 import { estimateTokens, matchMention, projectMap, rankChunks, splitChunks, tokenize, type SourceFile } from './context.js';
 import type { ToolSpec } from './provider.js';
 
-// Batas per panggilan; anggaran total per pertanyaan dijaga pemanggil (session.ts).
+// Per-call limits; the total budget per question is kept by the caller (session.ts).
 export const MAX_RESULT_TOKENS = 6000;
 const MAX_SEARCH_HITS = 15;
 const MAX_TEXT_MATCHES = 40;
@@ -13,55 +13,55 @@ const MAX_SNIPPET_CHARS = 900;
 
 export const TOOLS: ToolSpec[] = [
     {
-        name: 'daftar_berkas',
-        description: 'Daftar semua berkas dokumen di folder kerja beserta jumlah kata dan heading-nya (kerangka isi). Pakai untuk mengetahui berkas dan bagian apa yang ada.',
+        name: 'list_files',
+        description: 'List all document files in the work folder with their word counts and headings (an outline of the contents). Use it to find out which files and sections exist.',
         parameters: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
-        name: 'cari_dokumen',
-        description: 'Cari bagian dokumen yang paling relevan dengan sebuah topik atau pertanyaan (pencarian kata kunci berperingkat). Mengembalikan potongan per bagian dengan nama berkas, heading, dan nomor baris. Cocok untuk topik, keputusan, rencana, kejadian, atau gagasan.',
+        name: 'search_documents',
+        description: 'Search for the document sections most relevant to a topic or question (ranked keyword search). Returns snippets per section with the file name, heading, and line numbers. Good for topics, decisions, plans, events, or ideas.',
         parameters: {
             type: 'object',
             properties: {
-                kueri: { type: 'string', description: 'Kata kunci atau kalimat pendek tentang yang dicari' },
-                maks: { type: 'integer', description: `Jumlah potongan maksimal (1–${MAX_SEARCH_HITS}, bawaan 8)` },
+                query: { type: 'string', description: 'Keywords or a short sentence about what is being looked for' },
+                max: { type: 'integer', description: `Maximum number of snippets (1–${MAX_SEARCH_HITS}, default 8)` },
             },
-            required: ['kueri'],
+            required: ['query'],
             additionalProperties: false,
         },
     },
     {
-        name: 'cari_teks',
-        description: 'Cari kemunculan teks persis (tanpa membedakan huruf besar/kecil) di seluruh dokumen atau satu berkas, dan kembalikan baris tempatnya muncul. Cocok untuk nama, tempat, angka, tanggal, atau istilah tertentu, mis. memeriksa konsistensi.',
+        name: 'search_text',
+        description: 'Search for occurrences of exact text (case-insensitive) across all documents or a single file, and return the lines where it appears. Good for names, places, numbers, dates, or specific terms, e.g. checking consistency.',
         parameters: {
             type: 'object',
             properties: {
-                teks: { type: 'string', description: 'Teks yang dicari, persis seperti tertulis' },
-                berkas: { type: 'string', description: 'Batasi ke satu berkas (opsional)' },
+                text: { type: 'string', description: 'The text to look for, exactly as written' },
+                file: { type: 'string', description: 'Limit to one file (optional)' },
             },
-            required: ['teks'],
+            required: ['text'],
             additionalProperties: false,
         },
     },
     {
-        name: 'baca_berkas',
-        description: 'Baca isi sebuah berkas dokumen (bisa sebagian: dari_baris sampai sampai_baris, nomor baris mulai dari 1). Hasil memuat nomor baris. Berkas panjang dipotong; lanjutkan dengan dari_baris berikutnya.',
+        name: 'read_file',
+        description: 'Read the contents of a document file (can be partial: from_line to to_line, line numbers start at 1). The result includes line numbers. Long files are truncated; continue with the next from_line.',
         parameters: {
             type: 'object',
             properties: {
-                nama: { type: 'string', description: 'Nama berkas seperti di daftar_berkas' },
-                dari_baris: { type: 'integer', description: 'Baris awal (bawaan 1)' },
-                sampai_baris: { type: 'integer', description: 'Baris akhir (bawaan: sampai habis atau batas panjang)' },
+                name: { type: 'string', description: 'File name as in list_files' },
+                from_line: { type: 'integer', description: 'First line (default 1)' },
+                to_line: { type: 'integer', description: 'Last line (default: to the end or the length limit)' },
             },
-            required: ['nama'],
+            required: ['name'],
             additionalProperties: false,
         },
     },
 ];
 
 export interface ToolOutcome {
-    content: string;   // dikirim kembali ke model
-    summary: string;   // satu frasa singkat untuk antarmuka, mis. "5 potongan"
+    content: string;   // sent back to the model
+    summary: string;   // a short phrase for the interface, e.g. "5 snippets"
 }
 
 const clip = (text: string, maxTokens: number): { text: string; clipped: boolean } => {
@@ -75,37 +75,37 @@ const asInt = (v: unknown): number | null => typeof v === 'number' && Number.isF
 function suggest(name: string, files: SourceFile[]): string {
     const wanted = tokenize(name);
     const close = files.map(f => f.name).filter(n => wanted.some(t => tokenize(n).includes(t))).slice(0, 5);
-    return close.length ? ` Mungkin maksudnya: ${close.join(', ')}.` : ' Panggil daftar_berkas untuk melihat nama yang ada.';
+    return close.length ? ` Maybe you meant: ${close.join(', ')}.` : ' Call list_files to see the existing names.';
 }
 
 const listFiles = (files: SourceFile[]): ToolOutcome => ({
-    content: files.length ? projectMap(files.map(f => ({ ...f, opened: false })), MAX_RESULT_TOKENS) : 'Belum ada berkas naskah di proyek.',
-    summary: `${files.length} berkas`,
+    content: files.length ? projectMap(files.map(f => ({ ...f, opened: false })), MAX_RESULT_TOKENS) : 'There are no document files in the project yet.',
+    summary: `${files.length} files`,
 });
 
 function searchDocuments(files: SourceFile[], args: Record<string, unknown>): ToolOutcome {
-    const query = asString(args.kueri);
-    if (!query) return { content: 'Argumen "kueri" wajib diisi.', summary: 'kueri kosong' };
-    const limit = Math.min(Math.max(asInt(args.maks) ?? 8, 1), MAX_SEARCH_HITS);
+    const query = asString(args.query);
+    if (!query) return { content: 'The "query" argument is required.', summary: 'empty query' };
+    const limit = Math.min(Math.max(asInt(args.max) ?? 8, 1), MAX_SEARCH_HITS);
     const terms = new Map(tokenize(query).map(t => [t, 1] as const));
     const ranked = rankChunks(files.flatMap(f => splitChunks(f.name, f.text)), terms).slice(0, limit);
-    if (!ranked.length) return { content: `Tidak ada bagian naskah yang cocok dengan "${query}". Coba kata kunci lain atau cari_teks.`, summary: 'tidak ada hasil' };
+    if (!ranked.length) return { content: `No document section matches "${query}". Try other keywords or search_text.`, summary: 'no results' };
     const body = ranked.map(({ chunk: c }) => {
         const text = c.text.length > MAX_SNIPPET_CHARS ? `${c.text.slice(0, MAX_SNIPPET_CHARS)} […]` : c.text;
-        return `[${c.file} › ${c.heading || 'awal berkas'} · baris ${c.start + 1}–${c.end + 1}]\n${text}`;
+        return `[${c.file} › ${c.heading || 'start of file'} · lines ${c.start + 1}–${c.end + 1}]\n${text}`;
     }).join('\n\n');
     const { text, clipped } = clip(body, MAX_RESULT_TOKENS);
-    return { content: clipped ? `${text}\n[… hasil dipotong; persempit kueri …]` : text, summary: `${ranked.length} potongan` };
+    return { content: clipped ? `${text}\n[… results truncated; narrow the query …]` : text, summary: `${ranked.length} snippets` };
 }
 
 function searchText(files: SourceFile[], args: Record<string, unknown>): ToolOutcome {
-    const needle = asString(args.teks);
-    if (!needle) return { content: 'Argumen "teks" wajib diisi.', summary: 'teks kosong' };
+    const needle = asString(args.text);
+    if (!needle) return { content: 'The "text" argument is required.', summary: 'empty text' };
     let scope = files;
-    const only = asString(args.berkas);
+    const only = asString(args.file);
     if (only) {
         const file = matchMention(only, files);
-        if (!file) return { content: `Berkas "${only}" tidak ditemukan.${suggest(only, files)}`, summary: 'berkas tidak ada' };
+        if (!file) return { content: `File "${only}" was not found.${suggest(only, files)}`, summary: 'file not found' };
         scope = [file];
     }
     const lower = needle.toLowerCase();
@@ -118,19 +118,19 @@ function searchText(files: SourceFile[], args: Record<string, unknown>): ToolOut
             if (lines.length < MAX_TEXT_MATCHES) lines.push(`${f.name}:${i + 1}: ${line.trim().slice(0, 240)}`);
         });
     }
-    if (!total) return { content: `Teks "${needle}" tidak ditemukan${only ? ` di ${only}` : ''}.`, summary: 'tidak ditemukan' };
-    const more = total > lines.length ? `\n[… ${total - lines.length} kemunculan lagi tidak ditampilkan; persempit dengan parameter berkas …]` : '';
-    return { content: `${total} baris memuat "${needle}":\n${lines.join('\n')}${more}`, summary: `${total} baris` };
+    if (!total) return { content: `The text "${needle}" was not found${only ? ` in ${only}` : ''}.`, summary: 'not found' };
+    const more = total > lines.length ? `\n[… ${total - lines.length} more occurrences not shown; narrow with the file parameter …]` : '';
+    return { content: `${total} lines contain "${needle}":\n${lines.join('\n')}${more}`, summary: `${total} lines` };
 }
 
 function readFile(files: SourceFile[], args: Record<string, unknown>): ToolOutcome {
-    const name = asString(args.nama);
-    if (!name) return { content: 'Argumen "nama" wajib diisi.', summary: 'nama kosong' };
+    const name = asString(args.name);
+    if (!name) return { content: 'The "name" argument is required.', summary: 'empty name' };
     const file = matchMention(name, files);
-    if (!file) return { content: `Berkas "${name}" tidak ditemukan.${suggest(name, files)}`, summary: 'berkas tidak ada' };
+    if (!file) return { content: `File "${name}" was not found.${suggest(name, files)}`, summary: 'file not found' };
     const lines = file.text.split('\n');
-    const from = Math.min(Math.max(asInt(args.dari_baris) ?? 1, 1), lines.length);
-    const to = Math.min(Math.max(asInt(args.sampai_baris) ?? lines.length, from), lines.length);
+    const from = Math.min(Math.max(asInt(args.from_line) ?? 1, 1), lines.length);
+    const to = Math.min(Math.max(asInt(args.to_line) ?? lines.length, from), lines.length);
     const out: string[] = [];
     let size = 0, last = from - 1;
     for (let i = from - 1; i < to; i++) {
@@ -140,47 +140,47 @@ function readFile(files: SourceFile[], args: Record<string, unknown>): ToolOutco
         out.push(line);
         last = i + 1;
     }
-    const head = `[${file.name}, baris ${from}–${last} dari ${lines.length}]`;
-    const tail = last < to ? `\n[… dipotong; lanjutkan dengan dari_baris=${last + 1} …]` : '';
-    return { content: `${head}\n${out.join('\n')}${tail}`, summary: `baris ${from}–${last}` };
+    const head = `[${file.name}, lines ${from}–${last} of ${lines.length}]`;
+    const tail = last < to ? `\n[… truncated; continue with from_line=${last + 1} …]` : '';
+    return { content: `${head}\n${out.join('\n')}${tail}`, summary: `lines ${from}–${last}` };
 }
 
-// Jalankan satu panggilan. Tidak pernah melempar: galat argumen dikembalikan sebagai teks supaya model bisa memperbaikinya.
+// Run one call. Never throws: argument errors are returned as text so the model can fix them.
 export function runTool(name: string, rawArguments: string, files: SourceFile[]): ToolOutcome {
     let args: Record<string, unknown> = {};
     if (rawArguments.trim()) {
         try {
             const parsed = JSON.parse(rawArguments);
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) args = parsed;
-            else throw new Error('bukan objek');
+            else throw new Error('not an object');
         } catch (e) {
-            return { content: 'Argumen bukan JSON objek yang valid.', summary: 'argumen tidak valid' };
+            return { content: 'The arguments are not a valid JSON object.', summary: 'invalid arguments' };
         }
     }
     switch (name) {
-        case 'daftar_berkas': return listFiles(files);
-        case 'cari_dokumen': return searchDocuments(files, args);
-        case 'cari_teks': return searchText(files, args);
-        case 'baca_berkas': return readFile(files, args);
-        default: return { content: `Alat "${name}" tidak dikenal. Alat yang tersedia: ${TOOLS.map(t => t.name).join(', ')}.`, summary: 'alat tidak dikenal' };
+        case 'list_files': return listFiles(files);
+        case 'search_documents': return searchDocuments(files, args);
+        case 'search_text': return searchText(files, args);
+        case 'read_file': return readFile(files, args);
+        default: return { content: `Tool "${name}" is not recognized. Available tools: ${TOOLS.map(t => t.name).join(', ')}.`, summary: 'unknown tool' };
     }
 }
 
-// Frasa untuk antarmuka: apa yang sedang dikerjakan asisten.
+// Phrases for the interface: what the assistant is working on.
 export function describeCall(name: string, rawArguments: string): string {
     let a: Record<string, unknown> = {};
-    try { a = JSON.parse(rawArguments || '{}') ?? {}; } catch (e) { /* tampilkan nama alatnya saja */ }
+    try { a = JSON.parse(rawArguments || '{}') ?? {}; } catch (e) { /* show only the tool name */ }
     switch (name) {
-        case 'daftar_berkas': return 'Melihat daftar berkas';
-        case 'cari_dokumen': return `Mencari “${asString(a.kueri)}”`;
-        case 'cari_teks': return `Mencari teks “${asString(a.teks)}”${asString(a.berkas) ? ` di ${asString(a.berkas)}` : ''}`;
-        case 'baca_berkas': return `Membaca ${asString(a.nama) || 'berkas'}${asInt(a.dari_baris) ? ` (dari baris ${asInt(a.dari_baris)})` : ''}`;
-        case 'buat_berkas': return `Mengusulkan berkas baru ${asString(a.nama)}`;
-        case 'ubah_berkas': return `Mengusulkan perubahan pada ${asString(a.nama)}`;
-        case 'ubah_kanban': return `Mengusulkan perubahan papan ${asString(a.nama)}`;
-        case 'sisip_teks': return `Mengusulkan sisipan di ${asString(a.nama)}`;
-        case 'hapus_berkas': return `Mengusulkan menghapus ${asString(a.nama)}`;
-        case 'pindah_berkas': return `Mengusulkan memindah ${asString(a.nama)} ke ${asString(a.tujuan)}`;
+        case 'list_files': return 'Viewing the file list';
+        case 'search_documents': return `Searching “${asString(a.query)}”`;
+        case 'search_text': return `Searching text “${asString(a.text)}”${asString(a.file) ? ` in ${asString(a.file)}` : ''}`;
+        case 'read_file': return `Reading ${asString(a.name) || 'file'}${asInt(a.from_line) ? ` (from line ${asInt(a.from_line)})` : ''}`;
+        case 'create_file': return `Proposing new file ${asString(a.name)}`;
+        case 'edit_file': return `Proposing changes to ${asString(a.name)}`;
+        case 'edit_kanban': return `Proposing changes to board ${asString(a.name)}`;
+        case 'insert_text': return `Proposing an insertion in ${asString(a.name)}`;
+        case 'delete_file': return `Proposing to delete ${asString(a.name)}`;
+        case 'move_file': return `Proposing to move ${asString(a.name)} to ${asString(a.destination)}`;
         default: return name;
     }
 }

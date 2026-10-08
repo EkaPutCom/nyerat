@@ -1,7 +1,7 @@
-// Baris tab dokumen di atas editor: Adw.TabBar yang menampilkan Adw.TabView, dan hanya terlihat
-// jika ada dua dokumen atau lebih (autohide). Isi dokumen tidak ada di TabView; tiap halamannya
-// hanya penanda, karena editor dan papan kanban dipilih oleh Gtk.Stack milik jendela.
-// Tab tidak tahu isi dokumen; jendela yang menyuplai judul dan status "belum disimpan".
+// Row of document tabs above the editor: an Adw.TabBar showing an Adw.TabView, visible only
+// when there are two or more documents (autohide). The document contents are not in the TabView; each page is
+// only a marker, because the editor and the kanban board are chosen by the window's own Gtk.Stack.
+// Tabs do not know the document contents; the window supplies the title and the "unsaved" status.
 
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -24,7 +24,7 @@ export class TabBar {
             const id = this.view.selected_page && this.ids_.get(this.view.selected_page);
             if (!this.syncing && id !== null && id !== undefined) this.onSelect(id);
         });
-        // Tombol tutup di tab hanya meminta; jendela yang memutuskan (mungkin bertanya dulu) lalu memanggil remove().
+        // The tab's close button only requests; the window decides (it may ask first) and then calls remove().
         this.view.connect('close-page', (_view, page) => {
             if (page === this.removing) {
                 this.view.close_page_finish(page, true);
@@ -56,7 +56,7 @@ export class TabBar {
         this.pages.delete(id);
         this.ids_.delete(page);
         this.removing = page;
-        this.syncing = true;   // TabView memilih tab tetangga sendiri; jendela yang menentukan tab aktif
+        this.syncing = true;   // TabView picks a neighboring tab by itself; the window decides the active tab
         this.view.close_page(page);
         this.syncing = false;
         this.removing = null;
@@ -69,7 +69,7 @@ export class TabBar {
         page.tooltip = tooltip ?? '';
     }
 
-    // Ikon simbolik di depan judul (mis. Beranda); null = tanpa ikon seperti tab dokumen.
+    // Symbolic icon in front of the title (e.g. Home); null = no icon like a document tab.
     setIcon(id: number, icon: string | null): void {
         const page = this.pages.get(id);
         if (page) page.icon = icon ? Gio.ThemedIcon.new(icon) : null;
@@ -83,7 +83,7 @@ export class TabBar {
         this.syncing = false;
     }
 
-    // Urutan tab dari kiri ke kanan (pengguna bisa menyeretnya).
+    // Tab order from left to right (the user can drag them).
     ids(): number[] {
         const result: number[] = [];
         for (let i = 0; i < this.view.n_pages; i++) result.push(this.ids_.get(this.view.get_nth_page(i))!);

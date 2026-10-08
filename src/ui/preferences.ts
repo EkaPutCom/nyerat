@@ -1,5 +1,5 @@
-// Dialog preferensi. Widgetnya dideklarasikan di preferences.ui dan diikat langsung ke
-// GSettings; jendela utama menerapkan perubahannya lewat sinyal "changed".
+// Preferences dialog. Its widgets are declared in preferences.ui and bound directly to
+// GSettings; the main window applies the changes through the "changed" signal.
 
 import Adw from 'gi://Adw?version=1';
 import Gio from 'gi://Gio';
@@ -11,7 +11,7 @@ import { uiTemplate } from '../gtkutil.js';
 import type { AppSettings } from '../settings.js';
 import template from './preferences.ui?raw';
 
-// Urutan sama dengan item "Tema warna" di preferences.ui.
+// The same order as the "Color scheme" items in preferences.ui.
 const SCHEMES = ['system', 'light', 'dark'];
 
 export class PreferencesDialog extends Adw.PreferencesDialog {
@@ -49,7 +49,7 @@ export class PreferencesDialog extends Adw.PreferencesDialog {
         this.bindChoice(gs, 'chat-model', this._chatModel, DEEPSEEK_MODELS);
     }
 
-    // ComboRow ↔ kunci bertipe string: indeks baris adalah posisi nilainya di `values`.
+    // ComboRow ↔ string-typed key: the row index is the position of its value in `values`.
     private bindChoice(gs: Gio.Settings, key: string, row: Adw.ComboRow, values: string[]): void {
         const sync = () => {
             const index = values.indexOf(gs.get_string(key));

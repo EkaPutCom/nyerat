@@ -1,6 +1,6 @@
-// Riwayat percakapan di disk: satu berkas Markdown per percakapan di <folder naskah>/.nyerat/chats/.
-// Format berkasnya ada di transcript.ts. Folder bertitik tidak dibaca sebagai naskah oleh asisten
-// (project.ts) dan tidak tampil di pohon Berkas, jadi riwayat tidak tercampur dengan naskah.
+// Conversation history on disk: one Markdown file per conversation in <manuscript folder>/.nyerat/chats/.
+// The file format is in transcript.ts. Dot folders are not read as manuscripts by the assistant
+// (project.ts) and do not show in the Files tree, so history does not get mixed with the manuscript.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -19,16 +19,16 @@ export interface ChatSummary {
 
 export const chatsDir = (root: string): string => GLib.build_filenamev([root, '.nyerat', 'chats']);
 
-// Waktu lokal sekarang untuk dicatat di berkas, mis. 2026-10-04T14:20:00.
+// Current local time to record in the file, e.g. 2026-10-04T14:20:00.
 export const nowStamp = (): string => GLib.DateTime.new_now_local().format('%Y-%m-%dT%H:%M:%S') ?? '';
 
 export { titleFrom };
 
-// Simpan percakapan. path = berkas yang sudah ada (ditimpa); null = buat berkas baru. Mengembalikan path-nya.
+// Save a conversation. path = an existing file (overwritten); null = create a new file. Returns its path.
 export function saveChat(root: string, chat: SavedChat, path: string | null): string {
     const dir = chatsDir(root);
     GLib.mkdir_with_parents(dir, 0o755);
-    // Riwayat berisi kutipan naskah: jangan ikut ter-commit tanpa disengaja. Hapus berkas ini untuk mengizinkannya.
+    // History contains manuscript quotes: do not get committed by accident. Delete this file to allow it.
     const ignore = GLib.build_filenamev([root, '.nyerat', '.gitignore']);
     if (!GLib.file_test(ignore, GLib.FileTest.EXISTS)) writeTextFile(ignore, '*\n');
     let target = path;
@@ -50,7 +50,7 @@ export function loadChat(path: string): SavedChat | null {
     }
 }
 
-// Percakapan di folder, terbaru dulu. Berkas yang bukan percakapan dilewati.
+// Conversations in the folder, newest first. Files that are not conversations are skipped.
 export function listChats(root: string): ChatSummary[] {
     const dir = chatsDir(root);
     const found: ChatSummary[] = [];
@@ -68,7 +68,7 @@ export function listChats(root: string): ChatSummary[] {
         const chat = loadChat(path);
         if (chat) found.push({ path, title: chat.title, created: chat.created, turns: chat.turns.length });
     }
-    // Stempel waktu ISO bisa dibandingkan sebagai teks; nama berkas menjadi penentu bila kosong atau sama.
+    // ISO timestamps can be compared as text; the file name is the tiebreaker if empty or equal.
     found.sort((a, b) => b.created.localeCompare(a.created) || b.path.localeCompare(a.path));
     return found.slice(0, MAX_LISTED);
 }
