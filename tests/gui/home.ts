@@ -56,7 +56,7 @@ export function homeTests(c: GuiContext): void {
     });
     test('due dates: overdue, today, tomorrow; far ones and finished ones are excluded', () => {
         const { win } = open();
-        eq(win.homeData().tasks.map(t => [t.title, t.status]), [['Old report', 'overdue'], ['Implement search', 'today'], ['Review architecture', 'soon']]);
+        eq(win.homePage.data().tasks.map(t => [t.title, t.status]), [['Old report', 'overdue'], ['Implement search', 'today'], ['Review architecture', 'soon']]);
         const all = labels(win);
         ok(all.includes('2 days overdue') && all.includes('Today') && all.includes('Tomorrow'), `due-date labels: ${all.join('|')}`);
         ok(all.includes('nyerat · board'), 'project and board in the subtitle');
@@ -65,7 +65,7 @@ export function homeTests(c: GuiContext): void {
     });
     test('inbox: the number of unprocessed items', () => {
         const { win } = open();
-        eq(win.homeData().inboxes, [{ file: 'inbox.md', open: 2 }]);
+        eq(win.homePage.data().inboxes, [{ file: 'inbox.md', open: 2 }]);
         ok(labels(win).includes('2 unprocessed'), 'inbox label');
         close(win);
     });
@@ -79,7 +79,7 @@ export function homeTests(c: GuiContext): void {
         win.openHome(); settle();
         ok(win.homeMode, 'Alt+Home did not return to Home');
         eq(win.documentCount, 4, 'Home was duplicated');
-        const data = win.homeData();
+        const data = win.homePage.data();
         eq(data.resume.map(r => [r.title, r.subtitle]), [['journal', '2026-10-06.md'], ['delta', 'summary.md']], 'one Continue card per folder');
         eq(data.recent.map(r => [r.title, r.subtitle]), [['architecture.md', 'projects/delta']], 'recent files');
         ok(labels(win).includes('Continue') && labels(win).includes('Recent files'), 'section titles');
@@ -118,10 +118,10 @@ export function homeTests(c: GuiContext): void {
     });
     test('a running agent is shown with its status', () => {
         const { win } = open();
-        const run = win.orchestrator.queue.add({ board: board, card: 'Tidy up README @pi', title: 'Tidy up README', agent: 'pi', project: 'shop', folder: '/tmp/shop', prompt: '', session: null });
+        const run = win.harness.orchestrator.queue.add({ board: board, card: 'Tidy up README @pi', title: 'Tidy up README', agent: 'pi', project: 'shop', folder: '/tmp/shop', prompt: '', session: null });
         win.refreshHome(); settle();
         ok(labels(win).includes('Agent') && rowTitles(win).includes('Tidy up README') && labels(win).includes('Working'), `agent: ${labels(win).join('|')}`);
-        win.orchestrator.queue.end(run, 'stopped');
+        win.harness.orchestrator.queue.end(run, 'stopped');
         win.refreshHome(); settle();
         ok(!labels(win).includes('Agent'), 'the Agent section is still shown after finishing');
         close(win);
@@ -176,7 +176,7 @@ export function homeTests(c: GuiContext): void {
         for (let i = 0; i < 320; i++) put(`aaa/note${i}.md`, '# Note\n');
         try {
             const { win } = open();
-            const data = win.homeData();
+            const data = win.homePage.data();
             eq(data.tasks.map(t => t.title), ['Old report', 'Implement search', 'Review architecture'], 'due dates');
             eq(data.inboxes, [{ file: 'inbox.md', open: 2 }], 'inbox');
             close(win);
@@ -190,11 +190,11 @@ export function homeTests(c: GuiContext): void {
         win.openFile(summary); settle();
         win.editor.setText(`---\nkanban: true\n---\n\n## Plan\n\n- [ ] Write summary @{${day(0)}}\n`);
         win.editor.buffer.set_modified(true);
-        ok(win.homeData().tasks.some(t => t.title === 'Write summary' && t.file === 'projects/delta/summary.md'), 'the unsaved board is missing');
+        ok(win.homePage.data().tasks.some(t => t.title === 'Write summary' && t.file === 'projects/delta/summary.md'), 'the unsaved board is missing');
         win.openFile(board); settle();
         win.editor.setText('# Not a board any more\n');
         win.editor.buffer.set_modified(true);
-        ok(!win.homeData().tasks.some(t => t.file === 'board.md'), 'the unsaved non-board still counts');
+        ok(!win.homePage.data().tasks.some(t => t.file === 'board.md'), 'the unsaved non-board still counts');
         for (const doc of [summary, board]) { win.openFile(doc); win.editor.buffer.set_modified(false); }
         close(win);
     });
@@ -209,7 +209,7 @@ export function homeTests(c: GuiContext): void {
     if (!shot) return;
     const { win } = open({ width: 1100, height: 760 });
     for (const file of [architecture, summary, journal, board]) win.openFile(file);
-    win.orchestrator.queue.add({ board: board, card: 'Tidy up README @pi', title: 'Tidy up README', agent: 'pi', project: 'shop', folder: '/tmp/shop', prompt: '', session: null }).status = 'waiting';
+    win.harness.orchestrator.queue.add({ board: board, card: 'Tidy up README @pi', title: 'Tidy up README', agent: 'pi', project: 'shop', folder: '/tmp/shop', prompt: '', session: null }).status = 'waiting';
     win.openHome();
     for (const [name, dark, width] of [['light', false, 1100], ['dark', true, 1100], ['narrow', false, 480]] as const) {
         win.setDark(dark);

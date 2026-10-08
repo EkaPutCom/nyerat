@@ -10,6 +10,8 @@
 //
 // Each document has its own MarkdownView (undo, cursor, and scroll are preserved when switching
 // tabs); the other components (outline, status, search, kanban board) follow the active document.
+// Features that span components (journal, harness runs, Home, agent writes, autosave) are controllers in
+// window/*; they see the window only through the host built in makeHost().
 
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
@@ -22,7 +24,7 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import { APP_ID, APP_NAME } from './config.js';
 import { addBundledIcons, after, type Awaitable } from './gtkutil.js';
 import { type AppSettings } from './settings.js';
-import { readTextFile, writeTextFile, writeTextFileAsync, waitForWrites, fileExists } from './files.js';
+import { readTextFile, writeTextFile, waitForWrites, fileExists } from './files.js';
 import { markdownToHtml } from './markdown/html.js';
 import { WELCOME } from './welcome.js';
 import { MarkdownView, type Mode } from './editor/view.js';
@@ -34,36 +36,30 @@ import { FileTree, isDirectory, isImageFile } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
 import { ChatPanel } from './ui/chat.js';
 import { listMarkdownFiles, readProject } from './agent/project.js';
-import { newNotePath, noteSection, resolveWikiLink, type WikiLink } from './markdown/wikilink.js';
-import { projectPath } from './agent/path.js';
-import { applyBatch } from './agent/batch.js';
-import { changeFiles, cleanNewName, type Change } from './agent/changes.js';
-import { agentGit, commitsBetween } from './git.js';
-import { readActivity, recordActivity } from './activity.js';
+import { newNotePath, resolveWikiLink, type WikiLink } from './markdown/wikilink.js';
+import { agentGit } from './git.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
 import { TabBar } from './ui/tabbar.js';
 import { HeaderBar } from './ui/headerbar.js';
 import type { Palette } from './colors.js';
 import { applyTheme, systemPrefersDark } from './ui/theme.js';
-import { chooseFile, askSaveChanges, showError, harnessAskDialog, harnessTextDialog, promptDialog } from './ui/dialogs.js';
+import { chooseFile, askSaveChanges, showError } from './ui/dialogs.js';
 import { registerActions, TEXT_ACTIONS, type Option } from './actions.js';
 import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
 import { InboxView } from './ui/inbox.js';
-import { HomeView, RESUME_CARDS, type HomeData, type HomeEntry } from './ui/home.js';
-import { dueTasks, localDate, moveRecent, openInboxes, rememberRecent, splitRecent, type RecentFile, type Task } from './markdown/home.js';
-import {
-    activityLines, addNote, agentActivity, boardEvents, clock, commitActivity, harnessActivity, journalName, journalStats, mergeActivity, newJournal,
-    type Activity, type ActivityKind,
-} from './markdown/journal.js';
+import { HomeView } from './ui/home.js';
+import { moveRecent, rememberRecent } from './markdown/home.js';
 import { isInbox, newInbox, parseInbox, serializeInbox, type Inbox } from './markdown/inbox.js';
-import { assignCard, cardMeta, countCards, isKanban, newBoard, parseBoard, serializeBoard, updateCard, type Board, type Card, type Position } from './markdown/kanban.js';
-import { Orchestrator } from './orchestrator.js';
-import { cardProject, checkProjectFolder, HARNESSES, isActive, PROJECT_NAME, type LinkedNote, type HarnessAsk, type HarnessReply, type Run } from './agent/harness.js';
-import { LogViewer } from './ui/logviewer.js';
-import type { MenuEntry } from './ui/menu.js';
+import { countCards, isKanban, newBoard, parseBoard, serializeBoard, type Board } from './markdown/kanban.js';
 import { _, fmt, ngettext } from './i18n.js';
+import { errorMessage, type Doc } from './window/doc.js';
+import { Autosaver, type AutosaveHost } from './window/autosave.js';
+import { JournalController, type JournalHost } from './window/journal.js';
+import { HarnessController, type HarnessHost } from './window/harness.js';
+import { HomeController, type HomeHost } from './window/home.js';
+import { applyChange, applyChangeBatch, type AgentWriteHost } from './window/agentwrites.js';
 
 const UNTITLED = _('Untitled');
 const HOME = _('Home');
@@ -71,11 +67,6 @@ const HOME = _('Home');
 const HOME_TAB = 'nyerat:home';
 // Actions that are meaningless on Home (there is no text to save or undo).
 const DOCUMENT_ACTIONS = ['save', 'save-as', 'export-html', 'undo', 'redo', 'kanban-view'];
-// Pause without keystrokes before autosave writes to disk.
-const AUTOSAVE_DELAY_MS = 1000;
-
-const errorMessage = (e: unknown): string => e instanceof Error ? e.message : String(e);
-
 // The saved window size may be larger than the screen (for example after moving
 // to a smaller monitor); limit it to the monitor size. GTK 4 no longer gives the general
 // work area (without panels), so the size of the first monitor is used.
@@ -87,20 +78,8 @@ function fitToScreen(width: number, height: number): [number, number] {
 }
 const MODE_LABELS: Record<Mode, string> = { source: _('Source'), focus: _('Focus'), typewriter: _('Typewriter') };
 
-
-// One open document (one tab).
-interface Doc {
-    id: number;
-    editor: MarkdownView;
-    file: string | null;          // document path, null = never saved
-    home: boolean;                // Home tab: its editor is unused, the tab contents are a HomeView
-    textOverride: boolean;        // the user chose the text view for this kanban board
-    boardText: string;            // the text the board last wrote/read; to recognize outside changes (undo)
-    reloadQueued: boolean;
-    autosaveTimer: number;        // autosave timeout id, 0 = none
-    lastChange: number;           // time (µs, monotonic) of the last text change
-    changes: number;              // number of text changes; marks the contents written by a background autosave
-}
+// The window as seen by its controllers; each controller is typed with only the part it needs.
+type WindowHost = AutosaveHost & JournalHost & HarnessHost & HomeHost & AgentWriteHost;
 
 export class MainWindow {
     readonly app: Adw.Application;
@@ -118,24 +97,12 @@ export class MainWindow {
     readonly board: KanbanBoard;
     readonly inbox: InboxView;
     readonly home: HomeView;
-    readonly orchestrator: Orchestrator;
-    // Harness dialogs can be replaced in tests with immediate answers; the real dialog answers through a Promise.
-    harnessDialogs: {
-        chooseFolder: (title: string) => Awaitable<string | null>;
-        answer: (ask: HarnessAsk, agent: string) => Awaitable<HarnessReply | null>;
-        text: (options: { title: string; label: string; context?: string }) => Awaitable<string | null>;
-    } = {
-        chooseFolder: title => chooseFile(this.win, { title, selectFolder: true }),
-        answer: (ask, agent) => harnessAskDialog(this.win, ask, agent),
-        text: options => harnessTextDialog(this.win, options),
-    };
-    // The quick capture dialog; replaced in tests with an immediate answer.
-    journalDialogs: { capture: () => Awaitable<string | null> } = {
-        capture: () => promptDialog(this.win, { title: _('Add to Journal'), label: _('Recorded in today\'s journal with the current time.'), accept: _('Add') }),
-    };
+    readonly journal: JournalController;
+    readonly harness: HarnessController;
+    readonly homePage: HomeController;
+    private readonly autosaver: Autosaver;
+    private readonly host: WindowHost;
     private closing = false;   // closing the window has been confirmed through a dialog
-    private readonly runLogs = new Map<number, LogViewer>();
-    private readonly loggedResults = new WeakSet<object>();   // harness results already recorded in the activity log
     readonly chat: ChatPanel;
     readonly chatSplit: Adw.OverlaySplitView;
     private readonly content: Gtk.Stack;
@@ -170,6 +137,13 @@ export class MainWindow {
         this.chat = new ChatPanel();
         this.header = new HeaderBar();
 
+        // Feature controllers: created before the first document, whose buffer already queues autosaves.
+        this.host = this.makeHost();
+        this.autosaver = new Autosaver(this.host);
+        this.journal = new JournalController(this.host);
+        this.harness = new HarnessController(this.host);
+        this.homePage = new HomeController(this.host);
+
         this.doc = this.addDoc();
         this.doc.editor.modes.focus = settings.focus;
         this.doc.editor.modes.typewriter = settings.typewriter;
@@ -177,20 +151,6 @@ export class MainWindow {
 
         // The components do not know each other; the window is what connects them.
         this.board.onChange = board => this.writeBoard(board);
-        this.orchestrator = new Orchestrator({
-            workspace: () => this.fileTree.root,
-            updateBoard: (file, edit) => this.updateBoardFile(file, edit),
-            linkedNotes: (file, links) => this.linkedNotes(file, links),
-            changed: (run, message) => {
-                if (run.result && (run.status === 'done' || run.status === 'failed') && !this.loggedResults.has(run.result)) {
-                    this.loggedResults.add(run.result);
-                    this.record('harness', harnessActivity(HARNESSES[run.agent]?.label ?? run.agent, run.title, run.project, run.status === 'done'));
-                }
-                if (this.boardMode && this.file === run.board) this.board.queueRender();
-                this.refreshHome();
-                if (message) this.toast(message);
-            },
-        });
         this.inbox.onChange = inbox => this.writeInbox(inbox);
         this.inbox.onOpenNote = link => this.openNote(link);
         this.inbox.listNotes = () => {
@@ -198,22 +158,22 @@ export class MainWindow {
             return root ? listMarkdownFiles(root) : [];
         };
         this.home.onOpenFile = path => this.openInTab(path);
-        this.home.onOpenTask = task => this.openWorkspaceFile(task.file);
-        this.home.onToggleTask = (task, done) => this.toggleTask(task, done);
-        this.home.onOpenInbox = file => this.openWorkspaceFile(file);
-        this.home.onOpenRun = id => this.openRun(id);
+        this.home.onOpenTask = task => this.homePage.openWorkspaceFile(task.file);
+        this.home.onToggleTask = (task, done) => this.homePage.toggleTask(task, done);
+        this.home.onOpenInbox = file => this.homePage.openWorkspaceFile(file);
+        this.home.onOpenRun = id => this.harness.open(id);
         this.home.onOpenFolder = () => void this.chooseFolder();
         this.home.onNewDocument = () => this.newDocument();
-        this.home.onOpenJournal = () => this.openJournal();
-        this.home.onCaptureJournal = () => this.captureJournal();
+        this.home.onOpenJournal = () => this.journal.open();
+        this.home.onCaptureJournal = () => this.journal.capture();
         this.board.onOpenNote = link => this.openNote(link);
         this.board.listNotes = () => {
             const root = this.noteRoot(this.doc);
             return root ? listMarkdownFiles(root) : [];
         };
         this.board.harness = {
-            status: card => (this.file && this.orchestrator.queue.find(this.file, card.text)?.status) || null,
-            menu: (card, at) => this.harnessMenu(card, at),
+            status: card => this.harness.status(card),
+            menu: (card, at) => this.harness.menu(card, at),
         };
         this.outline.onJump = line => this.editor.jumpToLine(line);
         this.tabBar.onSelect = id => {
@@ -287,8 +247,8 @@ export class MainWindow {
                 return bounds[0] ? buf.get_text(bounds[1], bounds[2], false) : '';
             },
             root: () => this.fileTree.root,
-            applyChange: change => this.applyChange(change),
-            applyBatch: changes => this.applyChangeBatch(changes),
+            applyChange: change => applyChange(this.host, change),
+            applyBatch: changes => applyChangeBatch(this.host, changes),
             git: request => this.fileTree.root ? agentGit(this.fileTree.root, request) : Promise.resolve({ ok: false, message: 'no work folder' }),
             window: () => this.win,
             files: fresh => {
@@ -407,6 +367,33 @@ export class MainWindow {
         this.toasts.add_toast(new Adw.Toast({ title: message, timeout: 3 }));
     }
 
+    private makeHost(): WindowHost {
+        const w = this;
+        return {
+            get win() { return w.win; },
+            get settings() { return w.settings; },
+            get chat() { return w.chat; },
+            get board() { return w.board; },
+            get harness() { return w.harness; },
+            get journal() { return w.journal; },
+            root: () => this.fileTree.root,
+            active: () => this.doc,
+            docs: () => this.docs,
+            openInTab: path => this.openInTab(path),
+            toast: message => this.toast(message),
+            write: (path, text) => this.write(path, text),
+            refreshTree: () => { if (this.fileTree.root) this.fileTree.refresh(this.fileTree.root); },
+            refreshHome: () => this.refreshHome(),
+            refreshTitle: doc => this.refreshTitle(doc),
+            filesMoved: () => { this.fileTree.reveal(this.file); this.syncHistory(true); },
+            projectName: path => this.projectName(path),
+            showChat: () => { this.settings.chat = true; },
+            boardShown: file => this.boardMode && this.file === file,
+            updateBoardFile: (file, edit) => this.updateBoardFile(file, edit),
+            record: (kind, text) => this.journal.record(kind, text),
+        };
+    }
+
     // ---------- Active document ----------
 
     get editor(): MarkdownView {
@@ -456,7 +443,7 @@ export class MainWindow {
         editor.buffer.connect('changed', () => {
             doc.changes++;
             this.queueBoardReload(doc);
-            this.queueAutosave(doc);
+            this.autosaver.queue(doc);
         });
 
         // A new document inherits the mode and theme of the currently active document.
@@ -520,7 +507,7 @@ export class MainWindow {
             return true;
         }
         const index = this.docs.indexOf(doc);
-        this.cancelAutosave(doc);
+        this.autosaver.cancel(doc);
         this.docs.splice(index, 1);
         this.tabBar.remove(doc.id);
         // Move first, then destroy: the search and other components still point at this editor.
@@ -624,70 +611,6 @@ export class MainWindow {
 
     // ---------- Assistant ----------
 
-    // Apply a change proposal from the agent that the user has approved. Returns an error message or null.
-    // Open files are changed through their editor (one undo step); others are written to disk. In both
-    // cases the contents must still equal what the agent saw, so the user's edits are not overwritten.
-    // Delete moves to the Trash; an open document stays in the editor as when it is deleted from the tree.
-    private applyChangeBatch(changes: Change[]): string | null {
-        const root = this.fileTree.root;
-        if (!root) return 'no work folder';
-        // Defense in depth: planChange() already rejects names like this, but writing to disk must not depend on it.
-        if (changes.some(c => changeFiles(c).some(f => cleanNewName(f) !== f))) return 'path is outside the work folder or invalid';
-        const pathOf = (file: string) => projectPath(root, file);
-        try { for (const c of changes) for (const f of changeFiles(c)) waitForWrites(pathOf(f)); } catch (e) { return errorMessage(e); }
-        const openDoc = (path: string) => this.docs.find(d => d.file === path);
-        const writeText = (path: string, text: string) => {
-            const open = openDoc(path);
-            if (open) open.editor.replaceText(text);
-            else { GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755); writeTextFile(path, text); }
-        };
-        const relocate = (from: string, to: string) => {
-            GLib.mkdir_with_parents(GLib.path_get_dirname(to), 0o755);
-            Gio.File.new_for_path(from).move(Gio.File.new_for_path(to), Gio.FileCopyFlags.NONE, null, null);
-            const open = openDoc(from);
-            if (open) { open.file = to; this.refreshTitle(open); }
-        };
-        const detached = new Map<Change, Doc>();
-        const error = applyBatch(changes, {
-            read: file => {
-                const path = pathOf(file), open = openDoc(path);
-                return open ? open.editor.getText() : fileExists(path) ? readTextFile(path) : null;
-            },
-            write: c => {
-                const path = pathOf(c.file);
-                if (c.kind === 'delete') {
-                    Gio.File.new_for_path(path).trash(null);
-                    const open = openDoc(path);
-                    if (open) { open.file = null; open.editor.buffer.set_modified(true); this.refreshTitle(open); detached.set(c, open); }
-                } else if (c.kind === 'move') relocate(path, pathOf(c.to!));
-                else writeText(path, c.after);
-            },
-            rollback: c => {
-                const path = pathOf(c.file);
-                if (c.kind === 'create') { if (fileExists(path)) Gio.File.new_for_path(path).delete(null); }
-                else if (c.kind === 'delete') {
-                    writeTextFile(path, c.before);
-                    const doc = detached.get(c);
-                    if (doc) { doc.file = path; doc.editor.buffer.set_modified(false); this.refreshTitle(doc); }
-                } else if (c.kind === 'move') relocate(pathOf(c.to!), path);
-                else writeText(path, c.before);
-            },
-        });
-        this.fileTree.refresh(root);
-        if (changes.some(c => c.kind === 'delete' || c.kind === 'move')) { this.fileTree.reveal(this.file); this.syncHistory(true); }
-        const summary = error ? null : agentActivity(changes);
-        if (summary) this.record('agent', summary);
-        return error;
-    }
-
-    private applyChange(change: Change): string | null {
-        const root = this.fileTree.root;
-        if (!root) return 'no work folder is open';
-        const error = this.applyChangeBatch([change]);
-        if (!error && change.kind === 'create') this.openInTab(projectPath(root, change.file));
-        return error;
-    }
-
     // File name relative to the project folder (the same as the name in agent/project.ts); null if outside the folder or not saved.
     private projectName(path: string | null): string | null {
         const root = this.fileTree.root;
@@ -728,26 +651,6 @@ export class MainWindow {
         if (!this.openInTab(path)) return;
         if (!found) this.toast(fmt(_('New note: {rel} (saved once filled in)'), { rel }));
         else if (link.heading) this.jumpToHeading(this.doc, link.heading);
-    }
-
-    // Notes linked by the cards on the board `boardFile`, for the harness prompt context. Looked up with the same rules
-    // as Ctrl+click; the document that is currently open is read from its editor so unsaved edits are included.
-    private linkedNotes(boardFile: string, links: WikiLink[]): LinkedNote[] {
-        const root = this.fileTree.root && boardFile.startsWith(`${this.fileTree.root}/`) ? this.fileTree.root : GLib.path_get_dirname(boardFile);
-        const from = boardFile.slice(root.length + 1);
-        const files = listMarkdownFiles(root);
-        return links.map(link => {
-            const file = resolveWikiLink(link.target, files, from);
-            if (!file) return { link, file: null, text: null };
-            const path = GLib.build_filenamev([root, ...file.split('/')]);
-            let text: string;
-            try {
-                text = this.docs.find(d => d.file === path)?.editor.getText() ?? readTextFile(path);
-            } catch {
-                return { link, file: null, text: null };
-            }
-            return { link, file, text: link.heading ? noteSection(text, link.heading) : text };
-        });
     }
 
     private jumpToHeading(doc: Doc, heading: string): void {
@@ -791,7 +694,7 @@ export class MainWindow {
         if (view === 'home') {
             this.findBar.close();
             this.content.visible_child_name = 'home';
-            this.home.render(this.homeData());
+            this.home.render(this.homePage.data());
         } else if (view === 'board') {
             this.board.setBoard(parseBoard(this.editor.getText()));
             this.doc.boardText = this.editor.getText();
@@ -878,208 +781,12 @@ export class MainWindow {
 
     // Redraw Home if it is shown; the data is recomputed from the files every time.
     refreshHome(): void {
-        if (this.doc.home && this.homeMode) this.home.render(this.homeData());
+        if (this.doc.home && this.homeMode) this.home.render(this.homePage.data());
     }
 
     private rememberRecent(path: string): void {
         if (this.restoring) return;
         this.settings.recentFiles = rememberRecent(this.settings.recentFiles, path, Math.floor(Date.now() / 1000));
-    }
-
-    homeData(now = new Date()): HomeData {
-        const root = this.fileTree.root;
-        const recent = this.settings.recentFiles.filter(r => fileExists(r.path) && !isDirectory(r.path));
-        const { resume, others } = splitRecent(recent, RESUME_CARDS);
-        // Boards and inboxes are read through the readProject cache (by modification time); unsaved tabs are read from their editor.
-        const relevant = (text: string) => isKanban(text) || isInbox(text);
-        const files = root ? readProject(root, null, false, relevant) : [];
-        for (const doc of this.docs) {
-            if (!root || !doc.file?.startsWith(`${root}/`) || !doc.editor.buffer.get_modified()) continue;
-            const name = this.projectName(doc.file)!;
-            const text = doc.editor.getText();
-            const at = files.findIndex(f => f.name === name);
-            if (!relevant(text)) { if (at >= 0) files.splice(at, 1); }
-            else if (at >= 0) files[at].text = text;
-            else files.push({ name, text });
-        }
-        const realName = GLib.get_real_name();
-        return {
-            now,
-            name: realName && realName !== 'Unknown' ? realName.split(/\s+/)[0] : null,
-            workspace: root,
-            resume: resume.map(r => this.homeEntry(r, true)),
-            recent: others.map(r => this.homeEntry(r, false)),
-            tasks: dueTasks(files, localDate(now), cardProject),
-            runs: this.orchestrator.queue.runs.filter(r => isActive(r.status)).map(r => ({ id: r.id, agent: r.agent, title: r.title, status: r.status })),
-            inboxes: openInboxes(files),
-            journal: root ? this.journalSummary(root, localDate(now)) : null,
-        };
-    }
-
-    private journalSummary(root: string, date: string): HomeData['journal'] {
-        const path = this.journalPath(date)!;
-        const doc = this.docs.find(d => d.file === path);
-        let text: string | null = null;
-        try {
-            text = doc ? doc.editor.getText() : fileExists(path) ? readTextFile(path) : null;
-        } catch (e) {
-            // unreadable: shown as not written yet
-        }
-        return { exists: text !== null, notes: text ? journalStats(text).notes : 0, activity: readActivity(root, date).length };
-    }
-
-    // Card: folder name above the file name. List: file name above its folder (relative to the work folder if inside it).
-    private homeEntry(r: RecentFile, card: boolean): HomeEntry {
-        const root = this.fileTree.root;
-        const dir = GLib.path_get_dirname(r.path), file = GLib.path_get_basename(r.path);
-        if (card) return { path: r.path, title: GLib.path_get_basename(dir), subtitle: file, time: r.time };
-        const folder = root && dir === root ? GLib.path_get_basename(root)
-            : root && dir.startsWith(`${root}/`) ? dir.slice(root.length + 1)
-            : dir.replace(GLib.get_home_dir(), '~');
-        return { path: r.path, title: file, subtitle: folder, time: r.time };
-    }
-
-    private openWorkspaceFile(name: string): void {
-        const root = this.fileTree.root;
-        if (root) this.openInTab(GLib.build_filenamev([root, ...name.split('/')]));
-    }
-
-    // A check from Home: written to its board (through the editor if open). A card that has changed is not touched.
-    private toggleTask(task: Task, done: boolean): boolean {
-        const root = this.fileTree.root;
-        if (!root) return false;
-        let changed = false;
-        const error = this.updateBoardFile(GLib.build_filenamev([root, ...task.file.split('/')]), board => {
-            const card = board.columns[task.at.column]?.cards[task.at.index];
-            if (card?.text !== task.card) { changed = true; return board; }
-            return updateCard(board, task.at, { done: done ? true : task.box ? false : null });
-        });
-        if (error || changed) {
-            this.toast(error ? fmt(_('Cannot change the card: {error}'), { error }) : _('The card has changed; open the board to check'));
-            // Deferred: the checked row is still running its handler.
-            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { this.refreshHome(); return GLib.SOURCE_REMOVE; });
-            return false;
-        }
-        return true;
-    }
-
-    // An agent that is waiting for an answer is asked right away; one that is working shows its log; a queued one opens its board.
-    private openRun(id: number): void {
-        const run = this.orchestrator.queue.runs.find(r => r.id === id);
-        if (!run) return;
-        if (run.status === 'waiting') this.answerHarness(run);
-        else if (run.status === 'working') this.showRunLog(run);
-        else this.openInTab(run.board);
-    }
-
-    // ---------- Journal ----------
-
-    private journalPath(date: string): string | null {
-        const root = this.fileTree.root;
-        return root ? GLib.build_filenamev([root, ...journalName(date).split('/')]) : null;
-    }
-
-    // Journal title, e.g. "Thursday, October 8, 2026", by the system locale like the date on Home.
-    private journalTitle(date: string): string {
-        const [y, m, d] = date.split('-').map(Number);
-        return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    }
-
-    // Record work activity to the work folder's daily log; without a work folder there is no journal, so it is skipped.
-    private record(kind: ActivityKind, text: string, time = Math.floor(Date.now() / 1000)): void {
-        const root = this.fileTree.root;
-        if (root) recordActivity(root, { time, kind, text });
-    }
-
-    // Board changes (in the work folder) → card activity.
-    private recordBoard(file: string | null, before: Board, after: Board): void {
-        const root = this.fileTree.root;
-        if (!root || !file?.startsWith(`${root}/`)) return;
-        for (const text of boardEvents(before, after, file.slice(root.length + 1))) this.record('card', text);
-    }
-
-    // Ctrl+Alt+J: open today's journal (created from the template if missing), then fill in the Activity section.
-    // Returns the Promise of filling in the activity (for tests), or null if the journal cannot be opened.
-    openJournal(now = new Date()): Promise<void> | null {
-        const date = localDate(now);
-        const path = this.journalPath(date);
-        if (!path) {
-            this.toast(_('Open a work folder first to write a journal'));
-            return null;
-        }
-        if (!this.docs.some(d => d.file === path) && !fileExists(path)) {
-            GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
-            if (!this.write(path, newJournal(this.journalTitle(date)))) return null;
-            this.fileTree.refresh(this.fileTree.root!);
-        }
-        if (!this.openInTab(path)) return null;
-        return this.fillJournalActivity(this.doc, date);
-    }
-
-    // Merge that day's activity (log + git commits) into the Activity section of the journal open in `doc`.
-    // Only lines that are not there yet are added, as a single undo step.
-    private async fillJournalActivity(doc: Doc, date: string): Promise<void> {
-        const root = this.fileTree.root, path = doc.file;
-        if (!root || !path) return;
-        const [y, m, d] = date.split('-').map(Number);
-        const since = Math.floor(new Date(y, m - 1, d).getTime() / 1000), until = Math.floor(new Date(y, m - 1, d + 1).getTime() / 1000);
-        const commits = await commitsBetween(root, since, until);
-        // git runs in the background: the tab may already have been closed or switched to another file.
-        if (!this.docs.includes(doc) || doc.file !== path) return;
-        const events: Activity[] = [...readActivity(root, date), ...commits.map(c => ({ time: c.time, kind: 'commit' as const, text: commitActivity(c.short, c.subject) }))];
-        const text = doc.editor.getText();
-        const next = mergeActivity(text, activityLines(events));
-        if (next !== text) doc.editor.replaceText(next);
-    }
-
-    // Ctrl+Shift+J: record one line in today's journal without leaving the document being worked on.
-    captureJournal(): void {
-        if (!this.fileTree.root) {
-            this.toast(_('Open a work folder first to write a journal'));
-            return;
-        }
-        void after(this.journalDialogs.capture(), note => { if (note) this.addJournalNote(note); });
-    }
-
-    // An open journal is changed through its editor (one undo step); one that is not open is written directly to disk.
-    addJournalNote(note: string, now = new Date()): boolean {
-        const date = localDate(now);
-        const path = this.journalPath(date);
-        if (!path) return false;
-        const doc = this.docs.find(d => d.file === path);
-        try {
-            if (doc) doc.editor.replaceText(addNote(doc.editor.getText(), clock(now), note));
-            else {
-                waitForWrites(path);
-                const text = fileExists(path) ? readTextFile(path) : newJournal(this.journalTitle(date));
-                GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
-                writeTextFile(path, addNote(text, clock(now), note));
-                this.fileTree.refresh(this.fileTree.root!);
-            }
-        } catch (e) {
-            this.toast(fmt(_('Failed to write the journal: {error}'), { error: errorMessage(e) }));
-            return false;
-        }
-        this.toast(_('Recorded in today\'s journal'));
-        this.refreshHome();
-        return true;
-    }
-
-    // Close the day: open the journal, then ask the Assistant to propose a summary. The proposal is still reviewed in the
-    // review window like any other agent change; nothing is written without approval.
-    // Returns the Promise of the question to the Assistant (for tests), or null if it did not run.
-    summarizeJournal(): Promise<void> | null {
-        if (this.chat.busy) {
-            this.toast(_('The Assistant is working; wait until it finishes'));
-            return null;
-        }
-        const filling = this.openJournal();
-        if (!filling) return null;
-        const name = this.projectName(this.file);
-        this.settings.chat = true;
-        return filling.then(() => this.chat.ask(
-            `Close the day: read the journal ${name} (the active document), then propose a short summary under the heading "## Summary" with insert_text: ` +
-            'what was finished, what got in the way, and what continues tomorrow. Use only the contents of the journal and the files it links; do not change other sections.'));
     }
 
     // ---------- Git history ----------
@@ -1105,116 +812,14 @@ export class MainWindow {
 
     // Changes from the board → document text (one undo step).
     private writeBoard(board: Board): void {
-        if (this.doc.boardText) this.recordBoard(this.file, parseBoard(this.doc.boardText), board);
+        if (this.doc.boardText) this.journal.recordBoard(this.file, parseBoard(this.doc.boardText), board);
         const text = serializeBoard(board);
         this.doc.boardText = text;   // recognize this change as the board's own
         this.editor.replaceText(text);
         this.showBoardCounts(board);
     }
 
-    // ---------- External harnesses ----------
-
-    // Card menu entries to assign, stop, and monitor harnesses.
-    private harnessMenu(card: Card, at: Position): MenuEntry[] {
-        const file = this.file;
-        const run = file ? this.orchestrator.queue.find(file, card.text) : null;
-        const active = run && isActive(run.status) ? run : null;
-        const agent = cardMeta(card.text).agent;
-        const entries: MenuEntry[] = Object.values(HARNESSES).map(spec => ({
-            label: fmt(_('Work on it with {label}'), { label: spec.label }),
-            enabled: !!file && !active && card.done !== true,
-            run: () => this.runHarness(at, spec.name),
-        }));
-        if (active?.status === 'waiting') entries.push({ label: fmt(_('Answer {agent}…'), { agent: active.agent }), run: () => this.answerHarness(active) });
-        if (active?.status === 'working') entries.push({ label: fmt(_('Steer {agent}…'), { agent: active.agent }), run: () => this.steerHarness(active) });
-        if (run && !active && run.result?.sessionId) entries.push({ label: fmt(_('Reply to {agent}…'), { agent: run.agent }), run: () => this.replyHarness(run) });
-        if (active) entries.push({ label: active.status === 'queued' ? _('Cancel Queue') : fmt(_('Stop {agent}'), { agent: active.agent }), run: () => this.orchestrator.stop(active) });
-        if (run) entries.push({ label: fmt(_('View {agent} Log'), { agent: run.agent }), run: () => this.showRunLog(run) });
-        if (agent && !active) entries.push({ label: _('Remove Assignment'), run: () => this.board.commit(updateCard(this.board.getBoard(), at, { text: assignCard(card.text, null) })) });
-        const project = cardProject(this.board.getBoard(), card);
-        if (project && this.settings.projects[project]) entries.push({ label: _('Change Project Folder…'), run: () => this.chooseProjectFolder(project) });
-        return entries;
-    }
-
-    // Run a harness for a card on the active board. The project folder is asked once and then remembered in the settings.
-    runHarness(at: Position, agent: string): void {
-        const file = this.file;
-        if (!file) { this.toast(_('Save the board first before assigning cards')); return; }
-        const card = this.board.getBoard().columns[at.column]?.cards[at.index];
-        if (!card) return;
-        const project = cardProject(this.board.getBoard(), card);
-        if (project && this.settings.projects[project]) {
-            this.startHarness(file, at, agent, project);
-            return;
-        }
-        void after(this.chooseProjectFolder(project), folder => {
-            if (!folder) return;
-            // The folder dialog can stay open for a long time: the assigned card must still be on the same board.
-            if (this.file !== file || this.board.getBoard().columns[at.column]?.cards[at.index]?.text !== card.text) {
-                this.toast(_('The board changed while choosing a folder; assign the card again'));
-                return;
-            }
-            if (!project) {
-                // No project name yet: use the folder name and note it on the card so the next turn does not ask again.
-                const tagged = `${card.text} #project/${folder.name}`;
-                this.board.commit(updateCard(this.board.getBoard(), at, { text: tagged }));
-            }
-            this.startHarness(file, at, agent, project ?? folder.name);
-        });
-    }
-
-    private startHarness(file: string, at: Position, agent: string, project: string): void {
-        const error = this.orchestrator.start(file, this.board.getBoard(), at, agent, project, this.settings.projects[project], GLib.path_get_basename(file));
-        if (error) this.toast(fmt(_('Cannot run {agent}: {error}'), { agent, error }));
-    }
-
-    // Choose a folder for project `name` (or a new project if null) and save the mapping.
-    private chooseProjectFolder(name: string | null): Awaitable<{ name: string; path: string } | null> {
-        return after(this.harnessDialogs.chooseFolder(name ? fmt(_('Project folder “{name}”'), { name }) : _('Choose a project folder')), path => this.mapProjectFolder(name, path));
-    }
-
-    private mapProjectFolder(name: string | null, path: string | null): { name: string; path: string } | null {
-        if (!path) return null;
-        const project = name ?? GLib.path_get_basename(path).replace(/\s+/g, '-');
-        const problem = !PROJECT_NAME.test(project) ? fmt(_('the folder name "{name}" cannot be used as a project name'), { name: project }) : checkProjectFolder(path, this.fileTree.root);
-        if (problem) { this.toast(fmt(_('Project folder rejected: {problem}'), { problem })); return null; }
-        this.settings.projects = { ...this.settings.projects, [project]: path };
-        return { name: project, path };
-    }
-
-    answerHarness(run: Run): void {
-        if (!run.ask) return;
-        void after(this.harnessDialogs.answer(run.ask, run.agent), reply => {
-            if (!reply) return;   // Later: the harness keeps waiting
-            const error = this.orchestrator.answer(run, reply);
-            if (error) this.toast(fmt(_('The answer was not sent: {error}'), { error }));
-        });
-    }
-
-    private steerHarness(run: Run): void {
-        void after(this.harnessDialogs.text({ title: fmt(_('Steering for {agent}'), { agent: run.agent }), label: fmt(_('{agent} receives it before its next step, without stopping the work.'), { agent: run.agent }) }), text => {
-            if (!text) return;
-            const error = this.orchestrator.steer(run, text);
-            this.toast(error ? fmt(_('The steering was not sent: {error}'), { error }) : fmt(_('Steering sent to {agent}'), { agent: run.agent }));
-        });
-    }
-
-    private replyHarness(run: Run): void {
-        void after(this.harnessDialogs.text({ title: fmt(_('Reply to {agent}'), { agent: run.agent }), label: fmt(_('The {agent} session continues with this reply; the card goes back to being worked on.'), { agent: run.agent }), context: run.result?.summary || undefined }), text => {
-            if (!text) return;
-            const error = this.orchestrator.resume(run, text);
-            if (error) this.toast(fmt(_('Cannot reply to {agent}: {error}'), { agent: run.agent, error }));
-        });
-    }
-
-    showRunLog(run: Run): LogViewer {
-        const open = this.runLogs.get(run.id);
-        if (open?.window.get_realized()) { open.show(); return open; }
-        const viewer = new LogViewer(this.win, run.trace, fmt(_('{agent} Log — {title}'), { agent: run.agent, title: run.title }));
-        this.runLogs.set(run.id, viewer);
-        viewer.show();
-        return viewer;
-    }
+    // ---------- Boards and inboxes ----------
 
     // Change the board in `file` for the orchestrator: through its editor if open (one undo step), otherwise directly on disk.
     private updateBoardFile(file: string, edit: (board: Board) => Board): string | null {
@@ -1233,7 +838,7 @@ export class MainWindow {
             }
             if (doc) doc.editor.replaceText(serializeBoard(next));
             else writeTextFile(file, serializeBoard(next));
-            this.recordBoard(file, board, next);
+            this.journal.recordBoard(file, board, next);
             return null;
         } catch (e) {
             return errorMessage(e);
@@ -1285,7 +890,7 @@ export class MainWindow {
             const dark = this.app.lookup_action('dark');
             if (dark instanceof Gio.SimpleAction) dark.set_state(GLib.Variant.new_boolean(this.dark));
         } else if (key === 'focus' || key === 'typewriter') for (const doc of this.docs) doc.editor.setMode(key, s[key]);
-        else if (key === 'autosave') { if (s.autosave) for (const doc of this.docs) this.queueAutosave(doc); }
+        else if (key === 'autosave') { if (s.autosave) for (const doc of this.docs) this.autosaver.queue(doc); }
         else if (key === 'chat-model') this.chat.setModel(s.chatModel);
         else if (key === 'chat-thinking') this.chat.setThinking(s.chatThinking);
         else if (key === 'chat-save') this.chat.setSaveChats(s.chatSave);
@@ -1293,66 +898,13 @@ export class MainWindow {
 
     // ---------- Auto save ----------
 
-    // Called on every text change, so it is kept cheap: it only records the time. The timer is not
-    // recreated per keystroke; when it fires, it postpones itself again if there are newer keystrokes.
-    private queueAutosave(doc: Doc): void {
-        if (!this.settings.autosave || !doc.file) return;
-        doc.lastChange = GLib.get_monotonic_time();
-        if (doc.autosaveTimer) return;
-        doc.autosaveTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, AUTOSAVE_DELAY_MS, () => this.autosaveTick(doc));
+    // The active document unless given; see Autosaver.
+    autosaveInBackground(doc: Doc = this.doc, done?: () => void): boolean {
+        return this.autosaver.inBackground(doc, done);
     }
 
-    private autosaveTick(doc: Doc): boolean {
-        const waited = (GLib.get_monotonic_time() - doc.lastChange) / 1000;
-        if (waited < AUTOSAVE_DELAY_MS) {
-            doc.autosaveTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.ceil(AUTOSAVE_DELAY_MS - waited), () => this.autosaveTick(doc));
-            return GLib.SOURCE_REMOVE;
-        }
-        doc.autosaveTimer = 0;
-        this.autosaveInBackground(doc);
-        return GLib.SOURCE_REMOVE;
-    }
-
-    // Autosave from the timer: the file is written in a worker thread (see writeTextFileAsync), so
-    // the main thread only copies the text. A later synchronous write to the same file
-    // waits for this one to finish. true = the write started.
-    autosaveInBackground(doc: Doc = this.doc, done: () => void = () => {}): boolean {
-        this.cancelAutosave(doc);
-        const path = doc.file;
-        if (!doc.editor.buffer.get_modified() || !this.settings.autosave || !path) return false;
-        const changes = doc.changes;
-        writeTextFileAsync(path, doc.editor.getText(), error => {
-            if (error) {
-                this.toast(fmt(_('Autosave failed: {error}'), { error: errorMessage(error) }));
-            } else if (this.docs.includes(doc) && doc.file === path && doc.changes === changes) {
-                // The text did not change while being written: the contents on disk equal the buffer.
-                doc.editor.buffer.set_modified(false);
-            }
-            done();
-        });
-        return true;
-    }
-
-    // Save quietly without a dialog or toast. true = no changes left behind.
     autosave(doc: Doc = this.doc): boolean {
-        this.cancelAutosave(doc);
-        if (!doc.editor.buffer.get_modified()) return true;
-        if (!this.settings.autosave || !doc.file) return false;
-        try {
-            writeTextFile(doc.file, doc.editor.getText());
-        } catch (e) {
-            // Not a dialog: autosave keeps trying, and repeated dialogs get in the way of typing.
-            this.toast(fmt(_('Autosave failed: {error}'), { error: errorMessage(e) }));
-            return false;
-        }
-        doc.editor.buffer.set_modified(false);
-        return true;
-    }
-
-    private cancelAutosave(doc: Doc): void {
-        if (!doc.autosaveTimer) return;
-        GLib.source_remove(doc.autosaveTimer);
-        doc.autosaveTimer = 0;
+        return this.autosaver.now(doc);
     }
 
     // ---------- Documents ----------
@@ -1415,7 +967,7 @@ export class MainWindow {
             if (!doc.file || !doc.editor.buffer.get_modified()) continue;
             if (!this.write(doc.file, doc.editor.getText())) return false;
             doc.editor.buffer.set_modified(false);
-            this.cancelAutosave(doc);
+            this.autosaver.cancel(doc);
         }
         return true;
     }
@@ -1558,7 +1110,7 @@ export class MainWindow {
         if (!this.file) return this.saveAs();
         if (!this.write(this.file, this.editor.getText())) return false;
         this.editor.buffer.set_modified(false);
-        this.cancelAutosave(this.doc);
+        this.autosaver.cancel(this.doc);
         this.toast(_('Saved'));
         return true;
     }
@@ -1630,10 +1182,10 @@ export class MainWindow {
     // Stop the timers and idles of all components after the window is destroyed.
     private dispose(): void {
         for (const doc of this.docs) {
-            this.cancelAutosave(doc);
+            this.autosaver.cancel(doc);
             doc.editor.destroy();
         }
-        this.orchestrator.dispose();
+        this.harness.dispose();
         this.chat.destroy();
         this.history.destroy();
         this.fileTree.destroy();

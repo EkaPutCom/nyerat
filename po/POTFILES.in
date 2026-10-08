@@ -26,6 +26,10 @@ src/ui/sidebar.ts
 src/ui/statusbar.ts
 src/ui/worklist.ts
 src/window.ts
+src/window/autosave.ts
+src/window/harness.ts
+src/window/home.ts
+src/window/journal.ts
 src/ui/chat.ui
 src/ui/findbar.ui
 src/ui/headerbar.ui

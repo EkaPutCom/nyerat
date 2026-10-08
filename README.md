@@ -370,7 +370,15 @@ src/
 ├── i18n.ts               gettext: _(), fmt(), pgettext(), ngettext(); the domain is bound before the other modules are evaluated
 ├── app.ts                creates the Gtk.Application and the window
 ├── window.ts             MainWindow: assembles the components, manages documents/tabs, open/save/export
-├── actions.ts            all the app's Gio.Actions and their shortcuts (setting toggles use Gio.Settings.create_action)
+├── window/               feature controllers of the window, each given a narrow host instead of MainWindow
+│   ├── doc.ts            the open document record (Doc) and the shared DocumentHost
+│   ├── journal.ts        today's journal, quick capture, end-of-day summary, the activity log
+│   ├── harness.ts        @pi cards: card menu, project folders, answer/steer/reply, run logs; owns the Orchestrator
+│   ├── home.ts           the data behind the Home tab and the actions taken from it
+│   ├── agentwrites.ts    applying approved Assistant changes (editor for open files, disk otherwise, rollback)
+│   └── autosave.ts       autosave timers and quiet saves
+├── actions.ts            all the app's Gio.Actions and their shortcuts (setting toggles use Gio.Settings.create_action); sees the window only as `ActionHost`
+├── colors.ts             the document color palettes (pure data, shared by editor/ and ui/)
 ├── config.ts             app name, ID, version, and fonts
 ├── settings.ts           AppSettings: typed properties on top of Gio.Settings (schema in data/com.ekaput.Nyerat.gschema.xml)
 ├── commands.ts           action names for the command palette
@@ -379,7 +387,7 @@ src/
 ├── fileops.ts            create, rename, delete (to the trash), and move files/folders on disk (no GTK; used by the file tree)
 ├── orchestrator.ts       runs the external harness (pi) for kanban cards in the project folder: process, queue, board updates
 ├── git.ts                the git history of a file and the list of uncommitted files through the `git` command (async; read-only, except committing selected files); also runs the agent's Git tools
-├── gitlog.ts             git output parser: log, diff, relative time (pure, no GTK)
+├── gitlog.ts             git output parser: log, diff, relative time (pure, no GTK); also the agent's GitRequest/GitAnswer types
 ├── welcome.ts            the sample document shown on first launch
 │
 ├── agent/                the AI assistant: manuscript context and model client (no GTK, except where noted)
@@ -461,7 +469,7 @@ src/
     ├── inbox.ts          inbox view: quick capture, note list, age, tags
     ├── home.ts           Home tab: Continue card, agent, deadlines, inbox, recent files
     ├── chat.ts           Assistant panel on the right: messages, the Context button, key and model settings
-    └── theme.ts          document color palette, fonts, CSS (named Adwaita colors for the interface, the system accent if available)
+    └── theme.ts          fonts and CSS from the palette in colors.ts (named Adwaita colors for the interface, the system accent if available)
 tests/
 ├── run-tests.ts          entry point and registration of unit/GUI tests
 ├── framework.ts          assertions, test results, CLI options, temporary folders
@@ -506,18 +514,20 @@ The code is divided into layers. Each layer may only use the layers below it, ne
 ```
  app.ts
    └─ window.ts ── actions.ts
+        ├─ window/*        feature controllers (journal, harness, Home, agent writes, autosave)
         ├─ ui/*            interface components
         ├─ editor/*        the editor engine
         │    └─ markdown/* Markdown rules (no GTK)
         ├─ agent/*         manuscript context and model client (no GTK)
-        └─ settings.ts, files.ts, git.ts, gitlog.ts, config.ts
+        └─ settings.ts, files.ts, git.ts, gitlog.ts, config.ts, colors.ts
 ```
 
 - **`agent/`** is also free of GTK. `ui/chat.ts` uses it, and the window only gives it a way to fetch the manuscript (`ChatHost`: the active document, the selection, project files, the manuscript folder). `agent/` knows nothing about the editor or widgets.
 - **`markdown/`** does not import GTK at all. It only contains string → data functions, so it is the easiest to study and test.
 - **`editor/`** knows nothing about files, menus, or the sidebar. `MarkdownView` only reports through callbacks (`onHighlighted`, `onCursorMoved`, `onMessage`).
 - **`ui/`** holds self-contained components. `Outline` does not know the editor; it only receives a list of headings and calls `onJump(line)` when clicked. `FileTree` is the same: it only displays folders and calls `onOpenFile(path)`; the window decides how to open the file (a new tab, switching to an existing tab, or reusing an empty document).
-- **`window.ts`** is the only place where components are connected to each other. For example: after highlighting, the editor calls `onHighlighted`, and then the window passes the headings to `Outline` and the text to `StatusBar`.
+- **`window.ts`** is the only place where components are connected to each other. For example: after highlighting, the editor calls `onHighlighted`, and then the window passes the headings to `Outline` and the text to `StatusBar`. Features that span several components (the journal, harness runs, Home, applying agent changes, autosave) live in `window/*` controllers; each receives a narrow host interface built by the window from closures, never `MainWindow` itself, so they do not import `window.ts`. `actions.ts` likewise types the window as `ActionHost`.
+- **Lower layers do not reach up.** `editor/` takes the `Palette` type from `colors.ts`, not from `ui/theme.ts`; `git.ts` takes the agent's Git request types from `gitlog.ts`, not from `agent/`.
 
 ### The editor workflow
 
@@ -597,7 +607,7 @@ Nyerat runs on GTK 4, GtkSourceView 5, and WebKitGTK 6.0. Some GTK 4 behaviors (
 - **The file tree (TreeListModel + ListView) and drag and drop.** Each folder is a `Gio.ListStore<FileNode>`; `Gtk.TreeListModel` also calls the child-creating function just to check whether a row can be expanded, so folder contents are stored in `dirStores` and read once. Dragging uses `Gtk.DragSource`/`Gtk.DropTarget` on the ListView; the row at the cursor is found with `pick()` (rows are direct children of the ListView, with a `TreeExpander` inside). The drop target marker uses row selection. The drag icon is taken from the icon theme; a widget as the icon (`GtkDragIcon`) triggers a Gtk-CRITICAL when the drag ends.
 - **Gtk.Template without glib-compile-resources.** `.ui` files are imported as text (`import xml from './x.ui?raw'`) and given to `Template:` as a `Uint8Array` (`uiTemplate()` in `gtkutil.ts`); there is no GResource to compile. `Adw.HeaderBar` is a final class, so `HeaderBar` wraps it in an `Adw.Bin`.
 - **Settings in GSettings.** The schema is in `data/` and compiled into `dist/` by the Vite plugin; `settings.ts` loads it from the bundle folder if present, otherwise from the system schema directory (the installed version). The menu toggles (`sidebar`, `chat`, `focus`, `typewriter`, `autosave`) are `Gio.Settings.create_action`, the sidebar and the Assistant panel are bound with `Gio.Settings.bind` to `show-sidebar` (through `bindPanel()`, see the adaptive layout), and `MainWindow.onSettingChanged` applies the rest (including changes from the preferences dialog).
-- **Colors.** The interface (sidebar, Assistant panel, board, status colors) uses named Adwaita colors (`@accent_color`, `@card_bg_color`, `@error_bg_color`, ...), so it follows the system accent and the high contrast mode. Document surfaces (the editor, tables, text tags, diagrams) still use the `theme.ts` palette because `GtkTextTag` and diagram rendering need real color values and the `hidden` tag must be exactly the same as the editor background; the accent is taken from `Adw.StyleManager.get_accent_color_rgba()` if libadwaita ≥ 1.6.
+- **Colors.** The interface (sidebar, Assistant panel, board, status colors) uses named Adwaita colors (`@accent_color`, `@card_bg_color`, `@error_bg_color`, ...), so it follows the system accent and the high contrast mode. Document surfaces (the editor, tables, text tags, diagrams) still use the `colors.ts` palette because `GtkTextTag` and diagram rendering need real color values and the `hidden` tag must be exactly the same as the editor background; the accent is taken from `Adw.StyleManager.get_accent_color_rgba()` if libadwaita ≥ 1.6.
 - **Context menus as data.** `Gtk.Menu` no longer exists. Right-click menus (the file tree, cards, lists) are built as `MenuEntry[]` (`ui/menu.ts`) and then turned into a `Gtk.PopoverMenu` with `menu.*` actions; tests only need to find an entry and call `run()`.
 - **Screenshots.** `gdk_pixbuf_get_from_window()` no longer exists. `tests/widgets.ts` draws a widget through `Gtk.WidgetPaintable` and then renders it into a texture with its window's renderer (used by `--screenshot` and `scripts/capture.ts`).
 
@@ -755,7 +765,7 @@ Nyerat has no code colorer of its own. The work is handed over to GtkSourceView,
 4. The tags from the highlighting are read range by range. Color, bold, italic, underline, and strikethrough are copied into `syntax:…` tags in the editor buffer. The background is not copied, so code blocks keep using the background from the app theme.
 5. The result is stored in a cache per (scheme, language, block contents). Typing outside a code block, or in another block, does not make this block get highlighted again.
 
-The color scheme is `tango` for light mode and `cobalt` for dark mode (set in `codeScheme` in `ui/theme.ts`). Because the code color tags are created later, their priority is automatically above `codeblock`. Every time a new color tag is created, `dim` (focus mode) and `hidden` are raised to the very top again, so that both still win over code colors.
+The color scheme is `tango` for light mode and `cobalt` for dark mode (set in `codeScheme` in `colors.ts`). Because the code color tags are created later, their priority is automatically above `codeblock`. Every time a new color tag is created, `dim` (focus mode) and `hidden` are raised to the very top again, so that both still win over code colors.
 
 ### Reading order
 

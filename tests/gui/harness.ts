@@ -80,15 +80,15 @@ export function harnessTests(c: GuiContext): void {
     const read = (name: string) => { try { return readTextFile(GLib.build_filenamev([dir, name])); } catch { return ''; } };
     const board = GLib.build_filenamev([tmp, 'harness-board.md']);
     const savedProjects = w.settings.projects;
-    const savedProgram = w.orchestrator.program;
-    const savedDialogs = w.harnessDialogs;
-    w.orchestrator.program = () => script;
+    const savedProgram = w.harness.orchestrator.program;
+    const savedDialogs = w.harness.dialogs;
+    w.harness.orchestrator.program = () => script;
     const chosen: string[] = [];
     let pick: string | null = null;
     let answers: (HarnessReply | null)[] = [];
     let texts: (string | null)[] = [];
     const asked: HarnessAsk[] = [];
-    w.harnessDialogs = {
+    w.harness.dialogs = {
         chooseFolder: title => { chosen.push(title); return pick; },
         answer: ask => { asked.push(ask); return answers.shift() ?? null; },
         text: () => texts.shift() ?? null,
@@ -127,7 +127,7 @@ export function harnessTests(c: GuiContext): void {
         const label = descendants(kb.columns[column].cards[index]).find(x => x.has_css_class('kanban-agent')) as Gtk.Label | undefined;
         return label?.label ?? '';
     };
-    const runOf = (text: string) => w.orchestrator.queue.find(board, kb.getBoard().columns[at(text).column].cards[at(text).index].text);
+    const runOf = (text: string) => w.harness.orchestrator.queue.find(board, kb.getBoard().columns[at(text).column].cards[at(text).index].text);
 
     test('an @pi card runs in the project folder, moves to In Progress and then Review with a result note', () => {
         w.settings.projects = { shop: project };
@@ -154,7 +154,7 @@ export function harnessTests(c: GuiContext): void {
 
     test('the pi log contains the session, tools, and cost', () => {
         const r = runOf('Checkout')!;
-        const viewer = w.showRunLog(r);
+        const viewer = w.harness.showLog(r);
         pump();
         ok(viewer.window.title?.includes('pi Log'), `title: ${viewer.window.title}`);
         const text = r.trace.text();
@@ -227,7 +227,7 @@ export function harnessTests(c: GuiContext): void {
         pick = null;
         run('Test the cart');
         eq(chosen.pop(), 'Choose a project folder');
-        eq(w.orchestrator.queue.runs.filter(r => r.board === board && r.card.startsWith('Test')).length, 0, 'cancelling the choice = not run');
+        eq(w.harness.orchestrator.queue.runs.filter(r => r.board === board && r.card.startsWith('Test')).length, 0, 'cancelling the choice = not run');
         pick = other;
         run('Test the cart');
         const name = GLib.path_get_basename(other);
@@ -251,7 +251,7 @@ export function harnessTests(c: GuiContext): void {
         pump();
         ok(w.file !== board && !w.boardMode, 'the board is still open');
         GLib.file_set_contents(GLib.build_filenamev([dir, 'release']), '');
-        ok(waitFor(() => w.orchestrator.queue.runs.every(r => r.status !== 'working')), 'the run did not finish');
+        ok(waitFor(() => w.harness.orchestrator.queue.runs.every(r => r.status !== 'working')), 'the run did not finish');
         const disk = parseBoard(readTextFile(board));
         eq(disk.columns[2].cards.map(x => x.text), ['Checkout with QRIS @pi #feature'], 'Review on disk');
         ok(disk.columns[2].cards[0].notes.some(n => n.startsWith('↳ pi done')), 'the result note on disk');
@@ -395,7 +395,7 @@ export function harnessTests(c: GuiContext): void {
         eq(w.file, board, 'back to the board');
 
         run('Checkout');
-        const wikiRun = () => w.orchestrator.queue.find(board, kb.getBoard().columns[at('Checkout').column].cards[at('Checkout').index].text);
+        const wikiRun = () => w.harness.orchestrator.queue.find(board, kb.getBoard().columns[at('Checkout').column].cards[at('Checkout').index].text);
         ok(waitFor(() => wikiRun()?.status === 'done'), `status: ${wikiRun()?.status}`);
         const prompt = JSON.parse(read('prompt')).message as string;
         contains(prompt, '## Related notes from Nyerat');
@@ -408,7 +408,7 @@ export function harnessTests(c: GuiContext): void {
     });
 
     w.settings.projects = savedProjects;
-    w.orchestrator.program = savedProgram;
-    w.harnessDialogs = savedDialogs;
+    w.harness.orchestrator.program = savedProgram;
+    w.harness.dialogs = savedDialogs;
     c.buf.set_modified(false);
 }

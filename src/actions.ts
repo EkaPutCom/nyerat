@@ -16,6 +16,7 @@ import type { Mode, MarkdownView } from './editor/view.js';
 import type { FindBar } from './ui/findbar.js';
 import type { AppSettings } from './settings.js';
 import type { Awaitable } from './gtkutil.js';
+import type { JournalController } from './window/journal.js';
 
 // View options that can be changed from the menu.
 export type Option = 'sidebar' | 'chat' | 'dark' | 'autosave' | Mode;
@@ -34,9 +35,7 @@ export interface ActionHost {
     closeTab(): Awaitable<boolean>;
     switchTab(step: number): void;
     openHome(): void;
-    openJournal(): Promise<void> | null;
-    captureJournal(): void;
-    summarizeJournal(): Promise<void> | null;
+    readonly journal: Pick<JournalController, 'open' | 'capture' | 'summarize'>;
     open(): Promise<void>;
     chooseFolder(): Promise<void>;
     save(): Awaitable<boolean>;
@@ -82,9 +81,9 @@ export function registerActions(app: Adw.Application, w: ActionHost): void {
     action('new', ['<Control>n'], () => w.newDocument());
     action('close-tab', ['<Control>w'], () => w.closeTab());
     action('home', ['<Alt>Home'], () => w.openHome());
-    action('journal', ['<Control><Alt>j'], () => void w.openJournal());
-    action('journal-capture', ['<Control><Shift>j'], () => w.captureJournal());
-    action('journal-summary', null, () => void w.summarizeJournal());
+    action('journal', ['<Control><Alt>j'], () => void w.journal.open());
+    action('journal-capture', ['<Control><Shift>j'], () => w.journal.capture());
+    action('journal-summary', null, () => void w.journal.summarize());
     action('next-tab', ['<Control>Page_Down', '<Control>Tab'], () => w.switchTab(1));
     action('prev-tab', ['<Control>Page_Up', '<Control><Shift>Tab', '<Control><Shift>ISO_Left_Tab'], () => w.switchTab(-1));
     action('open', ['<Control>o'], () => w.open());

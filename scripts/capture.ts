@@ -767,9 +767,9 @@ function main(app: Adw.Application): void {
     GLib.file_set_contents(piScript, fakePi(piDir));
     GLib.spawn_command_line_sync(`chmod +x ${piScript}`);
     const piMode = (m: string) => GLib.file_set_contents(GLib.build_filenamev([piDir, 'mode']), m);
-    const savedProgram = w.orchestrator.program, savedDialogs = w.harnessDialogs;
-    w.orchestrator.program = () => piScript;
-    w.harnessDialogs = { ...savedDialogs, answer: () => null };
+    const savedProgram = w.harness.orchestrator.program, savedDialogs = w.harness.dialogs;
+    w.harness.orchestrator.program = () => piScript;
+    w.harness.dialogs = { ...savedDialogs, answer: () => null };
     w.settings.projects = { 'web-ecommerce': shop };
     const piBoard = put('development.md', PI_BOARD);
     w.load(piBoard);
@@ -790,7 +790,7 @@ function main(app: Adw.Application): void {
         if (!entry?.run) throw new Error(`menu "${label}" does not exist for "${text}"`);
         entry.run();
     };
-    const runOf = (text: string) => w.orchestrator.queue.find(piBoard, cardAt(text).text);
+    const runOf = (text: string) => w.harness.orchestrator.queue.find(piBoard, cardAt(text).text);
     frame('pi', 8);
     piMode('slow');
     cardMenu('Checkout', 'Work on it with pi');
@@ -818,16 +818,16 @@ function main(app: Adw.Application): void {
     }
     const done = runOf('Checkout');
     if (done) {
-        const log = w.showRunLog(done);
+        const log = w.harness.showLog(done);
         idle(600);
         widgetPixbuf(log.window)!.savev(`${OUT}/pi-log.png`, 'png', [], []);
         log.window.destroy();
     }
     const waiting = runOf('Tidy up the README');
-    if (waiting) w.orchestrator.stop(waiting);
-    waitFor(() => !w.orchestrator.queue.runs.some(r => r.status === 'working' || r.status === 'waiting'));
-    w.orchestrator.program = savedProgram;
-    w.harnessDialogs = savedDialogs;
+    if (waiting) w.harness.orchestrator.stop(waiting);
+    waitFor(() => !w.harness.orchestrator.queue.runs.some(r => r.status === 'working' || r.status === 'waiting'));
+    w.harness.orchestrator.program = savedProgram;
+    w.harness.dialogs = savedDialogs;
     w.editor.buffer.set_modified(false);
 
     // ───────── The daily flow: Home, Inbox, Journal (one work folder, relative dates so Home always has due dates) ─────────
@@ -862,12 +862,12 @@ function main(app: Adw.Application): void {
     idle(600);
     flowFrame('home', 10);
     // Home → check the task that is due today: written straight back to its board.
-    const due = w.homeData().tasks.find(t => t.card.startsWith('Fix the sync bug'));
+    const due = w.homePage.data().tasks.find(t => t.card.startsWith('Fix the sync bug'));
     if (due) w.home.onToggleTask(due, true);
     w.refreshHome();
     idle(400);
     flowFrame('home', 6);
-    w.addJournalNote('Standup: the sync bug is done, the beta is next');
+    w.journal.addNote('Standup: the sync bug is done, the beta is next');
     idle(400);
     flowFrame('home', 12);
 
@@ -888,12 +888,12 @@ function main(app: Adw.Application): void {
     flow = moveCard(flow, { column: 0, index: 0 }, { column: 1, index: 0 });
     w.board.commit(flow);
     idle(300);
-    const journal = w.openJournal();
+    const journal = w.journal.open();
     if (journal) waitPromise(journal);
     idle(600);
     w.editor.view.scroll_to_iter(w.editor.buffer.get_start_iter(), 0, false, 0, 0);
     flowFrame('journal', 10);
-    w.addJournalNote('? Does the beta need the sync fix first');
+    w.journal.addNote('? Does the beta need the sync fix first');
     idle(400);
     flowFrame('journal', 14);
     w.editor.buffer.set_modified(false);

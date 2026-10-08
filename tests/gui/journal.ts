@@ -60,28 +60,28 @@ export function journalTests(c: GuiContext): void {
 
     test('without a work folder, the journal is not opened and the user is told', () => {
         const { win } = open({ folder: null });
-        eq(win.openJournal(), null);
+        eq(win.journal.open(), null);
         ok(win.lastToast.includes('work folder'), `toast: ${win.lastToast}`);
         let asked = false;
-        win.journalDialogs = { capture: () => { asked = true; return 'x'; } };
-        win.captureJournal();
+        win.journal.dialogs = { capture: () => { asked = true; return 'x'; } };
+        win.journal.capture();
         ok(!asked, 'the quick-capture dialog appeared without a work folder');
-        eq(win.homeData().journal, null, 'a Journal row on Home without a work folder');
+        eq(win.homePage.data().journal, null, 'a Journal row on Home without a work folder');
         close(win);
     });
 
     test('Ctrl+Shift+J without an open journal: a time-stamped note is written to a new file from the template', () => {
         const { win } = open();
         const now = new Date();
-        win.journalDialogs = { capture: () => 'Opening files got faster' };
-        win.captureJournal(); settle();
+        win.journal.dialogs = { capture: () => 'Opening files got faster' };
+        win.journal.capture(); settle();
         const text = readTextFile(journal);
         ok(text.startsWith('# ') && text.includes('## Today\'s focus') && text.includes('## Summary'), `template: ${text}`);
         ok(new RegExp(`## Notes\\n\\n- \\d\\d:\\d\\d Opening files got faster\\n\\n## Activity`).test(text), `notes: ${text}`);
         ok(text.includes(`- ${clock(now)} `) || text.includes(`- ${clock(new Date())} `), 'note time');
         ok(win.homeMode, 'quick capture switched away from Home');
-        win.journalDialogs = { capture: () => null };
-        win.captureJournal(); settle();
+        win.journal.dialogs = { capture: () => null };
+        win.journal.capture(); settle();
         eq(readTextFile(journal), text, 'a cancelled dialog changed the journal');
         close(win);
     });
@@ -115,11 +115,11 @@ export function journalTests(c: GuiContext): void {
     test('a finished harness result is recorded once', () => {
         const { win } = open();
         const before = readActivity(ws, today).length;
-        const run = win.orchestrator.queue.add({ board: board, card: 'Fix checkout @pi', title: 'Fix checkout', agent: 'pi', project: 'shop', folder: '/tmp/shop', prompt: '', session: null });
-        win.orchestrator.queue.end(run, 'done');
+        const run = win.harness.orchestrator.queue.add({ board: board, card: 'Fix checkout @pi', title: 'Fix checkout', agent: 'pi', project: 'shop', folder: '/tmp/shop', prompt: '', session: null });
+        win.harness.orchestrator.queue.end(run, 'done');
         const result: HarnessResult = { ok: true, summary: 'Done', error: null, cost: 0, tokens: 0, sessionId: null };
         run.result = result;
-        const host = (win.orchestrator as unknown as { host: { changed: (r: typeof run, m: string | null) => void } }).host;
+        const host = (win.harness.orchestrator as unknown as { host: { changed: (r: typeof run, m: string | null) => void } }).host;
         host.changed(run, null);
         host.changed(run, null);
         const texts = readActivity(ws, today).map(a => a.text).slice(before);
@@ -129,7 +129,7 @@ export function journalTests(c: GuiContext): void {
 
     test('opening the journal merges the log and commits of today into Activity, without duplicating', () => {
         const { win } = open();
-        const filling = win.openJournal();
+        const filling = win.journal.open();
         ok(filling, 'the journal did not open');
         settlePromise(filling!);
         eq(win.file, journal, 'journal tab');
@@ -145,7 +145,7 @@ export function journalTests(c: GuiContext): void {
         win.editor.buffer.redo();
         win.save(); settle();
         eq(win.documentCount, 2, 'number of tabs (Home + journal)');
-        settlePromise(win.openJournal()!);
+        settlePromise(win.journal.open()!);
         eq(win.editor.getText(), readTextFile(journal), 'the activity was duplicated when opened again');
         eq(win.documentCount, 2, 'the journal opened in a new tab again');
         close(win);
@@ -153,11 +153,11 @@ export function journalTests(c: GuiContext): void {
 
     test('quick capture while the journal is open writes through the editor (one undo step), not the disk', () => {
         const { win } = open();
-        settlePromise(win.openJournal()!);
+        settlePromise(win.journal.open()!);
         win.openHome(); settle();
         const disk = readTextFile(journal);
-        win.journalDialogs = { capture: () => '! Flatpak cannot be tested yet' };
-        win.captureJournal(); settle();
+        win.journal.dialogs = { capture: () => '! Flatpak cannot be tested yet' };
+        win.journal.capture(); settle();
         eq(readTextFile(journal), disk, 'the disk was touched although the journal is open');
         win.switchTab(1); settle();
         ok(win.editor.getText().includes(' ! Flatpak cannot be tested yet\n\n## Activity'), 'the note at the end of the Notes section');
@@ -168,14 +168,14 @@ export function journalTests(c: GuiContext): void {
 
     test('Home: the journal row for today with the number of notes and activities', () => {
         const { win } = open();
-        const data = win.homeData();
+        const data = win.homePage.data();
         eq(data.journal, { exists: true, notes: 1, activity: 3 });
         const row = rowTitles(win).find(([title]) => title === 'Today\'s journal');
         eq(row, ['Today\'s journal', '1 note · 3 activities']);
         const capture = descendants(win.home.widget).find((x): x is Gtk.Button => x instanceof Gtk.Button && x.get_tooltip_text() === 'Add to Journal…');
         ok(capture, 'the quick-capture button');
         let asked = false;
-        win.journalDialogs = { capture: () => { asked = true; return null; } };
+        win.journal.dialogs = { capture: () => { asked = true; return null; } };
         capture!.emit('clicked');
         ok(asked, 'the capture button did not open a dialog');
         descendants(win.home.widget).find((x): x is Adw.ActionRow => x instanceof Adw.ActionRow && x.title === 'Today\'s journal')!.emit('activated');
@@ -197,7 +197,7 @@ export function journalTests(c: GuiContext): void {
         const keyStore: KeyStore = { get: async () => ({ key: 'test', source: 'keyring' }), set: async () => 'keyring', clear: async () => {} };
         win.chat.makeProvider = () => provider;
         win.chat.keyStore = keyStore;
-        const asking = win.summarizeJournal();
+        const asking = win.journal.summarize();
         ok(asking, 'the summary did not run');
         settlePromise(asking!);
         settle();
@@ -213,7 +213,7 @@ export function journalTests(c: GuiContext): void {
     const shot = optVal('shot-journal');
     if (!shot) return;
     const { win } = open({ width: 1100, height: 760, sidebar: true });
-    settlePromise(win.openJournal()!);
+    settlePromise(win.journal.open()!);
     const save = (name: string) => {
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(15000); }
         widgetPixbuf(win.win)?.savev(`${shot}-${name}.png`, 'png', [], []);
