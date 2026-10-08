@@ -1,6 +1,6 @@
-# Uji Semua Format Markdown
+# Markdown All-Formats Test
 
-Dokumen ini berisi semua format yang didukung Nyerat, ditambah kasus-kasus sulit. Buka di editor lalu gerakkan kursor ke setiap baris: sintaksnya harus tersembunyi di baris lain dan muncul di baris aktif.
+This document contains every format Nyerat supports, plus the tricky cases. Open it in the editor and move the cursor to each line: the syntax must be hidden on other lines and appear on the active line.
 
 ## 1. Heading
 
@@ -11,204 +11,204 @@ Dokumen ini berisi semua format yang didukung Nyerat, ditambah kasus-kasus sulit
 ##### Heading 5
 ###### Heading 6
 
-## Heading dengan tanda penutup ##
+## Heading with closing marks ##
 
-####### Tujuh pagar bukan heading
+####### Seven hashes is not a heading
 
-#Tanpa spasi bukan heading
+#No space is not a heading
 
-## 2. Penekanan
+## 2. Emphasis
 
-Teks **tebal dengan bintang** dan __tebal dengan garis bawah__.
+Text **bold with asterisks** and __bold with underscores__.
 
-Teks *miring dengan bintang* dan _miring dengan garis bawah_.
+Text *italic with asterisks* and _italic with underscores_.
 
-Teks ***tebal miring*** dan ___tebal miring garis bawah___.
+Text ***bold italic*** and ___bold italic underscores___.
 
-Teks ~~dicoret~~ dan ==distabilo==.
+Text ~~struck through~~ and ==highlighted==.
 
-Gabungan: **tebal dengan *miring* di dalamnya** dan *miring dengan **tebal** di dalamnya*.
+Combined: **bold with *italic* inside it** and *italic with **bold** inside it*.
 
-Penekanan di tengah kata: ka**ta**kan dan ka*ta*kan.
+Emphasis in the middle of a word: un**believ**able and un*believ*able.
 
-Satu huruf: **a**, *b*, ~~c~~, ==d==.
+Single letter: **a**, *b*, ~~c~~, ==d==.
 
-## 3. Kode inline
+## 3. Inline code
 
-Perintah `gjs -m nyerat.js` dijalankan di terminal.
+The command `gjs -m nyerat.js` is run in the terminal.
 
-Kode dengan backtick di dalamnya: ``console.log(`halo`)``.
+Code with a backtick inside it: ``console.log(`hello`)``.
 
-Format di dalam kode tidak diproses: `**bukan tebal**`, `*bukan miring*`, `[bukan](tautan)`.
+Formatting inside code is not processed: `**not bold**`, `*not italic*`, `[not](a link)`.
 
-## 4. Tautan dan gambar
+## 4. Links and images
 
-Tautan biasa: [GTK](https://www.gtk.org).
+A plain link: [GTK](https://www.gtk.org).
 
-Tautan dengan judul: [GNOME](https://www.gnome.org "Situs GNOME").
+A link with a title: [GNOME](https://www.gnome.org "GNOME website").
 
-Tautan dengan format: [**tebal** dan *miring*](https://example.com).
+A link with formatting: [**bold** and *italic*](https://example.com).
 
-Tautan relatif: [README](../../README.md).
+A relative link: [README](../../README.md).
 
-Tautan antardokumen: [[README]], [[README#Fitur|bagian fitur]], dan `[[bukan tautan]]` di dalam kode.
+Links between documents: [[README]], [[README#Features|features section]], and `[[not a link]]` inside code.
 
-Autolink: <https://example.org> dan <mailto:halo@example.com>.
+Autolink: <https://example.org> and <mailto:hello@example.com>.
 
-URL polos: https://developer.gnome.org/documentation/ di tengah kalimat.
+A bare URL: https://developer.gnome.org/documentation/ in the middle of a sentence.
 
-URL dengan garis bawah tidak jadi miring: https://example.com/nama_file_ini.html dan [tautan](https://example.com/a_b_c).
+A URL with underscores does not become italic: https://example.com/this_file_name.html and [link](https://example.com/a_b_c).
 
-Gambar dari internet: ![Logo GTK](https://www.gtk.org/assets/img/logo-gtk-sm.png)
+An image from the internet: ![GTK logo](https://www.gtk.org/assets/img/logo-gtk-sm.png)
 
-Gambar lokal dengan path relatif:
+A local image with a relative path:
 
-![gambar lokal](images/example.png)
+![local image](images/example.png)
 
-Gambar dengan judul: ![gambar lokal](images/example.png "Judul gambar")
+An image with a title: ![local image](images/example.png "Image title")
 
-Dua gambar dalam satu baris: ![satu](images/example.png) ![dua](https://www.gtk.org/assets/img/logo-gtk-sm.png)
+Two images on one line: ![one](images/example.png) ![two](https://www.gtk.org/assets/img/logo-gtk-sm.png)
 
-Gambar yang tidak ada: ![file hilang](gambar/tidak-ada.png)
+An image that does not exist: ![missing file](images/not-there.png)
 
 ## 5. Escape
 
-\*bukan miring\*, \*\*bukan tebal\*\*, \`bukan kode\`, \[bukan tautan\](url), \# bukan heading.
+\*not italic\*, \*\*not bold\*\*, \`not code\`, \[not a link\](url), \# not a heading.
 
-Garis miring terbalik: C:\\Users\\eka
+Backslash: C:\\Users\\eka
 
-## 6. Daftar
+## 6. Lists
 
-Daftar dengan tanda minus:
+A list with minus signs:
 
-- Satu
-- Dua
-- Tiga
+- One
+- Two
+- Three
 
-Daftar dengan bintang dan plus:
+A list with asterisks and plus signs:
 
-* Bintang
+* Star
 + Plus
 
-Daftar bernomor:
+A numbered list:
 
-1. Pertama
-2. Kedua
-3. Ketiga
+1. First
+2. Second
+3. Third
 
-Bernomor dengan kurung dan mulai dari 7:
+Numbered with parentheses, starting from 7:
 
-7) Tujuh
-8) Delapan
+7) Seven
+8) Eight
 
-Daftar bersarang:
+A nested list:
 
-1. Buah
-   - Apel
-   - Jeruk
-     - Jeruk bali
-     - Jeruk nipis
-2. Sayur
-   1. Bayam
-   2. Kangkung
+1. Fruit
+   - Apple
+   - Orange
+     - Pomelo
+     - Lime
+2. Vegetables
+   1. Spinach
+   2. Water spinach
 
-Daftar dengan format: **tebal**, *miring*, `kode`, dan [tautan](https://example.com):
+A list with formatting: **bold**, *italic*, `code`, and [link](https://example.com):
 
-- Item **tebal**
-- Item dengan `kode`
-- Item dengan [tautan](https://example.com)
+- Item **bold**
+- Item with `code`
+- Item with a [link](https://example.com)
 
-Item dengan beberapa paragraf:
+An item with several paragraphs:
 
-- Paragraf pertama dari item ini.
+- The first paragraph of this item.
 
-  Paragraf kedua dari item yang sama.
+  The second paragraph of the same item.
 
-- Item berikutnya.
+- The next item.
 
-## 7. Daftar tugas
+## 7. Task list
 
-- [x] Tugas selesai
-- [ ] Tugas belum selesai
-- [X] Selesai dengan X besar
-- [ ] Tugas dengan **tebal** dan `kode`
-  - [ ] Subtugas
-  - [x] Subtugas selesai
+- [x] Finished task
+- [ ] Unfinished task
+- [X] Finished with a capital X
+- [ ] Task with **bold** and `code`
+  - [ ] Subtask
+  - [x] Finished subtask
 
-## 8. Kutipan
+## 8. Quotes
 
-> Kutipan satu baris.
+> A one-line quote.
 
-> Kutipan beberapa baris.
-> Baris kedua dengan **tebal** dan *miring*.
-> Baris ketiga dengan `kode`.
+> A multi-line quote.
+> Second line with **bold** and *italic*.
+> Third line with `code`.
 
-> Kutipan bersarang:
->> Tingkat dua.
->>> Tingkat tiga.
+> A nested quote:
+>> Level two.
+>>> Level three.
 
-> Kutipan berisi daftar:
-> - Satu
-> - Dua
+> A quote containing a list:
+> - One
+> - Two
 
-## 9. Blok kode
+## 9. Code blocks
 
 ```js
 // JavaScript
-function halo(nama) {
-    return `Halo, ${nama}!`;  // **bukan tebal** di dalam kode
+function hello(name) {
+    return `Hello, ${name}!`;  // **not bold** inside code
 }
 ```
 
 ```python
-def halo(nama):
-    return f"Halo, {nama}!"
+def hello(name):
+    return f"Hello, {name}!"
 ```
 
 ```
-Blok kode tanpa bahasa.
-    Indentasi dipertahankan.
-<b>HTML</b> & karakter khusus harus di-escape saat ekspor.
+A code block without a language.
+    Indentation is preserved.
+<b>HTML</b> & special characters must be escaped on export.
 ```
 
 ~~~bash
-# Pembatas tilde
-echo "halo"
+# Tilde fence
+echo "hello"
 ~~~
 
 ````markdown
-Pembatas empat backtick bisa memuat tiga backtick:
+A four-backtick fence can contain three backticks:
 ```
-kode
+code
 ```
 ````
 
-## 10. Tabel
+## 10. Tables
 
-| Kiri | Tengah | Kanan |
+| Left | Center | Right |
 | :--- | :----: | ----: |
 | a | b | c |
-| **tebal** | `kode` | [tautan](https://example.com) |
-| panjaaaaaaaang | 🎉 | 123 |
+| **bold** | `code` | [link](https://example.com) |
+| looooooooong | 🎉 | 123 |
 
-Tabel tanpa pipa di tepi:
+A table without pipes at the edges:
 
-Nama | Nilai
+Name | Value
 --- | ---
-Satu | 1
-Dua | 2
+One | 1
+Two | 2
 
-Tabel dengan format, pipa yang di-escape, pemisah satu strip, serta CJK dan emoji:
+A table with formatting, an escaped pipe, a one-dash separator, plus CJK and emoji:
 
-| Fitur | Contoh |
+| Feature | Example |
 | - | :-: |
-| Pipa di dalam sel | a \| b |
-| CJK dan emoji | 日本語 🎉 |
-| ~~Coret~~ dan ==stabilo== | *miring* dan `kode` |
+| Pipe inside a cell | a \| b |
+| CJK and emoji | 日本語 🎉 |
+| ~~Strike~~ and ==highlight== | *italic* and `code` |
 
-## 11. Garis pemisah
+## 11. Horizontal rules
 
-Tiga gaya:
+Three styles:
 
 ---
 
@@ -216,32 +216,32 @@ Tiga gaya:
 
 ___
 
-## 12. Baris baru
+## 12. Line breaks
 
-Baris ini diakhiri dua spasi  
-jadi baris berikutnya turun.
+This line ends with two spaces  
+so the next line moves down.
 
-Baris ini diakhiri backslash\
-jadi baris berikutnya juga turun.
+This line ends with a backslash\
+so the next line moves down too.
 
-Baris ini tanpa penanda
-jadi digabung dengan baris berikutnya.
+This line has no marker
+so it is joined with the next line.
 
-## 13. Unicode dan emoji
+## 13. Unicode and emoji
 
-Emoji sebelum format: 🎉 **tebal** 🚀 *miring* ✨ `kode` 👍🏽 [tautan](https://example.com).
+Emoji before formatting: 🎉 **bold** 🚀 *italic* ✨ `code` 👍🏽 [link](https://example.com).
 
-Bahasa lain: こんにちは **世界**, Ελληνικά *κείμενο*, العربية ~~نص~~, Ñandú ==ü==.
+Other languages: こんにちは **世界**, Ελληνικά *κείμενο*, العربية ~~نص~~, Ñandú ==ü==.
 
-Simbol: → ← ↑ ↓ • © ® ™ ½ ≠ ≤ ≥ ∞
+Symbols: → ← ↑ ↓ • © ® ™ ½ ≠ ≤ ≥ ∞
 
-## 14. Diagram Mermaid dan DBML
+## 14. Mermaid and DBML diagrams
 
 ```mermaid
 graph TD
-    A[Mulai] --> B{Sudah siap?}
-    B -->|ya| C[Kerjakan]
-    B -->|belum| A
+    A[Start] --> B{Ready yet?}
+    B -->|yes| C[Do it]
+    B -->|not yet| A
 ```
 
 ```dbml
@@ -257,22 +257,22 @@ Table posts {
 }
 ```
 
-## 15. Kasus sulit
+## 15. Tricky cases
 
-Nama variabel snake_case_seperti_ini tidak jadi miring.
+A variable name like snake_case_like_this does not become italic.
 
-Rumus 2 * 3 * 4 = 24 tidak jadi miring.
+The formula 2 * 3 * 4 = 24 does not become italic.
 
-Bintang tunggal * di tengah kalimat.
+A single asterisk * in the middle of a sentence.
 
-Penekanan tidak ditutup: **tidak ditutup, *juga tidak.
+Unclosed emphasis: **not closed, *neither is this.
 
-Tanda kurung siku [bukan tautan] dan (bukan juga).
+Square brackets [not a link] and (not one either).
 
-Heading kosong di bawah ini:
+An empty heading below:
 
 #
 
-Baris yang sangat panjang untuk menguji pembungkusan teks: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud **exercitation ullamco laboris** nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in *reprehenderit in voluptate* velit esse cillum dolore eu fugiat nulla pariatur.
+A very long line to test text wrapping: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud **exercitation ullamco laboris** nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in *reprehenderit in voluptate* velit esse cillum dolore eu fugiat nulla pariatur.
 
-Baris terakhir tanpa baris baru di akhir file.
+The last line without a trailing newline at the end of the file.

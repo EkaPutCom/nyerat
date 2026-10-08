@@ -2,24 +2,24 @@
 kanban: true
 ---
 
-## Rencana
+## Plan
 
-- [ ] Riset pengguna #riset @{2026-10-10}
-  Wawancara lima pengguna aktif.
-  - catat kebutuhan utama
-- [ ] Rancang ulang halaman utama #desain
-- [ ] Tulis dokumentasi **API** #docs @{2026-10-25}
+- [ ] User research #research @{2026-10-10}
+  Interview five active users.
+  - note the main needs
+- [ ] Redesign the home page #design
+- [ ] Write the **API** documentation #docs @{2026-10-25}
 
-## Dikerjakan
+## In Progress
 
-- [ ] Implementasi papan kanban #fitur #penting
-- [ ] Perbaiki bug `ekspor HTML` #bug @{2026-10-03}
+- [ ] Implement the kanban board #feature #important
+- [ ] Fix the `HTML export` bug #bug @{2026-10-03}
 
 ## Review
 
-- [ ] Uji coba di Ubuntu 24.04 #qa
+- [ ] Trial on Ubuntu 24.04 #qa
 
-## Selesai
+## Done
 
-- [x] Pilih nama proyek: Nyerat
-- [x] Siapkan repositori GitHub #infra
+- [x] Choose the project name: Nyerat
+- [x] Set up the GitHub repository #infra

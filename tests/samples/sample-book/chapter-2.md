@@ -1,13 +1,13 @@
-# Bab 2: Pelayaran
+# Chapter 2: The Voyage
 
-Kapal meninggalkan pelabuhan dengan tenang. Nakhoda Hasyim memimpin pelayaran itu dari anjungan, sementara awak kapal menyiapkan layar.
+The ship left the harbor calmly. Captain Hasyim led the voyage from the bridge, while the crew prepared the sails.
 
-## Badai
+## The Storm
 
-Badai menghantam pada malam ketiga. Laras menyembunyikan surat itu di balik jaketnya, sementara Raka yang berusia dua puluh lima tahun memegang kemudi dan berteriak memberi aba-aba kepada awak.
+The storm hit on the third night. Laras hid the letter inside her jacket, while Raka, who was twenty-five years old, held the helm and shouted orders to the crew.
 
-Lambung hitam kapal itu berderak keras di antara gelombang, dan layar biru terkoyak di tiang utama.
+The black hull of the ship creaked hard among the waves, and the blue sail tore at the main mast.
 
-## Pagi Hari
+## Morning
 
-Badai reda menjelang pagi. Tidak ada yang hilang kecuali satu tong air tawar.
+The storm died down toward morning. Nothing was lost except one barrel of fresh water.
