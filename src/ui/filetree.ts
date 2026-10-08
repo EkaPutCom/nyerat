@@ -23,6 +23,7 @@ import { popupMenu, separator, type MenuEntry } from './menu.js';
 import { _, fmt } from '../i18n.js';
 
 export const MARKDOWN_EXTENSIONS = ['.md', '.markdown', '.mdown', '.mkd'];
+export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'];
 const SKIPPED_FOLDERS = new Set(['node_modules']);
 const EXPAND_DELAY = 600;   // ms; a closed folder opens automatically if held over during a drag
 const NO_ACTION = 0 as Gdk.DragAction;
@@ -46,6 +47,9 @@ export interface FolderEntry {
 
 export const isMarkdownFile = (name: string): boolean =>
     MARKDOWN_EXTENSIONS.some(ext => name.toLowerCase().endsWith(ext));
+
+export const isImageFile = (name: string): boolean =>
+    IMAGE_EXTENSIONS.some(ext => name.toLowerCase().endsWith(ext));
 
 export const isDirectory = (path: string): boolean => GLib.file_test(path, GLib.FileTest.IS_DIR);
 
@@ -71,7 +75,7 @@ export function listFolder(path: string): FolderEntry[] {
         const name = info.get_name();
         if (name.startsWith('.') || info.get_is_hidden() || SKIPPED_FOLDERS.has(name)) continue;
         const isDir = info.get_file_type() === Gio.FileType.DIRECTORY;
-        if (!isDir && !isMarkdownFile(name)) continue;
+        if (!isDir && !isMarkdownFile(name) && !isImageFile(name)) continue;
         entries.push({ name, path: GLib.build_filenamev([path, name]), isDir });
     }
     enumerator.close(null);
@@ -165,7 +169,7 @@ export class FileTree {
             const expander = listItem.child as Gtk.TreeExpander;
             expander.set_list_row(row);
             const box = expander.get_child() as Gtk.Box;
-            (box.get_first_child() as Gtk.Image).icon_name = node.isDir ? 'folder-symbolic' : 'text-x-generic-symbolic';
+            (box.get_first_child() as Gtk.Image).icon_name = node.isDir ? 'folder-symbolic' : isImageFile(node.name) ? 'image-x-generic-symbolic' : 'text-x-generic-symbolic';
             (box.get_last_child() as Gtk.Label).label = node.name;
         });
         return factory;

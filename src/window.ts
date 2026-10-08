@@ -17,6 +17,7 @@ import Adw from 'gi://Adw?version=1';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import GdkPixbuf from 'gi://GdkPixbuf';
 
 import { APP_ID, APP_NAME } from './config.js';
 import { addBundledIcons, after, type Awaitable } from './gtkutil.js';
@@ -29,7 +30,7 @@ import { Outline } from './ui/outline.js';
 import { History } from './ui/history.js';
 import { HistoryViewer } from './ui/historyviewer.js';
 import { remapPath } from './fileops.js';
-import { FileTree, isDirectory } from './ui/filetree.js';
+import { FileTree, isDirectory, isImageFile } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
 import { ChatPanel } from './ui/chat.js';
 import { listMarkdownFiles, readProject } from './agent/project.js';
@@ -1499,6 +1500,14 @@ export class MainWindow {
 
     // Open the file chosen in the file tree.
     openFile(path: string): void {
+        if (isImageFile(path)) {  // images are not editable: show them in the viewer
+            try {
+                new ImageViewer(this.win, GdkPixbuf.Pixbuf.new_from_file(path), GLib.path_get_basename(path)).show();
+            } catch {
+                void showError(this.win, fmt(_('Could not open image: {name}'), { name: GLib.path_get_basename(path) }));
+            }
+            return;
+        }
         if (path === this.file) return;
         if (!this.openInTab(path)) this.fileTree.reveal(this.file);  // restore the highlight to the file that is still open
     }

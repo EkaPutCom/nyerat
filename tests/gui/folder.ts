@@ -87,11 +87,11 @@ export function folderTests(c: GuiContext): void {
         GLib.unlink(GLib.build_filenamev([proj, 'b-new.md']));
         ok(waitFor(() => !childNames().includes('b-new.md')), 'the deleted file is still shown');
     });
-    test('a non-Markdown file that is added does not appear', () => {
+    test('an image file that is added appears; other file types do not', () => {
         write('picture.png');
         write('c-new.md');
         ok(waitFor(() => childNames().includes('c-new.md')), 'the new Markdown file did not appear');
-        ok(!childNames().includes('picture.png'), 'the .png file was shown too');
+        ok(childNames().includes('picture.png'), 'the .png file was not shown');
     });
     test('load() with a folder path opens the folder, not an error', () => {
         ft.setRoot(null);
