@@ -1,5 +1,5 @@
-// Perintah format yang mengubah isi buffer: tebal, tautan, heading, kutipan, dll.
-// Setiap perintah dibungkus begin/end_user_action supaya satu Ctrl+Z membatalkannya.
+// Formatting commands that change the buffer contents: bold, link, heading, quote, etc.
+// Each command is wrapped in begin/end_user_action so a single Ctrl+Z undoes it.
 
 import type Gtk from 'gi://Gtk?version=4.0';
 import { cpLength } from './offsets.js';
@@ -7,7 +7,7 @@ import { iterAtLine } from '../gtkutil.js';
 
 const cursorIter = (buffer: Gtk.TextBuffer) => buffer.get_iter_at_mark(buffer.get_insert());
 
-// Isi satu baris beserta iter awal dan akhirnya: [teks, awal, akhir].
+// Contents of one line with its start and end iters: [text, start, end].
 export function lineText(buffer: Gtk.TextBuffer, iter: Gtk.TextIter): [string, Gtk.TextIter, Gtk.TextIter] {
     const s = iter.copy();
     s.set_line_offset(0);
@@ -16,7 +16,7 @@ export function lineText(buffer: Gtk.TextBuffer, iter: Gtk.TextIter): [string, G
     return [buffer.get_text(s, e, true), s, e];
 }
 
-// Nomor baris pertama dan terakhir dari seleksi (atau baris kursor).
+// First and last line numbers of the selection (or the cursor line).
 export function selectedLines(buffer: Gtk.TextBuffer): [number, number] {
     const [has, s, e] = buffer.get_selection_bounds();
     const a = has ? s : cursorIter(buffer);
@@ -24,16 +24,16 @@ export function selectedLines(buffer: Gtk.TextBuffer): [number, number] {
     return [a.get_line(), b.get_line()];
 }
 
-// Bungkus seleksi dengan penanda, misalnya ** untuk tebal. Jika seleksi sudah
-// terbungkus, penandanya dilepas. Tanpa seleksi: sisipkan pasangan penanda dan
-// taruh kursor di tengahnya.
+// Wrap the selection with a marker, e.g. ** for bold. If the selection is already
+// wrapped, the marker is removed. Without a selection: insert a pair of markers and
+// put the cursor in between.
 export function wrapSelection(buffer: Gtk.TextBuffer, left: string, right = left): void {
     buffer.begin_user_action();
     const [has, s, e] = buffer.get_selection_bounds();
     if (has) {
-        // Hanya penandanya yang disisipkan/dihapus, seleksinya tidak pernah kosong. Di X11,
-        // seleksi yang sempat kosong melepas clipboard PRIMARY, dan GTK 4 membatalkan seleksi
-        // baru begitu server mengonfirmasi pelepasan itu (Ctrl+B kedua lalu tidak melepas **).
+        // Only the markers are inserted/removed, the selection is never empty. On X11,
+        // a selection that was briefly empty releases the PRIMARY clipboard, and GTK 4 cancels the new
+        // selection as soon as the server confirms that release (the second Ctrl+B then does not remove **).
         const txt = buffer.get_text(s, e, true);
         const so = s.get_offset(), eo = e.get_offset();
         const l = cpLength(left), r = cpLength(right);
@@ -56,7 +56,7 @@ export function wrapSelection(buffer: Gtk.TextBuffer, left: string, right = left
     buffer.end_user_action();
 }
 
-// Seleksi berupa teks → [teks](), berupa URL → [](url). Kursor ditaruh di bagian yang kosong.
+// Selected text → [text](), selected URL → [](url). The cursor is placed in the empty part.
 export function insertLink(buffer: Gtk.TextBuffer): void {
     const [has, s, e] = buffer.get_selection_bounds();
     buffer.begin_user_action();
@@ -77,7 +77,7 @@ export function insertLink(buffer: Gtk.TextBuffer): void {
     buffer.end_user_action();
 }
 
-// Sisipkan blok (blok kode, tabel) dan taruh kursor di antara before dan after.
+// Insert a block (code block, table) and put the cursor between before and after.
 export function insertBlock(buffer: Gtk.TextBuffer, before: string, after: string): void {
     const [line] = lineText(buffer, cursorIter(buffer));
     buffer.begin_user_action();
@@ -89,8 +89,8 @@ export function insertBlock(buffer: Gtk.TextBuffer, before: string, after: strin
     buffer.end_user_action();
 }
 
-// Tambah/hapus awalan baris ("> ", "- ", "1. ") pada semua baris terseleksi.
-// Jika semua baris sudah berawalan, awalan dihapus.
+// Add/remove a line prefix ("> ", "- ", "1. ") on all selected lines.
+// If all lines already have the prefix, the prefix is removed.
 export function togglePrefix(buffer: Gtk.TextBuffer, re: RegExp, prefix: string): void {
     const [l0, l1] = selectedLines(buffer);
     const all: string[] = [];
@@ -111,7 +111,7 @@ export function togglePrefix(buffer: Gtk.TextBuffer, re: RegExp, prefix: string)
     buffer.end_user_action();
 }
 
-// Jadikan baris kursor heading level 1–6; level 0 atau level yang sama = paragraf biasa.
+// Make the cursor line a level 1–6 heading; level 0 or the same level = plain paragraph.
 export function setHeading(buffer: Gtk.TextBuffer, level: number): void {
     const [line, ls] = lineText(buffer, cursorIter(buffer));
     const m = /^#{1,6}[ \t]*/.exec(line);

@@ -1,15 +1,15 @@
-// Penerjemah DBML (bahasa skema dbdiagram.io) ke diagram ER Mermaid.
+// DBML (dbdiagram.io schema language) to Mermaid ER diagram converter.
 //
-// Diagramnya digambar oleh Mermaid (lihat editor/mermaidrender.ts), jadi di sini hanya
-// ada penguraian DBML dan penulisan ulang sebagai `erDiagram`. Yang didukung: Table
-// (alias, pengaturan kolom pk/unique/not null/note/ref, indexes, Note), Ref (satu baris
-// dan blok, relasi > < - <>), dan Enum/TableGroup/Project yang dilewati. Tanpa GTK.
+// The diagram is drawn by Mermaid (see editor/mermaidrender.ts), so here there is only
+// DBML parsing and rewriting as `erDiagram`. Supported: Table
+// (alias, column settings pk/unique/not null/note/ref, indexes, Note), Ref (single line
+// and block, relations > < - <>), and Enum/TableGroup/Project which are skipped. No GTK.
 //
-// Galat sintaks dilempar sebagai DbmlError berisi nomor baris.
+// Syntax errors are thrown as a DbmlError containing the line number.
 
 export class DbmlError extends Error {
     constructor(message: string, readonly line: number) {
-        super(`${message} (baris ${line})`);
+        super(`${message} (line ${line})`);
     }
 }
 
@@ -29,14 +29,14 @@ function tokenize(src: string): Token[] {
         if (src.startsWith('//', i)) { while (i < src.length && src[i] !== '\n') i++; continue; }
         if (src.startsWith('/*', i)) {
             const end = src.indexOf('*/', i + 2);
-            if (end < 0) throw new DbmlError('Komentar /* tidak ditutup', line);
+            if (end < 0) throw new DbmlError('Unclosed /* comment', line);
             for (const ch of src.slice(i, end)) if (ch === '\n') line++;
             i = end + 2;
             continue;
         }
         if (src.startsWith("'''", i)) {
             const end = src.indexOf("'''", i + 3);
-            if (end < 0) throw new DbmlError("Teks ''' tidak ditutup", line);
+            if (end < 0) throw new DbmlError("Unclosed ''' text", line);
             const text = src.slice(i + 3, end), at = line;
             for (const ch of text) if (ch === '\n') line++;
             push('str', text, at);
@@ -49,8 +49,8 @@ function tokenize(src: string): Token[] {
                 if (src[j] === '\\' && j + 1 < src.length) j++;
                 text += src[j++];
             }
-            if (src[j] !== c) throw new DbmlError('Tanda kutip tidak ditutup', line);
-            // "nama" adalah pengenal; 'teks' adalah string; `ekspresi` adalah ekspresi.
+            if (src[j] !== c) throw new DbmlError('Unclosed quote', line);
+            // "name" is an identifier; 'text' is a string; `expression` is an expression.
             push(c === '"' ? 'word' : c === "'" ? 'str' : 'expr', text, line);
             i = j + 1;
             continue;
@@ -58,7 +58,7 @@ function tokenize(src: string): Token[] {
         if (src.startsWith('<>', i)) { push('punct', '<>', line); i += 2; continue; }
         if (/[{}[\](),:.<>\-]/.test(c)) { push('punct', c, line); i++; continue; }
         const m = /^[^\s{}[\](),:.<>'"`\-/]+/.exec(src.slice(i));
-        if (!m) throw new DbmlError(`Karakter tidak dikenali: ${c}`, line);
+        if (!m) throw new DbmlError(`Unrecognized character: ${c}`, line);
         push('word', m[0], line);
         i += m[0].length;
     }
@@ -87,7 +87,7 @@ class Parser {
     private punct(text: string): boolean { const c = this.cur; return !!c && c.kind === 'punct' && c.text === text; }
 
     private expect(text: string): void {
-        if (!this.punct(text)) throw new DbmlError(`Seharusnya "${text}", ditemukan ${this.cur ? `"${this.cur.text}"` : 'akhir kode'}`, this.line);
+        if (!this.punct(text)) throw new DbmlError(`Expected "${text}", found ${this.cur ? `"${this.cur.text}"` : 'end of code'}`, this.line);
         this.p++;
     }
 
@@ -100,12 +100,12 @@ class Parser {
 
     parse(): Schema {
         while (this.cur) {
-            const kw = this.word('kata kunci').toLowerCase();
+            const kw = this.word('keyword').toLowerCase();
             if (kw === 'table') this.table();
             else if (kw === 'ref') this.ref();
             else if (kw === 'enum' || kw === 'tablegroup' || kw === 'project' || kw === 'tablepartial') this.skipBlock();
             else if (kw === 'note') this.skipNote();
-            else throw new DbmlError(`Tidak dikenali: ${kw}`, this.t[this.p - 1].line);
+            else throw new DbmlError(`Unrecognized: ${kw}`, this.t[this.p - 1].line);
         }
         return this.schema;
     }
@@ -115,19 +115,19 @@ class Parser {
         while (this.cur && !this.punct('{')) this.p++;
         this.expect('{');
         for (let depth = 1; depth > 0; this.p++) {
-            if (!this.cur) throw new DbmlError('Blok tidak ditutup dengan "}"', this.line);
+            if (!this.cur) throw new DbmlError('Block not closed with "}"', this.line);
             if (this.punct('{')) depth++;
             else if (this.punct('}')) depth--;
         }
     }
 
-    // Note: 'teks'   atau   Note { 'teks' }   atau   Note nama { 'teks' }
+    // Note: 'text'   or   Note { 'text' }   or   Note name { 'text' }
     private skipNote(): string {
         if (this.punct(':')) {
             this.p++;
             return this.str();
         }
-        if (!this.punct('{')) this.word('nama note');   // Note nama { ... } di tingkat atas
+        if (!this.punct('{')) this.word('note name');   // Note name { ... } at the top level
         this.expect('{');
         const text = this.str();
         this.expect('}');
@@ -136,19 +136,19 @@ class Parser {
 
     private str(): string {
         const c = this.cur;
-        if (!c || c.kind !== 'str') throw new DbmlError('Seharusnya teks dalam tanda kutip', this.line);
+        if (!c || c.kind !== 'str') throw new DbmlError('Expected quoted text', this.line);
         this.p++;
         return c.text;
     }
 
-    // schema.tabel.kolom → ['schema.tabel', 'kolom']; "(a, b)" di ujung berarti kolom gabungan.
+    // schema.table.column → ['schema.table', 'column']; a trailing "(a, b)" means a composite column.
     private endpoint(): [string, string] {
-        const parts = [this.word('nama tabel')];
+        const parts = [this.word('table name')];
         let col = '';
         while (this.punct('.')) {
             this.p++;
             if (this.punct('(')) { col = this.columnList(); break; }
-            parts.push(this.word('nama kolom'));
+            parts.push(this.word('column name'));
         }
         if (!col) col = parts.length > 1 ? parts.pop()! : '';
         return [parts.join('.'), col];
@@ -156,8 +156,8 @@ class Parser {
 
     private columnList(): string {
         this.expect('(');
-        const names = [this.word('nama kolom')];
-        while (this.punct(',')) { this.p++; names.push(this.word('nama kolom')); }
+        const names = [this.word('column name')];
+        while (this.punct(',')) { this.p++; names.push(this.word('column name')); }
         this.expect(')');
         return names.join(', ');
     }
@@ -165,12 +165,12 @@ class Parser {
     private operator(): string {
         const c = this.cur;
         if (c && c.kind === 'punct' && ['>', '<', '-', '<>'].includes(c.text)) { this.p++; return c.text; }
-        throw new DbmlError('Seharusnya jenis relasi (>, <, - atau <>)', this.line);
+        throw new DbmlError('Expected a relation type (>, <, - or <>)', this.line);
     }
 
-    // Ref: a.x > b.y   atau   Ref nama: ...   atau   Ref { ... }
+    // Ref: a.x > b.y   or   Ref name: ...   or   Ref { ... }
     private ref(): void {
-        if (!this.punct(':') && !this.punct('{')) this.word('nama ref');
+        if (!this.punct(':') && !this.punct('{')) this.word('ref name');
         if (this.punct(':')) {
             this.p++;
             this.relation();
@@ -178,19 +178,19 @@ class Parser {
         }
         this.expect('{');
         while (!this.punct('}')) {
-            if (!this.cur) throw new DbmlError('Blok Ref tidak ditutup dengan "}"', this.line);
+            if (!this.cur) throw new DbmlError('Ref block not closed with "}"', this.line);
             this.relation();
         }
         this.p++;
     }
 
     private relation(): void {
-        // Kolom gabungan di sisi kiri ditulis "a.(x, y)" dan ditangani endpoint().
+        // A composite column on the left side is written "a.(x, y)" and handled by endpoint().
         const [from, fromCol] = this.endpoint();
         const op = this.operator();
         const [to, toCol] = this.endpoint();
         this.addRelation({ from, fromCol, op, to, toCol });
-        // Pengaturan relasi ([delete: cascade]) tidak mengubah diagram.
+        // Relation settings ([delete: cascade]) do not change the diagram.
         if (this.punct('[')) this.settings();
     }
 
@@ -198,13 +198,13 @@ class Parser {
         this.schema.relations.push(r);
     }
 
-    // Isi [ ... ] dipecah di koma tingkat atas; tiap butir berupa deretan token.
+    // The contents of [ ... ] are split at top-level commas; each item is a run of tokens.
     private settings(): Token[][] {
         this.expect('[');
         const items: Token[][] = [[]];
         for (let depth = 0; ; this.p++) {
             const c = this.cur;
-            if (!c) throw new DbmlError('Pengaturan "[" tidak ditutup dengan "]"', this.line);
+            if (!c) throw new DbmlError('Setting "[" not closed with "]"', this.line);
             if (c.kind === 'punct') {
                 if (c.text === '(' || c.text === '[') depth++;
                 else if (c.text === ')' || (c.text === ']' && depth > 0)) depth--;
@@ -218,14 +218,14 @@ class Parser {
     }
 
     private table(): void {
-        const parts = [this.word('nama tabel')];
-        while (this.punct('.')) { this.p++; parts.push(this.word('nama tabel')); }
+        const parts = [this.word('table name')];
+        while (this.punct('.')) { this.p++; parts.push(this.word('table name')); }
         const table: Table = { name: parts.join('.'), alias: null, columns: [] };
         if (this.is('as')) { this.p++; table.alias = this.word('alias'); }
         if (this.punct('[')) this.settings();
         this.expect('{');
         while (!this.punct('}')) {
-            if (!this.cur) throw new DbmlError(`Tabel ${table.name} tidak ditutup dengan "}"`, this.line);
+            if (!this.cur) throw new DbmlError(`Table ${table.name} not closed with "}"`, this.line);
             if (this.is('note') && this.t[this.p + 1] && ['{', ':'].includes(this.t[this.p + 1].text)) { this.p++; this.skipNote(); }
             else if (this.is('indexes') && this.t[this.p + 1]?.text === '{') { this.p++; this.skipBlock(); }
             else this.column(table);
@@ -235,25 +235,25 @@ class Parser {
     }
 
     private column(table: Table): void {
-        const name = this.word('nama kolom');
+        const name = this.word('column name');
         const type = this.type();
         const col: Column = { name, type, pk: false, unique: false, fk: false, note: '' };
         table.columns.push(col);
-        // Pengaturan kolom hanya dibaca bila "[" masih di baris yang sama dengan jenisnya.
+        // Column settings are only read if "[" is still on the same line as its type.
         while (this.punct('[') && this.cur!.line === this.t[this.p - 1].line) {
             for (const item of this.settings()) this.columnSetting(table, col, item);
         }
     }
 
-    // varchar(255), decimal(10,2), schema.tipe, int[] (kurung siku kosong menempel).
+    // varchar(255), decimal(10,2), schema.type, int[] (empty square brackets attached).
     private type(): string {
-        let type = this.word('jenis kolom');
-        while (this.punct('.')) { this.p++; type += `.${this.word('jenis kolom')}`; }
+        let type = this.word('column type');
+        while (this.punct('.')) { this.p++; type += `.${this.word('column type')}`; }
         if (this.punct('(')) {
             let depth = 0, args = '';
             do {
                 const c = this.cur;
-                if (!c) throw new DbmlError('Tanda kurung pada jenis kolom tidak ditutup', this.line);
+                if (!c) throw new DbmlError('Parenthesis in column type not closed', this.line);
                 if (c.text === '(' && c.kind === 'punct') depth++;
                 else if (c.text === ')' && c.kind === 'punct') depth--;
                 args += c.text;
@@ -284,17 +284,17 @@ export function parseDbml(src: string): Schema {
     return new Parser(tokenize(src)).parse();
 }
 
-// ---------- Penulisan ulang sebagai Mermaid ----------
+// ---------- Rewriting as Mermaid ----------
 
 const CARDINALITY: Record<string, string> = {
-    '>': '}o--||',    // banyak ke satu
-    '<': '||--o{',    // satu ke banyak
+    '>': '}o--||',    // many to one
+    '<': '||--o{',    // one to many
     '-': '||--||',
     '<>': '}o--o{',
 };
 
 const quote = (s: string): string => `"${s.replace(/"/g, "'")}"`;
-// Nama atribut dan jenis di Mermaid tidak boleh berisi spasi atau koma.
+// Attribute and type names in Mermaid must not contain spaces or commas.
 const ident = (s: string): string => s.replace(/[^\w\-[\]()]/g, '_') || '_';
 
 export function dbmlToMermaid(src: string): string {
@@ -303,7 +303,7 @@ export function dbmlToMermaid(src: string): string {
     for (const t of schema.tables) if (t.alias) alias.set(t.alias, t.name);
     const resolve = (name: string): string => alias.get(name) ?? name;
 
-    // Kolom di sisi "banyak" suatu relasi adalah kunci asing.
+    // A column on the "many" side of a relation is a foreign key.
     const byName = new Map(schema.tables.map(t => [t.name, t]));
     const mark = (table: string, col: string): void => {
         const c = byName.get(resolve(table))?.columns.find(c => c.name === col);

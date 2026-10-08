@@ -1,27 +1,27 @@
-// MarkdownView: widget editor Markdown yang langsung terformat.
+// MarkdownView: the Markdown editor widget with live formatting.
 //
-// Menyatukan GtkSourceView dengan modul-modul di folder ini:
-//   tags.ts         gaya teks
-//   highlighter.ts  dijalankan setiap teks berubah
-//   decorations.ts  dijalankan setiap kursor pindah baris
-//   lists.ts        Enter dan Tab
-//   clicks.ts       klik kotak tugas dan Ctrl+klik tautan
-//   wikicomplete.ts saran nama catatan saat mengetik [[
-//   images.ts       gambar ditampilkan di bawah barisnya
-//   codehighlight.ts  isi blok kode diwarnai sesuai bahasanya
-//   tablelayer.ts   tabel dirender sebagai grid, tableedit.ts menyuntingnya
-//   mermaid.ts      blok ```mermaid dirender sebagai diagram (mermaidrender.ts)
+// Brings GtkSourceView together with the modules in this folder:
+//   tags.ts         text styles
+//   highlighter.ts  runs every time the text changes
+//   decorations.ts  runs every time the cursor changes line
+//   lists.ts        Enter and Tab
+//   clicks.ts       clicking task boxes and Ctrl+click on links
+//   wikicomplete.ts note name suggestions while typing [[
+//   images.ts       images displayed below their line
+//   codehighlight.ts  code block contents colored according to their language
+//   tablelayer.ts   tables rendered as a grid, tableedit.ts edits them
+//   mermaid.ts      ```mermaid blocks rendered as a diagram (mermaidrender.ts)
 //
-// Widget ini tidak tahu apa-apa soal file, menu, atau sidebar. Ia memberi kabar
-// lewat callback yang dipasang oleh jendela (window.ts):
-//   onHighlighted({ text, headings })   setelah penyorotan
-//   onCursorMoved(line, column)         setelah kursor pindah
-//   onMessage(text)                     pesan singkat untuk pengguna
-//   onViewImage(pixbuf, title)          gambar diminta diperbesar (klik ganda / perintah menu)
-//   getBaseDir()                        folder untuk tautan relatif
-//   onOpenNote(link)                    Ctrl+klik [[catatan]]
-//   onOpenDocument(path)                Ctrl+klik tautan ke berkas Markdown; false = buka dengan aplikasi lain
-//   listNotes()                         berkas Markdown di proyek, untuk saran [[
+// This widget knows nothing about files, menus, or the sidebar. It reports
+// through callbacks installed by the window (window.ts):
+//   onHighlighted({ text, headings })   after highlighting
+//   onCursorMoved(line, column)         after the cursor moves
+//   onMessage(text)                     a short message for the user
+//   onViewImage(pixbuf, title)          an image is asked to be enlarged (double click / menu command)
+//   getBaseDir()                        folder for relative links
+//   onOpenNote(link)                    Ctrl+click [[note]]
+//   onOpenDocument(path)                Ctrl+click a link to a Markdown file; false = open with another app
+//   listNotes()                         Markdown files in the project, for [[ suggestions
 
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
@@ -55,13 +55,13 @@ import type { Palette } from '../ui/theme.js';
 import { iterAtLine } from '../gtkutil.js';
 import { _, fmt } from '../i18n.js';
 
-const TEXT_WIDTH = 780;  // lebar kolom teks maksimum, dalam piksel
+const TEXT_WIDTH = 780;  // maximum text column width, in pixels
 
-// Penyorotan bertahap saat membuka dokumen (lihat setText()): sebanyak ini baris dari awal
-// diberi tag langsung, sisanya dicicil per FILL_BUDGET_MS di idle. Prioritasnya di atas
-// penataan latar GtkTextView (GTK_TEXT_VIEW_PRIORITY_VALIDATE = 125) supaya baris ditata
-// sekali dengan tag akhirnya, dan di bawah menggambar (GDK_PRIORITY_REDRAW = 120) supaya
-// layar tetap diperbarui selama cicilan berjalan.
+// Incremental highlighting when opening a document (see setText()): this many lines from the start
+// are tagged immediately, the rest is fed in per FILL_BUDGET_MS in idle. Its priority is above
+// GtkTextView's background layout (GTK_TEXT_VIEW_PRIORITY_VALIDATE = 125) so lines are laid out
+// once with their final tags, and below drawing (GDK_PRIORITY_REDRAW = 120) so the
+// screen keeps being updated while the feeding runs.
 const FILL_FIRST_LINES = 200;
 const FILL_CHUNK_LINES = 100;
 const FILL_BUDGET_MS = 8;
@@ -69,17 +69,17 @@ const FILL_PRIORITY = GLib.PRIORITY_HIGH_IDLE + 22;
 
 export type Mode = 'source' | 'focus' | 'typewriter';
 
-// Ganti seluruh isi TextView (lewat `replace`), lalu tampilkan dari awal.
+// Replace the whole TextView contents (through `replace`), then show from the start.
 //
-// GTK memberi tinggi 0 pada baris yang belum ditata. Jika gambar pertama mencakup area di
-// bawah baris yang sudah ditata, GTK bisa menata semua baris sampai akhir dokumen sekaligus
-// di thread utama (di GTK 3 membuka naskah 650 KB membeku ±0,6 detik). Karena itu posisi
-// gulir lama dinolkan dulu, dan gulir ke kursor diantre: GTK lalu menata layar di sekitar
-// kursor sebelum menggambar dan sisanya sedikit demi sedikit di latar.
+// GTK gives height 0 to lines that have not been laid out. If the first image covers the area
+// below the lines already laid out, GTK may lay out all lines to the end of the document at once
+// on the main thread (in GTK 3 opening a 650 KB manuscript froze for ±0.6 seconds). That is why the old
+// scroll position is zeroed first, and the scroll to the cursor is queued: GTK then lays out the screen around
+// the cursor before drawing and the rest little by little in the background.
 //
-// Gulir ke kursor hanya jika TextView sudah punya ukuran. Sebelum itu (jendela belum tampil,
-// atau tab baru di Stack) GTK 4 menyimpan gulirnya lalu menjalankannya dengan geometri yang
-// belum ada, sehingga dokumen terbuka di tengah atau akhir, bukan di awal.
+// Scroll to the cursor only if the TextView already has a size. Before that (the window is not shown yet,
+// or a new tab in the Stack) GTK 4 stores the scroll and then runs it with geometry that
+// does not exist yet, so the document opens in the middle or at the end, not at the start.
 export function replaceAllText(view: Gtk.TextView, replace: () => void): void {
     view.get_vadjustment()?.set_value(0);
     replace();
@@ -110,7 +110,7 @@ export class MarkdownView {
     onHighlighted: (result: HighlightResult) => void = () => {};
     onCursorMoved: (line: number, column: number) => void = () => {};
     onMessage: (text: string) => void = () => {};
-    onViewImage: (pixbuf: GdkPixbuf.Pixbuf, title: string) => void = () => {};  // gambar diminta diperbesar
+    onViewImage: (pixbuf: GdkPixbuf.Pixbuf, title: string) => void = () => {};  // an image is asked to be enlarged
     getBaseDir: () => string = () => GLib.get_home_dir();
     onOpenNote: (link: WikiLink) => void = () => {};
     onOpenDocument: (path: string) => boolean = () => false;
@@ -130,8 +130,8 @@ export class MarkdownView {
     private cursorForce = false;
     private syntaxTagger: LineTagger;
     private concealer: MarkerConcealer;
-    // Rentang teks yang disunting sejak penyorotan terakhir. Memakai mark supaya ikut
-    // bergeser jika ada suntingan lain sebelum penyorotan berjalan.
+    // The text range edited since the last highlighting. Uses a mark so it shifts
+    // along if there is another edit before the highlighting runs.
     private dirty = false;
     private dirtyStart: Gtk.TextMark;
     private dirtyEnd: Gtk.TextMark;
@@ -148,7 +148,7 @@ export class MarkdownView {
         this.view.add_css_class('editor');
         this.tags = createTags(this.buffer);
         const syntaxTags = SYNTAX_TAGS.map(n => this.tags[n]);
-        // Tag indentasi daftar dibuat sesuai kebutuhan; LineTagger perlu tahu untuk membersihkannya.
+        // List indent tags are created on demand; LineTagger needs to know in order to clear them.
         this.listIndent = new ListIndent(this.view, this.buffer, tag => syntaxTags.push(tag));
         registerListIndent(this.tags, this.listIndent);
         this.syntaxTagger = new LineTagger(this.buffer, syntaxTags);
@@ -156,8 +156,8 @@ export class MarkdownView {
         this.dirtyStart = this.buffer.create_mark(null, this.buffer.get_start_iter(), true);
         this.dirtyEnd = this.buffer.create_mark(null, this.buffer.get_start_iter(), false);
 
-        // Tag warna kode dibuat belakangan, jadi prioritasnya otomatis di atas 'codeblock'.
-        // 'dim' (mode fokus) dan 'hidden' harus tetap paling atas.
+        // Code color tags are created later, so their priority is automatically above 'codeblock'.
+        // 'dim' (focus mode) and 'hidden' must stay on top.
         this.code = new CodeHighlighter(this.buffer);
         this.code.onTagAdded = () => {
             const top = this.buffer.get_tag_table().get_size() - 1;
@@ -166,7 +166,7 @@ export class MarkdownView {
         };
 
         this.tableLayer = new TableLayer(this.view, this.tags.tablehide);
-        // Klik sel di grid → kursor ke sel itu di teks mentah (yang membuka tabelnya).
+        // Click on a cell in the grid → cursor to that cell in the raw text (which opens the table).
         this.tableLayer.onActivate = (line, col) => {
             const text = this.lines[line] ?? '';
             const it = iterAtLine(this.buffer, line);
@@ -176,7 +176,7 @@ export class MarkdownView {
         };
 
         this.codeLayer = new CodeLayer(this.view, this.tags.codehide, this.code);
-        // Klik kotak kode → kursor ke baris pertama isinya, sehingga blok terbuka untuk disunting.
+        // Click on a code box → cursor to the first line of its contents, so the block opens for editing.
         this.codeLayer.onActivate = line => {
             this.buffer.place_cursor(iterAtLine(this.buffer, line));
             this.view.grab_focus();
@@ -184,7 +184,7 @@ export class MarkdownView {
 
         this.mermaid = new MermaidLayer(this.view, this.tags.mermaidhide);
         this.mermaid.onZoom = (pixbuf, title) => this.onViewImage(pixbuf, title);
-        // Klik diagram → kursor ke baris kode terakhir, sehingga kodenya terbuka.
+        // Click on a diagram → cursor to the last code line, so its code opens.
         this.mermaid.onActivate = line => {
             const it = iterAtLine(this.buffer, line);
             it.forward_to_line_end();
@@ -195,7 +195,7 @@ export class MarkdownView {
         this.images = new ImageLayer(this.view);
         this.images.onZoom = (line, index) => this.zoomImage(line, index);
         this.images.getBaseDir = () => this.getBaseDir();
-        // Klik gambar → kursor ke barisnya, sehingga sintaks ![alt](url) muncul.
+        // Click on an image → cursor to its line, so the ![alt](url) syntax appears.
         this.images.onActivate = line => {
             const it = iterAtLine(this.buffer, line);
             it.forward_to_line_end();
@@ -203,9 +203,9 @@ export class MarkdownView {
             this.view.grab_focus();
         };
 
-        // EXTERNAL, bukan NEVER: dengan NEVER, lebar minimum TextView (= lebarnya saat
-        // ini + margin) diteruskan ke jendela, sehingga jendela tidak bisa mengecil dan
-        // terus membesar setiap margin dihitung ulang.
+        // EXTERNAL, not NEVER: with NEVER, the TextView's minimum width (= its current width
+        // + margin) is passed up to the window, so the window cannot shrink and
+        // keeps growing every time the margin is recomputed.
         this.widget = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.EXTERNAL, hexpand: true, vexpand: true });
         this.widget.set_child(this.view);
 
@@ -229,24 +229,24 @@ export class MarkdownView {
                 this.completer.queue(false);
             }
         });
-        // Margin dihitung dari lebar area yang terlihat (page_size adjustment horizontal,
-        // diisi TextView saat dialokasikan), bukan dari lebar TextView yang ikut ditentukan
-        // margin itu sendiri. GTK 4 tidak punya sinyal size-allocate.
-        // Transparan sampai margin pertama terpasang: tanpa ini frame pertama editor baru
-        // tergambar dengan margin 0 (teks menempel di kiri) sebelum idle di updateMargins().
+        // The margin is computed from the width of the visible area (page_size of the horizontal adjustment,
+        // filled in by the TextView when allocated), not from the TextView's width, which is itself determined
+        // by that margin. GTK 4 has no size-allocate signal.
+        // Transparent until the first margin is applied: without this the first frame of a new editor
+        // is drawn with margin 0 (text stuck to the left) before the idle in updateMargins().
         const hadj = this.widget.get_hadjustment();
         this.widget.set_opacity(0);
         hadj.connect('changed', () => this.updateMargins(hadj.get_page_size()));
-        // Fase CAPTURE: berjalan sebelum penanganan tombol/klik bawaan GtkSourceView
-        // (indentasi otomatis, Tab, menaruh kursor), sama seperti handler GTK 3 yang mendahuluinya.
+        // CAPTURE phase: runs before GtkSourceView's built-in key/click handling
+        // (auto-indent, Tab, placing the cursor), just like the GTK 3 handler that preceded it.
         onKeyPress(this.view, (keyval, state) => this.onKey(keyval, state), Gtk.PropagationPhase.CAPTURE);
         onClick(this.view, (count, x, y, state) => this.onClick(count, x, y, state))
             .set_propagation_phase(Gtk.PropagationPhase.CAPTURE);
     }
 
-    // Hentikan semua pekerjaan tertunda. GTK 4 tidak lagi memancarkan "destroy" untuk widget
-    // yang masih dipegang JavaScript, jadi pemilik editor (jendela) wajib memanggil ini saat
-    // tab atau jendela ditutup. Melepas widget dari induknya urusan pemiliknya.
+    // Stop all pending work. GTK 4 no longer emits "destroy" for widgets
+    // still held by JavaScript, so the editor's owner (the window) must call this when a
+    // tab or the window is closed. Detaching the widget from its parent is up to its owner.
     destroy(): void {
         if (this.destroyed) return;
         this.destroyed = true;
@@ -267,19 +267,19 @@ export class MarkdownView {
         return this.destroyed;
     }
 
-    // ---------- Isi dan tampilan ----------
+    // ---------- Contents and display ----------
 
     getText(): string {
         const [s, e] = this.buffer.get_bounds();
         return this.buffer.get_text(s, e, true);
     }
 
-    // Ganti seluruh isi tanpa masuk riwayat undo (dipakai saat membuka file).
+    // Replace the whole contents without entering the undo history (used when opening a file).
     setText(text: string): void {
         const buf = this.buffer;
         this.resetHighlight = true;
-        // Dokumen panjang: tag sintaks dan marker tersembunyi dipasang bertahap (queueFill()).
-        // Penguraiannya tetap penuh karena struktur dokumen (baris, heading) dibutuhkan langsung.
+        // Long document: syntax tags and hidden markers are applied incrementally (queueFill()).
+        // Parsing is still complete because the document structure (lines, headings) is needed right away.
         this.syntaxTagger.defer(FILL_FIRST_LINES);
         this.concealer.defer(FILL_FIRST_LINES);
         replaceAllText(this.view, () => {
@@ -291,8 +291,8 @@ export class MarkdownView {
         this.highlight();
     }
 
-    // Ganti isi dokumen dengan suntingan sekecil mungkin (hanya bagian tengah yang berbeda),
-    // dalam satu langkah undo. Dipakai papan kanban untuk menulis perubahannya ke teks.
+    // Replace the document contents with the smallest possible edit (only the differing middle part),
+    // in a single undo step. Used by the kanban board to write its changes to the text.
     replaceText(text: string): void {
         const old = this.getText();
         let head = 0;
@@ -300,9 +300,9 @@ export class MarkdownView {
         while (head < max && old[head] === text[head]) head++;
         let tail = 0;
         while (tail < max - head && old[old.length - 1 - tail] === text[text.length - 1 - tail]) tail++;
-        if (head === old.length && head === text.length) return;   // tidak ada perubahan
+        if (head === old.length && head === text.length) return;   // no change
 
-        // Batas potongan tidak boleh membelah pasangan surrogat (emoji): mundurkan awal, majukan akhir.
+        // The cut boundary must not split a surrogate pair (emoji): move the start back, the end forward.
         const isLow = (c: number) => c >= 0xDC00 && c <= 0xDFFF;
         if (head < old.length && isLow(old.charCodeAt(head))) head--;
         if (tail > 0 && isLow(old.charCodeAt(old.length - tail))) tail--;
@@ -323,7 +323,7 @@ export class MarkdownView {
         this.tableLayer.setPalette(palette);
         this.codeLayer.setPalette();
         this.mermaid.setTheme({ dark: palette.dark, bg: palette.bg, fg: palette.fg, accent: palette.accent, node: palette.codeBg });
-        this.highlight();  // warnai ulang blok kode dengan skema baru
+        this.highlight();  // recolor code blocks with the new scheme
     }
 
     // name: 'source' | 'focus' | 'typewriter'
@@ -350,14 +350,14 @@ export class MarkdownView {
         });
     }
 
-    // Posisi kursor dalam code point, untuk diingat lalu dipulihkan dengan restoreCursor().
+    // Cursor position in code points, to be remembered and then restored with restoreCursor().
     get cursorOffset(): number {
         return this.buffer.get_iter_at_mark(this.buffer.get_insert()).get_offset();
     }
 
-    // Taruh kursor di offset (dipotong ke akhir dokumen jika file memendek) dan gulir ke sana.
-    // Tanpa grab_focus(): editor tab latar tidak boleh merebut fokus. Gulir ditunda ke idle
-    // supaya berlaku setelah editor mendapat ukuran, termasuk tab yang belum pernah tampil.
+    // Put the cursor at offset (clamped to the end of the document if the file got shorter) and scroll there.
+    // Without grab_focus(): a background tab's editor must not steal focus. The scroll is deferred to idle
+    // so it applies after the editor gets a size, including tabs that have never been shown.
     restoreCursor(offset: number): void {
         this.buffer.place_cursor(this.buffer.get_iter_at_offset(Math.max(0, offset)));
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
@@ -367,14 +367,14 @@ export class MarkdownView {
         });
     }
 
-    // Kolom teks di tengah: margin kiri/kanan mengikuti lebar jendela.
+    // Centered text column: the left/right margins follow the window width.
     private updateMargins(width: number): void {
-        if (width <= 0) return;   // belum dialokasikan; tunggu lebar yang sebenarnya
+        if (width <= 0) return;   // not allocated yet; wait for the real width
         const m = Math.max(36, Math.floor((width - TEXT_WIDTH) / 2));
         if (m === this.margin && width === this.width) return;
         this.margin = m;
         this.width = width;
-        // Jangan ubah ukuran selagi GTK mengalokasikan; tunda ke idle.
+        // Do not resize while GTK is allocating; defer to idle.
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             if (this.destroyed) return GLib.SOURCE_REMOVE;
             this.view.set_left_margin(m);
@@ -392,12 +392,12 @@ export class MarkdownView {
 
     // ---------- Siklus penyorotan ----------
     //
-    // Teks berubah    → queueHighlight()    → highlight()  → updateCursor(true)
-    // Kursor berpindah → queueCursorUpdate() → updateCursor()
+    // Text changed    → queueHighlight()    → highlight()  → updateCursor(true)
+    // Cursor moved    → queueCursorUpdate() → updateCursor()
     //
-    // Keduanya ditunda ke PRIORITY_HIGH_IDLE: beberapa perubahan beruntun digabung
-    // jadi satu proses, dan prosesnya selesai sebelum GTK menggambar ulang layar
-    // sehingga tidak berkedip.
+    // Both are deferred to PRIORITY_HIGH_IDLE: several consecutive changes are merged
+    // into one pass, and the pass finishes before GTK redraws the screen
+    // so it does not flicker.
 
     queueHighlight(): void {
         if (this.destroyed || this.highlightQueued) return;
@@ -408,8 +408,8 @@ export class MarkdownView {
         });
     }
 
-    // Catat rentang yang disunting; dipakai highlight() untuk menentukan baris mana yang
-    // tag-nya tidak bisa dipercaya lagi.
+    // Record the edited range; used by highlight() to determine which lines'
+    // tags can no longer be trusted.
     private markDirty(start: Gtk.TextIter, end: Gtk.TextIter): void {
         const buf = this.buffer;
         if (!this.dirty || start.compare(buf.get_iter_at_mark(this.dirtyStart)) < 0) buf.move_mark(this.dirtyStart, start);
@@ -419,7 +419,7 @@ export class MarkdownView {
 
     highlight(): void {
         if (this.destroyed) return;
-        // setText() sorot langsung: batalkan callback yang dibuat sinyal changed.
+        // setText() highlights right away: cancel the callback created by the changed signal.
         if (this.highlightQueued) GLib.source_remove(this.highlightQueued);
         this.highlightQueued = 0;
         const reset = this.resetHighlight;
@@ -436,7 +436,7 @@ export class MarkdownView {
             this.concealer.edited(first, last, count);
         }
         const result = highlight(this.buffer, this.tags, this.syntaxTagger, this.highlightCache, reset ? undefined : edited);
-        // Tanpa suntingan, cache mengembalikan hasil yang sama: tidak ada baris yang diurai ulang.
+        // Without edits, the cache returns the same result: no lines are re-parsed.
         if (result.markers !== this.markers) this.concealer.reparsed(result.markers, ...result.reparsed);
         this.markers = result.markers;
         this.lines = result.lines;
@@ -454,25 +454,25 @@ export class MarkdownView {
         this.updateCursor(true);
         if (this.syntaxTagger.pending) this.queueFill();
         else if (!this.fillQueued) {
-            // Dokumen pendek: tidak ada yang ditunda, jangan tunda baris yang ditambahkan nanti.
+            // Short document: nothing is deferred, do not defer lines added later.
             this.syntaxTagger.defer(Infinity);
             this.concealer.defer(Infinity);
         }
     }
 
-    // true = semua baris sudah diberi tag (tidak ada cicilan penyorotan yang tersisa).
+    // true = all lines have been tagged (no highlighting installments remain).
     get highlightComplete(): boolean {
         return !this.fillQueued && !this.syntaxTagger.pending;
     }
 
-    // Cicil tag baris yang ditunda setText(). Baris di sekitar kursor dan yang sedang terlihat
-    // didahulukan, jadi melompat ke akhir dokumen sebelum cicilan selesai tetap menampilkan
-    // teks terformat. (Sebelum GTK selesai menata, area terlihat belum bisa dipercaya: baris
-    // yang belum ditata setinggi 0. Karena itu posisi kursor ikut dipakai.)
+    // Feed in the tags of lines deferred by setText(). Lines around the cursor and the currently visible ones
+    // come first, so jumping to the end of the document before the feeding finishes still shows
+    // formatted text. (Before GTK finishes laying out, the visible area cannot be trusted: lines
+    // not yet laid out are 0 high. That is why the cursor position is used too.)
     private queueFill(): void {
         if (this.destroyed || this.fillQueued) return;
         this.fillQueued = GLib.idle_add(FILL_PRIORITY, () => {
-            // Teks berubah tetapi belum disorot: offset baris basi. highlight() (HIGH_IDLE) dulu.
+            // The text changed but has not been highlighted: line offsets are stale. highlight() (HIGH_IDLE) first.
             if (this.dirty) return GLib.SOURCE_CONTINUE;
             const start = GLib.get_monotonic_time();
             let done = false;
@@ -489,15 +489,15 @@ export class MarkdownView {
         });
     }
 
-    // Baris yang sedang terlihat dan FILL_CHUNK_LINES baris di sekitar kursor, urut naik.
+    // The currently visible lines and FILL_CHUNK_LINES lines around the cursor, ascending.
     private priorityLines(): number[] {
         const rect = this.view.get_visible_rect();
         const [top] = this.view.get_line_at_y(rect.y);
         const [bottom] = this.view.get_line_at_y(rect.y + rect.height);
         const cursor = this.buffer.get_iter_at_mark(this.buffer.get_insert()).get_line();
         const lines = new Set<number>();
-        // Sebelum validasi GTK, ribuan baris setinggi 0 bisa dianggap terlihat.
-        // Jangan memasangnya sekaligus dan mengalahkan batas waktu cicilan.
+        // Before GTK validation, thousands of 0-high lines can be considered visible.
+        // Do not apply them all at once and defeat the installment time limit.
         if (bottom.get_line() - top.get_line() <= FILL_FIRST_LINES)
             for (let l = top.get_line(); l <= bottom.get_line(); l++) lines.add(l);
         for (let l = cursor - FILL_CHUNK_LINES; l <= cursor + FILL_CHUNK_LINES; l++) lines.add(l);
@@ -518,8 +518,8 @@ export class MarkdownView {
     updateCursor(force = false): void {
         const buf = this.buffer;
         const ins = buf.get_iter_at_mark(buf.get_insert());
-        // Teks sudah berubah tetapi belum disorot: markers dan nomor baris masih milik teks
-        // lama. highlight() yang sudah antre akan memanggil updateCursor(true).
+        // The text has changed but has not been highlighted: markers and line numbers still belong to the
+        // old text. The highlight() already queued will call updateCursor(true).
         if (this.dirty) {
             this.onCursorMoved(ins.get_line(), ins.get_line_offset());
             return;
@@ -528,7 +528,7 @@ export class MarkdownView {
         const l0 = Math.min(ins.get_line(), sel.get_line());
         const l1 = Math.max(ins.get_line(), sel.get_line());
 
-        // Dekorasi hanya perlu dihitung ulang jika baris aktif berubah.
+        // Decorations only need to be recomputed if the active line changes.
         const key = `${l0}:${l1}`;
         if (force || key !== this.cursorKey) {
             this.cursorKey = key;
@@ -545,14 +545,14 @@ export class MarkdownView {
 
     // ---------- Input ----------
 
-    // Dipanggil untuk setiap tombol. true = sudah ditangani, GTK tidak memprosesnya lagi.
+    // Called for every key. true = handled, GTK does not process it any further.
     onKey(keyval: number, state: number): boolean {
         if (state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK)) return false;
         if (this.completer.onKey(keyval)) return true;
         if (this.buffer.get_has_selection()) return false;
         const shift = (state & Gdk.ModifierType.SHIFT_MASK) !== 0;
 
-        // Di dalam tabel: Tab/Shift+Tab pindah sel, Enter pindah baris.
+        // Inside a table: Tab/Shift+Tab move between cells, Enter moves between rows.
         const line = this.buffer.get_iter_at_mark(this.buffer.get_insert()).get_line();
         if (this.tables.some(t => line >= t.start && line <= t.end)) {
             if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_ISO_Left_Tab)
@@ -572,8 +572,8 @@ export class MarkdownView {
         return false;
     }
 
-    // Tombol kiri ditekan di (x, y), koordinat widget TextView. count = klik ke berapa
-    // (2 = klik ganda, yang dibiarkan untuk GTK memilih kata).
+    // Left button pressed at (x, y), TextView widget coordinates. count = which click it is
+    // (2 = double click, which is left for GTK to select a word).
     onClick(count: number, x: number, y: number, state: number): boolean {
         if (count !== 1) return false;
         const [bx, by] = this.view.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, Math.round(x), Math.round(y));
@@ -597,7 +597,7 @@ export class MarkdownView {
         return false;
     }
 
-    // Perbesar gambar di baris `line` (default: baris kursor).
+    // Zoom the image on line `line` (default: the cursor line).
     zoomImage(line?: number, index = 0): void {
         const target = line ?? this.buffer.get_iter_at_mark(this.buffer.get_insert()).get_line();
         const found = this.images.imageAt(target, index);
@@ -605,7 +605,7 @@ export class MarkdownView {
         else this.onMessage(found.reason);
     }
 
-    // Perintah tabel dari menu/shortcut. Pesan kegagalan ditampilkan lewat onMessage.
+    // Table commands from the menu/shortcut. Failure messages are shown through onMessage.
     tableCommand(command: TableCommand): void {
         const result = runTableCommand(this.buffer, command);
         if (!result.ok) this.onMessage(result.reason);
@@ -617,7 +617,7 @@ export class MarkdownView {
         if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) {
             const bare = url.replace(/[#?].*$/, '');
             const path = GLib.path_is_absolute(bare) ? bare : GLib.build_filenamev([this.getBaseDir(), decodeURI(bare)]);
-            // Tautan ke catatan Markdown lain dibuka di Nyerat sendiri, seperti [[wikilink]].
+            // Links to other Markdown notes are opened in Nyerat itself, like [[wikilink]].
             if (/\.(md|markdown|mdown|mkd)$/i.test(path) && this.onOpenDocument(path)) return;
             uri = Gio.File.new_for_path(path).get_uri();
         }
@@ -626,7 +626,7 @@ export class MarkdownView {
             try {
                 launcher!.launch_finish(result);
             } catch {
-                if (!this.destroyed) this.onMessage(fmt(_('Tidak bisa membuka {url}'), { url }));
+                if (!this.destroyed) this.onMessage(fmt(_('Cannot open {url}'), { url }));
             }
         });
     }

@@ -1,6 +1,6 @@
-// Tipe untuk lingkungan GJS: global (print, logError, TextEncoder, ...) dan
-// modul GObject Introspection yang di-import dengan "gi://Nama?version=x".
-// Disediakan oleh paket @girs (ts-for-gir).
+// Types for the GJS environment: globals (print, logError, TextEncoder, ...) and
+// GObject Introspection modules imported with "gi://Name?version=x".
+// Provided by the @girs packages (ts-for-gir).
 
 import '@girs/gjs';
 import '@girs/gjs/dom';

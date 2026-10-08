@@ -1,9 +1,9 @@
-// Terjemahan antarmuka (gettext). Bahasa sumber adalah Indonesia: teks di kode dan berkas .ui
-// tetap ditulis dalam bahasa Indonesia dan dibungkus _(), lalu po/*.po menerjemahkannya.
+// Interface translations (gettext). The source language is English: text in code and .ui files
+// is written in English and wrapped in _(), then po/*.po translates it.
 //
-// Domain diikat saat modul ini dievaluasi, sebelum modul lain yang memanggil _() di tingkat atas
-// (mis. label palet perintah), karena modul ES dievaluasi berurutan dari impor terdalam. Berkas
-// .ui (Gtk.Template) memakai domain bawaan yang diatur textdomain() di sini.
+// The domain is bound when this module is evaluated, before other modules that call _() at the top
+// level (e.g. command palette labels), because ES modules are evaluated in order from the innermost
+// import. .ui files (Gtk.Template) use the default domain set by textdomain() here.
 
 import gettext from 'gettext';
 import Gio from 'gi://Gio';
@@ -11,11 +11,11 @@ import GLib from 'gi://GLib';
 
 export const GETTEXT_DOMAIN = 'nyerat';
 
-// Folder locale: terpasang = <prefix>/share/locale (bundel di <prefix>/share/nyerat), dari dist/ =
-// <repo>/locale yang biasanya tidak ada sehingga teks sumber tampil apa adanya.
+// Locale folder: installed = <prefix>/share/locale (bundle in <prefix>/share/nyerat), from dist/ =
+// <repo>/locale which usually does not exist, so the source text is shown as is.
 function localeDir(): string {
     let dir = Gio.File.new_for_uri(import.meta.url).get_parent();
-    if (dir && !dir.get_child('nyerat.js').query_exists(null)) dir = dir.get_parent();   // dari dist/chunks/
+    if (dir && !dir.get_child('nyerat.js').query_exists(null)) dir = dir.get_parent();   // from dist/chunks/
     return GLib.build_filenamev([dir?.get_parent()?.get_path() ?? '.', 'locale']);
 }
 
@@ -24,10 +24,10 @@ gettext.textdomain(GETTEXT_DOMAIN);
 
 export const _ = (text: string): string => gettext.dgettext(GETTEXT_DOMAIN, text);
 export const ngettext = (one: string, many: string, n: number): string => gettext.dngettext(GETTEXT_DOMAIN, one, many, n);
-// Teks yang sama dengan arti berbeda (mis. "Buka" tombol vs judul) dibedakan dengan konteks.
+// The same text with different meanings (e.g. "Open" button vs title) is distinguished with a context.
 export const pgettext = (context: string, text: string): string => gettext.dpgettext(GETTEXT_DOMAIN, context, text);
 
-// Isi {nama} dalam teks terjemahan. Placeholder bernama (bukan template literal) supaya xgettext bisa
-// mengambil teksnya dan penerjemah bisa mengubah urutan kata.
+// Fill {name} in translated text. Named placeholders (not template literals) so xgettext can
+// extract the text and translators can reorder words.
 export const fmt = (text: string, values: Record<string, string | number>): string =>
     text.replace(/\{(\w+)\}/g, (match, key: string) => key in values ? String(values[key]) : match);

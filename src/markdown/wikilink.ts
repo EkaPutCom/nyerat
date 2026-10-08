@@ -1,25 +1,25 @@
-// Tautan antardokumen gaya Obsidian: [[Catatan]], [[Catatan|teks lain]], [[folder/Catatan#Bagian]].
-// Murni, tanpa GTK: dipakai parser inline (penyorotan), ekspor HTML, klik tautan, dan saran nama saat mengetik [[.
+// Obsidian-style links between documents: [[Note]], [[Note|other text]], [[folder/Note#Section]].
+// Pure, no GTK: used by the inline parser (highlighting), HTML export, link clicks, and name suggestions while typing [[.
 //
-// Target dicocokkan dengan nama berkas Markdown di folder proyek tanpa ekstensi dan tanpa membedakan huruf besar,
-// sehingga [[catatan harian]] menemukan "Jurnal/Catatan Harian.md". Target yang memuat '/' dicocokkan dengan
-// akhir path-nya. Path selalu relatif terhadap folder proyek dan memakai '/'.
+// The target is matched against Markdown file names in the project folder without extension and case-insensitively,
+// so [[daily note]] finds "Journal/Daily Note.md". A target containing '/' is matched against
+// the end of its path. Paths are always relative to the project folder and use '/'.
 
 import { ESCAPE_OR_CODE, RE } from './syntax.js';
 
 export interface WikiLink {
-    target: string;    // nama atau path catatan, tanpa #bagian
-    heading: string;   // teks setelah '#', '' bila tidak ada
-    alias: string;     // teks setelah '|', '' bila tidak ada
+    target: string;    // note name or path, without #section
+    heading: string;   // text after '#', '' if absent
+    alias: string;     // text after '|', '' if absent
 }
 
-// Pola [[...]] di satu baris. Isinya tidak boleh memuat '[', ']', atau baris baru; '\0' adalah karakter
-// yang sudah di-mask parser inline (kode inline).
+// Pattern [[...]] on one line. The contents must not contain '[', ']', or a newline; '\0' is a character
+// already masked by the inline parser (inline code).
 export const WIKILINK = (): RegExp => /\[\[([^[\]\0\n|]+)(?:\|([^[\]\0\n]*))?\]\]/g;
 
 const MARKDOWN_EXT = /\.(md|markdown|mdown|mkd)$/i;
 
-// Isi di antara [[ dan ]] → bagian-bagiannya.
+// Contents between [[ and ]] → its parts.
 export function parseWikiLink(inner: string): WikiLink {
     const bar = inner.indexOf('|');
     const ref = bar < 0 ? inner : inner.slice(0, bar);
@@ -32,7 +32,7 @@ export function parseWikiLink(inner: string): WikiLink {
     };
 }
 
-// Teks yang terlihat untuk tautan: alias bila ada, kalau tidak target beserta bagiannya.
+// Visible text for a link: the alias if present, otherwise the target together with its section.
 export const wikiLabel = (link: WikiLink): string =>
     link.alias || [link.target, link.heading].filter(Boolean).join(' › ');
 
@@ -41,9 +41,9 @@ const baseName = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 const dirName = (path: string): string => path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
 const fold = (s: string): string => s.normalize('NFC').toLowerCase();
 
-// Berkas proyek (path relatif) yang dituju target, atau null. `from` = path relatif dokumen yang memuat tautan
-// (null untuk dokumen di luar proyek); bila ada beberapa berkas bernama sama, yang paling dekat dengannya menang,
-// lalu yang path-nya paling pendek, seperti Obsidian.
+// The project file (relative path) the target points to, or null. `from` = relative path of the document containing the link
+// (null for a document outside the project); if several files share the name, the one closest to it wins,
+// then the one with the shortest path, like Obsidian.
 export function resolveWikiLink(target: string, files: string[], from: string | null): string | null {
     const want = fold(stem(target.trim().replace(/^\.?\//, '')));
     if (!want) return null;
@@ -64,8 +64,8 @@ export function resolveWikiLink(target: string, files: string[], from: string | 
     return matches.sort((a, b) => score(a) - score(b) || a.split('/').length - b.split('/').length || a.localeCompare(b))[0];
 }
 
-// Path relatif untuk catatan baru dari target yang belum ada, atau null bila namanya tidak aman.
-// Target tanpa folder dibuat di samping dokumen yang menautkannya; target dengan folder relatif terhadap proyek.
+// Relative path for a new note from a target that does not exist yet, or null if the name is unsafe.
+// A target without a folder is created next to the document that links to it; a target with a folder is relative to the project.
 export function newNotePath(target: string, from: string | null): string | null {
     const clean = target.trim().replace(/^\.?\//, '');
     const parts = clean.split('/');
@@ -77,28 +77,28 @@ export function newNotePath(target: string, from: string | null): string | null 
     return dir ? `${dir}/${name}` : name;
 }
 
-// Teks yang paling ringkas untuk menautkan berkas `file`: nama tanpa ekstensi bila unik di proyek,
-// kalau tidak path tanpa ekstensi.
+// The most compact text for linking file `file`: the name without extension if unique in the project,
+// otherwise the path without extension.
 export function wikiTargetFor(file: string, files: string[]): string {
     const name = fold(stem(baseName(file)));
     const twins = files.filter(f => MARKDOWN_EXT.test(f) && fold(stem(baseName(f))) === name).length;
     return twins > 1 ? stem(file) : stem(baseName(file));
 }
 
-// Bagian yang sedang diketik setelah [[ yang belum ditutup di teks sebelum kursor, atau null.
-// Saran berhenti setelah '|' (alias) dan '#' (bagian) karena keduanya bukan nama berkas.
+// The part being typed after an unclosed [[ in the text before the cursor, or null.
+// Suggestions stop after '|' (alias) and '#' (section) because neither is a file name.
 export function wikiQuery(beforeCursor: string): string | null {
     const open = beforeCursor.lastIndexOf('[[');
     if (open < 0) return null;
     const typed = beforeCursor.slice(open + 2);
     if (/[[\]|#\n]/.test(typed)) return null;
-    // `kode` sebelum [[ yang belum ditutup: di dalam kode inline tidak ada tautan.
+    // `code` before an unclosed [[: inside inline code there are no links.
     if ((beforeCursor.slice(0, open).match(/`/g)?.length ?? 0) % 2) return null;
     return typed;
 }
 
-// Berkas Markdown yang cocok dengan teks yang diketik, paling relevan dulu: awalan nama, awalan kata,
-// lalu potongan di mana saja di path. Teks kosong = semua berkas menurut abjad.
+// Markdown files that match the typed text, most relevant first: name prefix, word prefix,
+// then a fragment anywhere in the path. Empty text = all files alphabetically.
 export function suggestNotes(query: string, files: string[], limit = 8): string[] {
     const q = fold(query.trim());
     const ranked: [number, string][] = [];
@@ -118,7 +118,7 @@ export function suggestNotes(query: string, files: string[], limit = 8): string[
     return ranked.slice(0, limit).map(r => r[1]);
 }
 
-// Semua [[tautan]] di teks (di luar kode inline), tanpa duplikat menurut target dan bagian, urut kemunculan.
+// All [[links]] in the text (outside inline code), without duplicates by target and section, in order of appearance.
 export function wikiLinksIn(text: string): WikiLink[] {
     const seen = new Set<string>();
     const out: WikiLink[] = [];
@@ -133,8 +133,8 @@ export function wikiLinksIn(text: string): WikiLink[] {
     return out;
 }
 
-// Bagian dokumen di bawah heading `heading` (tanpa membedakan huruf besar) sampai heading berikutnya yang
-// setingkat atau lebih tinggi, termasuk heading-nya sendiri. null bila heading tidak ada. Blok kode dilewati.
+// The part of the document under heading `heading` (case-insensitive) up to the next heading of the
+// same or higher level, including the heading itself. null if the heading does not exist. Code blocks are skipped.
 export function noteSection(text: string, heading: string): string | null {
     const want = fold(heading.trim());
     const lines = text.split('\n');

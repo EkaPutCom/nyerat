@@ -1,21 +1,21 @@
-// Slot widget yang ditempel di atas teks (gambar, tabel, diagram) dengan add_overlay().
+// Widget slots attached above the text (images, tables, diagrams) with add_overlay().
 //
-// GTK 4.14 tidak bisa melepas anak overlay GtkTextView: gtk_text_view_remove() hanya
-// mengenal anak di tepi dan anak yang berjangkar, sehingga memanggilnya untuk overlay
-// berakhir dengan "GtkBox is not a child of GtkSourceView" dan widgetnya tetap terpasang.
-// Karena itu tiap lapisan meminjam slot (Box kosong yang sudah menjadi overlay) dan
-// mengembalikannya saat bloknya dibuang: isinya dikosongkan, slotnya disembunyikan, lalu
-// dipakai lagi oleh blok berikutnya. Jumlah slot = jumlah blok terbanyak yang pernah tampil.
+// GTK 4.14 cannot remove overlay children of a GtkTextView: gtk_text_view_remove() only
+// knows edge children and anchored children, so calling it for an overlay
+// ends with "GtkBox is not a child of GtkSourceView" and the widget stays attached.
+// That is why each layer borrows a slot (an empty Box that is already an overlay) and
+// returns it when its block is discarded: its contents are emptied, the slot is hidden, and then
+// reused by the next block. Number of slots = the largest number of blocks ever shown.
 //
-// Penerima klik dipasang di isi slot, bukan di slotnya, supaya tidak ikut terbawa ke blok lain.
+// Click receivers are attached to the slot contents, not to the slot itself, so they do not carry over to another block.
 //
-// Posisi overlay memakai koordinat buffer; GtkTextViewChild menguranginya dengan offset gulir
-// saat mengalokasikan. Tetapi di GTK 4.14 offset itu hanya diperbarui di size_allocate milik
-// TextView (gtk_text_view_child_set_offset), dan menggulir tidak mengalokasikan ulang TextView:
-// overlay tetap di letak lama (gambar "hilang", tabel melayang) sampai ada hal lain yang memicu
-// alokasi. Karena itu setiap adjustment bergulir slot meminta alokasi ulang TextView (supaya
-// set_offset() terpanggil) sekaligus wadah overlay-nya (tanpa itu GTK melewati alokasi wadah
-// yang ukurannya tidak berubah, dan overlay tidak dipindahkan).
+// Overlay positions use buffer coordinates; GtkTextViewChild subtracts the scroll offset
+// when allocating. But in GTK 4.14 that offset is only updated in the TextView's own size_allocate
+// (gtk_text_view_child_set_offset), and scrolling does not reallocate the TextView:
+// overlays stay at their old position (images "vanish", tables float) until something else triggers an
+// allocation. That is why every scrolling adjustment makes the slot request a reallocation of the TextView (so that
+// set_offset() is called) as well as of the overlay container (without it GTK skips allocating a container
+// whose size did not change, and the overlays are not moved).
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
@@ -23,7 +23,7 @@ import { removeChildren } from '../gtkutil.js';
 
 export class OverlaySlots {
     private readonly free: Gtk.Box[] = [];
-    private container: Gtk.Widget | null = null;   // GtkTextViewChild, induk semua overlay
+    private container: Gtk.Widget | null = null;   // GtkTextViewChild, the parent of all overlays
     private adjustments: Gtk.Adjustment[] = [];
     private queued = 0;
     private destroyed = false;
@@ -38,9 +38,9 @@ export class OverlaySlots {
         const adjs = [this.view.get_vadjustment(), this.view.get_hadjustment()].filter((a): a is Gtk.Adjustment => !!a);
         for (const adj of adjs) {
             if (this.adjustments.includes(adj)) continue;
-            // Langsung, supaya widget pindah di frame yang sama dengan teksnya; lalu sekali lagi
-            // di idle: gulir dari scroll_to_iter() diterapkan TextView di tengah alokasinya, dan
-            // permintaan alokasi saat itu bisa terlewat untuk frame tersebut.
+            // Immediately, so the widget moves in the same frame as its text; then once more
+            // in idle: the scroll from scroll_to_iter() is applied by the TextView in the middle of its allocation, and
+            // the allocation request made then can be missed for that frame.
             adj.connect('value-changed', () => {
                 this.reallocate();
                 this.queueReallocate();
@@ -58,15 +58,15 @@ export class OverlaySlots {
         });
     }
 
-    // Alokasikan ulang TextView dan wadah overlay supaya overlay mengikuti offset gulir terbaru.
-    // Tanpa overlay tidak ada yang perlu dipindahkan.
+    // Reallocate the TextView and the overlay container so overlays follow the latest scroll offset.
+    // Without overlays there is nothing to move.
     private reallocate(): void {
         if (!this.container) return;
         this.view.queue_allocate();
         this.container.queue_allocate();
     }
 
-    // Editor ditutup: hentikan alokasi ulang yang tertunda.
+    // Editor closed: stop the pending reallocation.
     destroy(): void {
         this.destroyed = true;
         if (this.queued) GLib.source_remove(this.queued);
@@ -79,9 +79,9 @@ export class OverlaySlots {
         slot.set_opacity(1);
     }
 
-    // Slot kosong yang terlihat, belum diposisikan (pemanggil memakai place()).
-    // Transparan sampai place() pertama: overlay baru berada di (0, 0) dan, tanpa ini,
-    // gambar/tabel sempat berkedip di pojok kiri atas sebelum dipindahkan ke barisnya.
+    // An empty visible slot, not yet positioned (the caller uses place()).
+    // Transparent until the first place(): a new overlay sits at (0, 0) and, without this,
+    // the image/table would flash in the top-left corner before being moved to its line.
     acquire(): Gtk.Box {
         const slot = this.free.pop();
         if (slot) {

@@ -1,35 +1,35 @@
-// Inbox: tempat menangkap ide, tautan, dan catatan cepat dalam file Markdown. Frontmatter
-// menandai dokumen sebagai inbox:
+// Inbox: a place to capture ideas, links, and quick notes in a Markdown file. Frontmatter
+// marks the document as an inbox:
 //
 //   ---
 //   inbox: true
 //   ---
 //
-//   # Inbox                          ← judul dan deskripsi (apa pun sebelum item pertama) dipertahankan
+//   # Inbox                          ← title and description (anything before the first item) are kept
 //
-//   - Baca artikel GNOME HIG #read ➕ 2026-10-07 14:32
-//     catatan item (diindentasi)     ← baris yang diindentasi = catatan item
-//   - [x] Ide nama workbench #nyerat ➕ 2026-10-07 09:10
+//   - Read the GNOME HIG article #read ➕ 2026-10-07 14:32
+//     item note (indented)           ← an indented line = item note
+//   - [x] Workbench name idea #nyerat ➕ 2026-10-07 09:10
 //
-// Satu item = satu butir daftar; "➕ tanggal jam" adalah waktu tangkap (sama dengan tanda
-// "dibuat" di plugin Tasks Obsidian). Item tanpa waktu tetap sah. Murni TypeScript tanpa
-// GTK; semua operasi mengembalikan inbox baru.
+// One item = one list bullet; "➕ date time" is the capture time (same as the "created" marker in
+// the Obsidian Tasks plugin). Items without a time are still valid. Pure TypeScript without
+// GTK; all operations return a new inbox.
 
 import { cardMeta, parseColumn, trimBlankEnds, type Card } from './kanban.js';
 
 export type InboxItem = Card;
 
 export interface Inbox {
-    head: string[];        // frontmatter, judul, dan deskripsi: semua baris sebelum item pertama
-    items: InboxItem[];    // dari yang paling atas; item baru disisipkan di atas
-    outro: string[];       // baris biasa setelah item terakhir, dipertahankan apa adanya
+    head: string[];        // frontmatter, title, and description: all lines before the first item
+    items: InboxItem[];    // from the top; new items are inserted at the top
+    outro: string[];       // plain lines after the last item, kept as is
 }
 
 export const DEFAULT_HEAD = ['---', 'inbox: true', '---'];
 
 const MARKER = /^inbox:\s*["']?(?:true|yes)["']?\s*$/i;
 const ITEM = /^[-*+]\s/;
-// Waktu tangkap; jam boleh tidak ada.
+// Capture time; the time of day may be absent.
 const CAPTURED = /\s*➕\s*(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}:\d{2}))?/;
 
 export function isInbox(text: string): boolean {
@@ -44,7 +44,7 @@ export function isInbox(text: string): boolean {
 
 export function parseInbox(text: string): Inbox {
     const lines = text.replace(/\r\n?/g, '\n').split('\n');
-    // Butir daftar di dalam frontmatter (mis. "tags:\n- a") bukan item.
+    // List bullets inside the frontmatter (e.g. "tags:\n- a") are not items.
     let from = 0;
     if (lines[0]?.trim() === '---') {
         const close = lines.findIndex((l, i) => i > 0 && l.trim() === '---');
@@ -71,15 +71,15 @@ export function newInbox(title = 'Inbox'): Inbox {
     return { head: [...DEFAULT_HEAD, '', `# ${title}`], items: [], outro: [] };
 }
 
-// ---------- Operasi ----------
+// ---------- Operations ----------
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 
-// "2026-10-07 14:32" untuk waktu lokal `date`.
+// "2026-10-07 14:32" for the local time of `date`.
 export const stamp = (date: Date): string =>
     `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 
-// Item baru di paling atas dengan waktu tangkap `now`. Teks sudah memuat waktu tangkap → dipakai apa adanya.
+// New item at the very top with capture time `now`. Text that already contains a capture time → used as is.
 export function captureItem(inbox: Inbox, text: string, now: Date, notes: string[] = []): Inbox {
     const body = text.trim();
     if (!body) return inbox;
@@ -94,12 +94,12 @@ export function updateItem(inbox: Inbox, index: number, patch: Partial<InboxItem
 export const deleteItem = (inbox: Inbox, index: number): Inbox =>
     ({ ...inbox, items: inbox.items.filter((_, i) => i !== index) });
 
-// ---------- Isi item ----------
+// ---------- Item content ----------
 
 export interface ItemMeta {
-    title: string;            // teks tanpa #tag dan waktu tangkap
+    title: string;            // text without #tags and capture time
     tags: string[];
-    captured: Date | null;    // waktu lokal; item tanpa jam dianggap tengah malam
+    captured: Date | null;    // local time; an item without a time of day is treated as midnight
 }
 
 export function itemMeta(text: string): ItemMeta {
@@ -114,7 +114,7 @@ export function itemMeta(text: string): ItemMeta {
     return { title: meta.title, tags: meta.tags, captured };
 }
 
-// Susun teks item dari judul dan tag hasil sunting; waktu tangkap dari `oldText` dipertahankan.
+// Compose the item text from an edited title and tags; the capture time from `oldText` is kept.
 export function composeItem(title: string, tags: string[], oldText = ''): string {
     const tagText = tags.map(t => t.replace(/^#+/, '')).filter(Boolean).map(t => `#${t}`);
     const old = CAPTURED.exec(oldText);
@@ -125,7 +125,7 @@ export function composeItem(title: string, tags: string[], oldText = ''): string
 export type AgeUnit = 'now' | 'minutes' | 'hours' | 'days' | 'date';
 export interface Age { unit: AgeUnit; n: number }
 
-// Usia item untuk label "10 menit lalu"; lebih dari seminggu jatuh ke tanggal.
+// Item age for the "10 minutes ago" label; more than a week falls back to the date.
 export function ageOf(captured: Date, now: Date): Age {
     const minutes = Math.floor((now.getTime() - captured.getTime()) / 60000);
     if (minutes < 1) return { unit: 'now', n: 0 };

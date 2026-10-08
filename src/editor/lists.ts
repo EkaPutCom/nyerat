@@ -1,10 +1,10 @@
-// Perilaku Enter dan Tab di dalam daftar dan kutipan.
+// Enter and Tab behavior inside lists and quotes.
 
 import type Gtk from 'gi://Gtk?version=4.0';
 import { RE } from '../markdown/syntax.js';
 import { lineText } from './editing.js';
 
-// Apakah baris lineNo berada di dalam blok kode ```?
+// Is line lineNo inside a ``` code block?
 export function isInCodeBlock(lines: string[], lineNo: number): boolean {
     let open: string | null = null;
     for (let i = 0; i < lineNo && i < lines.length; i++) {
@@ -16,12 +16,12 @@ export function isInCodeBlock(lines: string[], lineNo: number): boolean {
     return open !== null;
 }
 
-// Enter di baris daftar/kutipan. Mengembalikan true jika ditangani:
-//   "- satu"   → baris baru "- "
-//   "9. a"     → baris baru "10. "
-//   "- [x] a"  → baris baru "- [ ] "
-//   "> a"      → baris baru "> "
-//   item kosong ("- " atau "> ") → awalannya dihapus, daftar/kutipan berakhir
+// Enter on a list/quote line. Returns true if handled:
+//   "- one"   → new line "- "
+//   "9. a"     → new line "10. "
+//   "- [x] a"  → new line "- [ ] "
+//   "> a"      → new line "> "
+//   empty item ("- " or "> ") → its prefix is removed, the list/quote ends
 export function continueBlock(buffer: Gtk.TextBuffer): boolean {
     const [line, ls, le] = lineText(buffer, buffer.get_iter_at_mark(buffer.get_insert()));
     const qp = /^(?:[ \t]*>[ \t]?)*/.exec(line)![0];
@@ -56,7 +56,7 @@ export function continueBlock(buffer: Gtk.TextBuffer): boolean {
     return true;
 }
 
-// Tab / Shift+Tab di baris daftar: tambah atau kurangi indentasi 4 spasi.
+// Tab / Shift+Tab on a list line: increase or decrease the indentation by 4 spaces.
 export function indentListItem(buffer: Gtk.TextBuffer, outdent: boolean): boolean {
     const [line, ls] = lineText(buffer, buffer.get_iter_at_mark(buffer.get_insert()));
     if (!RE.list.test(line.replace(/^(?:[ \t]*>[ \t]?)+/, ''))) return false;

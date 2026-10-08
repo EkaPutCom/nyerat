@@ -1,9 +1,9 @@
-// Menyunting tabel di teks mentahnya: Tab/Enter berpindah sel dan baris, serta
-// perintah tambah/hapus baris dan kolom, perataan, dan merapikan kolom.
+// Editing tables in their raw text: Tab/Enter move between cells and rows, plus
+// commands to add/delete rows and columns, align, and tidy up columns.
 //
-// Semua fungsi di sini membaca ulang dokumen dari buffer (bukan dari hasil
-// penyorotan terakhir), jadi selalu sesuai dengan teks yang sedang tampil.
-// Logika tabelnya sendiri ada di markdown/table.ts.
+// All functions here re-read the document from the buffer (not from the last
+// highlighting result), so they always match the text being displayed.
+// The table logic itself is in markdown/table.ts.
 
 import type Gtk from 'gi://Gtk?version=4.0';
 import { cpLength, cpToU16 } from './offsets.js';
@@ -20,8 +20,8 @@ export type TableCommand =
 
 export type CommandResult = { ok: true } | { ok: false; reason: string };
 
-// Posisi kursor di dalam tabel. Baris dihitung "logis": 0 = judul (baris pemisah
-// dianggap bagian dari judul), 1 = isi pertama, dst.
+// Cursor position inside a table. Rows are counted "logically": 0 = header (the separator row
+// is considered part of the header), 1 = first body row, etc.
 interface Where {
     table: TableRange;
     lines: string[];
@@ -53,7 +53,7 @@ function whereIsCursor(buffer: Gtk.TextBuffer): Where | null {
     };
 }
 
-// Kursor ke awal isi sel (row, col). Baris yang selnya kurang: ke akhir baris.
+// Cursor to the start of the contents of cell (row, col). A row with fewer cells: to the end of the row.
 function placeCursor(buffer: Gtk.TextBuffer, line: number, col: number): void {
     const [start, end] = buffer.get_bounds();
     const text = buffer.get_text(start, end, true).split('\n')[line] ?? '';
@@ -62,7 +62,7 @@ function placeCursor(buffer: Gtk.TextBuffer, line: number, col: number): void {
     buffer.place_cursor(iter);
 }
 
-// Ganti baris start..end dengan newLines dalam satu langkah undo.
+// Replace lines start..end with newLines in a single undo step.
 function replaceLines(buffer: Gtk.TextBuffer, start: number, end: number, newLines: string[]): void {
     const from = iterAtLine(buffer, start);
     const to = iterAtLine(buffer, end);
@@ -73,7 +73,7 @@ function replaceLines(buffer: Gtk.TextBuffer, start: number, end: number, newLin
     buffer.end_user_action();
 }
 
-// Tambah satu baris kosong di bawah baris terakhir tabel.
+// Add one blank row below the table's last row.
 function appendRow(buffer: Gtk.TextBuffer, table: TableRange, columns: number): void {
     const end = iterAtLine(buffer, table.end);
     if (!end.ends_line()) end.forward_to_line_end();
@@ -82,10 +82,10 @@ function appendRow(buffer: Gtk.TextBuffer, table: TableRange, columns: number): 
     buffer.end_user_action();
 }
 
-// ---------- Tab dan Enter ----------
+// ---------- Tab and Enter ----------
 
-// Tab / Shift+Tab: pindah ke sel berikutnya / sebelumnya. Di sel terakhir, Tab
-// menambah baris baru. true jika kursor ada di tabel (tombolnya sudah ditangani).
+// Tab / Shift+Tab: move to the next / previous cell. In the last cell, Tab
+// adds a new row. true if the cursor is in a table (the key was handled).
 export function tabInTable(buffer: Gtk.TextBuffer, backward: boolean): boolean {
     const at = whereIsCursor(buffer);
     if (!at) return false;
@@ -101,16 +101,16 @@ export function tabInTable(buffer: Gtk.TextBuffer, backward: boolean): boolean {
         toRow = row - 1;
         toCol = columns - 1;
     } else {
-        return true;  // sel pertama: tidak ada yang sebelumnya
+        return true;  // first cell: there is nothing before it
     }
     if (toRow > lastRow(table)) appendRow(buffer, table, columns);
     placeCursor(buffer, lineOfRow(table, toRow), toCol);
     return true;
 }
 
-// Enter: pindah ke sel yang sama di baris berikutnya (baris baru jika sudah di baris
-// terakhir). Di baris isi terakhir yang kosong, Enter menghapus baris itu dan keluar
-// dari tabel, seperti Enter di item daftar yang kosong.
+// Enter: move to the same cell in the next row (a new row if already on the last
+// row). On an empty last body row, Enter deletes that row and leaves
+// the table, like Enter on an empty list item.
 export function enterInTable(buffer: Gtk.TextBuffer): boolean {
     const at = whereIsCursor(buffer);
     if (!at) return false;
@@ -118,8 +118,8 @@ export function enterInTable(buffer: Gtk.TextBuffer): boolean {
 
     if (row > 0 && row === lastRow(table) && splitRow(lines[table.end]).every(c => c.text === '')) {
         if ((lines[table.end + 1] ?? null) !== null && lines[table.end + 1].trim() === '') {
-            // Sudah ada baris kosong di bawah tabel: hapus saja seluruh baris kosongnya
-            // (beserta pemisah baris), dan kursor pindah ke baris kosong yang ada.
+            // There is already a blank line below the table: just delete the whole blank line
+            // (together with the row separator), and the cursor moves to the existing blank line.
             const from = iterAtLine(buffer, table.end - 1);
             from.forward_to_line_end();
             const to = iterAtLine(buffer, table.end);
@@ -128,7 +128,7 @@ export function enterInTable(buffer: Gtk.TextBuffer): boolean {
             buffer.delete(from, to);
             buffer.end_user_action();
         } else {
-            replaceLines(buffer, table.end, table.end, ['']);  // sisakan baris kosong sebagai pemisah
+            replaceLines(buffer, table.end, table.end, ['']);  // leave a blank line as a separator
         }
         placeCursor(buffer, table.end, 0);
         return true;
@@ -142,15 +142,15 @@ export function enterInTable(buffer: Gtk.TextBuffer): boolean {
 
 const ALIGN_OF: Partial<Record<TableCommand, Align>> = { 'align-left': 'left', 'align-center': 'center', 'align-right': 'right' };
 
-// Menjalankan perintah pada tabel di posisi kursor. Hasilnya selalu tabel yang sudah
-// dirapikan (lebar kolom disamakan), karena menambah/menghapus kolom mengubah lebarnya.
+// Runs a command on the table at the cursor position. The result is always a table that has been
+// tidied (column widths equalized), because adding/deleting columns changes their widths.
 export function runTableCommand(buffer: Gtk.TextBuffer, command: TableCommand): CommandResult {
     const at = whereIsCursor(buffer);
-    if (!at) return { ok: false, reason: _('Kursor harus berada di dalam tabel') };
+    if (!at) return { ok: false, reason: _('The cursor must be inside a table') };
     const { table, lines, row, col, columns } = at;
     let model = parseTable(lines.slice(table.start, table.end + 1));
     let cursorRow = row, cursorCol = col;
-    const body = row - 1;   // indeks di model.rows; -1 = judul
+    const body = row - 1;   // index into model.rows; -1 = header
 
     switch (command) {
         case 'row-below':
@@ -158,11 +158,11 @@ export function runTableCommand(buffer: Gtk.TextBuffer, command: TableCommand): 
             cursorRow = row + 1;
             break;
         case 'row-above':
-            if (row === 0) return { ok: false, reason: _('Tidak bisa menyisipkan baris di atas judul tabel') };
+            if (row === 0) return { ok: false, reason: _('Cannot insert a row above the table header') };
             model = insertRow(model, body);
             break;
         case 'delete-row':
-            if (row === 0) return { ok: false, reason: _('Baris judul tidak bisa dihapus') };
+            if (row === 0) return { ok: false, reason: _('The header row cannot be deleted') };
             model = deleteRow(model, body);
             cursorRow = Math.min(row, model.rows.length);
             break;
@@ -174,7 +174,7 @@ export function runTableCommand(buffer: Gtk.TextBuffer, command: TableCommand): 
             model = insertColumn(model, col);
             break;
         case 'delete-col':
-            if (columns <= 1) return { ok: false, reason: _('Kolom terakhir tidak bisa dihapus') };
+            if (columns <= 1) return { ok: false, reason: _('The last column cannot be deleted') };
             model = deleteColumn(model, col);
             cursorCol = Math.min(col, columns - 2);
             break;

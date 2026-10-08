@@ -1,10 +1,10 @@
-// Konversi Markdown → HTML untuk fitur "Ekspor HTML".
-// Murni JavaScript, tanpa GTK, sehingga mudah diuji.
+// Markdown → HTML conversion for the "Export HTML" feature.
+// Pure JavaScript, no GTK, so it is easy to test.
 //
-// Alurnya dua tahap:
-//   1. blocksHtml()  memecah dokumen per baris menjadi blok: heading, paragraf,
-//                    daftar, kutipan, tabel, blok kode.
-//   2. inlineHtml()  memformat isi tiap blok: tebal, miring, kode, tautan, dll.
+// The flow has two stages:
+//   1. blocksHtml()  splits the document line by line into blocks: headings, paragraphs,
+//                    lists, quotes, tables, code blocks.
+//   2. inlineHtml()  formats the contents of each block: bold, italic, code, links, etc.
 
 import { RE, ESCAPE_OR_CODE, startsTable } from './syntax.js';
 import { parseTable, tableEnd } from './table.js';
@@ -34,8 +34,8 @@ function inlineHtml(s: string): string {
         : `\u0001${codes.push(`<code>${esc(code)}</code>`) - 1}\u0001`);
     s = esc(s);
     const tok = (html: string) => `\u0003${links.push(html) - 1}\u0003`;
-    // [[Catatan#Bagian|teks]] → <a href="Catatan.md#bagian">teks</a>. Isinya sudah di-escape, jadi href
-    // dibangun dari teks asli lalu di-escape ulang.
+    // [[Note#Section|text]] → <a href="Note.md#section">text</a>. The contents are already escaped, so the href
+    // is built from the original text and then escaped again.
     s = s.replace(WIKILINK(), (whole: string, ref: string, alias?: string) => {
         const link = parseWikiLink(unesc(alias === undefined ? ref : `${ref}|${alias}`));
         if (!link.target && !link.heading) return whole;
@@ -58,17 +58,17 @@ function inlineHtml(s: string): string {
 }
 
 const indentWidth = (s: string): number => s.replace(/\t/g, '    ').length;
-// Lebar indentasi di awal baris (tab = 4 spasi).
+// Indentation width at the start of a line (tab = 4 spaces).
 const indentOf = (line: string): number => indentWidth(/^[ \t]*/.exec(line)![0]);
 
 interface ListItem {
     num: number;
-    task: boolean | null;   // null = bukan daftar tugas
+    task: boolean | null;   // null = not a task list
     lines: string[];
-    ci: number;             // indentasi isi item
+    ci: number;             // indentation of the item's content
 }
 
-// Mengurai daftar mulai baris i. Hasil: [html, indeks baris setelah daftar].
+// Parses a list starting at line i. Result: [html, index of the line after the list].
 function parseList(lines: string[], i: number): [string, number] {
     const first = RE.list.exec(lines[i])!;
     const ordered = /\d/.test(first[2]);
@@ -104,7 +104,7 @@ function parseList(lines: string[], i: number): [string, number] {
             i++;
         } else if (!RE.list.test(lines[i]) && !RE.fence.test(lines[i]) && !RE.heading.test(lines[i]) &&
                    !RE.hr.test(lines[i]) && !/^[ \t]*>/.test(lines[i])) {
-            it.lines.push(lines[i]);  // baris lanjutan (lazy)
+            it.lines.push(lines[i]);  // continuation line (lazy)
             i++;
         } else {
             break;
@@ -136,11 +136,11 @@ function blocksHtml(lines: string[]): string {
                 if (c && c[2][0] === ch && c[2].length >= n && !c[3].trim()) { i++; break; }
                 code.push(lines[i]);
             }
-            // Diagram Mermaid digambar oleh skrip di <head> saat halaman dibuka (lihat markdownToHtml).
+            // Mermaid diagrams are drawn by a script in <head> when the page is opened (see markdownToHtml).
             if (lang.split(/\s+/)[0].toLowerCase() === 'mermaid') { out.push(`<pre class="mermaid">${esc(code.join('\n'))}</pre>`); continue; }
-            // DBML diterjemahkan ke diagram ER Mermaid; yang salah sintaks tampil sebagai blok kode biasa.
+            // DBML is translated to a Mermaid ER diagram; invalid syntax shows as a plain code block.
             if (lang.split(/\s+/)[0].toLowerCase() === 'dbml') {
-                try { out.push(`<pre class="mermaid">${esc(dbmlToMermaid(code.join('\n')))}</pre>`); continue; } catch { /* jatuh ke blok kode */ }
+                try { out.push(`<pre class="mermaid">${esc(dbmlToMermaid(code.join('\n')))}</pre>`); continue; } catch { /* fall back to a code block */ }
             }
             out.push(`<pre><code${lang ? ` class="language-${esc(lang)}"` : ''}>${esc(code.join('\n'))}</code></pre>`);
             continue;
@@ -187,14 +187,14 @@ function blocksHtml(lines: string[]): string {
 
 export function markdownToHtml(src: string, title: string): string {
     const body = blocksHtml(src.replace(/\r\n?/g, '\n').split('\n'));
-    // Mermaid dimuat dari CDN hanya jika dokumennya punya diagram, jadi dokumen biasa tetap mandiri.
+    // Mermaid is loaded from a CDN only if the document has a diagram, so ordinary documents stay self-contained.
     const mermaid = body.includes('<pre class="mermaid">') ? `<script type="module">
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 mermaid.initialize({ startOnLoad: true, theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default' });
 </script>
 ` : '';
     return `<!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

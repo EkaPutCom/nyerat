@@ -1,5 +1,5 @@
-// Membaca riwayat git sebuah file lewat perintah `git`. Satu-satunya perubahan pada repositori
-// adalah commitFile()/commitFiles(), dan hanya atas permintaan pengguna. Semua async (Gio.Subprocess) supaya riwayat panjang tidak menahan editor.
+// Reads a file's git history through the `git` command. The only changes to the repository
+// are commitFile()/commitFiles(), and only at the user's request. Everything is async (Gio.Subprocess) so a long history does not block the editor.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -18,13 +18,13 @@ export type TextResult =
 
 interface Run { status: number; out: string; err: string }
 
-// null = git tidak bisa dijalankan (belum terpasang, atau folder tidak ada).
+// null = git cannot be run (not installed, or the folder does not exist).
 function runGit(cwd: string, args: string[]): Promise<Run | null> {
     return new Promise(resolve => {
         try {
             const launcher = new Gio.SubprocessLauncher({ flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE });
             launcher.set_cwd(cwd);
-            // Jangan ikut berebut kunci indeks dengan git lain yang sedang dipakai pengguna.
+            // Do not compete for the index lock with another git the user is running.
             launcher.setenv('GIT_OPTIONAL_LOCKS', '0', true);
             const proc = launcher.spawnv(['git', '-c', 'core.quotePath=false', ...args]);
             proc.communicate_utf8_async(null, null, (_proc, result) => {
@@ -42,8 +42,8 @@ function runGit(cwd: string, args: string[]): Promise<Run | null> {
 }
 
 function failure(run: Run | null): { ok: false; reason: GitFailure; message: string } {
-    if (!run) return { ok: false, reason: 'no-git', message: 'git tidak dapat dijalankan' };
-    // `git commit` melaporkan masalah (mis. "nothing to commit", user.name kosong) lewat stdout atau stderr.
+    if (!run) return { ok: false, reason: 'no-git', message: 'git cannot be run' };
+    // `git commit` reports problems (e.g. "nothing to commit", empty user.name) through stdout or stderr.
     const message = (run.err.trim() || run.out.trim());
     return { ok: false, reason: /not a git repository/i.test(message) ? 'no-repo' : 'failed', message };
 }
@@ -51,19 +51,19 @@ function failure(run: Run | null): { ok: false; reason: GitFailure; message: str
 const dirOf = (file: string) => GLib.path_get_dirname(file);
 const nameOf = (file: string) => GLib.path_get_basename(file);
 
-// Commit yang menyentuh file, terbaru dulu, mengikuti rename. skip/limit untuk memuat bertahap.
+// Commits that touch the file, newest first, following renames. skip/limit for incremental loading.
 export async function fileLog(file: string, skip: number, limit: number): Promise<LogResult> {
     const run = await runGit(dirOf(file), [
         'log', '--follow', '--name-only', `--format=${LOG_FORMAT}`, `--skip=${skip}`, '-n', String(limit),
         '--', `:(literal)${nameOf(file)}`,
     ]);
     if (run?.status === 0) return { ok: true, commits: parseLog(run.out) };
-    // Repo baru tanpa commit bukan kegagalan; riwayatnya memang kosong.
+    // A new repo with no commits is not a failure; its history is simply empty.
     if (run && /does not have any commits/i.test(run.err)) return { ok: true, commits: [] };
     return failure(run);
 }
 
-// Perubahan file pada satu commit (terhadap commit induknya).
+// File changes in one commit (against its parent commit).
 export async function commitDiff(file: string, commit: Commit): Promise<TextResult> {
     const run = await runGit(dirOf(file), [
         'show', '--format=', '--no-color', '--no-ext-diff', '--no-textconv', commit.hash,
@@ -72,16 +72,16 @@ export async function commitDiff(file: string, commit: Commit): Promise<TextResu
     return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
 }
 
-// Isi lengkap file pada commit itu.
+// Full contents of the file at that commit.
 export async function commitContent(file: string, commit: Commit): Promise<TextResult> {
-    // `./nama` dihitung dari folder file; dipakai jika path commit tidak diketahui.
+    // `./name` is relative to the file's folder; used if the commit path is unknown.
     const spec = commit.path ?? `./${nameOf(file)}`;
     const run = await runGit(dirOf(file), ['show', '--no-textconv', `${commit.hash}:${spec}`]);
     return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
 }
 
-// Commit di repositori folder `dir` dalam rentang waktu [since, until) (detik Unix), terbaru dulu.
-// Untuk bagian Aktivitas jurnal; folder tanpa git atau tanpa repo menghasilkan daftar kosong.
+// Commits in the repository of folder `dir` within the time range [since, until) (Unix seconds), newest first.
+// For the journal's Activity section; a folder without git or without a repo yields an empty list.
 export async function commitsBetween(dir: string, since: number, until: number): Promise<Commit[]> {
     const run = await runGit(dir, ['log', `--since=@${since}`, `--until=@${until - 1}`, `--format=${LOG_FORMAT}`]);
     return run?.status === 0 ? parseLog(run.out).filter(c => c.time >= since && c.time < until) : [];
@@ -93,7 +93,7 @@ export type StateResult =
     | { ok: true; state: WorkingState }
     | { ok: false; reason: GitFailure; message: string };
 
-// Apakah file berbeda dari commit terakhir (termasuk yang sudah di-stage atau belum dilacak).
+// Whether the file differs from the last commit (including staged or untracked ones).
 export async function workingState(file: string): Promise<StateResult> {
     const run = await runGit(dirOf(file), ['status', '--porcelain=v1', '--', `:(literal)${nameOf(file)}`]);
     if (run?.status !== 0) return failure(run);
@@ -106,7 +106,7 @@ export type ChangesResult =
     | { ok: true; changes: FileChange[] }
     | { ok: false; reason: GitFailure; message: string };
 
-// Semua file di repositori folder ini yang berbeda dari commit terakhir; path-nya absolut.
+// All files in this folder's repository that differ from the last commit; paths are absolute.
 export async function repoChanges(dir: string): Promise<ChangesResult> {
     const root = await runGit(dir, ['rev-parse', '--show-toplevel']);
     if (root?.status !== 0) return failure(root);
@@ -116,8 +116,8 @@ export async function repoChanges(dir: string): Promise<ChangesResult> {
     return { ok: true, changes: parseStatus(run.out).map(c => ({ ...c, path: GLib.build_filenamev([top, c.path]) })) };
 }
 
-// Perubahan file yang belum di-commit, terhadap HEAD. File baru (belum dilacak) ditampilkan
-// seluruhnya sebagai tambahan; repo tanpa commit dibandingkan dengan indeks.
+// Uncommitted changes of the file, against HEAD. A new (untracked) file is shown
+// entirely as additions; a repo with no commits is compared with the index.
 export async function workingDiff(file: string): Promise<TextResult> {
     const state = await workingState(file);
     if (!state.ok) return state;
@@ -125,7 +125,7 @@ export async function workingDiff(file: string): Promise<TextResult> {
     const flags = ['--no-color', '--no-ext-diff', '--no-textconv'];
     const spec = `:(literal)${nameOf(file)}`;
     if (state.state === 'untracked') {
-        // --no-index keluar dengan status 1 jika ada beda; itu hasil normal.
+        // --no-index exits with status 1 if there is a difference; that is a normal result.
         const run = await runGit(dirOf(file), ['diff', ...flags, '--no-index', '--', '/dev/null', nameOf(file)]);
         return run && run.status <= 1 ? { ok: true, text: run.out } : failure(run);
     }
@@ -136,8 +136,8 @@ export async function workingDiff(file: string): Promise<TextResult> {
     return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
 }
 
-// Commit hanya file ini; perubahan file lain yang sudah di-stage tidak ikut. File baru di-add
-// dulu karena `git commit -- path` menolak path yang belum dilacak.
+// Commit only this file; changes to other staged files are not included. A new file is added
+// first because `git commit -- path` rejects untracked paths.
 export async function commitFile(file: string, message: string): Promise<TextResult> {
     const spec = `:(literal)${nameOf(file)}`;
     const add = await runGit(dirOf(file), ['add', '--', spec]);
@@ -146,10 +146,10 @@ export async function commitFile(file: string, message: string): Promise<TextRes
     return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
 }
 
-// Commit beberapa file sekaligus (path absolut); file lain yang sudah di-stage tidak ikut. Path dihitung dari
-// akar repo karena folder file bisa berbeda-beda.
+// Commit several files at once (absolute paths); other staged files are not included. Paths are computed from
+// the repo root because the files' folders can differ.
 export async function commitFiles(files: string[], message: string): Promise<TextResult> {
-    if (!files.length) return { ok: false, reason: 'failed', message: 'Tidak ada file yang dipilih' };
+    if (!files.length) return { ok: false, reason: 'failed', message: 'No files selected' };
     const dir = dirOf(files[0]);
     const root = await runGit(dir, ['rev-parse', '--show-toplevel']);
     if (root?.status !== 0) return failure(root);
@@ -161,11 +161,11 @@ export async function commitFiles(files: string[], message: string): Promise<Tex
     return run?.status === 0 ? { ok: true, text: run.out } : failure(run);
 }
 
-// Pathspec alat Git agent: hanya berkas Markdown, tanpa berkas/folder bertitik dan node_modules, relatif ke folder kerja.
+// Agent Git tool pathspec: Markdown files only, no dot files/folders or node_modules, relative to the work folder.
 const AGENT_SPECS = ['*.md', '*.markdown', '*.mdown', '*.mkd', ':(exclude,glob)**/.*', ':(exclude,glob)**/.*/**', ':(exclude,glob)**/node_modules/**'];
 const AGENT_DATE = '--date=format:%Y-%m-%d %H:%M';
 
-// Menjalankan permintaan yang sudah divalidasi agent/gittools.ts (hash/HEAD~n dan path Markdown relatif) di folder kerja.
+// Runs a request already validated by agent/gittools.ts (hash/HEAD~n and relative Markdown path) in the work folder.
 export async function agentGit(root: string, request: GitRequest): Promise<GitAnswer> {
     const specs = request.file ? [`:(literal)${request.file}`] : AGENT_SPECS;
     let args: string[];

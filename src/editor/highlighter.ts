@@ -1,21 +1,21 @@
-// Penyorot sintaks: mengurai rentang suntingan sampai batas blok kembali stabil,
-// lalu memasang tag gaya. Juga mengumpulkan:
+// Syntax highlighter: parses the edited range until the block boundary is stable again,
+// then applies style tags. It also collects:
 //
-//   markers   rentang sintaks yang boleh disembunyikan, beserta baris tempat
-//             sintaks itu "aktif": [awal, akhir, barisPertama, barisTerakhir, baris]
-//             (offset dalam code point; baris = tempat marker itu berada). Untuk
-//             blok kode, rentang barisnya adalah seluruh blok, jadi pembatas ```
-//             muncul selama kursor ada di dalam blok.
-//   headings  daftar heading untuk outline: { level, text, line }
-//   lines     isi dokumen per baris
-//   images    gambar yang perlu ditampilkan: { line, url, alt }
-//   codeBlocks isi blok kode beserta bahasanya, untuk diwarnai (lihat codehighlight.ts)
-//   tables    rentang baris setiap tabel, untuk dirender sebagai grid (lihat tablelayer.ts)
-//   starts    offset (code point) awal setiap baris
-//   reparsed  rentang baris yang diurai ulang (baris lain hasilnya sama dengan sebelumnya)
-//   spans     tag sintaks per baris, untuk LineTagger
+//   markers   ranges of syntax that may be hidden, together with the lines where
+//             that syntax is "active": [start, end, firstLine, lastLine, line]
+//             (offsets in code points; line = where the marker is). For
+//             code blocks, the line range is the whole block, so the ``` fences
+//             show up while the cursor is inside the block.
+//   headings  list of headings for the outline: { level, text, line }
+//   lines     document contents per line
+//   images    images to display: { line, url, alt }
+//   codeBlocks contents of code blocks together with their language, to be colored (see codehighlight.ts)
+//   tables    line range of each table, to be rendered as a grid (see tablelayer.ts)
+//   starts    offset (code point) of the start of each line
+//   reparsed  line ranges that were re-parsed (other lines gave the same result as before)
+//   spans     syntax tags per line, for LineTagger
 //
-// Tag dipasang lewat LineTagger (tagsync.ts), jadi hanya baris yang berubah yang disentuh.
+// Tags are applied through LineTagger (tagsync.ts), so only changed lines are touched.
 
 import type Gtk from 'gi://Gtk?version=4.0';
 import { RE, isTableSeparator } from '../markdown/syntax.js';
@@ -27,7 +27,7 @@ import type { LineSpan, LineTagger } from './tagsync.js';
 import { iterAtLine } from '../gtkutil.js';
 import { listIndentFor } from './listindent.js';
 
-// Sintaks yang boleh disembunyikan: [awal, akhir, barisPertama, barisTerakhir, baris].
+// Syntax that may be hidden: [start, end, firstLine, lastLine, line].
 export type Marker = [start: number, end: number, firstLine: number, lastLine: number, line: number];
 
 export interface Heading {
@@ -43,11 +43,11 @@ export interface ImageRef {
 }
 
 export interface CodeBlock {
-    lang: string;     // teks setelah ``` (misalnya "js"); '' jika tidak ada
-    start: number;    // offset (code point) awal isi blok di buffer
-    text: string;     // isi blok tanpa baris pembatas
-    startLine: number;  // baris pembatas pembuka
-    endLine: number;    // baris pembatas penutup (baris terakhir dokumen jika tidak ditutup)
+    lang: string;     // text after ``` (e.g. "js"); '' if none
+    start: number;    // offset (code point) of the start of the block contents in the buffer
+    text: string;     // block contents without the fence lines
+    startLine: number;  // opening fence line
+    endLine: number;    // closing fence line (the last line of the document if not closed)
     closed: boolean;
 }
 
@@ -63,7 +63,7 @@ export interface HighlightResult {
     words: number;
     characters: number;
     reparsed: [first: number, last: number];
-    spans: LineSpan[][];   // tag sintaks per baris (offset relatif terhadap awal baris)
+    spans: LineSpan[][];   // syntax tags per line (offsets relative to the start of the line)
 }
 
 interface Parsed extends HighlightResult {
@@ -71,7 +71,7 @@ interface Parsed extends HighlightResult {
     lineWords: number[];
 }
 
-// Indeks pertama dengan key(item) >= value pada array yang urut menurut key.
+// First index with key(item) >= value in an array sorted by key.
 const lowerBoundBy = <T>(items: T[], value: number, key: (item: T) => number): number => {
     let a = 0, b = items.length;
     while (a < b) { const mid = (a + b) >>> 1; if (key(items[mid]) < value) a = mid + 1; else b = mid; }
@@ -79,17 +79,17 @@ const lowerBoundBy = <T>(items: T[], value: number, key: (item: T) => number): n
 };
 const lowerBound = (items: number[], value: number): number => lowerBoundBy(items, value, n => n);
 
-// Seperti splice() untuk daftar yang urut menurut `line`: item sebelum baris `from` tetap,
-// item mulai baris `to` digeser `shift` baris di tempat (snapshot lama tidak dipakai lagi).
+// Like splice() for a list sorted by `line`: items before line `from` stay,
+// items from line `to` onward are shifted by `shift` lines in place (the old snapshot is no longer used).
 function spliceByLine<T extends { line: number }>(old: T[], from: number, to: number, shift: number, mid: T[]): T[] {
     const tail = lowerBoundBy(old, to, item => item.line);
     if (shift) for (let i = tail; i < old.length; i++) old[i].line += shift;
     return splice(old, lowerBoundBy(old, from, item => item.line), tail, mid);
 }
 
-// old[0..from) + mid + old[to..) (opsional diubah dengan tail), disalin sekali ke array baru.
-// Dipanggil tiap ketukan untuk array seukuran dokumen; spread/slice/map membuat beberapa
-// salinan antara yang memperberat GC.
+// old[0..from) + mid + old[to..) (optionally changed with tail), copied once into a new array.
+// Called on every keystroke for document-sized arrays; spread/slice/map would create several
+// intermediate copies that burden the GC.
 function splice<T>(old: T[], from: number, to: number, mid: T[], tail?: (item: T) => T): T[] {
     const out = new Array<T>(from + mid.length + Math.max(0, old.length - to));
     let k = 0;
@@ -100,8 +100,8 @@ function splice<T>(old: T[], from: number, to: number, mid: T[], tail?: (item: T
     return out;
 }
 
-// Baris di luar kode/tabel tanpa pipa adalah batas netral. Ia tidak bisa
-// menjadi judul/lanjutan tabel. Fence baru boleh memperpanjang rentang parsing.
+// A line outside code/tables without a pipe is a neutral boundary. It cannot
+// become a table header/continuation. A new fence may extend the parsing range.
 function checkpoints(lines: string[], code: CodeBlock[], tables: TableRange[]): number[] {
     const points: number[] = [];
     let c = 0, t = 0;
@@ -120,8 +120,8 @@ interface CachedLine {
     images: Omit<ImageRef, 'line'>[];
 }
 
-// Hanya simpan baris dokumen saat ini, bukan seluruh riwayat suntingan. Cache
-// berisi offset relatif; offset dan konteks blok dihitung ulang setelah teks bergeser.
+// Only keep the lines of the current document, not the whole edit history. The cache
+// holds relative offsets; offsets and block context are recomputed after the text shifts.
 export class HighlightCache {
     private snapshot: Parsed | null = null;
     parsedLines = 0;
@@ -147,7 +147,7 @@ export class HighlightCache {
         const raw = buffer.get_text(from, to, true);
         const changed = (last + 1 < buffer.get_line_count() ? raw.slice(0, -1) : raw).split('\n');
         if (afterOldEdit < first || changed.length !== last - first + 1)
-            return this.update(buffer, tags);  // delimiter yang tidak cocok dengan pemisahan baris JS
+            return this.update(buffer, tags);  // delimiter that does not match the JS line splitting
         const lines = splice(old.lines, first, afterOldEdit, changed);
         const before = lowerBound(old.checkpoints, first);
         const startLine = before > 0 ? old.checkpoints[before - 1] : 0;
@@ -158,8 +158,8 @@ export class HighlightCache {
             part = parseLines(lines.slice(startLine, endLine + shift + 1), tags, this);
             this.parsedLines += part.lines.length;
             if (endLine === old.lines.length - 1 || !part.codeBlocks.some(b => !b.closed)) break;
-            // Fence baru bisa mengubah konteks sampai jauh ke bawah. Perluas secara
-            // geometris supaya tidak mengurai ulang tiap paragraf satu per satu.
+            // A new fence can change the context far below. Expand
+            // geometrically so paragraphs are not re-parsed one by one.
             const next = lowerBound(old.checkpoints, endLine + Math.max(16, endLine - startLine + 1));
             endLine = old.checkpoints[next] ?? old.lines.length - 1;
         }
@@ -171,9 +171,9 @@ export class HighlightCache {
         const lineWords = splice(old.lineWords, startLine, afterOld, part.lineWords);
         let oldWords = 0;
         for (let i = startLine; i < afterOld; i++) oldWords += old.lineWords[i];
-        // Marker urut menurut barisnya, jadi batas bagian lama dicari dengan pencarian biner.
-        // Marker setelah bagian yang diurai digeser di tempat: snapshot lama tidak dipakai lagi
-        // dan dokumen panjang bisa punya puluhan ribu marker.
+        // Markers are ordered by their line, so the old section boundary is found with a binary search.
+        // Markers after the parsed section are shifted in place: the old snapshot is no longer used
+        // and a long document can have tens of thousands of markers.
         const markerAt = (line: number) => lowerBoundBy(old.markers, line, m => m[4]);
         const markerTail = markerAt(afterOld);
         if (delta || shift) {
@@ -223,12 +223,12 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags, tagger: LineTagger
 
 function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed {
     const text = lines.join('\n');
-    // Semua posisi di bawah ini dalam UTF-16 (string JS); dikonversi saat menyentuh buffer.
+    // All positions below are in UTF-16 (JS strings); converted when touching the buffer.
     const toCp = makeCpMap(text);
     const spans: LineSpan[][] = lines.map(() => []);
     cache?.begin();
     const starts: number[] = [];
-    // Setiap tag dipasang di baris yang sedang diproses (`row`, mulai offset `rowStart`).
+    // Each tag is applied on the line being processed (`row`, starting at offset `rowStart`).
     let row = 0, rowStart = 0;
     const apply = (name: TagName, a: number, b: number) => {
         if (b > a) spans[row].push([tags[name], toCp(a) - rowStart, toCp(b) - rowStart]);
@@ -239,7 +239,7 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
 
     const images: ImageRef[] = [];
 
-    // withImages = false untuk baris tabel: gambar di bawah baris tabel merusak tata letaknya.
+    // withImages = false for table rows: an image below a table row breaks its layout.
     const inline = (base: number, s: string, line: number, withImages = true) => {
         const { tags: found, marks, images: imgs } = parseInline(s);
         for (const [n, a, b] of found) apply(n, base + a, base + b);
@@ -247,14 +247,14 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
         if (!withImages) return;
         for (const img of imgs) {
             images.push({ line, url: img.url, alt: img.alt });
-            // Di baris yang tidak aktif, seluruh ![alt](url) disembunyikan
-            // dan hanya gambarnya yang terlihat (lihat editor/images.ts).
+            // On an inactive line, the whole ![alt](url) is hidden
+            // and only the image is visible (see editor/images.ts).
             hide(base + img.start, base + img.end, line, line);
         }
     };
 
-    // Tabel dikenali lebih dulu dari rentang parsing, supaya aturannya sama dengan
-    // yang dipakai perintah edit dan ekspor HTML (markdown/table.ts).
+    // Tables are recognized first from the parsing range, so the rules are the same as
+    // those used by the edit commands and HTML export (markdown/table.ts).
     const tables = findTables(lines);
     const tableOf = new Map<number, TableRange>();
     for (const t of tables) for (let l = t.start; l <= t.end; l++) tableOf.set(l, t);
@@ -262,7 +262,7 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
     let off = 0;
     let fence: { line: number; ch: string; len: number; a: number; b: number; lang: string } | null = null;
     const codeBlocks: CodeBlock[] = [];
-    // Blok kode selesai di baris lastLine (eksklusif): catat isinya.
+    // The code block ends at line lastLine (exclusive): record its contents.
     const closeBlock = (f: NonNullable<typeof fence>, lastLine: number) =>
         codeBlocks.push({
             lang: f.lang, start: toCp(f.b), text: lines.slice(f.line + 1, lastLine).join('\n'),
@@ -277,7 +277,7 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
         const nl = i < lines.length - 1 ? 1 : 0;
         let m: RegExpExecArray | null;
 
-        // Di dalam blok kode: tidak ada format lain, cari pembatas penutup.
+        // Inside a code block: no other formatting, look for the closing fence.
         if (fence) {
             m = RE.fence.exec(line);
             apply('codeblock', off, lineEnd + nl);
@@ -329,7 +329,7 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
                 return;
             }
 
-            // Kutipan, boleh diikuti daftar: "> - item"
+            // Quote, may be followed by a list: "> - item"
             let p = 0;
             if ((m = RE.quote.exec(line))) {
                 p = m[0].length;
@@ -344,8 +344,8 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
                 const bs = off + p + m[1].length;
                 apply('bullet', bs, bs + m[2].length);
                 const q = p + m[0].length;
-                // Baris lanjutan (hasil pembungkusan) sejajar dengan teks item. Dalam kutipan
-                // margin kiri sudah diatur tag quote, jadi dilewati.
+                // Continuation lines (from wrapping) line up with the item text. In a quote
+                // the left margin is already set by the quote tag, so it is skipped.
                 const hanging = p === 0 ? listIndentFor(tags) : undefined;
                 if (hanging && lineEnd > off) {
                     const tag = hanging.tag(m[1], m[2], m[3], m[4]?.slice(0, 3) ?? '', m[4]?.slice(3) ?? '');
@@ -372,7 +372,7 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
     }
     if (fence) {
         hide(fence.a, fence.b, fence.line, lines.length - 1);
-        closeBlock(fence, lines.length);  // blok yang belum ditutup berlanjut sampai akhir dokumen
+        closeBlock(fence, lines.length);  // an unclosed block continues to the end of the document
     }
 
     cache?.end();

@@ -1,65 +1,65 @@
-// Jurnal harian: satu berkas Markdown biasa per hari (jurnal/2026-10-08.md) berisi catatan pengguna
-// dan aktivitas kerja hari itu.
+// Daily journal: one plain Markdown file per day (journal/2026-10-08.md) containing the user's notes
+// and the work activity of that day.
 //
-//   # Kamis, 8 Oktober 2026
+//   # Thursday, October 8, 2026
 //
-//   ## Fokus hari ini
+//   ## Today's focus
 //
-//   ## Catatan
+//   ## Notes
 //
-//   - 09:12 Iter yang dipakai ulang membuat buka berkas ~2x lebih cepat      ← catat cepat (Ctrl+Shift+J)
+//   - 09:12 The reused iter makes opening files ~2x faster      ← quick capture (Ctrl+Shift+J)
 //
-//   ## Aktivitas
+//   ## Activity
 //
-//   - 10:42 Kartu “Materi rilis” → Dikerjakan di [[tugas]]                  ← dari log aktivitas dan git
-//   - 16:05 Commit `dd831a6` Percepat membuka…
+//   - 10:42 Card “Release material” → In Progress in [[tasks]]              ← from the activity log and git
+//   - 16:05 Commit `dd831a6` Speed up opening…
 //
-//   ## Ringkasan
+//   ## Summary
 //
-// Aktivitas (kartu dipindah, perubahan agent, hasil harness) dicatat sepanjang hari ke log JSONL di
-// .nyerat/aktivitas, lalu digabung ke bagian Aktivitas saat jurnal dibuka. Penggabungan hanya menambah baris
-// yang belum ada, jadi suntingan pengguna di bagian itu tidak pernah tertimpa.
+// Activity (cards moved, agent changes, harness results) is recorded throughout the day to a JSONL log in
+// .nyerat/activity, then merged into the Activity section when the journal is opened. Merging only adds lines
+// that are not there yet, so the user's edits in that section are never overwritten.
 //
-// Murni TypeScript tanpa GTK. Judul bagian adalah isi dokumen, bukan teks antarmuka, jadi tidak diterjemahkan.
+// Pure TypeScript without GTK. Section titles are document content, not interface text, so they are not translated.
 
 import { cardMeta, type Board } from './kanban.js';
 
-export const JOURNAL_DIR = 'jurnal';
-export const NOTES = 'Catatan';
-export const ACTIVITY = 'Aktivitas';
-const SECTIONS = ['Fokus hari ini', NOTES, ACTIVITY, 'Ringkasan'];
+export const JOURNAL_DIR = 'journal';
+export const NOTES = 'Notes';
+export const ACTIVITY = 'Activity';
+const SECTIONS = ['Today\'s focus', NOTES, ACTIVITY, 'Summary'];
 
-// Nama relatif berkas jurnal untuk tanggal "YYYY-MM-DD".
+// Relative name of the journal file for the date "YYYY-MM-DD".
 export const journalName = (date: string): string => `${JOURNAL_DIR}/${date}.md`;
 
-// Tanggal dari nama relatif berkas jurnal; null jika bukan berkas jurnal.
+// Date from the relative name of a journal file; null if it is not a journal file.
 export function journalDate(name: string): string | null {
-    const m = /^jurnal\/(\d{4}-\d{2}-\d{2})\.md$/.exec(name);
+    const m = /^journal\/(\d{4}-\d{2}-\d{2})\.md$/.exec(name);
     return m ? m[1] : null;
 }
 
-// Isi awal jurnal. title = tanggal yang mudah dibaca, disusun pemanggil sesuai lokal.
+// Initial journal contents. title = a human-readable date, composed by the caller according to the locale.
 export function newJournal(title: string): string {
     return [`# ${title}`, ...SECTIONS.flatMap(s => ['', `## ${s}`])].join('\n') + '\n';
 }
 
-// Jam lokal "HH:MM" untuk stempel baris.
+// Local time "HH:MM" for line stamps.
 export function clock(date: Date): string {
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-// ---------- Bagian ----------
+// ---------- Sections ----------
 
 interface Span {
-    head: number;   // indeks baris judul bagian
-    end: number;    // indeks baris setelah isi bagian (judul berikutnya, atau panjang dokumen)
+    head: number;   // index of the section heading line
+    end: number;    // index of the line after the section content (the next heading, or the document length)
 }
 
 const FENCE = /^\s*(```|~~~)/;
 const TOP_HEADING = /^#{1,2}\s/;
 
-// Bagian "## <heading>" (tanpa membedakan huruf besar); berakhir di judul tingkat 1–2 berikutnya. Baris di dalam blok kode dilewati.
+// Section "## <heading>" (case-insensitive); ends at the next level 1–2 heading. Lines inside code blocks are skipped.
 function findSection(lines: string[], heading: string): Span | null {
     const want = heading.toLowerCase();
     let fenced = false, head = -1;
@@ -72,15 +72,15 @@ function findSection(lines: string[], heading: string): Span | null {
     return head >= 0 ? { head, end: lines.length } : null;
 }
 
-// Indeks setelah baris berisi terakhir di bagian (tepat setelah judul bila bagian kosong).
+// Index after the last non-blank line in the section (right after the heading if the section is empty).
 function lastFilled(lines: string[], span: Span): number {
     let at = span.end;
     while (at > span.head + 1 && !lines[at - 1].trim()) at--;
     return at;
 }
 
-// Tambahkan baris ke akhir isi bagian; bagian yang belum ada dibuat. Bagian Aktivitas yang baru diletakkan
-// sebelum Ringkasan supaya urutan template tetap; bagian lain di akhir dokumen.
+// Append a line to the end of the section content; a missing section is created. A new Activity section is placed
+// before Summary so the template order is kept; other sections go at the end of the document.
 function appendToSection(text: string, heading: string, added: string[]): string {
     if (!added.length) return text;
     const lines = text.split('\n');
@@ -96,20 +96,20 @@ function appendToSection(text: string, heading: string, added: string[]): string
         return `${body ? `${body}\n\n` : ''}${block.join('\n')}`;
     }
     const at = lastFilled(lines, span);
-    // Bagian kosong: satu baris kosong setelah judul. Sesudahnya selalu ada satu baris kosong sebelum judul berikutnya.
+    // Empty section: one blank line after the heading. Afterwards there is always one blank line before the next heading.
     const insert = at === span.head + 1 ? ['', ...added] : added;
     const rest = lines.slice(at);
     const gap = rest.length && rest[0].trim() ? [''] : [];
     return [...lines.slice(0, at), ...insert, ...gap, ...rest].join('\n');
 }
 
-// Catat cepat: "- HH:MM teks" di akhir bagian Catatan. Baris baru di teks diganti spasi (satu catatan = satu butir).
+// Quick capture: "- HH:MM text" at the end of the Notes section. Newlines in the text are replaced with spaces (one note = one bullet).
 export function addNote(text: string, time: string, note: string): string {
     const line = note.replace(/\s*\n\s*/g, ' ').trim();
     return line ? appendToSection(text, NOTES, [`- ${time} ${line}`]) : text;
 }
 
-// Tambahkan baris aktivitas yang belum ada di bagian Aktivitas (dibandingkan tanpa spasi di tepi).
+// Add activity lines that are not yet in the Activity section (compared without surrounding whitespace).
 export function mergeActivity(text: string, lines: string[]): string {
     const span = findSection(text.split('\n'), ACTIVITY);
     const present = new Set(span ? text.split('\n').slice(span.head + 1, span.end).map(l => l.trim()) : []);
@@ -119,8 +119,8 @@ export function mergeActivity(text: string, lines: string[]): string {
 }
 
 export interface JournalStats {
-    notes: number;      // butir di bagian Catatan
-    activity: number;   // butir di bagian Aktivitas
+    notes: number;      // bullets in the Notes section
+    activity: number;   // bullets in the Activity section
 }
 
 export function journalStats(text: string): JournalStats {
@@ -132,22 +132,22 @@ export function journalStats(text: string): JournalStats {
     return { notes: count(NOTES), activity: count(ACTIVITY) };
 }
 
-// ---------- Aktivitas ----------
+// ---------- Activity ----------
 
 export type ActivityKind = 'card' | 'agent' | 'harness' | 'commit';
 
 export interface Activity {
-    time: number;       // detik Unix
+    time: number;       // Unix seconds
     kind: ActivityKind;
-    text: string;       // satu baris Markdown, tanpa jam
+    text: string;       // one Markdown line, without the time
 }
 
 const KINDS = new Set<string>(['card', 'agent', 'harness', 'commit']);
 
-// Satu baris log JSONL.
+// One JSONL log line.
 export const serializeActivity = (a: Activity): string => JSON.stringify({ time: a.time, kind: a.kind, text: a.text });
 
-// Isi log JSONL → aktivitas. Baris rusak (mis. tulisan terpotong) dilewati.
+// JSONL log contents → activities. Corrupt lines (e.g. truncated writes) are skipped.
 export function parseActivity(text: string): Activity[] {
     const out: Activity[] = [];
     for (const line of text.split('\n')) {
@@ -163,7 +163,7 @@ export function parseActivity(text: string): Activity[] {
     return out;
 }
 
-// Aktivitas → baris "- HH:MM teks" urut waktu (urutan asal dipertahankan untuk waktu yang sama).
+// Activities → "- HH:MM text" lines in time order (the original order is kept for equal times).
 export function activityLines(events: Activity[]): string[] {
     return events
         .map((a, i) => ({ a, i }))
@@ -171,13 +171,13 @@ export function activityLines(events: Activity[]): string[] {
         .map(({ a }) => `- ${clock(new Date(a.time * 1000))} ${a.text}`);
 }
 
-// Tautan [[...]] ke berkas relatif tanpa ekstensi Markdown, supaya bisa dibuka dengan Ctrl+klik dari jurnal.
+// A [[...]] link to a file relative path without the Markdown extension, so it can be opened with Ctrl+click from the journal.
 export const fileLink = (name: string): string => `[[${name.replace(/\.(md|markdown|mdown|mkd)$/i, '')}]]`;
 
 const quote = (title: string): string => `“${title.length > 80 ? `${title.slice(0, 77)}…` : title}”`;
 
-// Perubahan papan yang layak dicatat: kartu pindah kolom, kartu dicentang selesai, dan kartu baru.
-// Kartu dikenali dari teksnya; kartu yang teksnya disunting tidak dicatat (bukan kejadian kerja).
+// Board changes worth recording: a card moved columns, a card was checked as done, and a new card.
+// Cards are recognized by their text; a card whose text was edited is not recorded (not a work event).
 export function boardEvents(before: Board, after: Board, board: string): string[] {
     const where = new Map<string, { column: string; done: boolean | null }[]>();
     for (const column of before.columns)
@@ -193,15 +193,15 @@ export function boardEvents(before: Board, after: Board, board: string): string[
             const list = where.get(card.text);
             const was = list?.find(w => w.column === column.title) ?? list?.[0];
             if (!was) {
-                fresh.push(`Kartu baru ${title} di ${column.title.trim()} · ${link}`);
+                fresh.push(`New card ${title} in ${column.title.trim()} · ${link}`);
                 continue;
             }
             list!.splice(list!.indexOf(was), 1);
-            if (was.column !== column.title) events.push(`Kartu ${title} → ${column.title.trim()} · ${link}`);
-            else if (was.done !== true && card.done === true) events.push(`Kartu ${title} selesai · ${link}`);
+            if (was.column !== column.title) events.push(`Card ${title} → ${column.title.trim()} · ${link}`);
+            else if (was.done !== true && card.done === true) events.push(`Card ${title} done · ${link}`);
         }
     }
-    // Kartu yang teksnya disunting juga tampak "baru"; hanya pertambahan jumlah kartu yang dihitung.
+    // A card whose text was edited also looks "new"; only the increase in the number of cards is counted.
     for (const line of fresh.reverse()) if (added-- > 0) events.push(line);
     return events;
 }
@@ -212,13 +212,13 @@ export interface ChangeSummary {
     to?: string;
 }
 
-// Perubahan agent yang diterapkan pengguna → satu baris ringkas.
+// Agent changes applied by the user → one compact line.
 export function agentActivity(changes: ChangeSummary[]): string | null {
     if (!changes.length) return null;
-    const verb = (c: ChangeSummary) => c.kind === 'create' ? 'membuat' : c.kind === 'delete' ? 'membuang' : c.kind === 'move' ? 'memindah' : 'mengubah';
+    const verb = (c: ChangeSummary) => c.kind === 'create' ? 'created' : c.kind === 'delete' ? 'removed' : c.kind === 'move' ? 'moved' : 'changed';
     const parts = new Map<string, string[]>();
     for (const c of changes) {
-        const target = c.kind === 'move' && c.to ? `${fileLink(c.file)} ke ${fileLink(c.to)}` : c.kind === 'delete' ? `\`${c.file}\`` : fileLink(c.file);
+        const target = c.kind === 'move' && c.to ? `${fileLink(c.file)} to ${fileLink(c.to)}` : c.kind === 'delete' ? `\`${c.file}\`` : fileLink(c.file);
         const list = parts.get(verb(c)) ?? [];
         if (!list.includes(target)) list.push(target);
         parts.set(verb(c), list);
@@ -231,5 +231,5 @@ export function commitActivity(hash: string, subject: string): string {
 }
 
 export function harnessActivity(agent: string, title: string, project: string, ok: boolean): string {
-    return `${agent} ${ok ? 'selesai' : 'gagal'} ${quote(title)} di proyek ${project}`;
+    return `${agent} ${ok ? 'finished' : 'failed'} ${quote(title)} in project ${project}`;
 }

@@ -1,4 +1,4 @@
-// Arti klik pada teks: mencentang kotak tugas, membaca URL tautan, dan target [[wikilink]].
+// Meaning of clicks on text: checking task boxes, reading link URLs, and [[wikilink]] targets.
 
 import type Gtk from 'gi://Gtk?version=4.0';
 import { cpToU16, cpLength } from './offsets.js';
@@ -6,7 +6,7 @@ import type { Tags } from './tags.js';
 import { lineText } from './editing.js';
 import { WIKILINK, parseWikiLink, type WikiLink } from '../markdown/wikilink.js';
 
-// Klik di "[ ]" / "[x]" → balik status centangnya. Mengembalikan true jika ditangani.
+// Click on "[ ]" / "[x]" → flip its checked state. Returns true if handled.
 export function toggleTaskAt(buffer: Gtk.TextBuffer, iter: Gtk.TextIter, tags: Tags): boolean {
     if (!iter.has_tag(tags.task) && !iter.has_tag(tags.taskdone)) return false;
     const [line, ls] = lineText(buffer, iter);
@@ -24,12 +24,12 @@ export function toggleTaskAt(buffer: Gtk.TextBuffer, iter: Gtk.TextIter, tags: T
 }
 
 const LINK_PATTERNS = [
-    /!?\[[^\]]*\]\(([^)\s]*)[^)]*\)/g,          // [teks](url) dan ![alt](url)
+    /!?\[[^\]]*\]\(([^)\s]*)[^)]*\)/g,          // [text](url) and ![alt](url)
     /<((?:https?|mailto|ftp):[^\s>]+)>/g,          // <https://...>
     /\bhttps?:\/\/[^\s<>]*[^\s<>.,;:!?)\]'"]/g,  // URL polos
 ];
 
-// URL dari tautan di posisi iter, atau null.
+// URL of the link at the iter position, or null.
 export function linkAt(buffer: Gtk.TextBuffer, iter: Gtk.TextIter, tags: Tags): string | null {
     if (!iter.has_tag(tags.link) && !iter.has_tag(tags.image)) return null;
     const [line] = lineText(buffer, iter);
@@ -44,7 +44,7 @@ export function linkAt(buffer: Gtk.TextBuffer, iter: Gtk.TextIter, tags: Tags): 
     return null;
 }
 
-// [[Catatan]] di posisi iter, atau null.
+// [[Note]] at the iter position, or null.
 export function wikiLinkAt(buffer: Gtk.TextBuffer, iter: Gtk.TextIter, tags: Tags): WikiLink | null {
     if (!iter.has_tag(tags.link)) return null;
     const [line] = lineText(buffer, iter);

@@ -1,20 +1,20 @@
-// Mengurai keluaran git (riwayat dan diff) menjadi data. Murni, tanpa GTK dan tanpa
-// memanggil git, supaya mudah diuji; pemanggilnya ada di git.ts.
+// Parses git output (history and diffs) into data. Pure, no GTK and no
+// calls to git, so it is easy to test; the caller is in git.ts.
 
 export interface Commit {
     hash: string;
     short: string;
     author: string;
-    time: number;          // detik sejak epoch
+    time: number;          // seconds since the epoch
     subject: string;
-    path: string | null;   // path file di commit ini relatif ke akar repo (berubah jika file pernah di-rename)
+    path: string | null;   // file path in this commit relative to the repo root (changes if the file was ever renamed)
 }
 
-// Pemisah record dan field yang tidak mungkin muncul di pesan commit.
+// Record and field separators that cannot appear in a commit message.
 export const LOG_FORMAT = '%x1e%H%x1f%h%x1f%an%x1f%at%x1f%s';
 
-// Keluaran `git log --name-only --format=LOG_FORMAT`: tiap commit diawali \x1e,
-// baris pertamanya field commit, sisanya nama file.
+// Output of `git log --name-only --format=LOG_FORMAT`: each commit starts with \x1e,
+// its first line is the commit fields, the rest are file names.
 export function parseLog(output: string): Commit[] {
     const commits: Commit[] = [];
     for (const record of output.split('\x1e')) {
@@ -23,7 +23,7 @@ export function parseLog(output: string): Commit[] {
         const [hash, short, author, time, ...subject] = head.split('\x1f');
         if (!hash || !short) continue;
         const path = rest.find(line => line.trim() !== '') ?? null;
-        // Path dengan karakter khusus dikutip git (diawali "); jangan dipakai mentah-mentah.
+        // Paths with special characters are quoted by git (start with "); do not use them raw.
         commits.push({
             hash, short, author, time: Number(time) || 0, subject: subject.join('\x1f'),
             path: path && !path.startsWith('"') ? path : null,
@@ -34,24 +34,24 @@ export function parseLog(output: string): Commit[] {
 
 const MINUTE = 60, HOUR = 3600, DAY = 86400;
 
-// "3 hari lalu", "2 bulan lalu", ...
+// "3 days ago", "2 months ago", ...
 export function relativeTime(time: number, now: number): string {
     const diff = Math.max(0, now - time);
-    if (diff < MINUTE) return 'baru saja';
-    if (diff < HOUR) return `${Math.floor(diff / MINUTE)} menit lalu`;
-    if (diff < DAY) return `${Math.floor(diff / HOUR)} jam lalu`;
-    if (diff < 7 * DAY) return `${Math.floor(diff / DAY)} hari lalu`;
-    if (diff < 30 * DAY) return `${Math.floor(diff / (7 * DAY))} minggu lalu`;
-    if (diff < 365 * DAY) return `${Math.floor(diff / (30 * DAY))} bulan lalu`;
-    return `${Math.floor(diff / (365 * DAY))} tahun lalu`;
+    if (diff < MINUTE) return 'just now';
+    if (diff < HOUR) return `${Math.floor(diff / MINUTE)} min ago`;
+    if (diff < DAY) return `${Math.floor(diff / HOUR)} hr ago`;
+    if (diff < 7 * DAY) return `${Math.floor(diff / DAY)} d ago`;
+    if (diff < 30 * DAY) return `${Math.floor(diff / (7 * DAY))} wk ago`;
+    if (diff < 365 * DAY) return `${Math.floor(diff / (30 * DAY))} mo ago`;
+    return `${Math.floor(diff / (365 * DAY))} yr ago`;
 }
 
 export type DiffKind = 'add' | 'del' | 'hunk' | 'context';
 
 export interface DiffLine { kind: DiffKind; text: string }
 
-// Keluaran `git show` untuk satu file → baris berjenis. Kepala diff (diff --git, index,
-// ---, +++) dibuang; isinya sudah ada di judul jendela, jadi hanya mengganggu bacaan.
+// Output of `git show` for one file → typed lines. The diff header (diff --git, index,
+// ---, +++) is dropped; its content is already in the window title, so it only gets in the way of reading.
 export function parseDiff(output: string): DiffLine[] {
     const lines = output.replace(/\n$/, '').split('\n');
     const firstHunk = lines.findIndex(line => line.startsWith('@@'));
@@ -66,16 +66,16 @@ export function parseDiff(output: string): DiffLine[] {
 
 export type ChangeKind = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
 
-export interface FileChange { path: string; kind: ChangeKind }   // path relatif ke akar repo
+export interface FileChange { path: string; kind: ChangeKind }   // path relative to the repo root
 
-// Path yang mengandung tab, kutip, atau backslash dikutip git ("..." dengan escape C).
+// Paths containing a tab, quote, or backslash are quoted by git ("..." with C escapes).
 function unquote(path: string): string {
     if (!path.startsWith('"') || !path.endsWith('"')) return path;
     return path.slice(1, -1).replace(/\\([tn"\\])/g, (_m, c: string) => ({ t: '\t', n: '\n' })[c] ?? c);
 }
 
-// Keluaran `git status --porcelain=v1` (tanpa -z: GJS membaca keluaran sebagai string UTF-8 yang terpotong di NUL):
-// "XY path", dan untuk rename/copy "XY lama -> baru".
+// Output of `git status --porcelain=v1` (without -z: GJS reads output as a UTF-8 string truncated at NUL):
+// "XY path", and for rename/copy "XY old -> new".
 export function parseStatus(output: string): FileChange[] {
     const changes: FileChange[] = [];
     for (const line of output.split('\n')) {

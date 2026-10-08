@@ -1,7 +1,7 @@
-// Semua aksi aplikasi beserta shortcut-nya, di satu tempat.
+// All application actions and their shortcuts, in one place.
 //
-// Aksi (Gio.SimpleAction) dipicu oleh tombol header bar, item menu, atau shortcut.
-// Aksi "toggle" punya status on/off yang otomatis tampil sebagai centang di menu.
+// Actions (Gio.SimpleAction) are triggered by header bar buttons, menu items, or shortcuts.
+// "Toggle" actions have an on/off state that automatically shows as a checkmark in menus.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -14,10 +14,10 @@ import type Adw from 'gi://Adw?version=1';
 import type { TableCommand } from './editor/tableedit.js';
 import type { MainWindow, Option } from './window.js';
 
-const TABLE_TEMPLATE: [before: string, after: string] = ['| Kolom 1 | Kolom 2 | Kolom 3 |\n| ------- | ------- | ------- |\n| ', ' |  |  |\n'];
+const TABLE_TEMPLATE: [before: string, after: string] = ['| Column 1 | Column 2 | Column 3 |\n| -------- | -------- | -------- |\n| ', ' |  |  |\n'];
 
-// Aksi yang menyunting teks dokumen. Saat papan kanban tampil, teksnya tersembunyi, jadi
-// aksi ini dinonaktifkan (menu meredup, pintasan dan palet tidak memicunya).
+// Actions that edit the document text. While the kanban board is shown, its text is hidden, so
+// these actions are disabled (menu dims, shortcuts and palette do not trigger them).
 export const TEXT_ACTIONS = new Set([
     'find', 'bold', 'italic', 'strike', 'inline-code', 'highlight', 'link', 'image', 'zoom-image', 'codeblock', 'table',
     'quote', 'ulist', 'olist', 'heading0', 'heading1', 'heading2', 'heading3', 'heading4', 'heading5', 'heading6',
@@ -32,7 +32,7 @@ export function registerActions(app: Adw.Application, w: MainWindow): void {
         app.add_action(a);
         if (accels) app.set_accels_for_action(`app.${name}`, accels);
     };
-    // Toggle yang bukan kunci GSettings: mode source dan mode gelap.
+    // Toggles that are not GSettings keys: source mode and dark mode.
     const toggle = (name: Option, accels: string[], initial: boolean) => {
         const a = Gio.SimpleAction.new_stateful(name, null, GLib.Variant.new_boolean(initial));
         a.connect('change-state', (act, value) => {
@@ -57,12 +57,12 @@ export function registerActions(app: Adw.Application, w: MainWindow): void {
     action('open-folder', ['<Control><Shift>o'], () => w.chooseFolder());
     action('save', ['<Control>s'], () => w.save());
 
-    // Undo/redo lewat aksi, supaya juga bekerja saat papan kanban tampil (editor teks tidak
-    // berfokus). Di tampilan teks hasilnya sama dengan pintasan bawaan GtkSourceView.
+    // Undo/redo through actions, so they also work while the kanban board is shown (the text editor is
+    // not focused). In text view the result is the same as the built-in GtkSourceView shortcuts.
     action('undo', ['<Control>z'], () => w.editor.buffer.undo());
     action('redo', ['<Control><Shift>z', '<Control>y'], () => w.editor.buffer.redo());
 
-    // Papan kanban
+    // Kanban board
     action('kanban-new', null, () => w.newBoardDocument());
     action('inbox-new', null, () => w.newInboxDocument());
     const view = Gio.SimpleAction.new_stateful('kanban-view', null, GLib.Variant.new_boolean(false));
@@ -78,7 +78,7 @@ export function registerActions(app: Adw.Application, w: MainWindow): void {
     action('about', null, () => showAbout(w.win));
     action('find', ['<Control>f'], () => w.findBar.open());
 
-    // Format inline
+    // Inline formatting
     action('bold', ['<Control>b'], () => wrapSelection(w.editor.buffer, '**'));
     action('italic', ['<Control>i'], () => wrapSelection(w.editor.buffer, '*'));
     action('strike', ['<Alt><Shift>5', '<Control><Shift>x'], () => wrapSelection(w.editor.buffer, '~~'));
@@ -88,11 +88,11 @@ export function registerActions(app: Adw.Application, w: MainWindow): void {
     action('image', ['<Control><Shift>i'], () => w.insertImage());
     action('zoom-image', null, () => w.editor.zoomImage());
 
-    // Blok
+    // Blocks
     action('codeblock', ['<Control><Shift>k'], () => insertBlock(w.editor.buffer, '```\n', '\n```'));
     action('table', ['<Control>t'], () => insertBlock(w.editor.buffer, ...TABLE_TEMPLATE));
 
-    // Edit tabel di posisi kursor
+    // Edit the table at the cursor position
     const tableActions: [string, TableCommand, string[] | null][] = [
         ['table-row-below', 'row-below', null], ['table-row-above', 'row-above', null], ['table-delete-row', 'delete-row', null],
         ['table-col-right', 'col-right', null], ['table-col-left', 'col-left', null], ['table-delete-col', 'delete-col', null],
@@ -106,9 +106,9 @@ export function registerActions(app: Adw.Application, w: MainWindow): void {
     for (let n = 0; n <= 6; n++)
         action(`heading${n}`, [`<Control>${n}`], () => setHeading(w.editor.buffer, n));
 
-    // Tampilan
+    // View
     const s = w.settings;
-    // Toggle yang terikat ke kunci GSettings: status aksinya mengikuti kunci itu.
+    // Toggle bound to a GSettings key: the action's state follows that key.
     const setting = (key: string, accels: string[]) => {
         app.add_action(s.gsettings.create_action(key));
         if (accels.length) app.set_accels_for_action(`app.${key}`, accels);

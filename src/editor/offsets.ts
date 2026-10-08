@@ -1,8 +1,8 @@
-// GtkTextIter menghitung posisi per karakter Unicode (code point), sedangkan
-// string JavaScript menghitung per unit UTF-16. Emoji seperti 🎉 = 1 karakter
-// di GTK tetapi 2 unit di JavaScript, jadi posisi perlu dikonversi.
+// GtkTextIter counts positions per Unicode character (code point), while
+// JavaScript strings count per UTF-16 unit. An emoji such as 🎉 = 1 character
+// in GTK but 2 units in JavaScript, so positions need to be converted.
 
-// Mengembalikan fungsi: offset UTF-16 → offset code point.
+// Returns a function: UTF-16 offset → code point offset.
 export function makeCpMap(text: string): (offset: number) => number {
     if (!/[\uD800-\uDFFF]/.test(text)) return x => x;
     const map = new Int32Array(text.length + 1);
@@ -17,10 +17,10 @@ export function makeCpMap(text: string): (offset: number) => number {
     return x => map[x];
 }
 
-// Offset code point → offset UTF-16 di dalam string s.
+// Code point offset → UTF-16 offset inside string s.
 export const cpToU16 = (s: string, cp: number): number => Array.from(s).slice(0, cp).join('').length;
 
-// Panjang string dalam code point (satuan yang dipakai GtkTextBuffer).
+// String length in code points (the unit used by GtkTextBuffer).
 export function cpLength(s: string): number {
     if (!/[\uD800-\uDFFF]/.test(s)) return s.length;
     let count = 0;
@@ -28,12 +28,12 @@ export function cpLength(s: string): number {
     return count;
 }
 
-// Pemisah kata: spasi (sama dengan \s di JS) dan simbol Markdown # > * _ ` ~ = | -.
+// Word separators: whitespace (same as \s in JS) and the Markdown symbols # > * _ ` ~ = | -.
 const ASCII_SEPARATOR = new Uint8Array(128);
 for (const c of ' \t\n\v\f\r#>*_`~=|-') ASCII_SEPARATOR[c.charCodeAt(0)] = 1;
 
-// Jumlah kata, sama dengan (s.match(/[^\s#>*_`~=|-]+/g) ?? []).length tetapi tanpa membuat
-// string per kata: membuka naskah 100.000 kata 3× lebih cepat dan tanpa sampah untuk GC.
+// Word count, the same as (s.match(/[^\s#>*_`~=|-]+/g) ?? []).length but without creating a
+// string per word: opening a 100,000-word manuscript 3× faster and without garbage for the GC.
 export function countWords(s: string): number {
     let words = 0, inWord = false;
     for (let i = 0; i < s.length; i++) {

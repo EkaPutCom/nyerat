@@ -1,7 +1,7 @@
-// Pola regex untuk mengenali sintaks Markdown.
-// Dipakai bersama oleh penyorot editor (editor/highlighter.ts) dan ekspor HTML (markdown/html.ts).
+// Regex patterns for recognizing Markdown syntax.
+// Used together by the editor highlighter (editor/highlighter.ts) and the HTML export (markdown/html.ts).
 
-// Pola tingkat blok: diuji terhadap satu baris utuh.
+// Block-level patterns: tested against one whole line.
 export const RE = {
     fence: /^(\s{0,3})(`{3,}|~{3,})(.*)$/,
     heading: /^(#{1,6})([ \t]+|$)/,
@@ -11,26 +11,26 @@ export const RE = {
     tableSep: /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/,
 };
 
-// Baris pemisah tabel ("| --- | :-: |" atau "--- | ---"). Wajib memuat '|' supaya
-// tidak tertukar dengan garis pemisah "---".
+// Table separator row ("| --- | :-: |" or "--- | ---"). Must contain '|' so that it
+// is not confused with the "---" divider line.
 export const isTableSeparator = (line: string): boolean => line.includes('|') && RE.tableSep.test(line);
 
-// Awal tabel: baris berisi '|' yang diikuti baris pemisah.
+// Table start: a line containing '|' followed by a separator row.
 export const startsTable = (lines: string[], i: number): boolean => lines[i].includes('|') && i + 1 < lines.length && isTableSeparator(lines[i + 1]);
 
-// Escape (\*) dan kode inline (`kode`) dalam SATU regex, supaya dikenali bersamaan
-// dari kiri ke kanan seperti di CommonMark:
-//   \`bukan kode\`   escape menang, karena backtick-nya sudah "dimakan" escape
-//   `C:\*`           kode menang, karena backslash ada di dalam kode
-// Grup: 1 = karakter yang di-escape, 2 = backtick pembuka, 3 = isi kode.
+// Escape (\*) and inline code (`code`) in ONE regex, so they are recognized together
+// from left to right as in CommonMark:
+//   \`not code\`     the escape wins, because its backtick is already "eaten" by the escape
+//   `C:\*`           the code wins, because the backslash is inside the code
+// Groups: 1 = the escaped character, 2 = the opening backticks, 3 = the code contents.
 export const ESCAPE_OR_CODE = (): RegExp => /\\([\\`*_{}[\]()#+\-.!~=|<>])|(`+)([^`]|[^`][\s\S]*?[^`])\2(?!`)/g;
 
-// Nama format inline yang dihasilkan parseInline().
+// Names of inline formats produced by parseInline().
 export type InlineTag = 'code' | 'marker' | 'link' | 'image' | EmphasisTag;
 export type EmphasisTag = 'bold' | 'italic' | 'bolditalic' | 'strike' | 'mark';
 
-// Pola penekanan inline: [nama tag, regex, panjang penanda].
-// Urutannya penting: *** dicoba sebelum **, dan ** sebelum *.
+// Inline emphasis patterns: [tag name, regex, marker length].
+// Order matters: *** is tried before **, and ** before *.
 export const EMPHASIS: [EmphasisTag, RegExp, number][] = [
     ['bolditalic', /(\*\*\*)(?=\S)([\s\S]*?\S)\*\*\*/g, 3],
     ['bolditalic', /(?<!\w)(___)(?=\S)([\s\S]*?\S)___(?!\w)/g, 3],

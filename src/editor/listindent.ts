@@ -1,9 +1,9 @@
-// Indentasi menggantung untuk item daftar: baris lanjutan (hasil pembungkusan) sejajar
-// dengan teks item, bukan dengan penanda "-" / "1." di kirinya.
+// Hanging indent for list items: continuation lines (from wrapping) line up
+// with the item text, not with the "-" / "1." marker on its left.
 //
-// GtkTextTag memakai `indent` negatif (baris pertama paragraf penuh, sisanya menjorok) bersama
-// left_margin. Lebar awalan ("  - ", "10. ", "- [ ] ") bergantung pada teksnya, jadi tag dibuat
-// sesuai kebutuhan, satu per lebar piksel, dan left_margin-nya diperbarui saat margin editor berubah.
+// A GtkTextTag uses a negative `indent` (the first line of the paragraph is full, the rest indented) together with
+// left_margin. The width of the prefix ("  - ", "10. ", "- [ ] ") depends on its text, so tags are created
+// on demand, one per pixel width, and their left_margin is updated when the editor margin changes.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
@@ -19,14 +19,14 @@ export class ListIndent {
 
     constructor(private readonly view: Gtk.TextView, private readonly buffer: Gtk.TextBuffer, private readonly onCreate: (tag: Gtk.TextTag) => void) {}
 
-    // Margin kiri editor berubah: geser margin semua tag.
+    // The editor's left margin changed: shift the margin of all tags.
     setMargin(margin: number): void {
         this.margin = margin;
         for (const [width, tag] of this.tags) tag.left_margin = margin + width;
     }
 
-    // Tag untuk item daftar dengan awalan: indent + marker ("-", "1.") + gap (spasi) +
-    // task ("[ ]"/"[x]" atau '') + tail (spasi setelah kotak tugas).
+    // Tag for a list item with a prefix: indent + marker ("-", "1.") + gap (space) +
+    // task ("[ ]"/"[x]" or '') + tail (space after the task box).
     tag(indent: string, marker: string, gap: string, task: string, tail: string): Gtk.TextTag {
         const width = this.measure(indent, marker, gap, task, tail);
         let tag = this.tags.get(width);
@@ -39,7 +39,7 @@ export class ListIndent {
         return tag;
     }
 
-    // Lebar awalan sebagaimana digambar: penanda tebal, kotak tugas bercetak tebal monospace.
+    // Prefix width as drawn: bold marker, bold monospace task box.
     private measure(indent: string, marker: string, gap: string, task: string, tail: string): number {
         const key = `${indent}\n${marker}\n${gap}\n${task}\n${tail}`;
         let width = this.widths.get(key);
@@ -57,7 +57,7 @@ export class ListIndent {
 
 const registry = new WeakMap<Tags, ListIndent>();
 
-// Dipanggil editor: highlighter.ts mencari ListIndent lewat objek Tags miliknya.
+// Called by the editor: highlighter.ts finds ListIndent through its own Tags object.
 export function registerListIndent(tags: Tags, indent: ListIndent): void {
     registry.set(tags, indent);
 }

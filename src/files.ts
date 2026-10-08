@@ -1,4 +1,4 @@
-// Baca/tulis file teks UTF-8. Melempar error jika gagal; penanganannya di pemanggil.
+// Read/write UTF-8 text files. Throws on failure; handling is up to the caller.
 
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
@@ -16,13 +16,13 @@ export function writeTextFile(path: string, text: string): void {
     GLib.file_set_contents(path, enc.encode(text));
 }
 
-// Penulisan latar yang sedang berjalan, per path.
+// Background writes in progress, per path.
 const pending = new Map<string, number>();
 
-// Tulis file tanpa menahan thread utama: Gio menulis ke file sementara, fsync, lalu
-// mengganti file tujuan secara atomik di thread pekerja. Dipakai auto save supaya jeda
-// fsync (bisa puluhan milidetik di disk lambat) tidak terasa saat pengguna lanjut mengetik.
-// done dipanggil di thread utama; error = null jika berhasil.
+// Write a file without blocking the main thread: Gio writes to a temporary file, fsyncs, then
+// atomically replaces the target file in a worker thread. Used by autosave so the fsync pause
+// (can be tens of milliseconds on a slow disk) is not felt while the user keeps typing.
+// done is called on the main thread; error = null on success.
 export function writeTextFileAsync(path: string, text: string, done: (error: unknown) => void): void {
     pending.set(path, (pending.get(path) ?? 0) + 1);
     const finish = (error: unknown) => {
@@ -46,10 +46,10 @@ export function writeTextFileAsync(path: string, text: string, done: (error: unk
     }
 }
 
-// Tunggu penulisan latar ke `path` (atau ke file di dalam folder `path`) selesai. Dipanggil
-// sebelum menulis, memindah, atau membuang file, supaya hasil penulisan latar yang lebih
-// lama tidak menimpa perubahan sesudahnya. Jarang menunggu: penulisan latar hanya
-// beberapa milidetik.
+// Wait for background writes to `path` (or to files inside the folder `path`) to finish. Called
+// before writing, moving, or deleting a file, so the result of an older background write does not
+// overwrite later changes. Rarely waits: a background write takes only
+// a few milliseconds.
 export function waitForWrites(path: string): void {
     const busy = () => [...pending.keys()].some(p => p === path || p.startsWith(`${path}/`));
     const context = GLib.MainContext.default();

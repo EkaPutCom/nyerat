@@ -1,46 +1,46 @@
-// Papan kanban dalam file Markdown. Frontmatter menandai dokumen sebagai papan:
+// Kanban board in a Markdown file. Frontmatter marks the document as a board:
 //
 //   ---
 //   kanban: true
 //   ---
 //
-// Penanda lama "kanban-plugin: …" (dari plugin Kanban Obsidian) tetap dikenali, dan
-// frontmatter yang sudah ada dipertahankan apa adanya saat disimpan. Isinya:
+// The old marker "kanban-plugin: …" (from the Obsidian Kanban plugin) is still recognized, and
+// existing frontmatter is kept as is when saved. Contents:
 //
-//   ## Rencana                      ← heading level 2 = daftar (kolom)
+//   ## Plan                         ← heading level 2 = list (column)
 //
-//   - [ ] Tulis laporan #penting    ← item daftar = kartu; [x] = selesai
-//     catatan kartu (diindentasi)   ← baris yang diindentasi = catatan kartu
-//   - [ ] Kirim undangan @{2026-10-20}
-//   - [ ] Perbaiki checkout @pi     ← @nama = harness yang ditugasi mengerjakan kartu
+//   - [ ] Write the report #important  ← list item = card; [x] = done
+//     card note (indented)          ← an indented line = card note
+//   - [ ] Send invitations @{2026-10-20}
+//   - [ ] Fix checkout @pi          ← @name = the harness assigned to work on the card
 //
-//   ## Selesai
+//   ## Done
 //
-//   - [x] Pesan tempat
+//   - [x] Book the venue
 //
 //   %% kanban:settings
-//   ...                             ← sisanya dipertahankan apa adanya
+//   ...                             ← the rest is kept as is
 //
-// Murni TypeScript tanpa GTK. Semua operasi mengembalikan papan baru; papan asal
-// tidak diubah, sehingga mudah diuji.
+// Pure TypeScript without GTK. All operations return a new board; the original board
+// is not changed, so it is easy to test.
 
 export interface Card {
-    done: boolean | null;   // null = item biasa tanpa kotak centang ("- teks")
-    text: string;           // baris pertama kartu, Markdown mentah (termasuk #tag dan @{tanggal})
-    notes: string[];        // catatan: baris lanjutan kartu, tanpa indentasi
+    done: boolean | null;   // null = plain item without a checkbox ("- text")
+    text: string;           // first line of the card, raw Markdown (including #tag and @{date})
+    notes: string[];        // notes: continuation lines of the card, without indentation
 }
 
 export interface Column {
     title: string;
-    intro: string[];        // baris biasa sebelum kartu pertama (misalnya "**Complete**")
+    intro: string[];        // plain lines before the first card (e.g. "**Complete**")
     cards: Card[];
-    outro: string[];        // baris biasa setelah kartu terakhir (misalnya "***")
+    outro: string[];        // plain lines after the last card (e.g. "***")
 }
 
 export interface Board {
-    head: string[];         // semua baris sebelum daftar pertama: frontmatter dan judul
+    head: string[];         // all lines before the first list: frontmatter and title
     columns: Column[];
-    footer: string[];       // dari "%% kanban:settings" sampai akhir file
+    footer: string[];       // from "%% kanban:settings" to the end of the file
 }
 
 export interface Position {
@@ -55,12 +55,12 @@ const CARD = /^[-*+]\s+(?:\[([ xX])\]\s?)?(.*)$/;
 const FOOTER = /^%%\s*kanban:settings/;
 const INDENTED = /^( {2,}|\t)/;
 
-// ---------- Mengenali dan membaca ----------
+// ---------- Recognizing and reading ----------
 
-// Penanda papan di frontmatter: "kanban: true", atau "kanban-plugin: …" (nilai apa pun).
+// Board marker in the frontmatter: "kanban: true", or "kanban-plugin: …" (any value).
 const MARKER = /^(?:kanban:\s*["']?(?:true|yes)["']?|kanban-plugin:\s*\S+)\s*$/i;
 
-// Dokumen adalah papan kanban jika frontmatter-nya memuat penanda papan.
+// A document is a kanban board if its frontmatter contains the board marker.
 export function isKanban(text: string): boolean {
     const lines = text.split('\n', 40);
     if (lines[0]?.trim() !== '---') return false;
@@ -95,7 +95,7 @@ export function parseColumn(title: string, lines: string[]): Column {
         } else if (current && INDENTED.test(line)) {
             current.notes.push(line.replace(/^( {2}|\t)/, ''));
         } else if (!line.trim()) {
-            // Baris kosong di tengah catatan kartu dipertahankan; selainnya hanya pemisah.
+            // A blank line in the middle of a card's notes is kept; otherwise it is only a separator.
             if (current && INDENTED.test(nextNonBlank(lines, i + 1) ?? '')) current.notes.push('');
         } else {
             current = null;
@@ -125,7 +125,7 @@ export function parseBoard(text: string): Board {
     return { head, columns, footer };
 }
 
-// ---------- Menulis ----------
+// ---------- Writing ----------
 
 export function serializeBoard(board: Board): string {
     const out: string[] = [...(board.head.length ? board.head : DEFAULT_HEAD), ''];
@@ -143,14 +143,14 @@ export function serializeBoard(board: Board): string {
     return `${trimBlankEnds(out).join('\n')}\n`;
 }
 
-// Papan baru dengan daftar-daftar kosong.
-export function newBoard(titles: string[] = ['Rencana', 'Dikerjakan', 'Selesai']): Board {
+// New board with empty lists.
+export function newBoard(titles: string[] = ['Plan', 'In Progress', 'Done']): Board {
     return { head: [...DEFAULT_HEAD], columns: titles.map(title => ({ title, intro: [], cards: [], outro: [] })), footer: [] };
 }
 
 export const countCards = (board: Board): number => board.columns.reduce((n, c) => n + c.cards.length, 0);
 
-// ---------- Operasi ----------
+// ---------- Operations ----------
 
 const clamp = (n: number, min: number, max: number): number => Math.min(max, Math.max(min, n));
 
@@ -158,7 +158,7 @@ function withColumn(board: Board, column: number, change: (c: Column) => Column)
     return { ...board, columns: board.columns.map((c, i) => (i === column ? change(c) : c)) };
 }
 
-// Sisipkan kartu di `index` (default: paling bawah).
+// Insert a card at `index` (default: at the bottom).
 export function addCard(board: Board, column: number, text: string, index = Infinity): Board {
     const title = text.trim();
     if (!title) return board;
@@ -173,7 +173,7 @@ export function updateCard(board: Board, at: Position, patch: Partial<Card>): Bo
     return withColumn(board, at.column, c => ({ ...c, cards: c.cards.map((card, i) => (i === at.index ? { ...card, ...patch } : card)) }));
 }
 
-// Kartu biasa ("- teks") menjadi selesai pada pergantian pertama.
+// A plain card ("- text") becomes done on the first toggle.
 export const toggleDone = (board: Board, at: Position): Board =>
     updateCard(board, at, { done: board.columns[at.column]?.cards[at.index]?.done !== true });
 
@@ -181,9 +181,9 @@ export function deleteCard(board: Board, at: Position): Board {
     return withColumn(board, at.column, c => ({ ...c, cards: c.cards.filter((_, i) => i !== at.index) }));
 }
 
-// Pindahkan kartu. to.index adalah posisi akhir kartu di daftar tujuan (setelah kartu
-// dicabut dari daftar asal), sehingga memindahkan ke bawah di daftar yang sama tidak
-// perlu penyesuaian khusus.
+// Move a card. to.index is the final position of the card in the destination list (after the card
+// is taken out of the source list), so moving down within the same list needs
+// no special adjustment.
 export function moveCard(board: Board, from: Position, to: Position): Board {
     const card = board.columns[from.column]?.cards[from.index];
     if (!card || !board.columns[to.column]) return board;
@@ -219,18 +219,18 @@ export function moveColumn(board: Board, from: number, to: number): Board {
     return { ...board, columns };
 }
 
-// ---------- Isi kartu ----------
+// ---------- Card content ----------
 
 export interface CardMeta {
-    title: string;         // teks tanpa #tag, @{tanggal}, dan @penugasan, untuk ditampilkan
+    title: string;         // text without #tag, @{date}, and @assignment, for display
     tags: string[];
     due: string | null;    // "YYYY-MM-DD"
-    agent: string | null;  // harness yang ditugasi ("@pi" → "pi"); yang pertama bila lebih dari satu
+    agent: string | null;  // the assigned harness ("@pi" → "pi"); the first one if there is more than one
 }
 
 const TAG = /(^|\s)#([\p{L}\p{N}_/-]+)/gu;
 const DUE = /\s*@\{(\d{4}-\d{2}-\d{2})(?:[ T]\d{1,2}:\d{2})?\}/;
-// Harus berdiri sendiri (diawali spasi), jadi alamat email dan @{tanggal} tidak ikut.
+// Must stand alone (preceded by a space), so email addresses and @{date} are not matched.
 const AGENT = /(^|\s)@([a-z][a-z0-9_-]*)(?=\s|$)/g;
 
 export function cardMeta(text: string): CardMeta {
@@ -241,19 +241,19 @@ export function cardMeta(text: string): CardMeta {
     return { title: title || text.trim(), tags, due, agent };
 }
 
-// Pecah teks kartu menjadi judul, tag, dan tenggat (tanggal dengan jam bila ada) untuk
-// formulir sunting; composeCard menyatukannya kembali.
+// Split card text into title, tags, and due date (date with time if present) for the
+// edit form; composeCard puts them back together.
 export interface CardParts {
     title: string;
     tags: string[];
     due: string;
-    agent?: string;   // kosong = tidak ditugaskan
+    agent?: string;   // empty = not assigned
 }
 
 const DUE_FULL = /\s*@\{(\d{4}-\d{2}-\d{2}(?:[ T]\d{1,2}:\d{2})?)\}/;
 export const DUE_INPUT = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{1,2}:\d{2})?$/;
 
-// Ganti bagian tanggal tenggat dengan `date` (YYYY-MM-DD) dari pemilih tanggal; jam yang sudah diketik dipertahankan.
+// Replace the due date part with `date` (YYYY-MM-DD) from the date picker; a time already typed is kept.
 export function withDueDate(due: string, date: string): string {
     const trimmed = due.trim();
     return DUE_INPUT.test(trimmed) ? date + trimmed.slice(10) : date;
@@ -274,12 +274,12 @@ export function composeCard({ title, tags, due, agent = '' }: CardParts): string
 
 export const AGENT_NAME = /^[a-z][a-z0-9_-]*$/;
 
-// Tugaskan kartu ke harness `agent` (ganti penugasan lama, atau hapus bila null) tanpa menyentuh bagian lain teksnya.
+// Assign the card to harness `agent` (replaces the old assignment, or removes it if null) without touching the rest of its text.
 export function assignCard(text: string, agent: string | null): string {
     const rest = text.replace(AGENT, '$1').replace(/\s{2,}/g, ' ').trim();
     if (!agent) return rest;
     const meta = cardMeta(rest);
-    // Sisipkan tepat setelah judul supaya urutannya sama dengan composeCard.
+    // Insert right after the title so the order is the same as composeCard.
     const at = rest.indexOf(meta.title);
     return at < 0 ? `${rest} @${agent}` : `${rest.slice(0, at + meta.title.length)} @${agent}${rest.slice(at + meta.title.length)}`;
 }
@@ -288,13 +288,13 @@ export type DueStatus = 'overdue' | 'today' | 'soon' | 'later';
 
 const DAY = 24 * 60 * 60 * 1000;
 
-// today: "YYYY-MM-DD". 'soon' = dalam dua hari ke depan.
+// today: "YYYY-MM-DD". 'soon' = within the next two days.
 export function dueStatus(due: string, today: string): DueStatus {
     const days = Math.round((Date.parse(`${due}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / DAY);
     return days < 0 ? 'overdue' : days === 0 ? 'today' : days <= 2 ? 'soon' : 'later';
 }
 
-// ---------- Menyeret ----------
+// ---------- Dragging ----------
 
-// Posisi sisip kartu yang diseret: jumlah kartu lain yang titik tengahnya di atas pointer.
+// Insertion position of the dragged card: the number of other cards whose midpoint is above the pointer.
 export const dropIndex = (centers: number[], y: number): number => centers.filter(c => c < y).length;

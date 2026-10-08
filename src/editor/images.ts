@@ -1,19 +1,19 @@
-// Menampilkan gambar ![alt](url) langsung di editor.
+// Displays images ![alt](url) directly in the editor.
 //
-// Gambar TIDAK dimasukkan ke dalam buffer teks (misalnya lewat GtkTextChildAnchor),
-// karena itu akan menambah karakter ke dokumen dan riwayat undo. Sebagai gantinya:
+// Images are NOT put into the text buffer (e.g. through a GtkTextChildAnchor),
+// because that would add characters to the document and the undo history. Instead:
 //
-//   1. Di bawah baris yang memuat gambar disediakan ruang kosong dengan tag
-//      ber-`pixels_below_lines` setinggi gambarnya.
-//   2. Widget gambar ditempelkan di atas ruang kosong itu dengan
-//      add_overlay(). Posisinya dalam koordinat buffer, jadi ikut
-//      bergulir bersama teks.
-//   3. Setiap kali tata letak berubah (teks diedit, jendela diubah ukurannya,
-//      gambar selesai dimuat), posisi widget dihitung ulang dari
-//      get_line_yrange() barisnya.
+//   1. Below the line that contains the image, blank space is reserved with a tag
+//      having `pixels_below_lines` as tall as the image.
+//   2. The image widget is attached above that blank space with
+//      add_overlay(). Its position is in buffer coordinates, so it scrolls
+//      along with the text.
+//   3. Every time the layout changes (text edited, window resized,
+//      image finished loading), the widget position is recomputed from
+//      the line's get_line_yrange().
 //
-// Gambar dimuat secara async dan disimpan di cache per URI, jadi mengetik tidak
-// memuat ulang gambar yang sama.
+// Images are loaded asynchronously and cached per URI, so typing does not
+// reload the same image.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GdkPixbuf from 'gi://GdkPixbuf';
@@ -25,13 +25,13 @@ import { OverlaySlots } from './overlays.js';
 import { iterAtLine, onClick, removeChildren, textureFromPixbuf } from '../gtkutil.js';
 import { _, fmt } from '../i18n.js';
 
-const MAX_HEIGHT = 480;  // tinggi maksimum gambar, dalam piksel
-const GAP = 12;          // jarak di atas dan bawah gambar
-const SPACING = 8;       // jarak antar gambar dalam satu baris
+const MAX_HEIGHT = 480;  // maximum image height, in pixels
+const GAP = 12;          // distance above and below the image
+const SPACING = 8;       // distance between images on one line
 
-// ---------- Memuat gambar ----------
+// ---------- Loading images ----------
 
-// URL di Markdown → URI GIO. Path relatif dihitung dari folder dokumen.
+// URL in Markdown → GIO URI. Relative paths are resolved from the document folder.
 export function resolveImageUri(url: string, baseDir: string): string {
     if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return url;
     const path = GLib.path_is_absolute(url) ? url : GLib.build_filenamev([baseDir, decodeURI(url)]);
@@ -45,24 +45,24 @@ interface CacheEntry {
     waiters: ((entry: CacheEntry) => void)[];
 }
 
-// Satu gambar di dalam blok.
+// One image inside a block.
 interface BlockItem {
     uri: string;
     alt: string;
     entry: CacheEntry | null;
 }
 
-// Bagian dari Gdk.Event yang dipakai penanganan klik (memudahkan tes membuat event tiruan).
+// The part of Gdk.Event used by click handling (makes it easier for tests to create fake events).
 
-// Hasil mencari gambar untuk diperbesar (imageAt).
+// Result of looking for an image to zoom (imageAt).
 export type ImageLookup =
     | { ok: true; pixbuf: GdkPixbuf.Pixbuf; title: string }
     | { ok: false; reason: string };
 
-// Satu blok per baris yang memuat gambar.
+// One block per line that contains images.
 export interface Block {
     line: number;
-    key: string;           // daftar URI + alt, untuk mencocokkan blok yang sama
+    key: string;           // list of URI + alt, to match the same block
     items: BlockItem[];
     box: Gtk.Box;          // slot overlay (lihat overlays.ts)
     content: Gtk.Box;
@@ -74,7 +74,7 @@ export interface Block {
 
 const cache = new Map<string, CacheEntry>();
 
-// Muat gambar secara async; callback dipanggil dengan entri cache saat selesai.
+// Load an image asynchronously; the callback is called with the cache entry when done.
 function loadImage(uri: string, callback: (entry: CacheEntry) => void): void {
     let entry = cache.get(uri);
     if (entry) {
@@ -90,7 +90,7 @@ function loadImage(uri: string, callback: (entry: CacheEntry) => void): void {
             const [, bytes] = file.load_contents_finish(result);
             const stream = Gio.MemoryInputStream.new_from_bytes(new GLib.Bytes(bytes));
             const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
-            fresh.pixbuf = pixbuf.apply_embedded_orientation() ?? pixbuf;  // foto ponsel yang diputar
+            fresh.pixbuf = pixbuf.apply_embedded_orientation() ?? pixbuf;  // rotated phone photos
             fresh.status = 'ok';
         } catch (e) {
             fresh.status = 'error';
@@ -101,7 +101,7 @@ function loadImage(uri: string, callback: (entry: CacheEntry) => void): void {
     });
 }
 
-// ---------- Lapisan gambar ----------
+// ---------- Image layer ----------
 
 export class ImageLayer {
     readonly view: Gtk.TextView;
@@ -111,8 +111,8 @@ export class ImageLayer {
     blocks: Block[] = [];
 
     getBaseDir: () => string = () => GLib.get_home_dir();
-    onActivate: (line: number) => void = () => {};  // gambar diklik sekali
-    onZoom: (line: number, index: number) => void = () => {};  // gambar diklik dua kali
+    onActivate: (line: number) => void = () => {};  // image clicked once
+    onZoom: (line: number, index: number) => void = () => {};  // image double-clicked
 
     private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
     private relayoutQueued = false;
@@ -125,8 +125,8 @@ export class ImageLayer {
         this.buffer = view.buffer;
         this.slots = new OverlaySlots(view);
 
-        // Tata letak berubah (tinggi dokumen atau ukuran jendela, terlihat dari adjustment
-        // vertikal) → posisi widget perlu dihitung ulang.
+        // The layout changed (document height or window size, seen from the vertical
+        // adjustment) → widget positions need to be recomputed.
         view.connect('notify::vadjustment', () => this.watchAdjustment());
         this.watchAdjustment();
     }
@@ -145,25 +145,25 @@ export class ImageLayer {
         adj.connect('changed', () => this.queueRelayout());
     }
 
-    // Gambar di baris `line` diklik. Satu klik: kursor ke barisnya (sintaksnya muncul);
-    // klik ganda: perbesar gambar itu.
+    // The image on line `line` was clicked. Single click: cursor to its line (its syntax appears);
+    // double click: zoom that image.
     press(line: number, index: number, doubleClick: boolean): void {
         if (doubleClick) this.onZoom(line, index);
         else this.onActivate(line);
     }
 
-    // Gambar ke-`index` di baris `line` dalam ukuran penuh (bukan yang diperkecil untuk tampilan).
+    // The `index`-th image on line `line` at full size (not the scaled-down one used for display).
     imageAt(line: number, index = 0): ImageLookup {
         const item = this.blocks.find(b => b.line === line)?.items[index];
-        if (!item) return { ok: false, reason: _('Tidak ada gambar di baris ini') };
+        if (!item) return { ok: false, reason: _('There is no image on this line') };
         if (item.entry?.status === 'ok' && item.entry.pixbuf) {
             const name = item.uri.split('/').pop() ?? item.uri;
             return { ok: true, pixbuf: item.entry.pixbuf, title: item.alt || GLib.uri_unescape_string(name, null) || name };
         }
-        return { ok: false, reason: item.entry?.status === 'error' ? _('Gambar tidak bisa dimuat') : _('Gambar belum selesai dimuat') };
+        return { ok: false, reason: item.entry?.status === 'error' ? _('The image could not be loaded') : _('The image has not finished loading') };
     }
 
-    // images dari highlighter.ts
+    // images from highlighter.ts
     update(images: ImageRef[]): void {
         const baseDir = this.getBaseDir();
         const byLine = new Map<number, { uri: string; alt: string }[]>();
@@ -172,8 +172,8 @@ export class ImageLayer {
             byLine.get(img.line)!.push({ uri: resolveImageUri(img.url, baseDir), alt: img.alt });
         }
 
-        // Pakai ulang blok yang isinya sama, walaupun barisnya bergeser (misalnya
-        // karena ada baris baru di atasnya). Cocokkan berdasarkan daftar URI.
+        // Reuse blocks with the same contents, even if their lines shifted (for example
+        // because a new line was added above). Match by the URI list.
         const unused = [...this.blocks];
         const next: Block[] = [];
         for (const [line, items] of byLine) {
@@ -201,7 +201,7 @@ export class ImageLayer {
         this.queueRelayout();
     }
 
-    // Lebar kolom teks berubah → skala ulang semua gambar.
+    // The text column width changed → rescale all images.
     setMaxWidth(width: number): void {
         width = Math.max(100, Math.floor(width));
         if (width === this.maxWidth) return;
@@ -241,7 +241,7 @@ export class ImageLayer {
         this.slots.release(block.box);
     }
 
-    // Bangun ulang isi blok sesuai status pemuatan dan lebar kolom saat ini.
+    // Rebuild the block contents according to the current loading status and column width.
     private render(block: Block): void {
         removeChildren(block.content);
         let height = 0;
@@ -253,24 +253,24 @@ export class ImageLayer {
                 const w = Math.max(1, Math.round(pb.get_width() * scale));
                 const h = Math.max(1, Math.round(pb.get_height() * scale));
                 const scaled = (scale < 1 ? pb.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR) : null) ?? pb;
-                // Gtk.Image di GTK 4 berukuran ikon; Picture tampil seukuran gambarnya.
+                // Gtk.Image in GTK 4 is icon-sized; Picture is shown at the size of its image.
                 widget = Gtk.Picture.new_for_paintable(textureFromPixbuf(scaled));
                 (widget as Gtk.Picture).set_can_shrink(false);
-                widget.set_tooltip_text(fmt(_('{name}\nKlik ganda untuk memperbesar'), { name: item.alt || item.uri }));
+                widget.set_tooltip_text(fmt(_('{name}\nDouble-click to enlarge'), { name: item.alt || item.uri }));
                 height += h;
             } else {
                 const text = item.entry?.status === 'error'
-                    ? fmt(_('⚠ Gambar tidak bisa dimuat: {name}'), { name: item.alt || GLib.uri_unescape_string(item.uri, null) || item.uri })
-                    : fmt(_('Memuat gambar {name}…'), { name: item.alt });
-                // Tanpa wrap: widget di dalam TextView hanya diberi lebar minimum,
-                // sehingga label yang dibungkus akan terpotong per kata.
+                    ? fmt(_('⚠ The image could not be loaded: {name}'), { name: item.alt || GLib.uri_unescape_string(item.uri, null) || item.uri })
+                    : fmt(_('Loading image {name}…'), { name: item.alt });
+                // No wrap: a widget inside a TextView is only given the minimum width,
+                // so a wrapped label would be cut off word by word.
                 widget = new Gtk.Label({ label: text, xalign: 0 });
                 widget.add_css_class('image-note');
                 if (item.entry?.error) widget.set_tooltip_text(item.entry.error);
                 height += 24;
             }
-            // Setiap gambar punya penerima kliknya sendiri, supaya klik ganda tahu gambar mana
-            // yang dimaksud jika satu baris memuat beberapa gambar.
+            // Each image has its own click receiver, so a double click knows which image
+            // is meant when one line contains several images.
             widget.set_halign(Gtk.Align.START);
             const index = block.items.indexOf(item);
             onClick(widget, count => {
@@ -283,7 +283,7 @@ export class ImageLayer {
         block.height = height;
     }
 
-    // ---------- Ruang kosong di bawah baris ----------
+    // ---------- Blank space below the line ----------
 
     private gapTag(height: number): Gtk.TextTag {
         let tag = this.gapTags.get(height);
@@ -302,7 +302,7 @@ export class ImageLayer {
             const s = iterAtLine(this.buffer, block.line);
             const e = s.copy();
             if (!e.ends_line()) e.forward_to_line_end();
-            // Tag paragraf harus menempel di karakter pertama baris.
+            // The paragraph tag must stick to the first character of the line.
             if (s.equal(e)) continue;
             const gap = this.gapTag(block.height + 2 * GAP);
             if (!gaps.has(gap)) gaps.set(gap, []);
@@ -318,7 +318,7 @@ export class ImageLayer {
         this.relayoutQueued = true;
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this.relayoutQueued = false;
-            if (!this.destroyed) this.relayout();   // tab bisa ditutup sebelum idle berjalan
+            if (!this.destroyed) this.relayout();   // the tab may be closed before idle runs
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -330,7 +330,7 @@ export class ImageLayer {
             if (block.destroyed || block.line >= this.buffer.get_line_count()) continue;
             const [lineY, lineHeight] = this.view.get_line_yrange(iterAtLine(this.buffer, block.line));
             const y = lineY + lineHeight - block.height - GAP;
-            // Hanya pindahkan jika berubah, supaya tidak memicu resize berulang.
+            // Only move if changed, so as not to trigger repeated resizes.
             if (x === block.x && y === block.y) continue;
             block.x = x;
             block.y = y;

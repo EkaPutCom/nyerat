@@ -1,7 +1,7 @@
 {
   "name": "nyerat",
   "version": "1.0.0",
-  "description": "Personal workbench for humans and AI agents, dengan GTK 4 dan GJS",
+  "description": "Personal workbench for humans and AI agents, with GTK 4 and GJS",
   "private": true,
   "type": "module",
   "license": "MIT",
