@@ -170,6 +170,34 @@ export function homeTests(c: GuiContext): void {
         ok(!win.homeMode && win.file === null, 'the last tab was not emptied');
         close(win);
     });
+    test('boards and inboxes after more than 300 notes are still read', () => {
+        const notes = path('aaa');
+        GLib.mkdir_with_parents(notes, 0o755);
+        for (let i = 0; i < 320; i++) put(`aaa/note${i}.md`, '# Note\n');
+        try {
+            const { win } = open();
+            const data = win.homeData();
+            eq(data.tasks.map(t => t.title), ['Old report', 'Implement search', 'Review architecture'], 'due dates');
+            eq(data.inboxes, [{ file: 'inbox.md', open: 2 }], 'inbox');
+            close(win);
+        } finally {
+            for (let i = 0; i < 320; i++) GLib.unlink(path(`aaa/note${i}.md`));
+            GLib.rmdir(notes);
+        }
+    });
+    test('an unsaved tab that becomes a board is counted; one that stops being a board is not', () => {
+        const { win } = open();
+        win.openFile(summary); settle();
+        win.editor.setText(`---\nkanban: true\n---\n\n## Plan\n\n- [ ] Write summary @{${day(0)}}\n`);
+        win.editor.buffer.set_modified(true);
+        ok(win.homeData().tasks.some(t => t.title === 'Write summary' && t.file === 'projects/delta/summary.md'), 'the unsaved board is missing');
+        win.openFile(board); settle();
+        win.editor.setText('# Not a board any more\n');
+        win.editor.buffer.set_modified(true);
+        ok(!win.homeData().tasks.some(t => t.file === 'board.md'), 'the unsaved non-board still counts');
+        for (const doc of [summary, board]) { win.openFile(doc); win.editor.buffer.set_modified(false); }
+        close(win);
+    });
     test('without a work folder and history: a welcome page with Open Folder', () => {
         const { win } = open({ folder: null });
         ok(labels(win).includes('Open Folder…') && labels(win).includes('New Document'), `welcome: ${labels(win).join('|')}`);

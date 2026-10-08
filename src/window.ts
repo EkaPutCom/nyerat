@@ -892,11 +892,16 @@ export class MainWindow {
         const recent = this.settings.recentFiles.filter(r => fileExists(r.path) && !isDirectory(r.path));
         const { resume, others } = splitRecent(recent, RESUME_CARDS);
         // Boards and inboxes are read through the readProject cache (by modification time); unsaved tabs are read from their editor.
-        const files = root ? readProject(root, null) : [];
+        const relevant = (text: string) => isKanban(text) || isInbox(text);
+        const files = root ? readProject(root, null, false, relevant) : [];
         for (const doc of this.docs) {
-            if (!doc.file || !doc.editor.buffer.get_modified()) continue;
-            const entry = files.find(f => f.name === this.projectName(doc.file));
-            if (entry) entry.text = doc.editor.getText();
+            if (!root || !doc.file?.startsWith(`${root}/`) || !doc.editor.buffer.get_modified()) continue;
+            const name = this.projectName(doc.file)!;
+            const text = doc.editor.getText();
+            const at = files.findIndex(f => f.name === name);
+            if (!relevant(text)) { if (at >= 0) files.splice(at, 1); }
+            else if (at >= 0) files[at].text = text;
+            else files.push({ name, text });
         }
         const realName = GLib.get_real_name();
         return {

@@ -574,3 +574,23 @@ Type per character mixed 30 KB 1.52 ms (baseline 1.69), book 651 KB 2.97 (2.87).
 cursor and Enter still fluctuate between runs on Xvfb GL (e.g. the cursor on book 651 KB 32–59 ms
 in three runs without a change to the cursor path in between); see the note about llvmpipe frames above.
 Validation: `npm test` **575 passed, 0 failed**, a clean log. The baseline was not replaced.
+
+## Home reads boards past the first 300 files (2026-10-08)
+
+A fix, not an optimization. `homeData()` called `readProject()`, which stops after 300 Markdown files
+before checking whether a file is a board or an inbox. Boards and inboxes later in the alphabetical walk
+never reached the due dates or the inbox counts on Home. `readProject()` now takes a `keep` filter
+that is applied before the limit, and it drops cache entries of files under the root that were deleted.
+
+Micro-benchmark of the Home data path (walk + `dueTasks` + `openInboxes`, warm cache, 10 repetitions,
+a synthetic folder where every tenth file is a board with 40 cards; not in the repo):
+
+| Workspace | Before (median) | After (median) | Boards found before → after |
+| --- | ---: | ---: | ---: |
+| 300 files | 14.65 ms | 14.64 ms | 30 → 30 |
+| 1,000 files | 18.20 ms | 49.47 ms (max 80.14) | 30 → 100 |
+
+At 1,000 files the cost rises because all files are now walked and all 100 boards are parsed; the old
+number was cheaper only because it ignored 70% of them. This runs synchronously each time the window
+becomes active while Home is shown. Caching the parsed boards by file stamp would remove most of the
+`dueTasks` part; that has not been done yet. The editor benchmark is not affected (no editor code changed).

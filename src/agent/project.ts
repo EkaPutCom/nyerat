@@ -51,10 +51,14 @@ export function listMarkdownFiles(root: string, limit = 5000): string[] {
 }
 
 // All Markdown files under root (excluding dot files and the tools' built-in folders), except `except`.
-// Names are returned relative to the root.
-export function readProject(root: string, except: string | null, fresh = false): SourceFile[] {
+// Names are returned relative to the root. `keep` filters by contents before the file limit, so a caller
+// that only wants some files (Home: boards and inboxes) still finds them past the first MAX_FILES files.
+export function readProject(root: string, except: string | null, fresh = false, keep?: (text: string) => boolean): SourceFile[] {
     const files: SourceFile[] = [];
+    const seen = new Set<string>();
+    let complete = true;
     walkMarkdown(root, (info, path, name) => {
+        seen.add(path);
         if (path === except || info.get_size() > MAX_FILE_BYTES) return true;
         const stamp = `${info.get_size()}:${info.get_modification_date_time()?.to_unix() ?? 0}:${info.get_attribute_uint32('time::modified-usec')}`;
         let entry = cache.get(path);
@@ -66,8 +70,15 @@ export function readProject(root: string, except: string | null, fresh = false):
             }
             cache.set(path, entry);
         }
+        if (keep && !keep(entry.text)) return true;
         files.push({ name, text: entry.text });
-        return files.length < MAX_FILES;
+        complete = files.length < MAX_FILES;
+        return complete;
     });
+    // Forget files under root that were deleted or moved, so the cache does not grow with stale texts.
+    if (complete) {
+        const prefix = root.endsWith('/') ? root : `${root}/`;
+        for (const path of cache.keys()) if (path.startsWith(prefix) && !seen.has(path)) cache.delete(path);
+    }
     return files;
 }
