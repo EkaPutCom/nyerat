@@ -7,7 +7,8 @@ import Gdk from 'gi://Gdk?version=4.0';
 
 import { AppSettings } from '../../src/settings.js';
 import { ROOT, tmp } from '../framework.js';
-import { MainWindow, type Option } from '../../src/window.js';
+import type { Option } from '../../src/actions.js';
+import { MainWindow } from '../../src/window.js';
 import type { TagName } from '../../src/editor/tags.js';
 import { iterAtLine } from '../../src/gtkutil.js';
 

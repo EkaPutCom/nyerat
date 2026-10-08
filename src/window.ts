@@ -47,7 +47,7 @@ import { HeaderBar } from './ui/headerbar.js';
 import type { Palette } from './colors.js';
 import { applyTheme, systemPrefersDark } from './ui/theme.js';
 import { chooseFile, askSaveChanges, showError, harnessAskDialog, harnessTextDialog, promptDialog } from './ui/dialogs.js';
-import { registerActions, TEXT_ACTIONS } from './actions.js';
+import { registerActions, TEXT_ACTIONS, type Option } from './actions.js';
 import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
 import { InboxView } from './ui/inbox.js';
@@ -87,8 +87,6 @@ function fitToScreen(width: number, height: number): [number, number] {
 }
 const MODE_LABELS: Record<Mode, string> = { source: _('Source'), focus: _('Focus'), typewriter: _('Typewriter') };
 
-// View options that can be changed from the menu.
-export type Option = 'sidebar' | 'chat' | 'dark' | 'autosave' | Mode;
 
 // One open document (one tab).
 interface Doc {

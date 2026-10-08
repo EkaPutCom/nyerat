@@ -12,7 +12,41 @@ import { CommandPalette } from './ui/palette.js';
 import { showShortcuts } from './ui/shortcuts.js';
 import type Adw from 'gi://Adw?version=1';
 import type { TableCommand } from './editor/tableedit.js';
-import type { MainWindow, Option } from './window.js';
+import type { Mode, MarkdownView } from './editor/view.js';
+import type { FindBar } from './ui/findbar.js';
+import type { AppSettings } from './settings.js';
+import type { Awaitable } from './gtkutil.js';
+
+// View options that can be changed from the menu.
+export type Option = 'sidebar' | 'chat' | 'dark' | 'autosave' | Mode;
+
+// What the actions need from the main window. Kept narrow so this module does not depend on window.ts,
+// which registers the actions by passing itself.
+export interface ActionHost {
+    readonly win: Adw.ApplicationWindow;
+    readonly settings: AppSettings;
+    readonly findBar: FindBar;
+    readonly editor: MarkdownView;
+    readonly dark: boolean;
+    newDocument(): void;
+    newBoardDocument(): void;
+    newInboxDocument(): void;
+    closeTab(): Awaitable<boolean>;
+    switchTab(step: number): void;
+    openHome(): void;
+    openJournal(): Promise<void> | null;
+    captureJournal(): void;
+    summarizeJournal(): Promise<void> | null;
+    open(): Promise<void>;
+    chooseFolder(): Promise<void>;
+    save(): Awaitable<boolean>;
+    saveAs(): Promise<boolean>;
+    exportHtml(): Promise<void>;
+    insertImage(): Promise<void>;
+    toggleBoardView(on: boolean): void;
+    setOption(key: Option, value: boolean): void;
+    syncActionsEnabled(): void;
+}
 
 const TABLE_TEMPLATE: [before: string, after: string] = ['| Column 1 | Column 2 | Column 3 |\n| -------- | -------- | -------- |\n| ', ' |  |  |\n'];
 
@@ -25,7 +59,7 @@ export const TEXT_ACTIONS = new Set([
     'table-align-left', 'table-align-center', 'table-align-right', 'table-format',
 ]);
 
-export function registerActions(app: Adw.Application, w: MainWindow): void {
+export function registerActions(app: Adw.Application, w: ActionHost): void {
     const action = (name: string, accels: string[] | null, run: () => void) => {
         const a = new Gio.SimpleAction({ name });
         a.connect('activate', run);
