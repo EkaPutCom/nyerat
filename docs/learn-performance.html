@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Belajar Performa Nyerat</title>
-<meta name="description" content="Catatan belajar performa editor Nyerat: struktur data yang diubah, hasil benchmark sebelum/sesudah, dan simulasi dampaknya.">
+<title>Learning Performance with Nyerat</title>
+<meta name="description" content="Learning notes on the performance of the Nyerat editor: the data structures that changed, the before/after benchmark results, and simulations of their effects.">
 <style>
 :root {
   color-scheme: light;
@@ -112,7 +112,7 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
 details { margin: 10px 0; }
 details summary { cursor: pointer; color: var(--text-2); font-size: .88rem; }
 
-/* bar perbandingan */
+/* comparison bars */
 .cmp { display: grid; grid-template-columns: minmax(130px, 210px) 1fr; gap: 4px 14px; align-items: center; font-size: .86rem; }
 .cmp .lbl { color: var(--text-2); line-height: 1.25; }
 .cmp .bars { display: grid; gap: 3px; position: relative; }
@@ -135,7 +135,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: .88rem; }
 .chart .valtxt { fill: var(--text); font-weight: 600; }
 #tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: .8rem; box-shadow: 0 6px 20px rgba(0,0,0,.15); max-width: 300px; opacity: 0; transition: opacity .08s; }
 
-/* diagram struktur data */
+/* data structure diagram */
 .arr { display: flex; flex-wrap: wrap; gap: 3px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .75rem; }
 .cell { border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; background: var(--surface-2); min-width: 28px; text-align: center; }
 .cell.hot { background: var(--before-soft); border-color: var(--before); }
@@ -156,7 +156,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: .88rem; }
 .kv dt { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--text-2); }
 .kv dd { margin: 0; }
 
-/* simulasi */
+/* simulation */
 .sim { border: 1px solid var(--after); border-radius: 12px; padding: 16px; margin: 20px 0 6px; background: linear-gradient(var(--after-soft), var(--surface) 90px); }
 .sim > h3 { margin-top: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .sim .kind { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--text-2); background: var(--surface); }
@@ -209,568 +209,566 @@ footer { color: var(--text-3); font-size: .82rem; padding: 30px 0 60px; }
 
 <div class="wrap">
 <header class="hero">
-  <div class="eyebrow"><a href="index.html">← Nyerat</a> · Catatan belajar · 3–4 Oktober 2026</div>
-  <h1>Belajar performa dari editor Nyerat</h1>
-  <p class="lede">Dalam dua hari, mengetik satu karakter di dokumen 30 KB turun dari sekitar <b>286 ms</b> menjadi sekitar <b>1,5 ms</b>. Hampir seluruh penurunan itu datang dari <b>mengganti struktur data</b>, bukan dari mesin yang lebih cepat. Halaman ini membedah tiap perubahan: struktur sebelum dan sesudahnya, angka benchmark, dan simulasi kecil yang bisa Anda jalankan sendiri.</p>
+  <div class="eyebrow"><a href="index.html">← Nyerat</a> · Learning notes · October 3–4, 2026</div>
+  <h1>Learning performance from the Nyerat editor</h1>
+  <p class="lede">In two days, typing one character in a 30 KB document dropped from about <b>286 ms</b> to about <b>1.5 ms</b>. Almost all of that drop came from <b>changing data structures</b>, not from a faster machine. This page dissects each change: the structure before and after, the benchmark numbers, and small simulations you can run yourself.</p>
   <div class="kpis">
-    <div class="kpi"><div class="what">Ketik per karakter, mixed 100 blok</div><div class="big">±1,5 ms</div><div class="from">dari ±286 ms · 541a967 → 8d976da</div></div>
-    <div class="kpi"><div class="what">Pindah kursor 20 baris, mixed 100 blok</div><div class="big">29,6 ms</div><div class="from">dari 2.362 ms · 541a967 → 44cbc11</div></div>
-    <div class="kpi"><div class="what">Jeda membeku saat membuka naskah 651 KB</div><div class="big">71 ms</div><div class="from">dari 669 ms · ce74a34 → d7afe2f</div></div>
-    <div class="kpi"><div class="what">Buka pertama, 500 tabel</div><div class="big">2,0 s</div><div class="from">dari 8,2 s · 7080c4e → 8d976da</div></div>
+    <div class="kpi"><div class="what">Typing per character, mixed 100 blocks</div><div class="big">±1.5 ms</div><div class="from">from ±286 ms · 541a967 → 8d976da</div></div>
+    <div class="kpi"><div class="what">Moving the cursor 20 lines, mixed 100 blocks</div><div class="big">29.6 ms</div><div class="from">from 2,362 ms · 541a967 → 44cbc11</div></div>
+    <div class="kpi"><div class="what">Freeze pause when opening a 651 KB manuscript</div><div class="big">71 ms</div><div class="from">from 669 ms · ce74a34 → d7afe2f</div></div>
+    <div class="kpi"><div class="what">First open, 500 tables</div><div class="big">2.0 s</div><div class="from">from 8.2 s · 7080c4e → 8d976da</div></div>
   </div>
-  <nav class="toc" aria-label="Daftar isi">
-    <a href="#perjalanan">Perjalanan</a>
-    <a href="#cara-ukur">Cara mengukur</a>
-    <a href="#bab1">1 · Tag selisih</a>
-    <a href="#bab2">2 · Parsing inkremental</a>
-    <a href="#bab3">3 · Kurangi alokasi</a>
-    <a href="#bab4">4 · Membuka bertahap</a>
-    <a href="#bab5">5 · Tabel malas</a>
-    <a href="#bab6">6 · Auto save</a>
-    <a href="#bab7">7 · GC &amp; batas</a>
-    <a href="#pelajaran">Pelajaran</a>
+  <nav class="toc" aria-label="Table of contents">
+    <a href="#journey">Journey</a>
+    <a href="#how-we-measure">How we measure</a>
+    <a href="#ch1">1 · Diffed tags</a>
+    <a href="#ch2">2 · Incremental parsing</a>
+    <a href="#ch3">3 · Fewer allocations</a>
+    <a href="#ch4">4 · Opening in stages</a>
+    <a href="#ch5">5 · Lazy tables</a>
+    <a href="#ch6">6 · Auto save</a>
+    <a href="#ch7">7 · GC &amp; limits</a>
+    <a href="#lessons">Lessons</a>
   </nav>
 </header>
 
 <!-- ============================================================ -->
-<section class="chapter" id="perjalanan">
-  <div class="chapnum">Gambaran besar</div>
-  <h2>Perjalanan dari satu baseline ke baseline berikutnya</h2>
-  <p>Semua angka di bawah adalah median dari <code>npm run bench</code> pada mesin yang sama (GJS 1.80.2, GTK 3.24.41, X11/Xvfb, host c640). Sumbu tegak memakai <b>skala logaritmik</b>: setiap garis bantu berarti 10× lebih cepat. Arahkan kursor ke batang untuk detail.</p>
-  <h3>Ketik satu karakter: mixed 100 blok (~30 KB)</h3>
-  <svg class="chart" id="chart-type" viewBox="0 0 900 300" role="img" aria-label="Grafik waktu ketik per karakter per commit"></svg>
-  <h3>Pindah kursor 20 baris: mixed 100 blok</h3>
-  <svg class="chart" id="chart-cursor" viewBox="0 0 900 300" role="img" aria-label="Grafik waktu pindah kursor per commit"></svg>
-  <div class="caveat"><b>Catatan metode.</b> Dua baseline pertama (<code>541a967</code>, <code>50dd86b</code>) hanya 3 pengulangan dan mencatat total 20 ketukan, sehingga angka per karakter di sini adalah total ÷ 20. Mulai <code>a7e4444</code> bench mencatat sampel tiap ketukan, 10 pengulangan setelah pemanasan, plus p95/maksimum. Lompatan 286 → 22 ms juga sebagian karena bench berhenti memutar <code>ctx.iteration()</code> dari JS (lihat <a href="#cara-ukur">cara mengukur</a>).</div>
+<section class="chapter" id="journey">
+  <div class="chapnum">The big picture</div>
+  <h2>The journey from one baseline to the next</h2>
+  <p>All the numbers below are medians from <code>npm run bench</code> on the same machine (GJS 1.80.2, GTK 3.24.41, X11/Xvfb, host c640). The vertical axis uses a <b>logarithmic scale</b>: each guide line means 10× faster. Hover over a bar for details.</p>
+  <h3>Typing one character: mixed 100 blocks (~30 KB)</h3>
+  <svg class="chart" id="chart-type" viewBox="0 0 900 300" role="img" aria-label="Chart of the time to type per character per commit"></svg>
+  <h3>Moving the cursor 20 lines: mixed 100 blocks</h3>
+  <svg class="chart" id="chart-cursor" viewBox="0 0 900 300" role="img" aria-label="Chart of the time to move the cursor per commit"></svg>
+  <div class="caveat"><b>A note on method.</b> The first two baselines (<code>541a967</code>, <code>50dd86b</code>) used only 3 repetitions and recorded the total of 20 keystrokes, so the per-character numbers here are the total ÷ 20. Starting with <code>a7e4444</code> the bench records a sample per keystroke, 10 repetitions after a warm-up, plus p95/maximum. The jump from 286 → 22 ms is also partly because the bench stopped spinning <code>ctx.iteration()</code> from JS (see <a href="#how-we-measure">how we measure</a>).</div>
   <ol class="timeline-steps">
-    <li><span class="h">541a967</span><span>Baseline pertama disimpan; <code>bench:save</code> dan <code>bench:compare</code> lahir.</span></li>
-    <li><span class="h">50dd86b</span><span><b>Bab 1</b> · Tag dipasang dengan selisih (<code>LineTagger</code>, <code>setTagRanges</code>).</span></li>
-    <li><span class="h">a7e4444</span><span>Bench diperkuat: sampel per ketukan, p95, metadata lingkungan, paste/hapus/undo/redo.</span></li>
-    <li><span class="h">9f324c7</span><span><b>Bab 2</b> · Parsing hanya rentang suntingan, cache baris berisi offset relatif.</span></li>
-    <li><span class="h">472c298</span><span><b>Bab 3, 4, 6</b> · Fixture naskah buku 651 KB, <code>MarkerConcealer</code>, splice satu salinan, auto save di thread pekerja.</span></li>
-    <li><span class="h">d7afe2f</span><span><b>Bab 4</b> · Tag dicicil di idle per ≤8 ms saat membuka.</span></li>
-    <li><span class="h">44cbc11</span><span><b>Bab 5</b> · Lapisan tabel hanya mengubah tabel yang berganti keadaan dan hanya menghitung posisi grid yang terlihat.</span></li>
-    <li><span class="h">7080c4e</span><span><b>Bab 7</b> · Diagnosis callback GJS yang ditolak saat GC.</span></li>
-    <li><span class="h">8d976da</span><span><b>Bab 5</b> · Grid tabel dibuat saat masuk layar, ukuran diambil dari cache pengukur.</span></li>
-    <li><span class="h">295d7b9</span><span><b>Bab 7</b> · Migrasi ke GTK 4.14: lingkungan bench berganti, baseline diganti. Regresinya dicatat di <a href="#bab7">Bab 7</a>.</span></li>
+    <li><span class="h">541a967</span><span>The first baseline is saved; <code>bench:save</code> and <code>bench:compare</code> are born.</span></li>
+    <li><span class="h">50dd86b</span><span><b>Chapter 1</b> · Tags are applied by diff (<code>LineTagger</code>, <code>setTagRanges</code>).</span></li>
+    <li><span class="h">a7e4444</span><span>The bench is strengthened: a sample per keystroke, p95, environment metadata, paste/delete/undo/redo.</span></li>
+    <li><span class="h">9f324c7</span><span><b>Chapter 2</b> · Parsing only the edited range, a line cache holding relative offsets.</span></li>
+    <li><span class="h">472c298</span><span><b>Chapters 3, 4, 6</b> · The 651 KB book manuscript fixture, <code>MarkerConcealer</code>, a single-copy splice, auto save on a worker thread.</span></li>
+    <li><span class="h">d7afe2f</span><span><b>Chapter 4</b> · Tags are fed in at idle, ≤8 ms per turn, when opening.</span></li>
+    <li><span class="h">44cbc11</span><span><b>Chapter 5</b> · The table layer only changes tables that switched state and only computes the position of visible grids.</span></li>
+    <li><span class="h">7080c4e</span><span><b>Chapter 7</b> · Diagnosing GJS callbacks that get rejected during GC.</span></li>
+    <li><span class="h">8d976da</span><span><b>Chapter 5</b> · A table grid is created when it enters the screen, its size taken from the measurer's cache.</span></li>
+    <li><span class="h">295d7b9</span><span><b>Chapter 7</b> · Migration to GTK 4.14: the bench environment changes, the baseline is replaced. The regression is recorded in <a href="#ch7">Chapter 7</a>.</span></li>
   </ol>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="cara-ukur">
-  <div class="chapnum">Sebelum mengoptimasi</div>
-  <h2>Cara mengukur supaya angkanya bisa dipercaya</h2>
-  <p>Optimasi tanpa pengukuran yang stabil hanyalah tebakan. Bench di <code>tests/bench.ts</code> berkembang bersama kodenya:</p>
+<section class="chapter" id="how-we-measure">
+  <div class="chapnum">Before optimizing</div>
+  <h2>How to measure so the numbers can be trusted</h2>
+  <p>Optimization without stable measurement is just guessing. The bench in <code>tests/bench.ts</code> grew along with the code:</p>
   <ul>
-    <li><b>Median, p95, dan maksimum, bukan rata-rata.</b> Pengguna merasakan jeda terburuk. Mengetik 2 ms dengan sesekali 30 ms tetap terasa tersendat.</li>
-    <li><b>Ukur sampai main loop menganggur.</b> Pekerjaan yang ditunda ke idle tetap harus dihitung. Bench <code>await</code> main loop dan tidak memutar <code>ctx.iteration()</code> dari JS. Sebelum <code>50dd86b</code>, cara itu membuat callback diblokir GC dan hasil 50/100 blok tidak valid.</li>
-    <li><b>Skenario yang meniru pengguna.</b> <code>ketik lewat view</code> memakai sinyal keybinding TextView, jalur yang sama dengan tombol sungguhan. <code>buka: jeda terpanjang</code> mengukur jeda main loop terpanjang, yaitu rasa "membeku", bukan total waktu.</li>
-    <li><b>Fixture yang mirip dokumen sungguhan.</b> <code>mixed</code> (kode, tabel, daftar), <code>buku</code> (paragraf panjang, 100.000 kata), <code>long</code> (20.000 baris).</li>
-    <li><b>Batas waktu dan validasi.</b> Hasil parsial tidak pernah menjadi baseline; <code>--timeout</code> membuat macet terdeteksi.</li>
-    <li><b>Baseline lama tidak dihapus untuk menyembunyikan regresi.</b> Kenaikan (paste +26,5%, total membuka +5–10%) tetap tercatat di <code>PERFORMANCE.md</code>.</li>
+    <li><b>Median, p95, and maximum, not the mean.</b> Users feel the worst pause. Typing at 2 ms with an occasional 30 ms still feels choppy.</li>
+    <li><b>Measure until the main loop is idle.</b> Work deferred to idle still has to be counted. The bench <code>await</code>s the main loop and does not spin <code>ctx.iteration()</code> from JS. Before <code>50dd86b</code>, that approach made callbacks get blocked by GC and the 50/100-block results were invalid.</li>
+    <li><b>Scenarios that imitate the user.</b> <code>type via view</code> uses the TextView keybinding signal, the same path as a real key press. <code>open: longest pause</code> measures the longest main loop pause, which is the feeling of "freezing", not the total time.</li>
+    <li><b>Fixtures that resemble real documents.</b> <code>mixed</code> (code, tables, lists), <code>book</code> (long paragraphs, 100,000 words), <code>long</code> (20,000 lines).</li>
+    <li><b>Time limits and validation.</b> Partial results never become a baseline; <code>--timeout</code> makes hangs detectable.</li>
+    <li><b>Old baselines are not deleted to hide regressions.</b> The increases (paste +26.5%, total opening +5–10%) are still recorded in <code>PERFORMANCE.md</code>.</li>
   </ul>
-<pre><code>npm run bench:compare                       # mixed 25/50/100 blok vs bench/baseline.json
-gjs -m dist/bench.js --fixture=buku --size=400 --sizes=50,200,400 \
-    --timeout=400 --compare=bench/baseline-buku.json</code></pre>
-  <div class="lesson"><b>Pelajaran</b>Derau itu nyata: <code>markdownToHtml</code> sempat "naik 37%" padahal <code>src/markdown/</code> tidak berubah. Jalankan ulang sebelum percaya, dan bandingkan sebelum/sesudah secara berurutan pada sesi yang sama.</div>
+<pre><code>npm run bench:compare                       # mixed 25/50/100 blocks vs bench/baseline.json
+gjs -m dist/bench.js --fixture=book --size=400 --sizes=50,200,400 \
+    --timeout=400 --compare=bench/baseline-book.json</code></pre>
+  <div class="lesson"><b>Lesson</b>Noise is real: <code>markdownToHtml</code> once "rose 37%" even though <code>src/markdown/</code> had not changed. Run again before believing it, and compare before/after back to back in the same session.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab1">
-  <div class="chapnum">Bab 1 · commit 50dd86b · <code>src/editor/tagsync.ts</code></div>
-  <h2>Jangan hapus semua lalu pasang ulang: pasang selisihnya</h2>
-  <p><b>Gejala.</b> Di dokumen 30 KB setiap ketukan butuh ±320 ms dan pindah kursor ±130 ms.</p>
-  <p><b>Penyebab.</b> Penyorot menghapus tag di <em>seluruh</em> buffer, lalu memasangnya lagi. Kodenya sederhana, tetapi tag yang memengaruhi ukuran (font heading, spasi baris) membuat GTK menganggap semua baris berubah dan <b>menata ulang seluruh dokumen</b>. Biaya tiap ketukan jadi sebanding panjang dokumen, padahal yang berubah hanya satu baris.</p>
+<section class="chapter" id="ch1">
+  <div class="chapnum">Chapter 1 · commit 50dd86b · <code>src/editor/tagsync.ts</code></div>
+  <h2>Don't remove everything and reapply: apply the difference</h2>
+  <p><b>The symptom.</b> In a 30 KB document each keystroke took ±320 ms and moving the cursor ±130 ms.</p>
+  <p><b>The cause.</b> The highlighter removed the tags across the <em>whole</em> buffer, and then applied them again. The code was simple, but tags that affect size (the heading font, line spacing) make GTK think all the lines changed and <b>lay out the entire document again</b>. The cost of each keystroke became proportional to the length of the document, even though only one line changed.</p>
 
   <div class="grid2">
     <div class="panel">
-      <h4><span class="tag old">Sebelum</span> tanpa ingatan</h4>
+      <h4><span class="tag old">Before</span> no memory</h4>
 <pre><code>for (const tag of allTags)
   buffer.remove_tag(tag, start, end);
 for (const [tag, a, b] of allSpans)
   buffer.apply_tag(tag, a, b);
-// tidak ada struktur yang diingat</code></pre>
-      <p class="meta">Disentuh per ketukan: semua baris. GTK menata ulang: semua baris.</p>
+// no structure is remembered</code></pre>
+      <p class="meta">Touched per keystroke: all lines. GTK lays out again: all lines.</p>
     </div>
     <div class="panel">
-      <h4><span class="tag new">Sesudah</span> ingat apa yang terpasang</h4>
+      <h4><span class="tag new">After</span> remember what is applied</h4>
 <pre><code>class LineTagger {
-  // applied[i] = tag yang terpasang di baris i
-  // null = belum diketahui → pasang ulang
+  // applied[i] = the tags applied on line i
+  // null = not yet known → apply again
   applied: (LineSpan[] | null)[]
 }
 type LineSpan = [tag, startRel, endRel]</code></pre>
-      <p class="meta">Disentuh per ketukan: baris yang tagnya berbeda dari <code>applied</code>.</p>
+      <p class="meta">Touched per keystroke: lines whose tags differ from <code>applied</code>.</p>
     </div>
   </div>
 
-  <h3>Ilustrasi: <code>edited(first, last, count)</code> saat satu baris disisipkan</h3>
-  <p>Pengguna menekan Enter di baris 2. Baris 0–1 tidak berubah. Baris 2–3 sekarang tidak diketahui. Baris lama 3 dan seterusnya hanya <b>bergeser</b> satu indeks. Tag GTK ikut bergeser bersama teks, jadi isinya tetap valid tanpa disentuh.</p>
+  <h3>Illustration: <code>edited(first, last, count)</code> when a line is inserted</h3>
+  <p>The user presses Enter on line 2. Lines 0–1 do not change. Lines 2–3 are now unknown. Old line 3 and onwards only <b>shift</b> by one index. The GTK tags shift along with the text, so their contents stay valid without being touched.</p>
   <div class="grid2">
     <div>
-      <div class="track-label">applied (sebelum Enter, 7 baris)</div>
+      <div class="track-label">applied (before Enter, 7 lines)</div>
       <div class="arr" id="lt-before"></div>
     </div>
     <div>
-      <div class="track-label">applied (sesudah Enter, 8 baris)</div>
+      <div class="track-label">applied (after Enter, 8 lines)</div>
       <div class="arr" id="lt-after"></div>
     </div>
   </div>
-  <p class="note">Abu-abu = disalin dari indeks lama, biru = digeser (shift +1), garis putus = <code>null</code> dan akan dihitung ulang. Hanya sel bergaris putus yang menyentuh GTK.</p>
-  <p>Untuk tag yang rentangnya lintas baris (dim, tabel, gambar, warna kode), <code>setTagRanges()</code> membandingkan rentang yang ada dengan yang diinginkan memakai dua operasi himpunan pada rentang terurut: <code>subtract(have, want)</code> dihapus, <code>subtract(want, have)</code> dipasang. Keduanya O(n + m) dengan dua penunjuk.</p>
+  <p class="note">Gray = copied from the old index, blue = shifted (shift +1), dashed = <code>null</code> and will be recomputed. Only the dashed cells touch GTK.</p>
+  <p>For tags whose ranges span lines (dim, table, image, code color), <code>setTagRanges()</code> compares the existing ranges with the wanted ones using two set operations on sorted ranges: <code>subtract(have, want)</code> is removed, <code>subtract(want, have)</code> is applied. Both are O(n + m) with two pointers.</p>
 
-  <h3>Hasil benchmark</h3>
-  <div class="legend"><span style="--c:var(--before)">Sebelum (541a967)</span><span style="--c:var(--after)">Sesudah (50dd86b)</span></div>
+  <h3>Benchmark results</h3>
+  <div class="legend"><span style="--c:var(--before)">Before (541a967)</span><span style="--c:var(--after)">After (50dd86b)</span></div>
   <div class="cmp" data-rows='[
-    ["Ketik 20 karakter, 100 blok", 5711.74, 447.37, "ms"],
-    ["Pindah kursor 20 baris, 100 blok", 2361.95, 152.58, "ms"],
-    ["highlight() ulang, 100 blok", 164.95, 20.20, "ms"],
-    ["Ketik 20 karakter, 25 blok", 1146.35, 143.28, "ms"],
-    ["Pindah kursor 20 baris, 25 blok", 781.37, 85.02, "ms"]]'></div>
-  <p class="note">Lebar batang relatif terhadap nilai terbesar di barisnya. Median dari 3 pengulangan; bench juga berubah di commit ini (lihat catatan metode).</p>
-
+    ["Type 20 characters, 100 blocks", 5711.74, 447.37, "ms"],
+    ["Move the cursor 20 lines, 100 blocks", 2361.95, 152.58, "ms"],
+    ["highlight() again, 100 blocks", 164.95, 20.20, "ms"],
+    ["Type 20 characters, 25 blocks", 1146.35, 143.28, "ms"],
+    ["Move the cursor 20 lines, 25 blocks", 781.37, 85.02, "ms"]]'></div>
+  <p class="note">Bar width is relative to the largest value in its row. The median of 3 repetitions; the bench also changed in this commit (see the note on method).</p>
   <div class="sim" id="sim1">
-    <h3>Simulasi 1: berapa baris yang disentuh? <span class="kind">Interaktif · model</span></h3>
-    <p>Klik baris mana pun untuk "mengetik" di sana. Kiri memakai cara lama, kanan memakai <code>LineTagger</code>. Baris jingga/biru adalah baris yang tagnya dihapus atau dipasang, sehingga GTK harus menatanya ulang.</p>
+    <h3>Simulation 1: how many lines are touched? <span class="kind">Interactive · model</span></h3>
+    <p>Click any line to "type" there. The left uses the old approach, the right uses <code>LineTagger</code>. Orange/blue lines are lines whose tags were removed or applied, so GTK has to lay them out again.</p>
     <div class="grid2">
-      <div><div class="track-label"><span class="tag old">Hapus semua + pasang ulang</span></div><div class="doclines click" id="s1-old"></div></div>
-      <div><div class="track-label"><span class="tag new">Pasang selisih</span></div><div class="doclines click" id="s1-new"></div></div>
+      <div><div class="track-label"><span class="tag old">Remove everything + reapply</span></div><div class="doclines click" id="s1-old"></div></div>
+      <div><div class="track-label"><span class="tag new">Apply the difference</span></div><div class="doclines click" id="s1-new"></div></div>
     </div>
     <div class="controls">
-      <label>Panjang dokumen <input type="range" id="s1-n" min="2" max="5" step="0.01" value="3"><output id="s1-n-out"></output></label>
-      <label>Biaya tata letak per baris <input type="range" id="s1-c" min="0.01" max="0.3" step="0.01" value="0.08"><output id="s1-c-out"></output></label>
+      <label>Document length <input type="range" id="s1-n" min="2" max="5" step="0.01" value="3"><output id="s1-n-out"></output></label>
+      <label>Layout cost per line <input type="range" id="s1-c" min="0.01" max="0.3" step="0.01" value="0.08"><output id="s1-c-out"></output></label>
     </div>
     <div class="stats">
-      <div class="stat old"><div class="k">Baris disentuh (lama)</div><div class="v" id="s1-old-n">–</div><div class="s" id="s1-old-ms"></div></div>
-      <div class="stat new"><div class="k">Baris disentuh (baru)</div><div class="v" id="s1-new-n">–</div><div class="s" id="s1-new-ms"></div></div>
+      <div class="stat old"><div class="k">Lines touched (old)</div><div class="v" id="s1-old-n">–</div><div class="s" id="s1-old-ms"></div></div>
+      <div class="stat new"><div class="k">Lines touched (new)</div><div class="v" id="s1-new-n">–</div><div class="s" id="s1-new-ms"></div></div>
     </div>
-    <p class="note">Model: perkiraan waktu = baris disentuh × biaya per baris. Angka biaya hanya pengandaian, bukan hasil ukur GTK. Pesan yang perlu ditangkap adalah bentuk kurvanya. Cara lama tumbuh linear terhadap panjang dokumen, cara baru tetap.</p>
+    <p class="note">The model: estimated time = lines touched × cost per line. The cost figure is only an assumption, not a GTK measurement. The message to take away is the shape of the curve. The old approach grows linearly with the document length, the new one stays flat.</p>
   </div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab2">
-  <div class="chapnum">Bab 2 · commit 9f324c7 · <code>src/editor/highlighter.ts</code></div>
-  <h2>Parsing inkremental: urai hanya di antara dua titik aman</h2>
-  <p><b>Gejala.</b> Setelah Bab 1, menyentuh GTK sudah murah, tetapi tiap ketukan masih ±20 ms. Penyebabnya: setiap ketukan membaca <em>seluruh</em> teks buffer, memecahnya per baris, lalu mengurai ulang semua baris.</p>
-  <p><b>Ide.</b> Markdown hampir selalu lokal. Satu ketukan di paragraf tidak mengubah arti baris lain, kecuali di dalam blok kode atau tabel. Jadi simpan <b>titik aman</b> (<code>checkpoints</code>): baris di luar kode/tabel yang tidak mengandung <code>|</code>. Ketika baris <i>k</i> disunting, urai ulang hanya dari checkpoint sebelum <i>k</i> sampai checkpoint sesudahnya.</p>
+<section class="chapter" id="ch2">
+  <div class="chapnum">Chapter 2 · commit 9f324c7 · <code>src/editor/highlighter.ts</code></div>
+  <h2>Incremental parsing: parse only between two safe points</h2>
+  <p><b>The symptom.</b> After Chapter 1, touching GTK was cheap, but each keystroke still took ±20 ms. The cause: every keystroke read the <em>whole</em> buffer text, split it into lines, and then re-parsed all the lines.</p>
+  <p><b>The idea.</b> Markdown is almost always local. A keystroke in a paragraph does not change the meaning of other lines, except inside code blocks or tables. So keep <b>safe points</b> (<code>checkpoints</code>): lines outside code/tables that do not contain <code>|</code>. When line <i>k</i> is edited, re-parse only from the checkpoint before <i>k</i> to the checkpoint after it.</p>
 
   <div class="grid2">
     <div class="panel">
-      <h4><span class="tag old">Sebelum</span> snapshot dibuang tiap ketukan</h4>
-<pre><code>text  = buffer.get_text(start, end)  // seluruh doc
+      <h4><span class="tag old">Before</span> the snapshot is thrown away on every keystroke</h4>
+<pre><code>text  = buffer.get_text(start, end)  // the whole doc
 lines = text.split('\n')
-result = parseLines(lines)            // semua baris
-// starts, markers, headings: dibangun ulang</code></pre>
+result = parseLines(lines)            // all lines
+// starts, markers, headings: rebuilt</code></pre>
     </div>
     <div class="panel">
-      <h4><span class="tag new">Sesudah</span> snapshot + cache</h4>
+      <h4><span class="tag new">After</span> a snapshot + a cache</h4>
 <pre><code>interface Parsed {
   lines: string[]; starts: number[];
-  checkpoints: number[];   // baris "netral", urut
-  lineWords: number[];     // kata per baris
+  checkpoints: number[];   // "neutral" lines, sorted
+  lineWords: number[];     // words per line
   markers, spans, headings, ...
 }
-cache: Map&lt;teksBaris, CachedLine&gt;  // offset relatif</code></pre>
+cache: Map&lt;lineText, CachedLine&gt;  // relative offsets</code></pre>
     </div>
   </div>
 
-  <h3>Ilustrasi: menyunting baris 6</h3>
+  <h3>Illustration: editing line 6</h3>
   <div class="grid2">
     <div>
       <div class="doclines" id="ip-doc"></div>
-      <p class="note">Garis tegak di kiri = checkpoint. Biru = rentang yang diurai ulang.</p>
+      <p class="note">A vertical bar on the left = a checkpoint. Blue = the range that is re-parsed.</p>
     </div>
     <div>
-<pre><code>// pencarian biner di checkpoints
-before = lowerBound(checkpoints, 6)   // → cp baris 4
-after  = lowerBound(checkpoints, 7)   // → cp baris 8
+<pre><code>// binary search in checkpoints
+before = lowerBound(checkpoints, 6)   // → cp line 4
+after  = lowerBound(checkpoints, 7)   // → cp line 8
 part   = parseLines(lines.slice(4, 9))
 
-// offset setelah rentang hanya digeser
-delta  = panjangBaru - panjangLama   // +1
+// offsets after the range are only shifted
+delta  = newLength - oldLength       // +1
 starts = splice(old.starts, 4, 9,
                 part.starts + base, n =&gt; n + delta)
-words  = old.words - kataLama + part.words</code></pre>
-      <p>Kalau rentang itu memuat fence <code>```</code> yang belum ditutup, konteks bisa berubah sampai jauh ke bawah. Rentang lalu <b>diperluas secara geometris</b> (minimal 16 baris, lalu dua kali lipat) supaya tidak mengurai paragraf satu per satu.</p>
+words  = old.words - oldWords + part.words</code></pre>
+      <p>If that range contains an unclosed <code>```</code> fence, the context may change far below. The range is then <b>expanded geometrically</b> (at least 16 lines, then doubling) so that paragraphs are not parsed one at a time.</p>
     </div>
   </div>
 
-  <h3>Cache berkunci teks, berisi offset relatif</h3>
-  <p>Hasil urai satu baris disimpan di <code>Map</code> dengan kunci <b>isi baris itu sendiri</b>, dan semua offset di dalamnya relatif terhadap awal baris. Jika baris berpindah posisi karena ada sisipan di atasnya, hasilnya tetap bisa dipakai. Hanya offset absolut yang dihitung ulang dengan menambah <code>starts[i]</code>.</p>
+  <h3>A cache keyed by text, holding relative offsets</h3>
+  <p>The parse result of one line is stored in a <code>Map</code> keyed by <b>the contents of that line itself</b>, and all the offsets inside it are relative to the start of the line. If the line moves because something was inserted above it, the result can still be used. Only the absolute offsets are recomputed by adding <code>starts[i]</code>.</p>
   <div class="grid2">
     <div class="panel">
       <dl class="kv">
-        <dt>kunci</dt><dd><code>"Halo **dunia** ini"</code></dd>
-        <dt>spans</dt><dd><code>[[bold, 5, 14], [hidden, 5, 7], [hidden, 12, 14]]</code></dd>
-        <dt>markers</dt><dd><code>[[5, 7], [12, 14]]</code></dd>
+        <dt>key</dt><dd><code>"Hello **world** this"</code></dd>
+        <dt>spans</dt><dd><code>[[bold, 6, 15], [hidden, 6, 8], [hidden, 13, 15]]</code></dd>
+        <dt>markers</dt><dd><code>[[6, 8], [13, 15]]</code></dd>
       </dl>
     </div>
     <div class="panel">
-      <p style="margin:0;font-size:.88rem">Cache memakai dua generasi (<code>previous</code>, <code>current</code>): baris yang tidak muncul lagi di urai berikutnya otomatis terbuang. Ada batas 10.000 entri, 4.096 karakter per kunci, dan 4 MiB total, jadi memori tidak tumbuh tanpa batas.</p>
+      <p style="margin:0;font-size:.88rem">The cache uses two generations (<code>previous</code>, <code>current</code>): lines that do not appear again in the next parse are dropped automatically. There is a limit of 10,000 entries, 4,096 characters per key, and 4 MiB in total, so memory does not grow without bound.</p>
     </div>
   </div>
 
-  <h3>Hasil benchmark</h3>
-  <div class="legend"><span style="--c:var(--before)">Sebelum (baseline a7e4444)</span><span style="--c:var(--after)">Sesudah (9f324c7)</span></div>
+  <h3>Benchmark results</h3>
+  <div class="legend"><span style="--c:var(--before)">Before (baseline a7e4444)</span><span style="--c:var(--after)">After (9f324c7)</span></div>
   <div class="cmp" data-rows='[
-    ["highlight() ulang", 20.19, 1.04, "ms"],
-    ["Ketik per karakter", 20.85, 2.55, "ms"],
-    ["Ketik per karakter: p95", 30.14, 10.32, "ms"],
-    ["Ketik per karakter: maksimum", 77.45, 22.78, "ms"],
-    ["Hapus teks besar", 42.54, 4.70, "ms"],
-    ["Undo paste besar", 43.24, 4.54, "ms"],
-    ["setText + sorot + layout", 412.15, 360.74, "ms"],
-    ["Paste besar + Unicode", 189.36, 166.45, "ms"],
-    ["Redo paste besar", 210.02, 187.16, "ms"],
-    ["Pindah kursor 20 baris", 150.71, 185.87, "ms"]]'></div>
-  <div class="caveat">Pindah kursor <b>naik</b> 150 → 186 ms pada run ini. Penyebabnya baru terlihat di Bab 5: lapisan tabel. Hasil ini dicatat apa adanya, tidak ditutupi dengan mengganti baseline.</div>
-  <div class="lesson"><b>Pelajaran</b>Pertanyaan pentingnya: "seberapa jauh efek suntingan ini bisa menjalar?" Jika jawabannya bisa dibatasi, misalnya oleh checkpoint, biaya per suntingan berhenti bergantung pada panjang dokumen. Tes acak (200 rangkaian suntingan dibandingkan parser penuh) memastikan hasil inkremental sama persis dengan hasil penuh.</div>
+    ["highlight() again", 20.19, 1.04, "ms"],
+    ["Type per character", 20.85, 2.55, "ms"],
+    ["Type per character: p95", 30.14, 10.32, "ms"],
+    ["Type per character: maximum", 77.45, 22.78, "ms"],
+    ["Delete a large text", 42.54, 4.70, "ms"],
+    ["Undo a large paste", 43.24, 4.54, "ms"],
+    ["setText + highlight + layout", 412.15, 360.74, "ms"],
+    ["Large paste + Unicode", 189.36, 166.45, "ms"],
+    ["Redo a large paste", 210.02, 187.16, "ms"],
+    ["Move the cursor 20 lines", 150.71, 185.87, "ms"]]'></div>
+  <div class="caveat">Moving the cursor <b>went up</b> from 150 → 186 ms in this run. The cause only becomes visible in Chapter 5: the table layer. This result is recorded as it is, not covered up by replacing the baseline.</div>
+  <div class="lesson"><b>Lesson</b>The important question: "how far can the effect of this edit spread?" If the answer can be bounded, for instance by a checkpoint, the cost per edit stops depending on the length of the document. Randomized tests (200 sequences of edits compared against the full parser) make sure the incremental result is exactly the same as the full one.</div>
 
   <div class="sim" id="sim2">
-    <h3>Simulasi 2: parser penuh vs inkremental, diukur di browser Anda <span class="kind">Interaktif · pengukuran nyata</span></h3>
-    <p>Simulasi ini membuat dokumen Markdown tiruan, lalu mengetik 40 karakter di tengah paragraf dengan dua cara. Parser dan kode inkrementalnya versi mini dari <code>highlighter.ts</code>, dan waktunya diukur dengan <code>performance.now()</code>.</p>
+    <h3>Simulation 2: full vs incremental parser, measured in your browser <span class="kind">Interactive · real measurement</span></h3>
+    <p>This simulation builds a mock Markdown document, and then types 40 characters in the middle of a paragraph in two ways. The parser and the incremental code are mini versions of <code>highlighter.ts</code>, and the time is measured with <code>performance.now()</code>.</p>
     <div class="controls">
-      <label>Jumlah baris <input type="range" id="s2-n" min="500" max="60000" step="500" value="10000"><output id="s2-n-out"></output></label>
-      <button id="s2-run">Jalankan</button>
+      <label>Number of lines <input type="range" id="s2-n" min="500" max="60000" step="500" value="10000"><output id="s2-n-out"></output></label>
+      <button id="s2-run">Run</button>
     </div>
     <div class="stats">
-      <div class="stat old"><div class="k">Penuh: median per ketukan</div><div class="v" id="s2-full">–</div><div class="s" id="s2-full-s"></div></div>
-      <div class="stat new"><div class="k">Inkremental: median per ketukan</div><div class="v" id="s2-inc">–</div><div class="s" id="s2-inc-s"></div></div>
-      <div class="stat"><div class="k">Lebih cepat</div><div class="v" id="s2-x">–</div><div class="s" id="s2-ok"></div></div>
+      <div class="stat old"><div class="k">Full: median per keystroke</div><div class="v" id="s2-full">–</div><div class="s" id="s2-full-s"></div></div>
+      <div class="stat new"><div class="k">Incremental: median per keystroke</div><div class="v" id="s2-inc">–</div><div class="s" id="s2-inc-s"></div></div>
+      <div class="stat"><div class="k">Faster by</div><div class="v" id="s2-x">–</div><div class="s" id="s2-ok"></div></div>
     </div>
-    <svg class="chart" id="s2-chart" viewBox="0 0 900 180" aria-label="Waktu per ketukan"></svg>
-    <p class="note">Coba geser jumlah baris. Waktu "penuh" naik hampir linear, sedangkan "inkremental" hampir datar. Sisa biaya inkremental berasal dari menyalin array seukuran dokumen (<code>starts</code>, <code>spans</code>), sama seperti di Nyerat: "array offset/metadata masih membutuhkan pekerjaan sebanding jumlah baris".</p>
+    <svg class="chart" id="s2-chart" viewBox="0 0 900 180" aria-label="Time per keystroke"></svg>
+    <p class="note">Try moving the number of lines. The "full" time grows almost linearly, while the "incremental" one is almost flat. The remaining incremental cost comes from copying arrays the size of the document (<code>starts</code>, <code>spans</code>), the same as in Nyerat: "adjusting the offset/metadata arrays is still proportional to the number of lines".</p>
   </div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab3">
-  <div class="chapnum">Bab 3 · commit 472c298 · <code>decorations.ts</code>, <code>highlighter.ts</code>, <code>outline.ts</code></div>
-  <h2>Kurangi alokasi: ubah yang perlu, salin sekali, geser di tempat</h2>
-  <p><b>Gejala.</b> Di naskah novel 651 KB, mengetik dan pindah kursor masih punya ekor p95 yang panjang. Profil menunjukkan banyak waktu habis membuat array kecil yang langsung dibuang. Di GJS (SpiderMonkey), alokasi semacam itu tidak gratis: semuanya menambah tekanan pada GC.</p>
+<section class="chapter" id="ch3">
+  <div class="chapnum">Chapter 3 · commit 472c298 · <code>decorations.ts</code>, <code>highlighter.ts</code>, <code>outline.ts</code></div>
+  <h2>Fewer allocations: change what needs changing, copy once, shift in place</h2>
+  <p><b>The symptom.</b> In the 651 KB novel manuscript, typing and moving the cursor still had a long p95 tail. Profiling showed that a lot of time went into creating small arrays that were thrown away immediately. In GJS (SpiderMonkey), allocations like that are not free: they all add pressure on the GC.</p>
 
-  <h3>3a. MarkerConcealer: dari "semua baris" ke "baris yang mungkin berubah"</h3>
-  <p>Marker Markdown (<code>**</code>, <code>#</code>, <code>`</code>) disembunyikan kecuali di baris kursor. Kode lama menghitung ulang marker untuk <b>semua</b> baris setiap ketukan.</p>
+  <h3>3a. MarkerConcealer: from "all lines" to "lines that may have changed"</h3>
+  <p>Markdown markers (<code>**</code>, <code>#</code>, <code>`</code>) are hidden except on the cursor line. The old code recomputed the markers for <b>all</b> lines on every keystroke.</p>
   <div class="grid2">
     <div class="panel">
-      <h4><span class="tag old">Sebelum</span></h4>
-<pre><code>// tiap ketukan / perpindahan kursor:
-const perLine = starts.map(() =&gt; []);   // N array baru
-for (const m of markers)               // M tuple baru
+      <h4><span class="tag old">Before</span></h4>
+<pre><code>// every keystroke / cursor move:
+const perLine = starts.map(() =&gt; []);   // N new arrays
+for (const m of markers)               // M new tuples
   perLine[m[4]].push([hidden, a, b]);
 tagger.apply(perLine, starts);</code></pre>
-      <p class="meta">Long 20.000 baris ≈ 20.000 array + puluhan ribu tuple per ketukan.</p>
+      <p class="meta">Long, 20,000 lines ≈ 20,000 arrays + tens of thousands of tuples per keystroke.</p>
     </div>
     <div class="panel">
-      <h4><span class="tag new">Sesudah</span></h4>
+      <h4><span class="tag new">After</span></h4>
 <pre><code>class MarkerConcealer {
-  active:  number[]          // baris yg dipasang "aktif"
-  recheck: [first, last][]   // baris yg diurai ulang
-  multiLine: Marker[]        // pembatas ``` saja
+  active:  number[]          // lines applied as "active"
+  recheck: [first, last][]   // lines that were re-parsed
+  multiLine: Marker[]        // ``` fences only
 }
-visit = active ∪ barisKursorBaru ∪ recheck
-tagger.applyLines(visit, ...)  // biasanya 2–3 baris</code></pre>
+visit = active ∪ newCursorLine ∪ recheck
+tagger.applyLines(visit, ...)  // usually 2–3 lines</code></pre>
     </div>
   </div>
   <div class="grid2">
-    <div><div class="track-label">Pindah kursor dari baris 3 ke 9 (cara lama)</div><div class="arr" id="mc-old"></div></div>
-    <div><div class="track-label">Pindah kursor dari baris 3 ke 9 (cara baru)</div><div class="arr" id="mc-new"></div></div>
+    <div><div class="track-label">Moving the cursor from line 3 to 9 (the old way)</div><div class="arr" id="mc-old"></div></div>
+    <div><div class="track-label">Moving the cursor from line 3 to 9 (the new way)</div><div class="arr" id="mc-new"></div></div>
   </div>
 
-  <h3>3b. Splice satu salinan + pencarian biner + geser di tempat</h3>
-  <p>Setelah suntingan, array seukuran dokumen (<code>starts</code>, <code>markers</code>, <code>spans</code>) harus digabung: bagian lama + bagian baru + sisa yang digeser.</p>
+  <h3>3b. A single-copy splice + binary search + shifting in place</h3>
+  <p>After an edit, the document-sized arrays (<code>starts</code>, <code>markers</code>, <code>spans</code>) have to be joined: the old part + the new part + the shifted remainder.</p>
   <div class="grid2">
     <div class="panel">
-      <h4><span class="tag old">Sebelum</span> 3–4 salinan antara</h4>
+      <h4><span class="tag old">Before</span> 3–4 intermediate copies</h4>
 <pre><code>starts = [...old.slice(0, from),
           ...mid,
           ...old.slice(to).map(n =&gt; n + delta)];
-markers = old.markers.filter(...)        // scan linear
-  .map(m =&gt; [m[0]+d, m[1]+d, ...])       // tuple baru</code></pre>
+markers = old.markers.filter(...)        // linear scan
+  .map(m =&gt; [m[0]+d, m[1]+d, ...])       // a new tuple</code></pre>
     </div>
     <div class="panel">
-      <h4><span class="tag new">Sesudah</span> satu salinan</h4>
+      <h4><span class="tag new">After</span> a single copy</h4>
 <pre><code>const out = new Array(from + mid.length + (len - to));
-// isi out sekali jalan, tail(n) = n + delta
+// fill out in one pass, tail(n) = n + delta
 tail = lowerBoundBy(markers, afterOld, m =&gt; m[4]);
 for (i = tail; i &lt; markers.length; i++) {
-  markers[i][0] += delta; ... // ubah di tempat
+  markers[i][0] += delta; ... // changed in place
 }</code></pre>
     </div>
   </div>
-  <p>Mengubah di tempat aman karena <b>snapshot lama tidak dipakai lagi</b> setelah suntingan. Ini invarian yang harus dijaga: kalau ada kode yang masih memegang snapshot lama, mutasi di tempat akan merusaknya.</p>
+  <p>Changing in place is safe because <b>the old snapshot is no longer used</b> after the edit. This is an invariant that has to be kept: if any code still holds the old snapshot, mutating in place would corrupt it.</p>
 
-  <h3>3c. Outline: bandingkan langsung, jangan serialisasi</h3>
-  <p>Sebelumnya outline membuat <code>JSON.stringify(headings)</code> setiap ketukan untuk mendeteksi perubahan. Sekarang daftar heading dibandingkan elemen demi elemen, sehingga tidak ada string seukuran outline yang dibuat lalu dibuang.</p>
+  <h3>3c. The outline: compare directly, don't serialize</h3>
+  <p>Previously the outline made a <code>JSON.stringify(headings)</code> on every keystroke to detect changes. Now the heading list is compared element by element, so no outline-sized string is created and then thrown away.</p>
 
-  <h3>Hasil benchmark (naskah buku 651 KB)</h3>
-  <div class="legend"><span style="--c:var(--before)">Sebelum (src ce74a34)</span><span style="--c:var(--after)">Sesudah (472c298)</span></div>
+  <h3>Benchmark results (651 KB book manuscript)</h3>
+  <div class="legend"><span style="--c:var(--before)">Before (src ce74a34)</span><span style="--c:var(--after)">After (472c298)</span></div>
   <div class="cmp" data-rows='[
-    ["Ketik per karakter", 2.91, 1.82, "ms"],
-    ["Ketik lewat view (paragraf)", 3.53, 2.61, "ms"],
-    ["Enter paragraf baru", 6.05, 3.25, "ms"],
-    ["Pindah kursor 20 baris", 24.01, 11.93, "ms"],
-    ["setText + sorot + layout", 1434.1, 761.1, "ms"],
-    ["Buka: jeda terpanjang", 668.9, 162.4, "ms"]]'></div>
-  <p class="note">Pada mixed 100 blok: ketik 2,55 → 1,39 ms; setText 360,74 → 227,23 ms. Dua baris terakhir juga dipengaruhi perbaikan pembukaan di Bab 4.</p>
+    ["Type per character", 2.91, 1.82, "ms"],
+    ["Type via view (paragraph)", 3.53, 2.61, "ms"],
+    ["Enter for a new paragraph", 6.05, 3.25, "ms"],
+    ["Move the cursor 20 lines", 24.01, 11.93, "ms"],
+    ["setText + highlight + layout", 1434.1, 761.1, "ms"],
+    ["Open: longest pause", 668.9, 162.4, "ms"]]'></div>
+  <p class="note">On mixed 100 blocks: typing 2.55 → 1.39 ms; setText 360.74 → 227.23 ms. The last two rows are also affected by the opening fix in Chapter 4.</p>
 
   <div class="sim" id="sim3">
-    <h3>Simulasi 3: alokasi per ketukan dan ekor latensi <span class="kind">Interaktif · pengukuran nyata</span></h3>
-    <p>Setiap titik adalah satu "ketukan" (300 ketukan). Cara lama membuat array per baris dan tuple per marker. Cara baru hanya memeriksa baris kursor lama/baru. Perhatikan titik yang melonjak: sebagian adalah GC browser Anda yang sedang bekerja.</p>
+    <h3>Simulation 3: allocations per keystroke and the latency tail <span class="kind">Interactive · real measurement</span></h3>
+    <p>Each point is one "keystroke" (300 keystrokes). The old approach creates an array per line and a tuple per marker. The new approach only checks the old/new cursor lines. Look at the points that spike: some are your browser's GC at work.</p>
     <div class="controls">
-      <label>Jumlah baris <input type="range" id="s3-n" min="1000" max="60000" step="1000" value="20000"><output id="s3-n-out"></output></label>
-      <button id="s3-run">Jalankan</button>
+      <label>Number of lines <input type="range" id="s3-n" min="1000" max="60000" step="1000" value="20000"><output id="s3-n-out"></output></label>
+      <button id="s3-run">Run</button>
     </div>
-    <div class="legend"><span style="--c:var(--before)">Semua baris (lama)</span><span style="--c:var(--after)">Baris yang mungkin berubah (baru)</span></div>
-    <svg class="chart" id="s3-chart" viewBox="0 0 900 220" aria-label="Sebaran waktu per ketukan"></svg>
+    <div class="legend"><span style="--c:var(--before)">All lines (old)</span><span style="--c:var(--after)">Lines that may have changed (new)</span></div>
+    <svg class="chart" id="s3-chart" viewBox="0 0 900 220" aria-label="Distribution of the time per keystroke"></svg>
     <div class="stats">
-      <div class="stat old"><div class="k">Lama: median / p95 / maks (ms)</div><div class="v" id="s3-old">–</div><div class="s" id="s3-old-a"></div></div>
-      <div class="stat new"><div class="k">Baru: median / p95 / maks (ms)</div><div class="v" id="s3-new">–</div><div class="s" id="s3-new-a"></div></div>
+      <div class="stat old"><div class="k">Old: median / p95 / max (ms)</div><div class="v" id="s3-old">–</div><div class="s" id="s3-old-a"></div></div>
+      <div class="stat new"><div class="k">New: median / p95 / max (ms)</div><div class="v" id="s3-new">–</div><div class="s" id="s3-new-a"></div></div>
     </div>
   </div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab4">
-  <div class="chapnum">Bab 4 · commit 472c298 &amp; d7afe2f · <code>view.ts</code>, <code>tagsync.ts</code></div>
-  <h2>Membuka dokumen: yang penting bukan total, tetapi jeda terpanjang</h2>
-  <p><b>Gejala.</b> Membuka naskah 651 KB membuat jendela membeku ±0,67 detik. Selama itu GTK tidak menggambar dan tidak menerima input.</p>
+<section class="chapter" id="ch4">
+  <div class="chapnum">Chapter 4 · commits 472c298 &amp; d7afe2f · <code>view.ts</code>, <code>tagsync.ts</code></div>
+  <h2>Opening a document: what matters is not the total, but the longest pause</h2>
+  <p><b>The symptom.</b> Opening the 651 KB manuscript froze the window for ±0.67 seconds. During that time GTK did not draw and did not accept input.</p>
 
-  <h3>4a. Biang yang tak terduga: <code>bottom_margin</code></h3>
-  <p>GTK 3 memberi tinggi 0 pada baris yang belum ditata. Gambar pertama setelah <code>set_text</code> mencakup area di bawah baris yang sudah ditata karena <code>bottom_margin</code> memperpanjang kanvas. Akibatnya <code>gtk_text_layout_draw</code> menata <b>semua baris sampai akhir dokumen</b> sekaligus. Ini dibuktikan dengan TextView polos: <code>bottom_margin</code> 1 px saja sudah cukup. Perbaikannya: <code>replaceAllText()</code> menolkan gulir lalu mengantre gulir ke kursor, sehingga GTK menata dua layar di sekitar kursor dulu dan sisanya di latar.</p>
-  <div class="caveat">Percobaan yang <b>ditolak</b>: melepas <code>bottom_margin</code> sementara. <code>set_bottom_margin()</code> memaksa GTK menata ulang seluruh dokumen, sehingga paste 12 KB di naskah 650 KB menjadi lebih dari 1 detik kerja latar. Catat juga eksperimen yang gagal agar tidak diulang orang lain.</div>
+  <h3>4a. An unexpected culprit: <code>bottom_margin</code></h3>
+  <p>GTK 3 gives a height of 0 to lines that have not been laid out. The first draw after <code>set_text</code> covers an area below the lines that have been laid out because <code>bottom_margin</code> extends the canvas. As a result <code>gtk_text_layout_draw</code> lays out <b>all lines up to the end of the document</b> at once. This was proven with a plain TextView: a <code>bottom_margin</code> of just 1 px was enough. The fix: <code>replaceAllText()</code> zeroes the scroll position and then queues a scroll to the cursor, so GTK lays out two screens around the cursor first and the rest in the background.</p>
+  <div class="caveat">An experiment that was <b>rejected</b>: removing <code>bottom_margin</code> temporarily. <code>set_bottom_margin()</code> forces GTK to lay out the whole document again, so a 12 KB paste into the 650 KB manuscript turned into more than 1 second of background work. Record failed experiments too, so nobody else repeats them.</div>
 
-  <h3>4b. Penyorotan bertahap: <code>LineTagger.deferFrom</code></h3>
-  <p>Profil membuka naskah 650 KB (dengan outline berbeda): <code>set_text</code> 29 ms, urai 31 ms, tag sintaks 60 ms, outline 54 ms, marker 33 ms, total ±207 ms dalam <b>satu blok</b>. Strukturnya diubah sedikit: <code>LineTagger</code> mendapat satu bilangan <code>deferFrom</code>. Baris <code>null</code> mulai indeks itu dilewati oleh <code>apply()</code> dan diisi oleh <code>fill()</code> sedikit demi sedikit.</p>
+  <h3>4b. Incremental highlighting: <code>LineTagger.deferFrom</code></h3>
+  <p>The profile of opening the 650 KB manuscript (with a different outline): <code>set_text</code> 29 ms, parsing 31 ms, syntax tags 60 ms, the outline 54 ms, markers 33 ms, ±207 ms in total in <b>a single block</b>. The structure was changed slightly: <code>LineTagger</code> got a single number, <code>deferFrom</code>. <code>null</code> lines from that index on are skipped by <code>apply()</code> and filled in bit by bit by <code>fill()</code>.</p>
   <div class="arr" id="defer-arr"></div>
-  <p class="note">Biru = terpasang sinkron (200 baris pertama). Garis putus = ditunda. Jingga = sedang diisi di giliran idle berikutnya, mendahulukan baris di sekitar kursor dan yang terlihat.</p>
-<pre><code>// view.ts (diringkas). Prioritas 122: di bawah menggambar (120),
-// di atas penataan latar GtkTextView (125)
+  <p class="note">Blue = applied synchronously (the first 200 lines). Dashed = deferred. Orange = being filled in the next idle turn, prioritizing the lines around the cursor and the visible ones.</p>
+<pre><code>// view.ts (condensed). Priority 122: below drawing (120),
+// above the GtkTextView background layout (125)
 const FILL_PRIORITY = GLib.PRIORITY_HIGH_IDLE + 22;
 GLib.idle_add(FILL_PRIORITY, () =&gt; {
   const start = GLib.get_monotonic_time();
   while (!done &amp;&amp; elapsed(start) &lt; FILL_BUDGET_MS) {   // ≤8 ms
-    const visible = this.priorityLines();     // terlihat + sekitar kursor
+    const visible = this.priorityLines();     // visible + around the cursor
     this.syntaxTagger.applyLines(visible, ...);
     done = this.syntaxTagger.fill(FILL_CHUNK_LINES, ...) &amp;&amp; ...;
   }
   return done ? GLib.SOURCE_REMOVE : GLib.SOURCE_CONTINUE;
 });</code></pre>
 
-  <h3>Hasil benchmark: buka, jeda terpanjang</h3>
-  <div class="legend"><span style="--c:var(--before)">Sebelum (baseline 472c298)</span><span style="--c:var(--after)">Sesudah (d7afe2f)</span></div>
+  <h3>Benchmark results: open, longest pause</h3>
+  <div class="legend"><span style="--c:var(--before)">Before (baseline 472c298)</span><span style="--c:var(--after)">After (d7afe2f)</span></div>
   <div class="cmp" data-rows='[
-    ["Buku 81 KB", 18.47, 13.01, "ms"],
-    ["Buku 325 KB", 70.99, 34.49, "ms"],
-    ["Buku 651 KB", 162.41, 71.45, "ms"],
+    ["Book 81 KB", 18.47, 13.01, "ms"],
+    ["Book 325 KB", 70.99, 34.49, "ms"],
+    ["Book 651 KB", 162.41, 71.45, "ms"],
     ["Mixed 30 KB", 134.41, 46.75, "ms"],
-    ["Buku 651 KB: total sampai semua tag terpasang", 761, 820, "ms"],
-    ["highlight() ulang tanpa suntingan", 0.41, 0.75, "ms"]]'></div>
-  <p class="note">Dari awal (ce74a34) jeda terpanjang buku 651 KB turun <b>668,9 → 71,45 ms</b>. Ada biayanya: total naik ±8% karena kerja dicicil, dan <code>highlight()</code> tanpa suntingan 0,41 → 0,6–0,9 ms karena memeriksa baris yang ditunda. Pengguna tidak merasakan keduanya saat mengetik.</p>
-  <div class="lesson"><b>Pelajaran</b>Total waktu dan responsivitas adalah dua metrik yang berbeda. Memecah pekerjaan memang menambah overhead, tetapi menjaga main loop tetap bisa menggambar dan menerima input. Itulah yang dirasakan pengguna.</div>
+    ["Book 651 KB: total until all tags are applied", 761, 820, "ms"],
+    ["highlight() again with no edits", 0.41, 0.75, "ms"]]'></div>
+  <p class="note">From the start (ce74a34) the longest pause for the 651 KB book dropped <b>668.9 → 71.45 ms</b>. There is a cost: the total went up ±8% because the work is fed in bit by bit, and <code>highlight()</code> with no edits went 0.41 → 0.6–0.9 ms because it checks the deferred lines. Users do not feel either while typing.</p>
+  <div class="lesson"><b>Lesson</b>Total time and responsiveness are two different metrics. Splitting up work does add overhead, but it keeps the main loop able to draw and accept input. That is what users feel.</div>
 
   <div class="sim" id="sim4">
-    <h3>Simulasi 4: main loop saat membuka, dan nasib ketukan pengguna <span class="kind">Interaktif · model terkalibrasi</span></h3>
-    <p>Pengguna mulai mengetik segera setelah dokumen dibuka (satu ketukan tiap 40 ms). Ketukan hanya diproses ketika main loop selesai mengerjakan tugas yang sedang berjalan. Durasi tugas diambil dari profil 650 KB di atas lalu diskalakan menurut ukuran dokumen.</p>
+    <h3>Simulation 4: the main loop while opening, and the fate of the user's keystrokes <span class="kind">Interactive · calibrated model</span></h3>
+    <p>The user starts typing as soon as the document opens (one keystroke every 40 ms). A keystroke is only processed when the main loop has finished the task it is running. The task durations are taken from the 650 KB profile above and then scaled by the size of the document.</p>
     <div class="controls">
-      <label>Ukuran dokumen <input type="range" id="s4-n" min="50" max="1500" step="50" value="650"><output id="s4-n-out"></output></label>
-      <button class="ghost" id="s4-play">Putar animasi</button>
+      <label>Document size <input type="range" id="s4-n" min="50" max="1500" step="50" value="650"><output id="s4-n-out"></output></label>
+      <button class="ghost" id="s4-play">Play the animation</button>
     </div>
-    <div class="track-label"><span class="tag old">Satu blok sinkron</span></div>
-    <svg class="chart" id="s4-old" viewBox="0 0 900 78" aria-label="Main loop cara lama"></svg>
-    <div class="track-label"><span class="tag new">Dicicil ≤8 ms di idle</span></div>
-    <svg class="chart" id="s4-new" viewBox="0 0 900 78" aria-label="Main loop cara baru"></svg>
+    <div class="track-label"><span class="tag old">One synchronous block</span></div>
+    <svg class="chart" id="s4-old" viewBox="0 0 900 78" aria-label="The main loop, the old way"></svg>
+    <div class="track-label"><span class="tag new">Fed in ≤8 ms at idle</span></div>
+    <svg class="chart" id="s4-new" viewBox="0 0 900 78" aria-label="The main loop, the new way"></svg>
     <div class="stats">
-      <div class="stat old"><div class="k">Lama: jeda terpanjang</div><div class="v" id="s4-old-j">–</div><div class="s" id="s4-old-k"></div></div>
-      <div class="stat new"><div class="k">Baru: jeda terpanjang</div><div class="v" id="s4-new-j">–</div><div class="s" id="s4-new-k"></div></div>
+      <div class="stat old"><div class="k">Old: longest pause</div><div class="v" id="s4-old-j">–</div><div class="s" id="s4-old-k"></div></div>
+      <div class="stat new"><div class="k">New: longest pause</div><div class="v" id="s4-new-j">–</div><div class="s" id="s4-new-k"></div></div>
     </div>
-    <p class="note">Model: bagian sinkron cara baru = <code>set_text</code> + urai + 200 baris pertama (≈71 ms pada 650 KB, sama dengan hasil ukur). Sisanya dipecah per 8 ms dengan satu frame 16 ms di antaranya. Garis tegak = ketukan, dan panjang ekornya adalah lama ketukan itu menunggu.</p>
+    <p class="note">The model: the synchronous part of the new approach = <code>set_text</code> + parsing + the first 200 lines (≈71 ms at 650 KB, the same as the measured result). The rest is split into 8 ms pieces with one 16 ms frame in between. A vertical line = a keystroke, and the length of its tail is how long that keystroke waited.</p>
   </div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab5">
-  <div class="chapnum">Bab 5 · commit 44cbc11 &amp; 8d976da · <code>src/editor/tablelayer.ts</code></div>
-  <h2>Tabel: kerjakan hanya yang berubah dan yang terlihat</h2>
-  <p>Tabel Markdown ditampilkan sebagai widget <code>Gtk.Grid</code> di atas TextView. Teks mentahnya disembunyikan, lalu ruangnya dipesan dengan tag tinggi (<code>gapTag</code>). Ada dua masalah terpisah.</p>
+<section class="chapter" id="ch5">
+  <div class="chapnum">Chapter 5 · commits 44cbc11 &amp; 8d976da · <code>src/editor/tablelayer.ts</code></div>
+  <h2>Tables: do only what changed and what is visible</h2>
+  <p>Markdown tables are shown as a <code>Gtk.Grid</code> widget over the TextView. Their raw text is hidden, and then their space is reserved with a tag of a given height (<code>gapTag</code>). There are two separate problems.</p>
 
-  <h3>5a. Pindah kursor (44cbc11)</h3>
-  <p>Setiap perpindahan kursor menelusuri rentang tag <b>semua</b> tabel, membuat string signature seluruh tabel, dan meminta <code>get_line_yrange()</code> untuk <b>semua</b> grid. Permintaan posisi itu memaksa GTK menata baris sampai jauh di luar layar.</p>
+  <h3>5a. Moving the cursor (44cbc11)</h3>
+  <p>Every cursor move walked the tag ranges of <b>all</b> tables, built a signature string for the entire table, and asked <code>get_line_yrange()</code> for <b>all</b> grids. That position request forces GTK to lay out lines far off screen.</p>
   <div class="grid2">
     <div class="panel">
-      <h4><span class="tag old">Sebelum</span></h4>
+      <h4><span class="tag old">Before</span></h4>
 <pre><code>onCursorMoved() {
-  for (const t of tables) {          // semua
-    setTagRanges(...);               // scan rentang tag
+  for (const t of tables) {          // all of them
+    setTagRanges(...);               // scan tag ranges
   }
   sig = blocks.map(b =&gt; `${b.start}-${b.end}:${collapsed}`)
-              .join(',');            // string seluruh tabel
+              .join(',');            // a string for every table
   for (const t of tables) {
     y = view.get_line_yrange(t.start); // layout!
   }
 }</code></pre>
     </div>
     <div class="panel">
-      <h4><span class="tag new">Sesudah</span></h4>
+      <h4><span class="tag new">After</span></h4>
 <pre><code>onCursorMoved() {
-  // hanya tabel yang berganti grid ⇄ teks mentah
-  for (const b of [tabelLama, tabelBaru]) toggle(b);
+  // only the tables that switch grid ⇄ raw text
+  for (const b of [oldTable, newTable]) toggle(b);
 }
 onScroll() {
-  for (const b of blocks)  // posisi hanya utk yang terlihat
-    if (terlihat(b)) place(b); else b.widget?.hide();
+  for (const b of blocks)  // positions only for the visible ones
+    if (visible(b)) place(b); else b.widget?.hide();
 }</code></pre>
     </div>
   </div>
-  <div class="legend"><span style="--c:var(--before)">Sebelum</span><span style="--c:var(--after)">Sesudah (44cbc11)</span></div>
+  <div class="legend"><span style="--c:var(--before)">Before</span><span style="--c:var(--after)">After (44cbc11)</span></div>
   <div class="cmp" data-rows='[
-    ["Mixed 7 KB: pindah kursor 20 baris", 44.29, 19.30, "ms"],
-    ["Mixed 15 KB: pindah kursor 20 baris", 66.66, 27.50, "ms"],
-    ["Mixed 30 KB: pindah kursor 20 baris", 132.52, 29.59, "ms"],
+    ["Mixed 7 KB: move the cursor 20 lines", 44.29, 19.30, "ms"],
+    ["Mixed 15 KB: move the cursor 20 lines", 66.66, 27.50, "ms"],
+    ["Mixed 30 KB: move the cursor 20 lines", 132.52, 29.59, "ms"],
     ["Mixed 30 KB: p95", 150.00, 42.65, "ms"]]'></div>
 
-  <h3>5b. Membuka dokumen dengan 500 tabel (8d976da)</h3>
-  <p>Kode lama membangun <b>500 grid</b> saat membuka, lalu membangun semuanya <b>lagi</b> ketika lebar awal 700 px berubah menjadi 781 px, sehingga terjadi 1.000 kali <code>build</code>. Sekarang setiap tabel diwakili struktur ringan, dan widget baru dibuat ketika tabel masuk layar.</p>
+  <h3>5b. Opening a document with 500 tables (8d976da)</h3>
+  <p>The old code built <b>500 grids</b> on opening, and then built all of them <b>again</b> when the initial width of 700 px changed to 781 px, so <code>build</code> ran 1,000 times. Now every table is represented by a lightweight structure, and the widget is only created when the table enters the screen.</p>
   <div class="grid2">
     <div class="panel">
 <pre><code>interface Block {
-  start, end: number      // rentang baris
-  collapsed: boolean      // grid atau teks mentah
-  height: number          // dari cache pengukur
-  widget: Gtk.Widget | null   // null = belum dibuat
+  start, end: number      // the line range
+  collapsed: boolean      // grid or raw text
+  height: number          // from the measurer's cache
+  widget: Gtk.Widget | null   // null = not created yet
 }
-geometry:  Map&lt;markupTabel, Geometry&gt;  // ≤256 tabel
-cellSizes: Map&lt;markupSel, [w, h]&gt;      // ≤1.024 sel</code></pre>
+geometry:  Map&lt;tableMarkup, Geometry&gt;  // ≤256 tables
+cellSizes: Map&lt;cellMarkup, [w, h]&gt;     // ≤1,024 cells</code></pre>
     </div>
     <div class="panel">
-      <p style="margin-top:0;font-size:.9rem">Tinggi tabel diukur oleh <b>dua sel pengukur</b> (<code>probe</code>) yang memakai CSS yang sama dengan sel sungguhan. Ruangnya bisa dipesan dengan <code>gapTag</code> tanpa membuat grid. Cache dibatasi (256 tabel, 1.024 sel, 1 Mi unit UTF-16 kunci) supaya dokumen besar tidak menimbun memori. Perubahan lebar memakai ulang sel dengan ellipsize, jadi tidak perlu membongkar grid.</p>
+      <p style="margin-top:0;font-size:.9rem">A table's height is measured by <b>two measuring cells</b> (<code>probe</code>) that use the same CSS as real cells. Its space can be reserved with <code>gapTag</code> without creating the grid. The caches are bounded (256 tables, 1,024 cells, 1 Mi UTF-16 units of key) so large documents do not hoard memory. A width change reuses the cells with ellipsize, so there is no need to tear the grid down.</p>
     </div>
   </div>
-  <div class="legend"><span style="--c:var(--before)">Sebelum (7080c4e)</span><span style="--c:var(--after)">Sesudah (8d976da)</span></div>
+  <div class="legend"><span style="--c:var(--before)">Before (7080c4e)</span><span style="--c:var(--after)">After (8d976da)</span></div>
   <div class="cmp" data-rows='[
-    ["500 tabel identik, buka pertama: total", 8249.69, 2019.03, "ms"],
-    ["500 tabel identik, buka pertama: jeda", 1916.57, 256.49, "ms"],
-    ["500 tabel berbeda, buka pertama: total", 8304.25, 2153.29, "ms"],
-    ["500 tabel berbeda, buka pertama: jeda", 1927.89, 353.56, "ms"],
-    ["500 tabel identik, buka ulang: total", 3395.40, 1699.07, "ms"],
-    ["500 tabel identik, buka ulang: jeda", 641.19, 556.91, "ms"],
-    ["Panggilan build()", 1000, 1, "×"]]'></div>
-  <p class="note">3 proses GJS/Xvfb terpisah per varian, sehingga ini diagnosis dan bukan estimasi distribusi. Sampel mentah ada di <code>bench/table-opening-profile.json</code>.</p>
+    ["500 identical tables, first open: total", 8249.69, 2019.03, "ms"],
+    ["500 identical tables, first open: pause", 1916.57, 256.49, "ms"],
+    ["500 different tables, first open: total", 8304.25, 2153.29, "ms"],
+    ["500 different tables, first open: pause", 1927.89, 353.56, "ms"],
+    ["500 identical tables, reopen: total", 3395.40, 1699.07, "ms"],
+    ["500 identical tables, reopen: pause", 641.19, 556.91, "ms"],
+    ["build() calls", 1000, 1, "×"]]'></div>
+  <p class="note">3 separate GJS/Xvfb processes per variant, so this is a diagnosis and not an estimate of the distribution. The raw samples are in <code>bench/table-opening-profile.json</code>.</p>
 
   <div class="sim" id="sim5">
-    <h3>Simulasi 5: grid dibuat semua vs saat terlihat <span class="kind">Interaktif · model terkalibrasi</span></h3>
-    <p>Setiap kotak adalah satu tabel di dokumen. Geser posisi gulir untuk melihat tabel mana yang punya widget. Widget yang pernah terlihat dipakai ulang, tidak dibongkar.</p>
+    <h3>Simulation 5: grids all created vs when visible <span class="kind">Interactive · calibrated model</span></h3>
+    <p>Each box is one table in the document. Move the scroll position to see which tables have a widget. A widget that has been visible is reused, not torn down.</p>
     <div class="controls">
-      <label>Jumlah tabel <input type="range" id="s5-n" min="10" max="1000" step="10" value="500"><output id="s5-n-out"></output></label>
-      <label>Posisi gulir <input type="range" id="s5-s" min="0" max="100" step="1" value="0"><output id="s5-s-out"></output></label>
-      <button class="ghost" id="s5-reset">Buka ulang</button>
+      <label>Number of tables <input type="range" id="s5-n" min="10" max="1000" step="10" value="500"><output id="s5-n-out"></output></label>
+      <label>Scroll position <input type="range" id="s5-s" min="0" max="100" step="1" value="0"><output id="s5-s-out"></output></label>
+      <button class="ghost" id="s5-reset">Reopen</button>
     </div>
-    <div class="track-label"><span class="tag old">Bangun semua (+ bangun ulang saat lebar berubah)</span></div>
+    <div class="track-label"><span class="tag old">Build everything (+ rebuild when the width changes)</span></div>
     <div class="minimap" id="s5-old"></div>
-    <div class="track-label"><span class="tag new">Bangun saat terlihat</span></div>
+    <div class="track-label"><span class="tag new">Build when visible</span></div>
     <div class="minimap" id="s5-new"></div>
     <div class="stats">
-      <div class="stat old"><div class="k">Lama: build() / perkiraan biaya</div><div class="v" id="s5-old-v">–</div><div class="s" id="s5-old-s"></div></div>
-      <div class="stat new"><div class="k">Baru: build() / perkiraan biaya</div><div class="v" id="s5-new-v">–</div><div class="s" id="s5-new-s"></div></div>
+      <div class="stat old"><div class="k">Old: build() / estimated cost</div><div class="v" id="s5-old-v">–</div><div class="s" id="s5-old-s"></div></div>
+      <div class="stat new"><div class="k">New: build() / estimated cost</div><div class="v" id="s5-new-v">–</div><div class="s" id="s5-new-s"></div></div>
     </div>
-    <p class="note">Model: ≈6,2 ms per <code>build()</code>, dikalibrasi dari (8.249 − 2.019) ms ÷ (1.000 − 1) build pada pengukuran 500 tabel. Biaya dasar membuka lainnya tidak dihitung di sini.</p>
+    <p class="note">The model: ≈6.2 ms per <code>build()</code>, calibrated from (8,249 − 2,019) ms ÷ (1,000 − 1) builds in the 500-table measurement. The other base costs of opening are not counted here.</p>
   </div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab6">
-  <div class="chapnum">Bab 6 · commit 472c298 · <code>MainWindow.autosave()</code></div>
-  <h2>Auto save: keluarkan I/O dari thread utama</h2>
-  <p>Auto save awalnya menulis dan <code>fsync</code> secara sinkron. Di NVMe hanya ±4 ms, tetapi di disk lambat atau sibuk fsync bisa memakan puluhan milidetik, tepat ketika pengguna lanjut mengetik. Sekarang timer memanggil penulisan lewat Gio di thread pekerja. Penulisan sinkron berikutnya ke path yang sama <b>menunggu</b> penulisan latar selesai, dan ada tes yang memastikan isi lama tidak menimpa isi baru.</p>
-  <p>Struktur kecil yang ikut berubah: handler <code>changed</code> hanya menyimpan <code>lastEdit = now()</code>. Timer <b>tidak dibuat ulang</b> per ketukan, cukup satu timer yang memeriksa apakah sudah cukup lama sejak <code>lastEdit</code>.</p>
-  <div class="legend"><span style="--c:var(--before)">Sinkron</span><span style="--c:var(--after)">Latar (bagian thread utama)</span></div>
+<section class="chapter" id="ch6">
+  <div class="chapnum">Chapter 6 · commit 472c298 · <code>MainWindow.autosave()</code></div>
+  <h2>Auto save: take I/O off the main thread</h2>
+  <p>Auto save originally wrote and called <code>fsync</code> synchronously. On NVMe that is only ±4 ms, but on a slow or busy disk fsync can take tens of milliseconds, right when the user keeps typing. Now the timer calls the write through Gio on a worker thread. The next synchronous write to the same path <b>waits</b> for the background write to finish, and a test makes sure old contents do not overwrite new ones.</p>
+  <p>A small structure that changed along with it: the <code>changed</code> handler only stores <code>lastEdit = now()</code>. The timer is <b>not recreated</b> per keystroke; a single timer is enough, checking whether enough time has passed since <code>lastEdit</code>.</p>
+  <div class="legend"><span style="--c:var(--before)">Synchronous</span><span style="--c:var(--after)">Background (the main-thread part)</span></div>
   <div class="cmp" data-rows='[
-    ["Buku 651 KB: median", 9.59, 5.33, "ms"],
-    ["Buku 651 KB: p95", 17.07, 7.46, "ms"]]'></div>
+    ["Book 651 KB: median", 9.59, 5.33, "ms"],
+    ["Book 651 KB: p95", 17.07, 7.46, "ms"]]'></div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab7">
-  <div class="chapnum">Bab 7 · commit 7080c4e · <code>bench/GC-DIAGNOSIS.md</code></div>
-  <h2>GC dan batas yang belum selesai</h2>
-  <p>Benchmark ekstrem (500 grid, 20.000 baris) lama sering macet. Diagnosisnya: <b>callback JavaScript ditolak oleh penjaga GC GJS</b> (<code>gjs-&gt;sweeping()</code>), bukan sekadar GC yang lambat. Callback yang hilang bisa menghentikan penyorotan atau Promise <code>idle()</code>, lalu bench menunggu sampai timeout. Native stack menunjuk ke <code>gdk_frame_clock_paint_idle</code> (prioritas 120), yaitu frame GTK biasa.</p>
-  <p>Sumber tekanan alokasi ada di kode yang diperbaiki pada Bab 3: <code>starts.map(() =&gt; [])</code> tiap ketukan, tuple marker baru, dan salinan cache seukuran dokumen. Setelah alokasi dikurangi, long 2.000 blok dan mixed 500 grid (1 pengulangan) selesai tanpa warning.</p>
-  <div class="caveat"><b>Yang jujur belum terbukti:</b> hubungan antara penurunan alokasi dan hilangnya gejala belum diisolasi lewat A/B per perubahan. Dugaan bug di flag sweeping GC bertahap masih dugaan beralasan, belum kesimpulan upstream. Membuka ulang 500 tabel masih punya jeda ±0,6 s, dan paste pada mixed 25 naik 26,5% (162 → 205 ms) pada satu pembanding yang belum diisolasi.</div>
-  <h3>Regresi yang tercatat</h3>
-  <div class="legend"><span style="--c:var(--before)">Sebelum</span><span style="--c:var(--after)">Sesudah</span></div>
+<section class="chapter" id="ch7">
+  <div class="chapnum">Chapter 7 · commit 7080c4e · <code>bench/GC-DIAGNOSIS.md</code></div>
+  <h2>GC and the limits that are not finished</h2>
+  <p>Extreme benchmarks (500 grids, 20,000 lines) used to hang often. The diagnosis: <b>JavaScript callbacks were rejected by GJS's GC guard</b> (<code>gjs-&gt;sweeping()</code>), not merely a slow GC. A lost callback can stop highlighting or the <code>idle()</code> Promise, and then the bench waits until the timeout. The native stack pointed to <code>gdk_frame_clock_paint_idle</code> (priority 120), which is an ordinary GTK frame.</p>
+  <p>The sources of allocation pressure were in the code fixed in Chapter 3: <code>starts.map(() =&gt; [])</code> on every keystroke, new marker tuples, and cache copies the size of the document. After allocations were reduced, long with 2,000 blocks and mixed with 500 grids (1 repetition) finished without warnings.</p>
+  <div class="caveat"><b>What is honestly not proven:</b> the connection between the drop in allocations and the disappearance of the symptom has not been isolated through an A/B per change. The suspicion of a bug in the incremental GC sweeping flag is still a reasoned guess, not an upstream conclusion. Reopening 500 tables still has a pause of ±0.6 s, and paste on mixed 25 went up 26.5% (162 → 205 ms) in one comparison that has not been isolated.</div>
+  <h3>Regressions on record</h3>
+  <div class="legend"><span style="--c:var(--before)">Before</span><span style="--c:var(--after)">After</span></div>
   <div class="cmp" data-rows='[
-    ["Mixed 25: paste besar + Unicode (8d976da)", 162.08, 205.09, "ms"],
-    ["Buku 651 KB: total membuka (8d976da vs baseline)", 820.16, 904.69, "ms"],
-    ["Long 1,3 MB: total membuka (8d976da)", 1925.10, 2031.42, "ms"],
-    ["Mixed 30 KB: total membuka (44cbc11)", 245.42, 264.53, "ms"]]'></div>
-  <p class="note">Optimasi hampir selalu memindahkan biaya. Daftar ini ada supaya pengembang berikutnya tahu ke mana harus melihat.</p>
-  <h3>Migrasi ke GTK 4: regresi yang diwarisi</h3>
-  <p>Pindah dari GTK 3.24 ke GTK 4.14 tidak mengubah satu baris pun di <code>src/markdown/</code>, tetapi editornya ikut melambat. Pembanding diukur berdampingan: versi GTK 3 dibangun dari <code>main</code> di worktree terpisah, lalu kedua versi dijalankan bergantian di Xvfb yang sama, 10 pengulangan.</p>
-  <div class="legend"><span style="--c:var(--before)">GTK 3 (cairo)</span><span style="--c:var(--after)">GTK 4 (OpenGL di llvmpipe)</span></div>
+    ["Mixed 25: large paste + Unicode (8d976da)", 162.08, 205.09, "ms"],
+    ["Book 651 KB: total opening (8d976da vs baseline)", 820.16, 904.69, "ms"],
+    ["Long 1.3 MB: total opening (8d976da)", 1925.10, 2031.42, "ms"],
+    ["Mixed 30 KB: total opening (44cbc11)", 245.42, 264.53, "ms"]]'></div>
+  <p class="note">Optimization almost always moves cost somewhere else. This list exists so the next developer knows where to look.</p>
+  <h3>Migrating to GTK 4: an inherited regression</h3>
+  <p>Moving from GTK 3.24 to GTK 4.14 did not change a single line in <code>src/markdown/</code>, but the editor slowed down too. The comparison was measured side by side: the GTK 3 version was built from <code>main</code> in a separate worktree, and then both versions were run in turn on the same Xvfb, 10 repetitions.</p>
+  <div class="legend"><span style="--c:var(--before)">GTK 3 (cairo)</span><span style="--c:var(--after)">GTK 4 (OpenGL on llvmpipe)</span></div>
   <div class="cmp" data-rows='[
-    ["Buku 651 KB: jeda terpanjang membuka", 64.51, 97.44, "ms"],
-    ["Buku 651 KB: total membuka", 852.68, 2394.35, "ms"],
-    ["Buku 651 KB: Enter paragraf baru", 3.37, 18.02, "ms"],
-    ["Mixed 30 KB: pindah kursor 20 baris", 21.32, 41.35, "ms"]]'></div>
-  <p>Dua penyebab yang terukur. <b>Pertama, renderer.</b> Xvfb tidak punya GPU, jadi GTK 4 menggambar dengan OpenGL di llvmpipe (perangkat lunak), sedangkan GTK 3 memakai cairo. Dengan <code>GSK_RENDERER=cairo</code> sebagian besar selisih hilang:</p>
-  <div class="legend"><span style="--c:var(--before)">GTK 4 (OpenGL di llvmpipe)</span><span style="--c:var(--after)">GTK 4 (cairo)</span></div>
+    ["Book 651 KB: longest pause when opening", 64.51, 97.44, "ms"],
+    ["Book 651 KB: total opening", 852.68, 2394.35, "ms"],
+    ["Book 651 KB: Enter for a new paragraph", 3.37, 18.02, "ms"],
+    ["Mixed 30 KB: move the cursor 20 lines", 21.32, 41.35, "ms"]]'></div>
+  <p>Two measured causes. <b>First, the renderer.</b> Xvfb has no GPU, so GTK 4 draws with OpenGL on llvmpipe (software), while GTK 3 uses cairo. With <code>GSK_RENDERER=cairo</code> most of the difference disappears:</p>
+  <div class="legend"><span style="--c:var(--before)">GTK 4 (OpenGL on llvmpipe)</span><span style="--c:var(--after)">GTK 4 (cairo)</span></div>
   <div class="cmp" data-rows='[
-    ["Buku 651 KB: Enter paragraf baru", 18.02, 4.17, "ms"],
-    ["Buku 651 KB: ketik lewat view", 6.24, 4.20, "ms"],
-    ["Mixed 30 KB: pindah kursor 20 baris", 41.35, 29.17, "ms"]]'></div>
-  <p><b>Kedua, <code>set_text()</code> GTK 4.</b> Jeda terpanjang saat membuka buku seluruhnya ada di <code>setText()</code> sinkron. Dipecah: <code>highlight()</code> kita setara (±40–45 ms di kedua versi), tetapi <code>GtkTextBuffer.set_text()</code> yang menggantikan isi lama naik dari ±27 ms menjadi ±45–58 ms. Mematikan undo tidak membantu. Melepas buffer dari view selama <code>set_text()</code> memberi hasil tidak stabil dan menambah jeda ±25–46 ms sesudahnya, jadi eksperimen itu dibuang.</p>
-  <p><b>Di desktop dengan GPU</b> (Intel UHD, OpenGL perangkat keras) sebagian besar selisih itu hilang. Yang tersisa terutama biaya <code>set_text()</code>:</p>
+    ["Book 651 KB: Enter for a new paragraph", 18.02, 4.17, "ms"],
+    ["Book 651 KB: type via view", 6.24, 4.20, "ms"],
+    ["Mixed 30 KB: move the cursor 20 lines", 41.35, 29.17, "ms"]]'></div>
+  <p><b>Second, GTK 4's <code>set_text()</code>.</b> The longest pause when opening the book lies entirely in the synchronous <code>setText()</code>. Broken down: our <code>highlight()</code> is equivalent (±40–45 ms in both versions), but <code>GtkTextBuffer.set_text()</code>, which replaces the old contents, went from ±27 ms to ±45–58 ms. Turning off undo did not help. Detaching the buffer from the view during <code>set_text()</code> gave unstable results and added a ±25–46 ms pause afterwards, so that experiment was dropped.</p>
+  <p><b>On a desktop with a GPU</b> (Intel UHD, hardware OpenGL) most of that difference disappears. What remains is mainly the cost of <code>set_text()</code>:</p>
   <div class="legend"><span style="--c:var(--before)">GTK 3</span><span style="--c:var(--after)">GTK 4 (GPU)</span></div>
   <div class="cmp" data-rows='[
-    ["Buku 651 KB: jeda terpanjang membuka", 71.03, 85.09, "ms"],
-    ["Buku 651 KB: total membuka", 799.29, 920.37, "ms"],
-    ["Buku 651 KB: Enter paragraf baru", 3.70, 3.83, "ms"],
-    ["Mixed 30 KB: pindah kursor 20 baris", 18.97, 19.94, "ms"]]'></div>
-  <div class="caveat"><b>Yang belum diukur:</b> Wayland. Angka Xvfb di atas adalah kasus terburuk (setara mesin tanpa GPU). Baseline baru (<code>bench/baseline.json</code>, <code>bench/baseline-buku.json</code>) memakai GTK 4 di Xvfb supaya <code>bench:compare</code> kembali membandingkan lingkungan yang setara.</div>
-  <div class="lesson"><b>Pelajaran</b>Mengganti toolkit mengganti lingkungan pengukuran. Bandingkan kedua versi berdampingan pada sesi yang sama, lalu pisahkan biaya toolkit (renderer, <code>set_text</code>) dari biaya kode sendiri sebelum menyimpulkan apa pun.</div>
+    ["Book 651 KB: longest pause when opening", 71.03, 85.09, "ms"],
+    ["Book 651 KB: total opening", 799.29, 920.37, "ms"],
+    ["Book 651 KB: Enter for a new paragraph", 3.70, 3.83, "ms"],
+    ["Mixed 30 KB: move the cursor 20 lines", 18.97, 19.94, "ms"]]'></div>
+  <div class="caveat"><b>Not measured yet:</b> Wayland. The Xvfb numbers above are the worst case (equivalent to a machine without a GPU). The new baselines (<code>bench/baseline.json</code>, <code>bench/baseline-book.json</code>) use GTK 4 on Xvfb so that <code>bench:compare</code> again compares equivalent environments.</div>
+  <div class="lesson"><b>Lesson</b>Changing the toolkit changes the measurement environment. Compare both versions side by side in the same session, and then separate the toolkit's cost (the renderer, <code>set_text</code>) from the cost of your own code before concluding anything.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="pelajaran">
-  <div class="chapnum">Ringkasan</div>
-  <h2>Pola yang bisa dibawa ke kode lain</h2>
+<section class="chapter" id="lessons">
+  <div class="chapnum">Summary</div>
+  <h2>Patterns that carry over to other code</h2>
   <div class="scroll-x">
   <table class="data cards">
-    <thead><tr><th>Pola</th><th>Struktur data</th><th>Biaya per suntingan</th><th>Di Nyerat</th></tr></thead>
+    <thead><tr><th>Pattern</th><th>Data structure</th><th>Cost per edit</th><th>In Nyerat</th></tr></thead>
     <tbody>
-      <tr><td data-k="Pola">Ingat keadaan terakhir, terapkan selisih</td><td data-k="Struktur data"><code>(LineSpan[] | null)[]</code></td><td data-k="Biaya per suntingan">O(N) → O(baris berubah)</td><td data-k="Di Nyerat"><code>LineTagger</code>, <code>setTagRanges</code></td></tr>
-      <tr><td data-k="Pola">Batasi jangkauan efek</td><td data-k="Struktur data"><code>checkpoints: number[]</code> + pencarian biner</td><td data-k="Biaya per suntingan">O(N) → O(segmen)</td><td data-k="Di Nyerat"><code>HighlightCache.update</code></td></tr>
-      <tr><td data-k="Pola">Cache berkunci isi, offset relatif</td><td data-k="Struktur data"><code>Map&lt;string, CachedLine&gt;</code> dua generasi</td><td data-k="Biaya per suntingan">urai ulang → lookup</td><td data-k="Di Nyerat"><code>HighlightCache</code></td></tr>
-      <tr><td data-k="Pola">Hanya yang mungkin berubah</td><td data-k="Struktur data"><code>active[]</code>, <code>recheck[]</code></td><td data-k="Biaya per suntingan">N array → 2–3 baris</td><td data-k="Di Nyerat"><code>MarkerConcealer</code></td></tr>
-      <tr><td data-k="Pola">Salin sekali, geser di tempat</td><td data-k="Struktur data"><code>new Array(n)</code> + mutasi</td><td data-k="Biaya per suntingan">3–4 salinan → 1</td><td data-k="Di Nyerat"><code>splice</code>, <code>spliceByLine</code></td></tr>
-      <tr><td data-k="Pola">Pecah kerja panjang</td><td data-k="Struktur data"><code>deferFrom</code> + idle ≤8 ms</td><td data-k="Biaya per suntingan">jeda 162 → 71 ms</td><td data-k="Di Nyerat"><code>LineTagger.fill</code></td></tr>
-      <tr><td data-k="Pola">Malas: buat saat terlihat</td><td data-k="Struktur data"><code>widget: Widget | null</code> + cache ukuran berbatas</td><td data-k="Biaya per suntingan">1.000 build → 1</td><td data-k="Di Nyerat"><code>TableLayer</code></td></tr>
-      <tr><td data-k="Pola">I/O di luar thread utama</td><td data-k="Struktur data">timer tunggal + <code>lastEdit</code></td><td data-k="Biaya per suntingan">fsync → antre</td><td data-k="Di Nyerat"><code>autosave()</code></td></tr>
+      <tr><td data-k="Pattern">Remember the last state, apply the difference</td><td data-k="Data structure"><code>(LineSpan[] | null)[]</code></td><td data-k="Cost per edit">O(N) → O(changed lines)</td><td data-k="In Nyerat"><code>LineTagger</code>, <code>setTagRanges</code></td></tr>
+      <tr><td data-k="Pattern">Bound the reach of the effect</td><td data-k="Data structure"><code>checkpoints: number[]</code> + binary search</td><td data-k="Cost per edit">O(N) → O(segment)</td><td data-k="In Nyerat"><code>HighlightCache.update</code></td></tr>
+      <tr><td data-k="Pattern">A cache keyed by contents, relative offsets</td><td data-k="Data structure"><code>Map&lt;string, CachedLine&gt;</code> with two generations</td><td data-k="Cost per edit">re-parse → lookup</td><td data-k="In Nyerat"><code>HighlightCache</code></td></tr>
+      <tr><td data-k="Pattern">Only what may have changed</td><td data-k="Data structure"><code>active[]</code>, <code>recheck[]</code></td><td data-k="Cost per edit">N arrays → 2–3 lines</td><td data-k="In Nyerat"><code>MarkerConcealer</code></td></tr>
+      <tr><td data-k="Pattern">Copy once, shift in place</td><td data-k="Data structure"><code>new Array(n)</code> + mutation</td><td data-k="Cost per edit">3–4 copies → 1</td><td data-k="In Nyerat"><code>splice</code>, <code>spliceByLine</code></td></tr>
+      <tr><td data-k="Pattern">Split up long work</td><td data-k="Data structure"><code>deferFrom</code> + idle ≤8 ms</td><td data-k="Cost per edit">pause 162 → 71 ms</td><td data-k="In Nyerat"><code>LineTagger.fill</code></td></tr>
+      <tr><td data-k="Pattern">Lazy: create when visible</td><td data-k="Data structure"><code>widget: Widget | null</code> + a bounded size cache</td><td data-k="Cost per edit">1,000 builds → 1</td><td data-k="In Nyerat"><code>TableLayer</code></td></tr>
+      <tr><td data-k="Pattern">I/O off the main thread</td><td data-k="Data structure">a single timer + <code>lastEdit</code></td><td data-k="Cost per edit">fsync → queued</td><td data-k="In Nyerat"><code>autosave()</code></td></tr>
     </tbody>
   </table>
   </div>
-  <div class="lesson"><b>Checklist sebelum menulis optimasi</b>
-    1) Ukur dulu dengan skenario yang dirasakan pengguna, termasuk p95 dan jeda terpanjang.
-    2) Tanya "apa yang sebenarnya berubah?" dan cari struktur data yang bisa menjawabnya tanpa memindai semuanya.
-    3) Tulis tes yang membandingkan jalur cepat dengan jalur lambat yang sudah benar.
-    4) Ukur lagi sebelum/sesudah secara berurutan, dan catat juga regresi serta eksperimen yang gagal.
+  <div class="lesson"><b>Checklist before writing an optimization</b>
+    1) Measure first with a scenario the user feels, including p95 and the longest pause.
+    2) Ask "what actually changed?" and look for a data structure that can answer it without scanning everything.
+    3) Write a test that compares the fast path with the slow path that is already correct.
+    4) Measure again before/after back to back, and record regressions and failed experiments too.
   </div>
-  <p>Sumber: <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/PERFORMANCE.md">PERFORMANCE.md</a>, <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/GC-DIAGNOSIS.md">GC-DIAGNOSIS.md</a>, <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/baseline.json">baseline.json</a>, <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/baseline-buku.json">baseline-buku.json</a>, <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/tables-500.json">tables-500.json</a>, <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/table-opening-profile.json">table-opening-profile.json</a>, dan riwayat git <code>bench/baseline.json</code>.</p>
+  <p>Sources: <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/PERFORMANCE.md">PERFORMANCE.md</a>, <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/GC-DIAGNOSIS.md">GC-DIAGNOSIS.md</a>, <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/baseline.json">baseline.json</a>, <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/baseline-book.json">baseline-book.json</a>, <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/tables-500.json">tables-500.json</a>, <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/table-opening-profile.json">table-opening-profile.json</a>, and the git history of <code>bench/baseline.json</code>.</p>
 </section>
 
-<footer>Simulasi 2 dan 3 mengukur kode JavaScript mini di browser Anda, bukan Nyerat di GJS. Angkanya bergantung pada mesin dan mesin JS, tetapi bentuk kurvanya mengikuti struktur datanya. Simulasi 1, 4, dan 5 adalah model yang angkanya dikalibrasi dari hasil benchmark di atas.</footer>
+<footer>Simulations 2 and 3 measure mini JavaScript code in your browser, not Nyerat in GJS. The numbers depend on the machine and the JS engine, but the shape of the curves follows the data structures. Simulations 1, 4, and 5 are models whose numbers are calibrated from the benchmark results above.</footer>
 </div>
-
 <script>
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
 const fmt = (v, d) => {
   if (d === undefined) d = v >= 100 ? 0 : v >= 10 ? 1 : 2;
-  return v.toLocaleString('id-ID', { minimumFractionDigits: d, maximumFractionDigits: d });
+  return v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 };
-const ms = v => (v > 0 && v < 0.01 ? '<0,01' : fmt(v)) + ' ms';
+const ms = v => (v > 0 && v < 0.01 ? '<0.01' : fmt(v)) + ' ms';
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs = {}, parent) => {
@@ -795,7 +793,7 @@ function attachTip(node, html) {
   node.addEventListener('mouseleave', () => { tip.style.opacity = 0; });
 }
 
-/* ---------- bar perbandingan sebelum/sesudah ---------- */
+/* ---------- before/after comparison bars ---------- */
 document.querySelectorAll('.cmp[data-rows]').forEach(box => {
   const rows = JSON.parse(box.dataset.rows);
   for (const [label, b, a, unit] of rows) {
@@ -807,8 +805,8 @@ document.querySelectorAll('.cmp[data-rows]').forEach(box => {
     bars.className = 'bars';
     const change = (a - b) / b * 100;
     const sign = change > 0 ? '+' : '−';
-    const word = change > 0 ? 'naik' : 'turun';
-    for (const [cls, v, name] of [['b', b, 'Sebelum'], ['a', a, 'Sesudah']]) {
+    const word = change > 0 ? 'up' : 'down';
+    for (const [cls, v, name] of [['b', b, 'Before'], ['a', a, 'After']]) {
       const row = document.createElement('div');
       row.className = 'row';
       const wrap = document.createElement('div');
@@ -830,7 +828,7 @@ document.querySelectorAll('.cmp[data-rows]').forEach(box => {
   }
 });
 
-/* ---------- ukuran SVG mengikuti lebar sebenarnya, supaya teks 11px tetap 11px ---------- */
+/* ---------- the SVG size follows the real width, so 11px text stays 11px ---------- */
 function fit(svg, H) {
   const W = Math.max(280, Math.round(svg.parentNode.clientWidth || 900));
   svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
@@ -838,7 +836,7 @@ function fit(svg, H) {
   return W;
 }
 
-/* ---------- grafik perjalanan (skala log) ---------- */
+/* ---------- journey chart (log scale) ---------- */
 function logChart(svg, data, opts) {
   svg.innerHTML = '';
   const narrow = (svg.parentNode.clientWidth || 900) < 600;
@@ -846,7 +844,7 @@ function logChart(svg, data, opts) {
   const frac = v => (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo));
   const tipOf = d => '<b>' + d.c + '</b>: ' + d.t + '<br>' + (d.label || ms(d.v)) + (d.n ? '<br><span style="color:var(--text-2)">' + d.n + '</span>' : '');
   if (narrow) {
-    // Layar sempit: batang horizontal, satu baris per commit.
+    // A narrow screen: horizontal bars, one row per commit.
     const row = 40, T = 22, H = T + row * data.length + 6;
     const W = fit(svg, H), L = 104, R = 70;
     const x = v => L + (W - L - R) * frac(v);
@@ -891,20 +889,20 @@ function logChart(svg, data, opts) {
   });
 }
 const typeData = [
-  { c: '541a967', t: 'baseline awal', v: 285.59, n: 'total 20 ketukan 5.711,74 ms ÷ 20; 3 pengulangan' },
-  { c: '50dd86b', t: 'tag selisih', v: 22.37, hl: 1, n: 'total 447,37 ms ÷ 20' },
-  { c: 'a7e4444', t: 'bench diperkuat', v: 20.85, n: 'median per ketukan, p95 30,14 ms' },
-  { c: '9f324c7', t: 'parsing rentang', v: 2.55, hl: 1, n: 'p95 10,32 ms' },
-  { c: '472c298', t: 'kurangi alokasi', v: 1.55, hl: 1, n: 'baseline tersimpan; satu run 1,39 ms' },
-  { c: '8d976da', t: 'terbaru', v: 1.51, label: '1,24–1,51', n: 'dua run bench:compare: 1,24 dan 1,51 ms' },
+  { c: '541a967', t: 'initial baseline', v: 285.59, n: 'total of 20 keystrokes 5,711.74 ms ÷ 20; 3 repetitions' },
+  { c: '50dd86b', t: 'diffed tags', v: 22.37, hl: 1, n: 'total 447.37 ms ÷ 20' },
+  { c: 'a7e4444', t: 'stronger bench', v: 20.85, n: 'median per keystroke, p95 30.14 ms' },
+  { c: '9f324c7', t: 'range parsing', v: 2.55, hl: 1, n: 'p95 10.32 ms' },
+  { c: '472c298', t: 'fewer allocations', v: 1.55, hl: 1, n: 'saved baseline; one run 1.39 ms' },
+  { c: '8d976da', t: 'latest', v: 1.51, label: '1.24–1.51', n: 'two bench:compare runs: 1.24 and 1.51 ms' },
 ];
 const cursorData = [
-  { c: '541a967', t: 'baseline awal', v: 2361.95, n: '3 pengulangan' },
-  { c: '50dd86b', t: 'tag selisih', v: 152.58, hl: 1 },
-  { c: 'a7e4444', t: 'bench diperkuat', v: 150.71 },
-  { c: '9f324c7', t: 'parsing rentang', v: 185.87, n: 'naik: lapisan tabel (lihat Bab 5)' },
-  { c: '472c298', t: 'kurangi alokasi', v: 145.26 },
-  { c: '44cbc11', t: 'tabel terlihat', v: 29.59, hl: 1, n: 'run ulang 29,06 ms; p95 42,65 ms' },
+  { c: '541a967', t: 'initial baseline', v: 2361.95, n: '3 repetitions' },
+  { c: '50dd86b', t: 'diffed tags', v: 152.58, hl: 1 },
+  { c: 'a7e4444', t: 'stronger bench', v: 150.71 },
+  { c: '9f324c7', t: 'range parsing', v: 185.87, n: 'up: the table layer (see Chapter 5)' },
+  { c: '472c298', t: 'fewer allocations', v: 145.26 },
+  { c: '44cbc11', t: 'visible tables', v: 29.59, hl: 1, n: 'rerun 29.06 ms; p95 42.65 ms' },
 ];
 function drawCharts() {
   logChart($('#chart-type'), typeData, { lo: 1, hi: 1000 });
@@ -914,7 +912,7 @@ drawCharts();
 let resizeT = 0;
 addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(drawCharts, 100); });
 
-/* ---------- ilustrasi LineTagger.edited ---------- */
+/* ---------- LineTagger.edited illustration ---------- */
 function cells(box, items) {
   box.innerHTML = '';
   for (const it of items) {
@@ -928,23 +926,23 @@ function cells(box, items) {
 const spanNames = ['h1', 'p', 'p', 'b', 'li', 'li', 'p'];
 cells($('#lt-before'), spanNames.map((s, i) => ({ i, t: s })));
 cells($('#lt-after'), Array.from({ length: 8 }, (_, i) =>
-  i < 2 ? { i, t: spanNames[i], tip: 'baris ' + i + ' tidak berubah: old[' + i + ']' }
-  : i <= 3 ? { i, t: 'null', cls: 'null', tip: 'baris disunting: pasang ulang' }
-  : { i, t: spanNames[i - 1], cls: 'cool', tip: 'digeser: old[' + (i - 1) + '], tidak menyentuh GTK' }));
+  i < 2 ? { i, t: spanNames[i], tip: 'line ' + i + ' unchanged: old[' + i + ']' }
+  : i <= 3 ? { i, t: 'null', cls: 'null', tip: 'edited line: apply again' }
+  : { i, t: spanNames[i - 1], cls: 'cool', tip: 'shifted: old[' + (i - 1) + '], does not touch GTK' }));
 
-/* ---------- ilustrasi MarkerConcealer ---------- */
+/* ---------- MarkerConcealer illustration ---------- */
 cells($('#mc-old'), Array.from({ length: 14 }, (_, i) => ({ i, t: '[]', cls: 'hot' })));
-cells($('#mc-new'), Array.from({ length: 14 }, (_, i) => ({ i, t: i === 3 || i === 9 ? 'cek' : '·', cls: i === 3 || i === 9 ? 'cool' : 'null' })));
+cells($('#mc-new'), Array.from({ length: 14 }, (_, i) => ({ i, t: i === 3 || i === 9 ? 'check' : '·', cls: i === 3 || i === 9 ? 'cool' : 'null' })));
 
-/* ---------- ilustrasi deferFrom ---------- */
+/* ---------- deferFrom illustration ---------- */
 cells($('#defer-arr'), Array.from({ length: 24 }, (_, i) => {
   if (i < 8) return { i, t: 'tag', cls: 'cool' };
-  if (i >= 14 && i < 17) return { i, t: 'isi', cls: 'hot', tip: 'giliran idle berikutnya (≤8 ms)' };
+  if (i >= 14 && i < 17) return { i, t: 'fill', cls: 'hot', tip: 'next idle turn (≤8 ms)' };
   return { i, t: 'null', cls: 'null' };
 }));
 
-/* ---------- ilustrasi parsing inkremental ---------- */
-const ipLines = ['# Bab Satu', '', 'Pagi itu **hujan** turun.', 'Ia menunggu di halte.', '', '"Kau datang?" tanyanya.', 'Ia tersenyum, *pelan*.|', 'Bus datang terlambat.', '', '```js', 'const x = 1;', '```', ''];
+/* ---------- incremental parsing illustration ---------- */
+const ipLines = ['# Chapter One', '', 'That morning the **rain** fell.', 'He waited at the bus stop.', '', '"Did you come?" he asked.', 'He smiled, *slowly*.|', 'The bus arrived late.', '', '```js', 'const x = 1;', '```', ''];
 const cps = [1, 4, 8, 12];
 const ipBox = $('#ip-doc');
 ipLines.forEach((t, i) => {
@@ -957,9 +955,9 @@ ipLines.forEach((t, i) => {
   ipBox.appendChild(d);
 });
 
-/* ============ Simulasi 1 ============ */
+/* ============ Simulation 1 ============ */
 (() => {
-  const demo = ['# Bab Satu', '', 'Pagi itu **hujan** turun.', 'Ia menunggu di halte.', '', '## Adegan 2', '"Kau datang?" tanyanya.', '- satu *butir*', '- dua butir', '', '| a | b |', '|---|---|', '| 1 | 2 |', '', 'Bus datang `terlambat`.', 'Selesai.'];
+  const demo = ['# Chapter One', '', 'That morning the **rain** fell.', 'He waited at the bus stop.', '', '## Scene 2', '"Did you come?" he asked.', '- one *item*', '- two items', '', '| a | b |', '|---|---|', '| 1 | 2 |', '', 'The bus arrived `late`.', 'The end.'];
   const oldBox = $('#s1-old'), newBox = $('#s1-new');
   const nIn = $('#s1-n'), cIn = $('#s1-c');
   let edited = -1;
@@ -985,22 +983,22 @@ ipLines.forEach((t, i) => {
   function update() {
     const N = Math.round(Math.pow(10, +nIn.value));
     const c = +cIn.value;
-    $('#s1-n-out').textContent = N.toLocaleString('id-ID') + ' baris';
+    $('#s1-n-out').textContent = N.toLocaleString('en-US') + ' lines';
     $('#s1-c-out').textContent = fmt(c, 2) + ' ms';
-    if (edited < 0) { $('#s1-old-n').textContent = '–'; $('#s1-new-n').textContent = '–'; $('#s1-old-ms').textContent = 'klik satu baris'; $('#s1-new-ms').textContent = ''; return; }
-    $('#s1-old-n').textContent = N.toLocaleString('id-ID');
-    $('#s1-old-ms').textContent = '≈ ' + ms(N * c) + ' per ketukan';
+    if (edited < 0) { $('#s1-old-n').textContent = '–'; $('#s1-new-n').textContent = '–'; $('#s1-old-ms').textContent = 'click a line'; $('#s1-new-ms').textContent = ''; return; }
+    $('#s1-old-n').textContent = N.toLocaleString('en-US');
+    $('#s1-old-ms').textContent = '≈ ' + ms(N * c) + ' per keystroke';
     $('#s1-new-n').textContent = '1';
-    $('#s1-new-ms').textContent = '≈ ' + ms(c) + ' per ketukan, berapa pun panjang dokumen';
+    $('#s1-new-ms').textContent = '≈ ' + ms(c) + ' per keystroke, whatever the document length';
   }
   nIn.addEventListener('input', update); cIn.addEventListener('input', update);
   update();
 })();
 
-/* ============ Simulasi 2: parser mini ============ */
+/* ============ Simulation 2: the mini parser ============ */
 const INLINE = /(\*\*[^*]+\*\*)|(\*[^*]+\*)|(`[^`]+`)|(\[[^\]]+\]\([^)]+\))/g;
 function parseLine(line, inCode) {
-  // hasil: { spans, words, fence, markers }, semua offset relatif terhadap awal baris
+  // result: { spans, words, fence, markers }, all offsets relative to the start of the line
   const spans = [], markers = [];
   const fence = line.startsWith('```');
   if (inCode || fence) { spans.push(['code', 0, line.length]); return { spans, markers, words: 0, fence }; }
@@ -1026,30 +1024,30 @@ function parseLine(line, inCode) {
 }
 function genDoc(n) {
   const T = [
-    l => '# Bab ' + l,
+    l => '# Chapter ' + l,
     () => '',
-    () => 'Pagi itu **hujan** turun di kota, dan *ia* menunggu di halte dengan `payung` yang [rusak](http://x).',
-    () => '"Kau datang juga?" tanyanya pelan, hampir tak terdengar di antara suara kendaraan.',
+    () => 'That morning **rain** fell on the city, and *she* waited at the bus stop with a broken `umbrella` that [leaks](http://x).',
+    () => '"So you came after all?" he asked softly, barely audible among the sound of traffic.',
     () => '',
-    () => '- butir *pertama* dalam daftar',
-    () => '- butir kedua',
+    () => '- the *first* item in the list',
+    () => '- the second item',
     () => '',
     () => '```js',
-    () => 'const hujan = turun();',
+    () => 'const rain = fall();',
     () => '```',
     () => '',
-    () => '| nama | nilai |',
+    () => '| name | value |',
     () => '|---|---|',
     () => '| **a** | 1 |',
     () => '',
-    () => 'Ia tersenyum dan melangkah naik ke bus yang datang terlambat sepuluh menit.',
+    () => 'She smiled and stepped onto the bus that arrived ten minutes late.',
     () => '',
   ];
   const out = new Array(n);
   for (let i = 0; i < n; i++) out[i] = T[i % T.length](i);
   return out;
 }
-// Parser penuh: baca seluruh teks, pecah, urai semua.
+// Full parser: read all the text, split, parse everything.
 function fullParse(text) {
   const lines = text.split('\n');
   const spans = new Array(lines.length), starts = new Array(lines.length), markers = [];
@@ -1075,7 +1073,7 @@ function splice1(old, from, to, mid, tail) {
   else for (let i = to; i < old.length; i++) out[k++] = old[i];
   return out;
 }
-// Parser inkremental mini: checkpoints + cache berkunci teks + offset relatif.
+// Mini incremental parser: checkpoints + a cache keyed by text + relative offsets.
 class IncParser {
   constructor(lines) {
     this.cache = new Map();
@@ -1093,7 +1091,7 @@ class IncParser {
       if (r.fence) inCode = !inCode;
       else if (!inCode && !t.includes('|')) checkpoints.push(i + base);
       starts[i] = off;
-      spans[i] = r.spans;          // relatif; absolut = starts[i] + offset
+      spans[i] = r.spans;          // relative; absolute = starts[i] + offset
       lineWords[i] = r.words;
       off += t.length + 1;
     }
@@ -1121,7 +1119,7 @@ class IncParser {
 }
 (() => {
   const nIn = $('#s2-n'), btn = $('#s2-run');
-  const out = () => $('#s2-n-out').textContent = (+nIn.value).toLocaleString('id-ID') + ' baris';
+  const out = () => $('#s2-n-out').textContent = (+nIn.value).toLocaleString('en-US') + ' lines';
   nIn.addEventListener('input', out); out();
   let last2 = null;
   addEventListener('resize', () => last2 && plot(...last2));
@@ -1137,24 +1135,24 @@ class IncParser {
       el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: k ? 'grid' : 'axis' }, svg);
       el('text', { x: L - 6, y: y(v) + 4, 'text-anchor': 'end' }, svg).textContent = fmt(v, v < 10 ? 1 : 0) + ' ms';
     }
-    el('text', { x: W - R, y: H - 6, 'text-anchor': 'end' }, svg).textContent = 'ketukan ke-1 … ke-' + full.length;
-    for (const [arr, color, name] of [[full, css('--before'), 'Penuh'], [inc, css('--after'), 'Inkremental']]) {
+    el('text', { x: W - R, y: H - 6, 'text-anchor': 'end' }, svg).textContent = 'keystroke 1 … ' + full.length;
+    for (const [arr, color, name] of [[full, css('--before'), 'Full'], [inc, css('--after'), 'Incremental']]) {
       el('polyline', { points: arr.map((v, i) => x(i) + ',' + y(v)).join(' '), fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
       const lx = x(arr.length - 1), ly = y(arr[arr.length - 1]);
       el('text', { x: lx - 4, y: ly - 6, 'text-anchor': 'end', class: 'valtxt' }, svg).textContent = name;
     }
     full.forEach((v, i) => {
       const r = el('rect', { x: x(i) - 6, y: T, width: 12, height: H - T - B, fill: 'transparent' }, svg);
-      attachTip(r, 'Ketukan ' + (i + 1) + '<br>Penuh: ' + ms(v) + '<br>Inkremental: ' + ms(inc[i]));
+      attachTip(r, 'Keystroke ' + (i + 1) + '<br>Full: ' + ms(v) + '<br>Incremental: ' + ms(inc[i]));
     });
   }
   btn.addEventListener('click', () => {
-    btn.disabled = true; btn.textContent = 'Mengukur…';
+    btn.disabled = true; btn.textContent = 'Measuring…';
     setTimeout(() => {
       const N = +nIn.value, K = 40;
       const base = genDoc(N);
-      const k = Math.floor(N / 2 / 18) * 18 + 2; // baris paragraf di tengah
-      // Penuh
+      const k = Math.floor(N / 2 / 18) * 18 + 2; // a paragraph line in the middle
+      // Full
       let lines = base.slice();
       let res = fullParse(lines.join('\n'));
       const tf = [];
@@ -1164,7 +1162,7 @@ class IncParser {
         res = fullParse(lines.join('\n'));
         tf.push(performance.now() - t0);
       }
-      // Inkremental
+      // Incremental
       const inc = new IncParser(base.slice());
       const ti = []; let parsed = 0;
       for (let i = 0; i < K; i++) {
@@ -1174,22 +1172,22 @@ class IncParser {
       }
       const mf = median(tf), mi = median(ti);
       $('#s2-full').textContent = ms(mf);
-      $('#s2-full-s').textContent = 'p95 ' + ms(pct(tf, .95)) + ' · urai ' + N.toLocaleString('id-ID') + ' baris/ketukan';
+      $('#s2-full-s').textContent = 'p95 ' + ms(pct(tf, .95)) + ' · parsed ' + N.toLocaleString('en-US') + ' lines/keystroke';
       $('#s2-inc').textContent = ms(mi);
-      $('#s2-inc-s').textContent = 'p95 ' + ms(pct(ti, .95)) + ' · urai ' + fmt(parsed / K, 0) + ' baris/ketukan';
+      $('#s2-inc-s').textContent = 'p95 ' + ms(pct(ti, .95)) + ' · parsed ' + fmt(parsed / K, 0) + ' lines/keystroke';
       $('#s2-x').textContent = fmt(mf / Math.max(mi, 0.001), 0) + '×';
       const same = res.words === inc.words && res.starts[N - 1] === inc.starts[N - 1];
-      $('#s2-ok').textContent = same ? '✓ jumlah kata & offset sama dengan parser penuh' : '✗ hasil berbeda!';
+      $('#s2-ok').textContent = same ? '✓ word count & offsets equal the full parser' : '✗ results differ!';
       plot(tf, ti);
-      btn.disabled = false; btn.textContent = 'Jalankan lagi';
+      btn.disabled = false; btn.textContent = 'Run again';
     }, 30);
   });
 })();
 
-/* ============ Simulasi 3: alokasi ============ */
+/* ============ Simulation 3: allocations ============ */
 (() => {
   const nIn = $('#s3-n'), btn = $('#s3-run');
-  const out = () => $('#s3-n-out').textContent = (+nIn.value).toLocaleString('id-ID') + ' baris';
+  const out = () => $('#s3-n-out').textContent = (+nIn.value).toLocaleString('en-US') + ' lines';
   nIn.addEventListener('input', out); out();
   let sink = 0;
   let last3 = null;
@@ -1207,30 +1205,30 @@ class IncParser {
       el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: k ? 'grid' : 'axis' }, svg);
       el('text', { x: L - 6, y: y(v) + 4, 'text-anchor': 'end' }, svg).textContent = fmt(v, v < 1 ? 2 : 1) + ' ms';
     }
-    el('text', { x: W - R, y: H - 6, 'text-anchor': 'end' }, svg).textContent = 'ketukan ke-1 … ke-' + a.length + (W > 600 ? ' (nilai di atas skala dipotong di tepi atas)' : '');
+    el('text', { x: W - R, y: H - 6, 'text-anchor': 'end' }, svg).textContent = 'keystroke 1 … ' + a.length + (W > 600 ? ' (values above the scale are clipped at the top edge)' : '');
     const surf = css('--surface');
-    for (const [arr, color, name] of [[a, css('--before'), 'Lama'], [b, css('--after'), 'Baru']]) {
+    for (const [arr, color, name] of [[a, css('--before'), 'Old'], [b, css('--after'), 'New']]) {
       arr.forEach((v, i) => {
         const c = el('circle', { cx: x(i), cy: y(v), r: 3, fill: color, stroke: surf, 'stroke-width': 1 }, svg);
-        attachTip(c, name + ', ketukan ' + (i + 1) + ': ' + ms(v));
+        attachTip(c, name + ', keystroke ' + (i + 1) + ': ' + ms(v));
       });
     }
   }
   btn.addEventListener('click', () => {
-    btn.disabled = true; btn.textContent = 'Mengukur…';
+    btn.disabled = true; btn.textContent = 'Measuring…';
     setTimeout(() => {
       const N = +nIn.value, K = 300;
       const starts = Array.from({ length: N }, (_, i) => i * 60);
       const markers = [];
       for (let i = 0; i < N; i++) if (i % 3) { markers.push([starts[i] + 5, starts[i] + 7, i, i, i]); markers.push([starts[i] + 20, starts[i] + 22, i, i, i]); }
       const hidden = 'hidden';
-      // pemanasan
+      // warm-up
       for (let w = 0; w < 5; w++) { const p = starts.map(() => []); sink += p.length; }
       const ta = [], tb = [];
       let cursor = Math.floor(N / 2), allocA = 0, allocB = 0;
       for (let k = 0; k < K; k++) {
         const prev = cursor; cursor = (cursor + 1) % N;
-        // lama: semua baris
+        // old: all lines
         let t0 = performance.now();
         const perLine = starts.map(() => []);
         for (const m of markers) {
@@ -1241,12 +1239,12 @@ class IncParser {
         sink += c;
         ta.push(performance.now() - t0);
         allocA = N + markers.length;
-        // baru: hanya baris kursor lama & baru
+        // new: only the old & new cursor lines
         t0 = performance.now();
         const visit = new Set([prev, cursor]);
         c = 0;
         for (const line of visit) {
-          // cari marker baris itu dengan pencarian biner
+          // find the markers of that line with a binary search
           let lo = 0, hi = markers.length;
           while (lo < hi) { const mid = (lo + hi) >>> 1; if (markers[mid][4] < line) lo = mid + 1; else hi = mid; }
           const spans = [];
@@ -1258,20 +1256,20 @@ class IncParser {
         tb.push(performance.now() - t0);
         allocB = 6;
       }
-      const f2 = v => v < 0.01 ? '<0,01' : fmt(v, 2);
+      const f2 = v => v < 0.01 ? '<0.01' : fmt(v, 2);
       const s = arr => f2(median(arr)) + ' / ' + f2(pct(arr, .95)) + ' / ' + fmt(Math.max(...arr), 1);
       $('#s3-old').textContent = s(ta);
-      $('#s3-old-a').textContent = '≈ ' + allocA.toLocaleString('id-ID') + ' array/tuple baru per ketukan';
+      $('#s3-old-a').textContent = '≈ ' + allocA.toLocaleString('en-US') + ' new arrays/tuples per keystroke';
       $('#s3-new').textContent = s(tb);
-      $('#s3-new-a').textContent = '≤ ' + allocB + ' objek baru per ketukan';
+      $('#s3-new-a').textContent = '≤ ' + allocB + ' new objects per keystroke';
       plot(ta, tb);
-      btn.disabled = false; btn.textContent = 'Jalankan lagi';
+      btn.disabled = false; btn.textContent = 'Run again';
       window.__sink = sink;
     }, 30);
   });
 })();
 
-/* ============ Simulasi 4: main loop ============ */
+/* ============ Simulation 4: the main loop ============ */
 (() => {
   const nIn = $('#s4-n'), playBtn = $('#s4-play');
   const KEY_EVERY = 40, KEY_START = 15, FRAME = 16, CHUNK = 8;
@@ -1279,11 +1277,11 @@ class IncParser {
     const s = kb / 650;
     const setText = 29 * s, parse = 31 * s, tags = 60 * s, outline = 54 * s, mark = 33 * s;
     const total = setText + parse + tags + outline + mark;
-    const oldTasks = [{ a: 0, b: total, kind: 'blok' }];
-    // cara baru: sinkron = set_text + urai + 200 baris pertama (≈11 ms, tetap)
+    const oldTasks = [{ a: 0, b: total, kind: 'block' }];
+    // new approach: synchronous = set_text + parsing + the first 200 lines (≈11 ms, fixed)
     const head = Math.min(11, tags + mark);
     const sync = setText + parse + head;
-    const newTasks = [{ a: 0, b: sync, kind: 'sinkron' }];
+    const newTasks = [{ a: 0, b: sync, kind: 'sync' }];
     let rest = tags + outline + mark - head, t = sync;
     while (rest > 0.01) {
       t += FRAME;
@@ -1309,7 +1307,7 @@ class IncParser {
     for (const t of tasks) {
       if (t.a > upTo) continue;
       const r = el('rect', { x: x(t.a), y: top, width: Math.max(1.5, x(Math.min(t.b, upTo)) - x(t.a)), height: h, rx: 2, fill: color }, svg);
-      attachTip(r, 'Tugas ' + t.kind + ': ' + ms(t.b - t.a) + '<br>main loop tidak bisa menggambar atau menerima input');
+      attachTip(r, 'Task ' + t.kind + ': ' + ms(t.b - t.a) + '<br>the main loop cannot draw or accept input');
     }
     for (const k of ks) {
       if (k.at > upTo) continue;
@@ -1318,7 +1316,7 @@ class IncParser {
       el('line', { x1: x(k.at), x2: x(k.at), y1: top - 4, y2: yy + 8, stroke: css('--text'), 'stroke-width': 1.5 }, svg);
       if (wait > 0.5) el('line', { x1: x(k.at), x2: x(Math.min(k.done, upTo)), y1: yy + 8, y2: yy + 8, stroke: css('--text-2'), 'stroke-width': 2, 'stroke-linecap': 'round' }, svg);
       const hit = el('rect', { x: x(k.at) - 5, y: 0, width: 10, height: 70, fill: 'transparent' }, svg);
-      attachTip(hit, 'Ketukan pada ' + fmt(k.at, 0) + ' ms<br>menunggu ' + ms(wait));
+      attachTip(hit, 'Keystroke at ' + fmt(k.at, 0) + ' ms<br>waited ' + ms(wait));
     }
     el('text', { x: W - R, y: 74, 'text-anchor': 'end' }, svg).textContent = fmt(end, 0) + ' ms';
     el('text', { x: L, y: 74 }, svg).textContent = '0';
@@ -1326,7 +1324,7 @@ class IncParser {
   let anim = 0;
   function render(upTo) {
     const kb = +nIn.value;
-    $('#s4-n-out').textContent = kb.toLocaleString('id-ID') + ' KB';
+    $('#s4-n-out').textContent = kb.toLocaleString('en-US') + ' KB';
     const { oldTasks, newTasks, end } = schedule(kb);
     const ko = keys(oldTasks, end), kn = keys(newTasks, end);
     const lim = upTo ?? end;
@@ -1335,16 +1333,16 @@ class IncParser {
     const jo = Math.max(...oldTasks.map(t => t.b - t.a)), jn = Math.max(...newTasks.map(t => t.b - t.a));
     const wo = Math.max(...ko.map(k => k.done - k.at)), wn = Math.max(...kn.map(k => k.done - k.at));
     $('#s4-old-j').textContent = ms(jo);
-    $('#s4-old-k').textContent = 'ketukan terlama menunggu ' + ms(wo);
+    $('#s4-old-k').textContent = 'longest keystroke wait: ' + ms(wo);
     $('#s4-new-j').textContent = ms(jn);
-    $('#s4-new-k').textContent = 'ketukan terlama menunggu ' + ms(wn) + ' · total ' + ms(newTasks[newTasks.length - 1].b);
+    $('#s4-new-k').textContent = 'longest keystroke wait: ' + ms(wn) + ' · total ' + ms(newTasks[newTasks.length - 1].b);
   }
   nIn.addEventListener('input', () => { cancelAnimationFrame(anim); render(); });
   addEventListener('resize', () => { cancelAnimationFrame(anim); render(); });
   playBtn.addEventListener('click', () => {
     cancelAnimationFrame(anim);
     const { end } = schedule(+nIn.value);
-    const t0 = performance.now(), slow = 4; // 4× lebih lambat dari waktu nyata
+    const t0 = performance.now(), slow = 4; // 4× slower than real time
     const step = () => {
       const t = (performance.now() - t0) / slow;
       render(Math.min(t, end));
@@ -1356,7 +1354,7 @@ class IncParser {
   window.__s4 = render;
 })();
 
-/* ============ Simulasi 5: tabel ============ */
+/* ============ Simulation 5: tables ============ */
 (() => {
   const nIn = $('#s5-n'), sIn = $('#s5-s');
   const COST = 6.24, VIEW = 2;
@@ -1364,7 +1362,7 @@ class IncParser {
   const cols = () => Math.max(10, Math.min(50, Math.floor($('#s5-old').clientWidth / 14) || 25));
   function render() {
     const N = +nIn.value;
-    $('#s5-n-out').textContent = N + ' tabel';
+    $('#s5-n-out').textContent = N + ' tables';
     $('#s5-s-out').textContent = sIn.value + '%';
     const first = Math.round((N - VIEW) * (+sIn.value) / 100);
     for (let i = first; i < first + VIEW && i < N; i++) seen.add(i);
@@ -1382,10 +1380,10 @@ class IncParser {
       });
     }
     const bo = 2 * N, bn = seen.size;
-    $('#s5-old-v').textContent = bo.toLocaleString('id-ID') + ' ×';
-    $('#s5-old-s').textContent = '≈ ' + ms(bo * COST) + ' membangun grid · ' + N + ' widget hidup';
-    $('#s5-new-v').textContent = bn.toLocaleString('id-ID') + ' ×';
-    $('#s5-new-s').textContent = '≈ ' + ms(bn * COST) + ' membangun grid · ' + bn + ' widget hidup';
+    $('#s5-old-v').textContent = bo.toLocaleString('en-US') + ' ×';
+    $('#s5-old-s').textContent = '≈ ' + ms(bo * COST) + ' building grids · ' + N + ' live widgets';
+    $('#s5-new-v').textContent = bn.toLocaleString('en-US') + ' ×';
+    $('#s5-new-s').textContent = '≈ ' + ms(bn * COST) + ' building grids · ' + bn + ' live widgets';
   }
   nIn.addEventListener('input', () => { seen = new Set(); render(); });
   sIn.addEventListener('input', render);
@@ -1394,7 +1392,7 @@ class IncParser {
   render();
 })();
 
-/* gambar ulang saat tema berubah supaya warna SVG mengikuti */
+/* redraw when the theme changes so the SVG colors follow */
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { drawCharts(); window.__s4 && window.__s4(); });
 })();
 </script>
