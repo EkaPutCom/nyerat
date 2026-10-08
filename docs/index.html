@@ -222,23 +222,86 @@ a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
 <!-- ========== HOW IT WORKS ========== -->
 <section class="alt" id="flow">
   <div class="wrap">
-    <div class="row">
-      <div class="text">
-        <p class="eyebrow">How it works</p>
-        <h2>One day of work, from Home to done.</h2>
-        <p class="sub" style="margin-bottom:18px">Everything is a Markdown file in one work folder, so each step feeds the next:</p>
-        <ol>
-          <li><strong>Home.</strong> Start the day on Home: what to continue, today's journal, agents that are running, due dates from your boards, and the unprocessed inbox</li>
-          <li><strong>Inbox.</strong> Capture ideas, links, and quick notes in a line, then process them later: turn the ones worth doing into cards</li>
-          <li><strong>Journal.</strong> Write short notes through the day. Nyerat adds the activity for you: cards moved, agent changes applied, harness results, and Git commits</li>
-          <li><strong>Kanban.</strong> Plan the work on a board. Due dates show up on Home, and checking a task there writes it back to the board</li>
-          <li><strong>Agent.</strong> Ask in plain language, for example “Update the release date and move the release material card to In Progress.” The agent proposes changes with a diff, you apply them, and it verifies the result. A card marked <code>@pi</code> goes to another agent in a project repo</li>
-        </ol>
-        <p class="sub" style="margin:18px 0 0">At the end of the day, ask the Assistant to summarize the journal. Nothing is written before you press Apply.</p>
-      </div>
-      <figure class="shot"><img src="assets/agent.gif" width="900" height="548" loading="lazy" alt="Animation of the agent proposing changes to a plan and a task board; the user applies both"><figcaption>The agent step: it proposes, you apply, and the plan and the board are updated</figcaption></figure>
+    <div class="center">
+      <p class="eyebrow">How it works</p>
+      <h2>One day of work, from Home to done.</h2>
+      <p class="sub">Everything is a Markdown file in one work folder, so each step feeds the next.</p>
     </div>
 
+    <div class="row">
+      <div class="text">
+        <p class="eyebrow">1. Home</p>
+        <h2>Start the day knowing what to continue.</h2>
+        <p class="sub" style="margin-bottom:18px">Open Nyerat and Home already shows where you left off.</p>
+        <ul>
+          <li>Recent files, today's journal, and agents that are running or waiting for you</li>
+          <li>Due dates from every kanban board, and the inbox that still has unprocessed notes</li>
+          <li>Check a task right on Home and it is written back to its board</li>
+        </ul>
+        <p style="margin-top:18px"><a href="docs/docs/home.html">About Home →</a></p>
+      </div>
+      <figure class="shot"><img src="assets/home.gif" width="900" height="548" loading="lazy" alt="Animation of the Home tab: a task due today is checked and disappears, and the journal row counts a new note"><figcaption>Home: check a task and add a journal note without opening another file</figcaption></figure>
+    </div>
+
+    <div class="row flip">
+      <div class="text">
+        <p class="eyebrow">2. Inbox</p>
+        <h2>Capture first, sort later.</h2>
+        <p class="sub" style="margin-bottom:18px">Ideas, links, and quick notes go into the inbox in one line.</p>
+        <ul>
+          <li>Type in the top field and press Enter; the note is time-stamped and tagged with <code>#tag</code></li>
+          <li>Process it later: turn the notes worth doing into kanban cards</li>
+          <li>It stays a plain Markdown list, with undo for every change</li>
+        </ul>
+        <p style="margin-top:18px"><a href="docs/docs/inbox.html">About the inbox →</a></p>
+      </div>
+      <figure class="shot"><img src="assets/inbox.gif" width="900" height="548" loading="lazy" alt="Animation of the inbox: two quick notes are typed and added to the top of the list"><figcaption>Two quick captures land at the top of the inbox</figcaption></figure>
+    </div>
+
+    <div class="row">
+      <div class="text">
+        <p class="eyebrow">3. Journal</p>
+        <h2>The day writes itself.</h2>
+        <p class="sub" style="margin-bottom:18px">You jot short notes; Nyerat adds what already happened.</p>
+        <ul>
+          <li>Quick capture with <kbd>Ctrl+Shift+J</kbd> without leaving the document you are in</li>
+          <li>Cards moved, agent changes applied, harness results, and Git commits are merged into the Activity section</li>
+          <li>At the end of the day the Assistant proposes a summary, and nothing is written before you apply it</li>
+        </ul>
+        <p style="margin-top:18px"><a href="docs/docs/journal.html">About the journal →</a></p>
+      </div>
+      <figure class="shot"><img src="assets/journal.gif" width="900" height="548" loading="lazy" alt="Animation of the daily journal: notes and the activity of a card that was moved, then a new note is added"><figcaption>Notes by you, activity by Nyerat, in one Markdown file</figcaption></figure>
+    </div>
+
+    <div class="row flip">
+      <div class="text">
+        <p class="eyebrow">4. Kanban</p>
+        <h2>Plan the work on a board.</h2>
+        <p class="sub" style="margin-bottom:18px">A kanban board is also just a Markdown file.</p>
+        <ul>
+          <li>Drag cards between lists; due dates <code>@{date}</code> show up on Home</li>
+          <li>Tags, notes, and checkboxes on every card</li>
+          <li>Moves are recorded in the journal</li>
+        </ul>
+        <p style="margin-top:18px"><a href="docs/docs/kanban.html">About kanban →</a></p>
+      </div>
+      <figure class="shot"><img src="assets/kanban.gif" width="900" height="548" loading="lazy" alt="Animation of a kanban board in which cards are moved between the lists"><figcaption>Cards move across the board</figcaption></figure>
+    </div>
+
+    <div class="row">
+      <div class="text">
+        <p class="eyebrow">5. Agent</p>
+        <h2>Ask for results, you decide.</h2>
+        <p class="sub" style="margin-bottom:18px">Ask in plain language; the agent reads your folder and proposes the work.</p>
+        <ul>
+          <li>“Update the release date and move the release material card to In Progress.” Each change is a proposal with its diff</li>
+          <li>Apply or reject; every application can be undone, and Markdown files outside the folder are never touched</li>
+          <li>For several steps it plans, proposes one batch, and verifies the result. A card marked <code>@pi</code> goes to another agent in a project repo</li>
+        </ul>
+        <p style="margin-top:18px"><a href="docs/docs/proposals.html">Proposals and approval →</a></p>
+      </div>
+      <figure class="shot"><img src="assets/agent.gif" width="900" height="548" loading="lazy" alt="Animation of the agent proposing changes to a plan and a task board; the user applies both"><figcaption>The agent proposes, you apply: the plan and the board are updated</figcaption></figure>
+    </div>
   </div>
 </section>
 

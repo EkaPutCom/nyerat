@@ -21,6 +21,7 @@ import { iterAtLine } from '../src/gtkutil.js';
 import { widgetPixbuf } from '../tests/widgets.js';
 import { editCardDialog, findDialog, harnessAskDialog } from '../src/ui/dialogs.js';
 import { findEntry } from '../src/ui/menu.js';
+import { localDate } from '../src/markdown/home.js';
 
 // A sample work folder for the Assistant panel screenshots (a fake provider; no network and no API key):
 // a product launch project with a plan, meeting notes, research, and a task board.
@@ -827,6 +828,74 @@ function main(app: Adw.Application): void {
     waitFor(() => !w.orchestrator.queue.runs.some(r => r.status === 'working' || r.status === 'waiting'));
     w.orchestrator.program = savedProgram;
     w.harnessDialogs = savedDialogs;
+    w.editor.buffer.set_modified(false);
+
+    // ───────── The daily flow: Home, Inbox, Journal (one work folder, relative dates so Home always has due dates) ─────────
+    const day = (offset: number) => { const d = new Date(); d.setDate(d.getDate() + offset); return localDate(d); };
+    const flowDir = GLib.build_filenamev([GLib.dir_make_tmp('nyerat-flow-XXXXXX'), 'nyerat-launch']);
+    const flowPut = (rel: string, text: string) => {
+        const path = GLib.build_filenamev([flowDir, ...rel.split('/')]);
+        GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
+        GLib.file_set_contents(path, text);
+        return path;
+    };
+    for (const [rel, text] of Object.entries(WORK)) flowPut(rel, text);
+    const flowBoard = flowPut('tasks.md', `---\nkanban: true\nproject: launch\n---\n\n## Plan\n\n- [ ] Prepare the release material #marketing @{${day(1)}}\n- [ ] Write the release notes #docs @{${day(2)}}\n\n## In Progress\n\n- [ ] Fix the sync bug #bug #important @{${day(0)}}\n\n## Done\n\n- [x] Redesign the home page #design\n`);
+    const flowInbox = flowPut('inbox.md', `---\ninbox: true\n---\n\n# Inbox\n\nA place to capture ideas, notes, and things to process later.\n\n- Read the article about the GNOME HIG #read ➕ ${day(0)} 08:10\n- Idea: offer a PDF export #idea ➕ ${day(-1)} 17:45\n`);
+    w.openFolder(flowDir, false);
+    w.setOption('chat', false);
+    w.setOption('sidebar', true);
+    w.sidebar.setPage('files');
+    w.setDark(false);
+    // Toasts from earlier scenes expire (3 s each, one at a time) and new ones are not shown, so they do not cover the frames.
+    w.toast = () => {};
+    idle(30000);
+    w.settings.recentFiles = [];   // so Continue only shows this folder's files, not the earlier scenes'
+    const flowFrame = (gif: string, hold = 0) => frame(gif, hold);
+    for (const rel of ['plans/launch.md', 'notes/meeting-1-oct.md', 'research/users.md']) w.openFile(GLib.build_filenamev([flowDir, ...rel.split('/')]));
+    while (w.documentCount > 1) w.closeTab();
+    w.file = null;
+    ed.setText('');
+    w.editor.buffer.set_modified(false);
+    w.settings.recentFiles = w.settings.recentFiles.filter(r => r.path.startsWith(`${flowDir}/`));
+    w.openHome();
+    idle(600);
+    flowFrame('home', 10);
+    // Home → check the task that is due today: written straight back to its board.
+    const due = w.homeData().tasks.find(t => t.card.startsWith('Fix the sync bug'));
+    if (due) w.home.onToggleTask(due, true);
+    w.refreshHome();
+    idle(400);
+    flowFrame('home', 6);
+    w.addJournalNote('Standup: the sync bug is done, the beta is next');
+    idle(400);
+    flowFrame('home', 12);
+
+    w.openFile(flowInbox);
+    idle(500);
+    flowFrame('inbox', 8);
+    for (const text of ['Ask Dewi about the beta schedule #question', 'Write the release notes for 1.0 #docs']) {
+        w.inbox.capture(text);
+        idle(300);
+        flowFrame('inbox', 8);
+    }
+    w.editor.buffer.set_modified(false);
+
+    // A card moved on the board is recorded as activity, then merged into the journal.
+    w.openFile(flowBoard);
+    idle(500);
+    let flow = parseBoard(w.editor.getText());
+    flow = moveCard(flow, { column: 0, index: 0 }, { column: 1, index: 0 });
+    w.board.commit(flow);
+    idle(300);
+    const journal = w.openJournal();
+    if (journal) waitPromise(journal);
+    idle(600);
+    w.editor.view.scroll_to_iter(w.editor.buffer.get_start_iter(), 0, false, 0, 0);
+    flowFrame('journal', 10);
+    w.addJournalNote('? Does the beta need the sync fix first');
+    idle(400);
+    flowFrame('journal', 14);
     w.editor.buffer.set_modified(false);
 
     finishGifs();
