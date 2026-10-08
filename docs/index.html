@@ -216,28 +216,6 @@ a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
       <a class="card" href="docs/history.html#agent-log"><div class="ico">▤</div><h3>The agent log</h3><p>A live timeline of every model round, the reasoning, the tool calls with their arguments and results, the tokens, and the duration.</p><span class="more">The agent log →</span></a>
       <a class="card" href="docs/orchestrator.html"><div class="ico">π</div><h3>The pi harness orchestrator</h3><p>A card marked <code>@pi</code> is worked on by the pi harness in another project repo. Answer its questions and permission requests straight from the card.</p><span class="more">The orchestrator →</span></a>
     </div>
-  </div>
-</section>
-
-<!-- ========== HOW IT WORKS ========== -->
-<section class="alt" id="flow">
-  <div class="wrap">
-    <div class="row">
-      <div class="text">
-        <p class="eyebrow">How it works</p>
-        <h2>One day of work, from Home to done.</h2>
-        <p class="sub" style="margin-bottom:18px">Everything is a Markdown file in one work folder, so each step feeds the next:</p>
-        <ol>
-          <li><strong>Home.</strong> Start the day on Home: what to continue, today's journal, agents that are running, due dates from your boards, and the unprocessed inbox</li>
-          <li><strong>Inbox.</strong> Capture ideas, links, and quick notes in a line, then process them later: turn the ones worth doing into cards</li>
-          <li><strong>Journal.</strong> Write short notes through the day. Nyerat adds the activity for you: cards moved, agent changes applied, harness results, and Git commits</li>
-          <li><strong>Kanban.</strong> Plan the work on a board. Due dates show up on Home, and checking a task there writes it back to the board</li>
-          <li><strong>Agent.</strong> Ask in plain language, for example “Update the release date and move the release material card to In Progress.” The agent proposes changes with a diff, you apply them, and it verifies the result. A card marked <code>@pi</code> goes to another agent in a project repo</li>
-        </ol>
-        <p class="sub" style="margin:18px 0 0">At the end of the day, ask the Assistant to summarize the journal. Nothing is written before you press Apply.</p>
-      </div>
-      <figure class="shot"><img src="assets/agent.gif" width="900" height="548" loading="lazy" alt="Animation of the agent proposing changes to a plan and a task board; the user applies both"><figcaption>The agent step: it proposes, you apply, and the plan and the board are updated</figcaption></figure>
-    </div>
 
     <div class="row flip">
       <div class="text">
@@ -270,6 +248,29 @@ a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
       </div>
       <figure class="shot"><img src="assets/work.gif" width="900" height="548" loading="lazy" alt="Animation of the agent recording a three-step plan, proposing a change batch, then verifying the result and marking every step done"><figcaption>The plan, the change batch, the verification, and then done and verified</figcaption></figure>
     </div>
+  </div>
+</section>
+
+<!-- ========== HOW IT WORKS ========== -->
+<section class="alt" id="flow">
+  <div class="wrap">
+    <div class="row">
+      <div class="text">
+        <p class="eyebrow">How it works</p>
+        <h2>One day of work, from Home to done.</h2>
+        <p class="sub" style="margin-bottom:18px">Everything is a Markdown file in one work folder, so each step feeds the next:</p>
+        <ol>
+          <li><strong>Home.</strong> Start the day on Home: what to continue, today's journal, agents that are running, due dates from your boards, and the unprocessed inbox</li>
+          <li><strong>Inbox.</strong> Capture ideas, links, and quick notes in a line, then process them later: turn the ones worth doing into cards</li>
+          <li><strong>Journal.</strong> Write short notes through the day. Nyerat adds the activity for you: cards moved, agent changes applied, harness results, and Git commits</li>
+          <li><strong>Kanban.</strong> Plan the work on a board. Due dates show up on Home, and checking a task there writes it back to the board</li>
+          <li><strong>Agent.</strong> Ask in plain language, for example “Update the release date and move the release material card to In Progress.” The agent proposes changes with a diff, you apply them, and it verifies the result. A card marked <code>@pi</code> goes to another agent in a project repo</li>
+        </ol>
+        <p class="sub" style="margin:18px 0 0">At the end of the day, ask the Assistant to summarize the journal. Nothing is written before you press Apply.</p>
+      </div>
+      <figure class="shot"><img src="assets/agent.gif" width="900" height="548" loading="lazy" alt="Animation of the agent proposing changes to a plan and a task board; the user applies both"><figcaption>The agent step: it proposes, you apply, and the plan and the board are updated</figcaption></figure>
+    </div>
+
   </div>
 </section>
 
