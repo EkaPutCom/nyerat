@@ -352,7 +352,7 @@ export function toolTests(): void {
         contains(all.content, '[chapter-3.md, lines 1–');
         contains(all.content, '1│ # Chapter 3: The Island');
         const part = runTool('read_file', '{"name":"chapter-1.md","from_line":5,"to_line":6}', files);
-        contains(part.content, '[chapter-1.md, lines 5–6 of  ');
+        contains(part.content, '[chapter-1.md, lines 5–6 of ');
         contains(part.content, '5│ ## The Meeting');
         ok(!part.content.includes('1│'), 'a line outside the range came along');
         eq(part.summary, 'lines 5–6');

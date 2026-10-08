@@ -199,7 +199,7 @@ export function planChange(name: string, rawArguments: string, files: SourceFile
             const actual = lines[line - 1];
             if (actual.trim() !== args.line_text.trim()) {
                 const near = lines.map((l, i) => l.trim() === (args.line_text as string).trim() ? i + 1 : 0).filter(n => n).slice(0, 5);
-                return fail(`Line ${line} in ${file.name} contains "${actual.slice(0, 200)}", not line_text.${near.length ? ` line_text is on lines ${near.join(', ')}.` : ' Re-read the file with read_file.'}`, 'line does not match');
+                return fail(`Line ${line} in ${file.name} contains "${actual.slice(0, 200)}", not line_text.${near.length ? ` line_text is on ${near.length === 1 ? "line" : "lines"} ${near.join(', ')}.` : ' Re-read the file with read_file.'}`, 'line does not match');
             }
             return insertAt(line);
         }

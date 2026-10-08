@@ -114,7 +114,7 @@ export function chatTests(c: GuiContext): void {
         ok(!text.includes('**'), 'the markdown marks are shown raw');
         contains(text, 'Looking through the manuscript.');
         contains(text, 'Context: ≈');
-        contains(text, 'snippets from chapter-1.md');
+        contains(text, 'excerpt from chapter-1.md');
         contains(text, '1.5k in (1.2k from cache) · 12 out');
         ok(panel.contextButton.get_label()!.startsWith('Context · ≈'), `context button: ${panel.contextButton.get_label()}`);
         eq(panel.session.history.length, 2);
@@ -167,8 +167,8 @@ export function chatTests(c: GuiContext): void {
         popover.popdown();
         pump();
         const shown = texts.join('\n');
-        contains(shown, 'Document: chapter-2.md (whole)');
-        contains(shown, 'Snippets: chapter-1.md');
+        contains(shown, 'Document: chapter-2.md (in full)');
+        contains(shown, 'Excerpt: chapter-1.md');
         contains(shown, 'Total ≈');
         panel.input.buffer.set_text('', -1);
     });
@@ -720,7 +720,7 @@ export function chatTests(c: GuiContext): void {
         const apply = panel.host.applyChange!;
         const stale = apply({ kind: 'edit', file: 'chapter-1.md', before: 'old content', after: 'new content', reason: '' });
         contains(stale ?? '', 'changed since it was proposed');
-        contains(apply({ kind: 'create', file: '../outside.md', before: '', after: 'x', reason: '' }) ?? '', 'outside the folder');
+        contains(apply({ kind: 'create', file: '../outside.md', before: '', after: 'x', reason: '' }) ?? '', 'outside the work folder');
         ok(!GLib.file_test(GLib.build_filenamev([tmp, 'outside.md']), GLib.FileTest.EXISTS), 'a file was written outside the folder');
         contains(apply({ kind: 'create', file: 'chapter-1.md', before: '', after: 'x', reason: '' }) ?? '', 'already exists');
     });

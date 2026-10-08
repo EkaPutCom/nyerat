@@ -59,11 +59,11 @@ export function wikiLinkTests(): void {
     });
     test('highlighting: only the name or alias becomes the link, the brackets and the alias target are hidden', () => {
         const r = parseInline('a [[Note]] b');
-        ok(r.tags.some(([n, s, e]) => n === 'link' && s === 4 && e === 11), JSON.stringify(r.tags));
-        eq(r.marks, [[2, 4], [11, 13]]);
+        ok(r.tags.some(([n, s, e]) => n === 'link' && s === 4 && e === 8), JSON.stringify(r.tags));
+        eq(r.marks, [[2, 4], [8, 10]]);
         const alias = parseInline('[[Journal/Idea|old idea]]');
-        ok(alias.tags.some(([n, s, e]) => n === 'link' && s === 13 && e === 21), JSON.stringify(alias.tags));
-        eq(alias.marks, [[0, 13], [21, 23]]);
+        ok(alias.tags.some(([n, s, e]) => n === 'link' && s === 15 && e === 23), JSON.stringify(alias.tags));
+        eq(alias.marks, [[0, 15], [23, 25]]);
     });
     test('highlighting: empty [[ ]], inline code, and link contents are not formatted again', () => {
         eq(parseInline('[[ ]]').tags, []);

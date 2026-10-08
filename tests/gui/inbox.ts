@@ -51,7 +51,7 @@ export function inboxTests(c: GuiContext): void {
         settle();
         eq(rows().length, 4, 'rows');
         const items = parseInbox(text()).items;
-        ok(/^Interesting link #read ➕  \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(items[0].text), items[0].text);
+        ok(/^Interesting link #read ➕ \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(items[0].text), items[0].text);
         eq(entry().text, '', 'the entry was cleared');
         ok(w.statusBar.right.label.includes('4 notes'), 'the status was updated');
         entry().set_text('   ');
