@@ -22,7 +22,7 @@ export function homeTests(c: GuiContext): void {
     const path = (name: string) => GLib.build_filenamev([ws, ...name.split('/')]);
     const put = (name: string, text: string) => { GLib.file_set_contents(path(name), text); return path(name); };
     const day = (offset: number) => localDate(new Date(Date.now() + offset * 24 * 60 * 60 * 1000));
-    const BOARD =  `---\nkanban: true\n---\n\n## Plan\n\n- [ ] Implement search #project/nyerat @{${day(0)}}\n- [ ] Review architecture @{${day(1)}}\n- [ ] Old report @{${day(-2)}}\n- [ ] Later @{${day(10)}}\n\n## Done\n\n- [x] Already done @{${day(0)}}\n`;
+    const BOARD = `---\nkanban: true\n---\n\n## Plan\n\n- [ ] Implement search #project/nyerat @{${day(0)}}\n- [ ] Review architecture @{${day(1)}}\n- [ ] Old report @{${day(-2)}}\n- [ ] Later @{${day(10)}}\n\n## Done\n\n- [x] Already done @{${day(0)}}\n`;
     const board = put('board.md', BOARD);
     put('inbox.md', '---\ninbox: true\n---\n\n- Idea one\n- Idea two\n- [x] Already processed\n');
     const architecture = put('projects/delta/architecture.md', '# Architecture\n');
@@ -148,12 +148,12 @@ export function homeTests(c: GuiContext): void {
         close(again.win);
     });
     test('more than seven due dates are summarized; the "Show" row opens the rest', () => {
-        const many = put('many.md',  `---\nkanban: true\n---\n\n## Plan\n\n${Array.from({ length: 10 }, (_, i) => `- [ ] Task ${i}  @{${day(0)}}`).join('\n')}\n`);
+        const many = put('many.md', `---\nkanban: true\n---\n\n## Plan\n\n${Array.from({ length: 10 }, (_, i) => `- [ ] Task ${i} @{${day(0)}}`).join('\n')}\n`);
         const { win } = open();
         const checks = () => descendants(win.home.widget).filter(x => x instanceof Gtk.CheckButton).length;
         eq(checks(), 7, 'due-date rows');
         const more = descendants(win.home.widget).find((x): x is Adw.ActionRow => x instanceof Adw.ActionRow && x.title.startsWith('Show'))!;
-        eq(more.title, 'Show 6 more tasks', 'baris summary');
+        eq(more.title, 'Show 6 more tasks', 'summary row');
         more.emit('activated'); settle();
         eq(checks(), 13, 'all due dates after opening');
         GLib.unlink(many);

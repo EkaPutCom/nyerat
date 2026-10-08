@@ -1,5 +1,5 @@
-// Tes GUI: jurnal harian (buka/buat, catat cepat, aktivitas dari papan, agent, harness, dan git, baris di Beranda,
-// ringkasan lewat Asisten) di jendela tersendiri dengan folder kerja sementara.
+// GUI tests: the daily journal (open/create, quick capture, activity from the board, agent, harness, and git, the row on Home,
+// summary through the Assistant) in a separate window with a temporary work folder.
 
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -23,25 +23,25 @@ import type { GuiContext } from './context.js';
 export function journalTests(c: GuiContext): void {
     const { w, pump } = c;
 
-    section('Jurnal');
-    const ws = GLib.build_filenamev([tmp, 'jurnal-kerja']);
+    section('Journal');
+    const ws = GLib.build_filenamev([tmp, 'journal-work']);
     GLib.mkdir_with_parents(ws, 0o755);
     const path = (name: string) => GLib.build_filenamev([ws, ...name.split('/')]);
     const put = (name: string, text: string) => { GLib.file_set_contents(path(name), text); return path(name); };
     const today = localDate(new Date());
-    const jurnal = path(`jurnal/${today}.md`);
-    const PAPAN = '---\nkanban: true\n---\n\n## Rencana\n\n- [ ] Materi rilis\n- [ ] Riset harga\n\n## Dikerjakan\n\n## Selesai\n';
-    const papan = put('tugas.md', PAPAN);
-    put('rencana.md', '# Rencana\n\nRilis 15 November.\n');
+    const journal = path(`journal/${today}.md`);
+    const BOARD =  '---\nkanban: true\n---\n\n## Plan\n\n- [ ] Release material\n- [ ] Research prices\n\n## In Progress\n\n## Done\n';
+    const board = put('tasks.md', BOARD);
+    put('plan.md', '# Plan\n\nRelease on 15 November.\n');
 
-    // Repo git dengan satu commit hari ini, supaya bagian Aktivitas juga memuat commit.
+    // A git repo with one commit today, so the Activity section also contains a commit.
     const git = (...args: string[]) => {
-        const [okRun, , err, status] = GLib.spawn_sync(ws, ['git', '-c', 'user.name=Uji', '-c', 'user.email=uji@contoh.id', ...args], null, GLib.SpawnFlags.SEARCH_PATH, null);
-        if (!okRun || status !== 0) throw new Error(`git ${args.join(' ')} gagal: ${new TextDecoder().decode(err ?? new Uint8Array())}`);
+        const [okRun, , err, status] = GLib.spawn_sync(ws, ['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], null, GLib.SpawnFlags.SEARCH_PATH, null);
+        if (!okRun || status !== 0) throw new Error(`git ${args.join(' ')} failed: ${ new TextDecoder().decode(err ?? new Uint8Array())}`);
     };
     git('init', '-q');
     git('add', '.');
-    git('commit', '-q', '-m', 'Siapkan papan rilis');
+    git('commit', '-q', '-m', 'Prepare the release board');
 
     const settle = () => { for (let i = 0; i < 30; i++) { pump(); GLib.usleep(8000); } };
     const rowTitles = (win: MainWindow) => descendants(win.home.widget).filter((x): x is Adw.ActionRow => x instanceof Adw.ActionRow).map(r => [r.title, r.subtitle]);
@@ -58,158 +58,158 @@ export function journalTests(c: GuiContext): void {
         registerActions(c.app, w);
     };
 
-    test('tanpa folder kerja, jurnal tidak dibuka dan pengguna diberi tahu', () => {
+    test('without a work folder, the journal is not opened and the user is told', () => {
         const { win } = open({ folder: null });
         eq(win.openJournal(), null);
-        ok(win.lastToast.includes('folder kerja'), `toast: ${win.lastToast}`);
+        ok(win.lastToast.includes('work folder'), `toast: ${win.lastToast}`);
         let asked = false;
         win.journalDialogs = { capture: () => { asked = true; return 'x'; } };
         win.captureJournal();
-        ok(!asked, 'dialog catat cepat muncul tanpa folder kerja');
-        eq(win.homeData().journal, null, 'baris Jurnal di Beranda tanpa folder kerja');
+        ok(!asked, 'the quick-capture dialog appeared without a work folder');
+        eq(win.homeData().journal, null, 'a Journal row on Home without a work folder');
         close(win);
     });
 
-    test('Ctrl+Shift+J tanpa jurnal terbuka: catatan berstempel jam ditulis ke berkas baru dari template', () => {
+    test('Ctrl+Shift+J without an open journal: a time-stamped note is written to a new file from the template', () => {
         const { win } = open();
         const now = new Date();
-        win.journalDialogs = { capture: () => 'Buka berkas jadi lebih cepat' };
+        win.journalDialogs = { capture: () => 'Opening files got faster' };
         win.captureJournal(); settle();
-        const text = readTextFile(jurnal);
-        ok(text.startsWith('# ') && text.includes('## Fokus hari ini') && text.includes('## Ringkasan'), `template: ${text}`);
-        ok(new RegExp(`## Catatan\\n\\n- \\d\\d:\\d\\d Buka berkas jadi lebih cepat\\n\\n## Aktivitas`).test(text), `catatan: ${text}`);
-        ok(text.includes(`- ${clock(now)} `) || text.includes(`- ${clock(new Date())} `), 'jam catatan');
-        ok(win.homeMode, 'catat cepat berpindah dari Beranda');
+        const text = readTextFile(journal);
+        ok(text.startsWith('# ') && text.includes('## Today\'s focus') && text.includes('## Summary'), `template: ${text}`);
+        ok(new RegExp(`## Notes\\n\\n- \\d\\d:\\d\\d Opening files got faster\\n\\n## Activity`).test(text), `notes: ${text}`);
+        ok(text.includes(`- ${clock(now)} `) || text.includes(`- ${clock(new Date())} `), 'note time');
+        ok(win.homeMode, 'quick capture switched away from Home');
         win.journalDialogs = { capture: () => null };
         win.captureJournal(); settle();
-        eq(readTextFile(jurnal), text, 'dialog yang dibatalkan mengubah jurnal');
+        eq(readTextFile(journal), text, 'a cancelled dialog changed the journal');
         close(win);
     });
 
-    test('aktivitas papan dan agent tercatat ke log harian', () => {
+    test('board and agent activity is recorded in the daily log', () => {
         const { win } = open();
-        win.openFile(papan); settle();
-        ok(win.boardMode, 'papan tidak tampil sebagai papan');
+        win.openFile(board); settle();
+        ok(win.boardMode, 'the board is not shown as a board');
         win.board.commit(moveCard(win.board.getBoard(), { column: 0, index: 0 }, { column: 1, index: 0 })); settle();
-        const error = win.chat.host.applyChange!({ kind: 'edit', file: 'rencana.md', before: '# Rencana\n\nRilis 15 November.\n', after: '# Rencana\n\nRilis 22 November.\n', reason: 'uji' });
-        eq(error, null, 'perubahan agent');
+        const error = win.chat.host.applyChange!({ kind: 'edit', file: 'plan.md', before: '# Plan\n\nRelease on 15 November.\n', after: '# Plan\n\nRelease on 22 November.\n', reason: 'test' });
+        eq(error, null, 'agent change');
         const texts = readActivity(ws, today).map(a => a.text);
-        eq(texts, ['Kartu “Materi rilis” → Dikerjakan · [[tugas]]', 'Agent mengubah [[rencana]]']);
-        win.closeTab(); settle();   // papan belum disimpan: buang
+        eq(texts, ['Card “Release material” → In Progress · [[tasks]]', 'Agent changed [[plan]]']);
+        win.closeTab(); settle();   // the board is not saved: discard
         close(win);
-        GLib.file_set_contents(papan, PAPAN);
+        GLib.file_set_contents(board, BOARD);
     });
 
-    test('suntingan teks papan di mode teks tidak dicatat sebagai aktivitas', () => {
+    test('editing the board text in text mode is not recorded as activity', () => {
         const { win } = open();
         const before = readActivity(ws, today).length;
-        win.openFile(papan); settle();
+        win.openFile(board); settle();
         win.toggleBoardView(false); settle();
-        win.editor.replaceText(PAPAN.replace('- [ ] Riset harga', '- [x] Riset harga'));
+        win.editor.replaceText(BOARD.replace('- [ ] Research prices', '- [x] Research prices'));
         win.toggleBoardView(true); settle();
-        eq(readActivity(ws, today).length, before, 'suntingan teks papan tercatat sebagai aktivitas');
+        eq(readActivity(ws, today).length, before, 'a board text edit was recorded as activity');
         win.closeTab(); settle();
         close(win);
     });
 
-    test('hasil harness yang selesai tercatat sekali', () => {
+    test('a finished harness result is recorded once', () => {
         const { win } = open();
         const before = readActivity(ws, today).length;
-        const run = win.orchestrator.queue.add({ board: papan, card: 'Fix checkout @pi', title: 'Fix checkout', agent: 'pi', project: 'toko', folder: '/tmp/toko', prompt: '', session: null });
+        const run = win.orchestrator.queue.add({ board: board,  card: 'Fix checkout @pi', title: 'Fix checkout', agent: 'pi', project: 'shop', folder: '/tmp/shop', prompt: '', session: null });
         win.orchestrator.queue.end(run, 'done');
-        const result: HarnessResult = { ok: true, summary: 'Beres', error: null, cost: 0, tokens: 0, sessionId: null };
+        const result: HarnessResult = { ok: true, summary: 'Done', error: null, cost: 0, tokens: 0, sessionId: null };
         run.result = result;
         const host = (win.orchestrator as unknown as { host: { changed: (r: typeof run, m: string | null) => void } }).host;
         host.changed(run, null);
         host.changed(run, null);
         const texts = readActivity(ws, today).map(a => a.text).slice(before);
-        eq(texts, ['pi selesai “Fix checkout” di proyek toko']);
+        eq(texts, ['pi finished “Fix checkout” in project shop']);
         close(win);
     });
 
-    test('membuka jurnal menggabungkan log dan commit hari ini ke Aktivitas, tanpa menggandakan', () => {
+    test('opening the journal merges the log and commits of today into Activity, without duplicating', () => {
         const { win } = open();
         const filling = win.openJournal();
-        ok(filling, 'jurnal tidak terbuka');
+        ok(filling, 'the journal did not open');
         settlePromise(filling!);
-        eq(win.file, jurnal, 'tab jurnal');
+        eq(win.file, journal, 'journal tab');
         const text = win.editor.getText();
-        const activity = text.slice(text.indexOf('## Aktivitas'), text.indexOf('## Ringkasan'));
-        for (const line of ['Kartu “Materi rilis” → Dikerjakan · [[tugas]]', 'Agent mengubah [[rencana]]', 'pi selesai “Fix checkout”', 'Siapkan papan rilis'])
-            ok(activity.includes(line), `aktivitas tanpa "${line}":\n${activity}`);
-        ok(/- \d\d:\d\d Commit `[0-9a-f]{7,}` Siapkan papan rilis/.test(activity), 'baris commit');
-        ok(text.includes('Buka berkas jadi lebih cepat'), 'catatan sebelumnya hilang');
-        // Satu langkah undo mengembalikan isi berkas.
+        const activity = text.slice(text.indexOf('## Activity'), text.indexOf('## Summary'));
+        for (const line of ['Card “Release material” → In Progress · [[tasks]]', 'Agent changed [[plan]]', 'pi finished “Fix checkout”', 'Prepare the release board'])
+            ok(activity.includes(line), `activity without "${line}":\n${activity}`);
+        ok(/- \d\d:\d\d Commit `[0-9a-f]{7,}` Prepare the release board/.test(activity), 'commit line');
+        ok(text.includes('Opening files got faster'), 'the earlier note vanished');
+        // One undo step restores the file contents.
         win.editor.buffer.undo();
-        eq(win.editor.getText(), readTextFile(jurnal), 'undo pengisian aktivitas');
+        eq(win.editor.getText(), readTextFile(journal), 'undo of filling in the activity');
         win.editor.buffer.redo();
         win.save(); settle();
-        eq(win.documentCount, 2, 'jumlah tab (Beranda + jurnal)');
+        eq(win.documentCount, 2, 'number of tabs (Home + journal)');
         settlePromise(win.openJournal()!);
-        eq(win.editor.getText(), readTextFile(jurnal), 'aktivitas digandakan saat dibuka lagi');
-        eq(win.documentCount, 2, 'jurnal dibuka di tab baru lagi');
+        eq(win.editor.getText(), readTextFile(journal), 'the activity was duplicated when opened again');
+        eq(win.documentCount, 2, 'the journal opened in a new tab again');
         close(win);
     });
 
-    test('catat cepat saat jurnal terbuka menulis lewat editor (satu langkah undo), bukan disk', () => {
+    test('quick capture while the journal is open writes through the editor (one undo step), not the disk', () => {
         const { win } = open();
         settlePromise(win.openJournal()!);
         win.openHome(); settle();
-        const disk = readTextFile(jurnal);
-        win.journalDialogs = { capture: () => '! Flatpak belum bisa diuji' };
+        const disk = readTextFile(journal);
+        win.journalDialogs = { capture: () => '! Flatpak cannot be tested yet' };
         win.captureJournal(); settle();
-        eq(readTextFile(jurnal), disk, 'disk tersentuh padahal jurnal terbuka');
+        eq(readTextFile(journal), disk, 'the disk was touched although the journal is open');
         win.switchTab(1); settle();
-        ok(win.editor.getText().includes(' ! Flatpak belum bisa diuji\n\n## Aktivitas'), 'catatan di akhir bagian Catatan');
+        ok(win.editor.getText().includes(' ! Flatpak cannot be tested yet\n\n## Activity'), 'the note at the end of the Notes section');
         win.editor.buffer.undo();
-        eq(win.editor.getText(), disk, 'undo catat cepat');
+        eq(win.editor.getText(), disk, 'undo of quick capture');
         close(win);
     });
 
-    test('Beranda: baris Jurnal hari ini dengan jumlah catatan dan aktivitas', () => {
+    test('Home: the journal row for today with the number of notes and activities', () => {
         const { win } = open();
         const data = win.homeData();
         eq(data.journal, { exists: true, notes: 1, activity: 3 });
-        const row = rowTitles(win).find(([title]) => title === 'Jurnal hari ini');
-        eq(row, ['Jurnal hari ini', '1 catatan · 3 aktivitas']);
-        const capture = descendants(win.home.widget).find((x): x is Gtk.Button => x instanceof Gtk.Button && x.get_tooltip_text() === 'Catat ke Jurnal…');
-        ok(capture, 'tombol catat cepat');
+        const row = rowTitles(win).find(([title]) => title === 'Today\'s journal');
+        eq(row, ['Today\'s journal', '1 note · 3 activities']);
+        const capture = descendants(win.home.widget).find((x): x is Gtk.Button => x instanceof Gtk.Button && x.get_tooltip_text() === 'Add to Journal…');
+        ok(capture, 'the quick-capture button');
         let asked = false;
         win.journalDialogs = { capture: () => { asked = true; return null; } };
         capture!.emit('clicked');
-        ok(asked, 'tombol catat tidak membuka dialog');
-        descendants(win.home.widget).find((x): x is Adw.ActionRow => x instanceof Adw.ActionRow && x.title === 'Jurnal hari ini')!.emit('activated');
+        ok(asked, 'the capture button did not open a dialog');
+        descendants(win.home.widget).find((x): x is Adw.ActionRow => x instanceof Adw.ActionRow && x.title === 'Today\'s journal')!.emit('activated');
         settle(); settle();
-        eq(win.file, jurnal, 'baris tidak membuka jurnal');
+        eq(win.file, journal, 'the row did not open the journal');
         close(win);
     });
 
-    test('ringkas jurnal: Asisten ditanya dengan jurnal sebagai dokumen aktif', () => {
+    test('summarize the journal: the Assistant is asked with the journal as the active document', () => {
         const { win, s } = open();
         const seen: ChatRequest[] = [];
         const provider: Provider = {
             async chat(req) {
                 seen.push(req);
-                req.onText('Siap.');
+                req.onText('Ready.');
                 return { usage: { prompt: 10, cached: 0, completion: 2 }, cancelled: false, toolCalls: [], reasoning: '' };
             },
         };
-        const keyStore: KeyStore = { get: async () => ({ key: 'uji', source: 'keyring' }), set: async () => 'keyring', clear: async () => {} };
+        const keyStore: KeyStore = { get: async () => ({ key: 'test', source: 'keyring' }), set: async () => 'keyring', clear: async () => {} };
         win.chat.makeProvider = () => provider;
         win.chat.keyStore = keyStore;
         const asking = win.summarizeJournal();
-        ok(asking, 'ringkasan tidak dijalankan');
+        ok(asking, 'the summary did not run');
         settlePromise(asking!);
         settle();
-        ok(s.chat, 'panel Asisten tidak dibuka');
-        eq(win.file, jurnal, 'jurnal bukan dokumen aktif');
+        ok(s.chat, 'the Assistant panel did not open');
+        eq(win.file, journal, 'the journal is not the active document');
         const sent = JSON.stringify(seen[0] ?? {});
-        ok(sent.includes('Tutup hari') && sent.includes(`jurnal/${today}.md`), 'pertanyaan ringkasan');
+        ok(sent.includes('Close the day') && sent.includes(`journal/${today}.md`), 'summary question');
         win.chat.reset();
         close(win);
     });
 
-    // --shot-journal=<prefix>: simpan <prefix>-jurnal.png, -jurnal-gelap.png, -beranda.png, -catat.png.
+    // --shot-journal=<prefix>: save <prefix>-journal.png, -journal-dark.png, -home.png, -capture.png.
     const shot = optVal('shot-journal');
     if (!shot) return;
     const { win } = open({ width: 1100, height: 760, sidebar: true });
@@ -218,16 +218,16 @@ export function journalTests(c: GuiContext): void {
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(15000); }
         widgetPixbuf(win.win)?.savev(`${shot}-${name}.png`, 'png', [], []);
     };
-    win.setDark(false); save('jurnal');
-    win.setDark(true); save('jurnal-gelap');
+    win.setDark(false); save('journal');
+    win.setDark(true); save('journal-dark');
     win.setDark(false);
-    win.openHome(); save('beranda');
-    // Dialog catat cepat sungguhan, ditangkap lalu ditutup dari timer.
+    win.openHome(); save('home');
+    // The real quick-capture dialog, captured and then closed from a timer.
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-        widgetPixbuf(win.win)?.savev(`${shot}-catat.png`, 'png', [], []);
+        widgetPixbuf(win.win)?.savev(`${shot}-capture.png`, 'png', [], []);
         win.win.get_visible_dialog()?.close();
         return GLib.SOURCE_REMOVE;
     });
-    settlePromise(promptDialog(win.win, { title: 'Catat ke Jurnal', label: 'Tercatat di jurnal hari ini dengan jam sekarang.', accept: 'Catat' }));
+    settlePromise(promptDialog(win.win, { title: 'Add to Journal', label: "Recorded in today's journal with the current time.", accept: 'Add' }));
     close(win);
 }
