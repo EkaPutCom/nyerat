@@ -9,79 +9,79 @@ export function fileTests(c: GuiContext): void {
     const { w, buf, text, setText, pump } = c;
 
     section('File');
-    test('simpan lalu buka lagi menghasilkan isi yang sama', () => {
+    test('saving and reopening gives the same contents', () => {
         const path = GLib.build_filenamev([tmp, 'uji.md']);
         const content = '# Uji 🎉\n\nÄÖÜ — ✓\n';
         setText(content);
         w.file = path;
-        ok(w.save(), 'save() gagal');
-        ok(!buf.get_modified(), 'status modified tidak direset');
+        ok(w.save(), 'save() failed');
+        ok(!buf.get_modified(), 'the modified status was not reset');
         setText('');
-        ok(w.load(path), 'load() gagal');
+        ok(w.load(path), 'load() failed');
         eq(text(), content);
     });
 
-    test('auto save menulis file setelah jeda mengetik', () => {
-        const path = GLib.build_filenamev([tmp, 'otomatis.md']);
+    test('autosave writes the file after a typing pause', () => {
+        const path = GLib.build_filenamev([tmp, 'auto.md']);
         setText('');
         w.file = path;
-        ok(w.save(), 'save() gagal');
+        ok(w.save(), 'save() failed');
         w.setOption('autosave', true);
-        buf.insert_at_cursor('# Halo', -1);
+        buf.insert_at_cursor('# Hello', -1);
         pump();
-        eq(readTextFile(path), '', 'belum ditulis sebelum jeda');
-        ok(buf.get_modified(), 'masih ditandai berubah');
+        eq(readTextFile(path), '', 'not written before the pause');
+        ok(buf.get_modified(), 'still marked as modified');
         for (let i = 0; i < 150 && buf.get_modified(); i++) { pump(); GLib.usleep(10000); }
-        eq(readTextFile(path), '# Halo', 'isi file');
-        ok(!buf.get_modified(), 'status modified direset');
+        eq(readTextFile(path), '# Hello', 'file contents');
+        ok(!buf.get_modified(), 'the modified status was reset');
     });
 
-    test('auto save latar: suntingan selama menulis tetap ditandai berubah', () => {
-        const path = GLib.build_filenamev([tmp, 'otomatis.md']);
+    test('background autosave: edits made while writing stay marked as modified', () => {
+        const path = GLib.build_filenamev([tmp, 'auto.md']);
         let finished = false;
-        ok(w.autosaveInBackground(undefined, () => { finished = true; }) === false, 'tidak ada perubahan, tidak menulis');
+        ok(w.autosaveInBackground(undefined, () => { finished = true; }) === false, 'no changes, no writing');
         buf.insert_at_cursor(' A', -1);
         pump();
-        ok(w.autosaveInBackground(undefined, () => { finished = true; }), 'penulisan latar tidak dimulai');
-        buf.insert_at_cursor('B', -1);   // diketik sebelum penulisan selesai
+        ok(w.autosaveInBackground(undefined, () => { finished = true; }), 'the background write did not start');
+        buf.insert_at_cursor('B', -1);   // typed before the write finished
         for (let i = 0; i < 500 && !finished; i++) { pump(); GLib.usleep(2000); }
-        ok(finished, 'penulisan latar tidak selesai');
-        eq(readTextFile(path), '# Halo A', 'isi yang ditulis adalah salinan saat dimulai');
-        ok(buf.get_modified(), 'B belum tersimpan, tetapi status modified direset');
+        ok(finished, 'the background write did not finish');
+        eq(readTextFile(path), '# Halo A', 'the written contents are the copy from when it started');
+        ok(buf.get_modified(), 'B is not saved yet, but the modified status was reset');
     });
 
-    test('simpan langsung setelah auto save latar tidak tertimpa isi lama', () => {
-        const path = GLib.build_filenamev([tmp, 'otomatis.md']);
-        ok(w.autosaveInBackground(), 'penulisan latar tidak dimulai');
+    test('saving right after a background autosave is not overwritten by the old contents', () => {
+        const path = GLib.build_filenamev([tmp, 'auto.md']);
+        ok(w.autosaveInBackground(), 'the background write did not start');
         buf.insert_at_cursor('C', -1);
-        ok(w.save(), 'save() gagal');   // menunggu penulisan latar, lalu menulis isi terbaru
+        ok(w.save(), 'save() failed');   // waits for the background write, then writes the latest contents
         for (let i = 0; i < 20; i++) { pump(); GLib.usleep(2000); }
-        eq(readTextFile(path), '# Halo ABC', 'isi file');
+        eq(readTextFile(path), '# Hello ABC', 'file contents');
         ok(!buf.get_modified(), 'status modified');
         buf.delete(buf.get_iter_at_offset(6), buf.get_end_iter());
-        ok(w.save(), 'save() gagal');
+        ok(w.save(), 'save() failed');
     });
 
-    test('auto save menyimpan tanpa bertanya saat berpindah dokumen', () => {
-        const path = GLib.build_filenamev([tmp, 'otomatis.md']);
+    test('autosave saves without asking when switching documents', () => {
+        const path = GLib.build_filenamev([tmp, 'auto.md']);
         buf.insert_at_cursor('!', -1);
         pump();
-        // Tanpa auto save, menutup dokumen membuka dialog dan tes akan macet. Berpindah tab
-        // adalah titik aman: dokumen yang ditinggalkan langsung disimpan.
+        // Without autosave, closing a document opens a dialog and the test would hang. Switching tabs
+        // is a safe point: the document that is left is saved immediately.
         w.newDocument();
-        eq(readTextFile(path), '# Halo!', 'isi file');
-        eq(w.file, null, 'dokumen baru');
-        eq(w.documentCount, 2, 'dokumen baru dibuka di tab baru');
+        eq(readTextFile(path), '# Hello!', 'file contents');
+        eq(w.file, null, 'new document');
+        eq(w.documentCount, 2, 'the new document was opened in a new tab');
         ok(w.closeTab(), 'closeTab() gagal');
-        ok(w.editor === c.ed, 'editor semula tidak aktif lagi');
+        ok(w.editor === c.ed, 'the original editor is no longer active');
         w.file = null;
     });
 
-    test('auto save tidak menyentuh dokumen tanpa file', () => {
+    test('autosave does not touch a document without a file', () => {
         buf.insert_at_cursor('x', -1);
         pump();
-        ok(!w.autosave(), 'autosave() melaporkan tersimpan');
-        ok(buf.get_modified(), 'status modified direset');
+        ok(!w.autosave(), 'autosave() reported saved');
+        ok(buf.get_modified(), 'the modified status was reset');
         w.setOption('autosave', false);
         setText('');
     });

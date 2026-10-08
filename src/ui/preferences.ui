@@ -31,7 +31,7 @@
             </child>
             <child>
               <object class="AdwSwitchRow" id="typewriter">
-                <property name="title" translatable="yes">Mode typewriter</property>
+                <property name="title" translatable="yes">Typewriter mode</property>
                 <property name="subtitle" translatable="yes">Keep the line being typed in the middle</property>
               </object>
             </child>

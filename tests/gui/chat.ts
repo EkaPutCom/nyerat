@@ -637,7 +637,7 @@ export function chatTests(c: GuiContext): void {
     test('batch: uncheck one file → only the checked ones are applied; Undo restores them', () => {
         GLib.file_set_contents(GLib.build_filenamev([book, 'schedule-a.md']), 'Rilis 15 November\n');
         GLib.file_set_contents(GLib.build_filenamev([book, 'schedule-b.md']), 'Rilis 15 November\n');
-        const tindakan = ['jadwal-a', 'jadwal-b'].map(name => ({ tool: 'edit_file', arguments: JSON.stringify({ name, old_text: '15 November', new_text: '22 November', reason: 'keputusan rapat' }) }));
+        const actions = ['jadwal-a', 'jadwal-b'].map(name => ({ tool: 'edit_file', arguments: JSON.stringify({ name, old_text: '15 November', new_text: '22 November', reason: 'keputusan rapat' }) }));
         toolReplies.length = 0;
         proposeAndPress(recording('propose_batch', { actions }), 'apply', viewer => {
             eq(viewer.checks.length, 2);

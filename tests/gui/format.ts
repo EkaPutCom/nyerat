@@ -7,14 +7,14 @@ export function formatTests(c: GuiContext): void {
     const { buf, pump, text, setText, cursorTo, action, clickAt } = c;
 
     section('Perintah format');
-    test('Ctrl+B membungkus pilihan dengan **', () => {
-        setText('satu kata');
+    test('Ctrl+B wraps the selection with **', () => {
+        setText('one word');
         buf.select_range(buf.get_iter_at_offset(5), buf.get_iter_at_offset(9)); pump();
         action('bold');
-        eq(text(), 'satu **kata**');
+        eq(text(), 'one **word**');
     });
-    test('Ctrl+B lagi melepas **', () => { action('bold'); eq(text(), 'satu kata'); });
-    test('undo mengembalikan perubahan', () => {
+    test('Ctrl+B again removes **', () => { action('bold'); eq(text(), 'one word'); });
+    test('undo restores the change', () => {
         setText('x');
         buf.select_range(buf.get_start_iter(), buf.get_end_iter()); pump();
         action('italic');
@@ -22,26 +22,26 @@ export function formatTests(c: GuiContext): void {
         buf.undo(); pump();
         eq(text(), 'x', 'setelah undo');
     });
-    test('Ctrl+2 dan Ctrl+0 mengatur heading', () => {
-        setText('judul'); cursorTo(0);
-        action('heading2'); eq(text(), '## judul', 'Ctrl+2');
-        action('heading0'); eq(text(), 'judul', 'Ctrl+0');
+    test('Ctrl+2 and Ctrl+0 set the heading', () => {
+        setText('title'); cursorTo(0);
+        action('heading2'); eq(text(), '## title', 'Ctrl+2');
+        action('heading0'); eq(text(), 'title',  'Ctrl+0');
     });
-    test('kutipan diterapkan ke beberapa baris', () => {
+    test('the quote is applied to several lines', () => {
         setText('a\nb');
         buf.select_range(buf.get_start_iter(), buf.get_end_iter()); pump();
         action('quote'); eq(text(), '> a\n> b');
     });
-    test('Ctrl+K membuat tautan dari pilihan', () => {
+    test('Ctrl+K makes a link from the selection', () => {
         setText('GTK');
         buf.select_range(buf.get_start_iter(), buf.get_end_iter()); pump();
         action('link'); eq(text(), '[GTK]()');
     });
-    test('klik kotak tugas mencentang dan menghapus centang', () => {
-        setText('- [ ] tugas\n\nlain'); cursorTo(2);
-        ok(clickAt(3), 'klik tidak ditangani');
-        eq(text(), '- [x] tugas\n\nlain', 'setelah klik pertama');
+    test('clicking a task checkbox checks and unchecks it', () => {
+        setText('- [ ] task\n\nother'); cursorTo(2);
+        ok(clickAt(3), 'the click was not handled');
+        eq(text(), '- [x] task\n\nother', 'after the first click');
         clickAt(3);
-        eq(text(), '- [ ] tugas\n\nlain', 'setelah klik kedua');
+        eq(text(), '- [ ] task\n\nother', 'after the second click');
     });
 }
