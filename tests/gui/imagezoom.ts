@@ -1,4 +1,4 @@
-// Tes GUI: Zoom gambar.
+// GUI tests: Image zoom.
 
 import GLib from 'gi://GLib';
 import Gdk from 'gi://Gdk?version=4.0';
@@ -11,15 +11,15 @@ import { emitClick } from '../widgets.js';
 export function imageZoomTests(c: GuiContext): void {
     const { w, ed, buf, pump, setText, cursorTo, action, imgDir, waitImages } = c;
 
-    section('Zoom gambar');
+    section('Image zoom');
     const makePixbuf = (width: number, height: number) => {
         const pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, false, 8, width, height);
         pixbuf.fill(0x4183c4ff);
         return pixbuf;
     };
-    makePixbuf(50, 50).savev(GLib.build_filenamev([imgDir, 'kecil.png']), 'png', [], []);
+    makePixbuf(50, 50).savev(GLib.build_filenamev([imgDir, 'small.png']), 'png', [], []);
     const settleV = () => { for (let i = 0; i < 30; i++) { pump(); GLib.usleep(10000); } };
-    const openViewer = (pixbuf: GdkPixbuf.Pixbuf, title = 'uji') => {
+    const openViewer = (pixbuf: GdkPixbuf.Pixbuf, title = 'test') => {
         const viewer = new ImageViewer(w.win, pixbuf, title);
         viewer.show();
         settleV();
@@ -31,103 +31,103 @@ export function imageZoomTests(c: GuiContext): void {
     let viewed: { pixbuf: GdkPixbuf.Pixbuf; title: string } | null = null;
     ed.onViewImage = (pixbuf, title) => { viewed = { pixbuf, title }; };
 
-    test('imageAt memberi gambar ukuran penuh, bukan yang diperkecil untuk tampilan', () => {
+    test('imageAt gives the image at full size, not the one shrunk for display', () => {
         w.file = GLib.build_filenamev([tmp, 'dok.md']);
-        setText('![uji](gambar/uji.png)\n\nteks'); waitImages();
+        setText('![test](images/test.png)\n\ntext'); waitImages();
         const found = ed.images.imageAt(0);
-        ok(found.ok, 'gambar tidak ditemukan');
-        eq([found.pixbuf.get_width(), found.pixbuf.get_height(), found.title], [300, 100, 'uji']);
+        ok(found.ok, 'the image was not found');
+        eq([found.pixbuf.get_width(), found.pixbuf.get_height(), found.title], [300, 100, 'test']);
     });
-    test('judul penampil: teks alt, atau nama file jika alt kosong', () => {
-        setText('![](gambar/uji.png)'); waitImages();
+    test('viewer title: the alt text, or the file name if the alt is empty', () => {
+        setText('![](images/test.png)'); waitImages();
         const found = ed.images.imageAt(0);
-        ok(found.ok && found.title === 'uji.png', 'judul dari nama file');
+        ok(found.ok && found.title === 'test.png', 'title from the file name');
     });
-    test('imageAt menolak baris tanpa gambar dan gambar yang gagal dimuat', () => {
-        setText('![x](gambar/tidak-ada.png)\n\nteks'); waitImages();
+    test('imageAt refuses a line without an image and an image that failed to load', () => {
+        setText('![x](images/not-there.png)\n\ntext'); waitImages();
         const missing = ed.images.imageAt(0), none = ed.images.imageAt(2);
-        ok(!missing.ok && missing.reason === 'Gambar tidak bisa dimuat', 'gambar hilang');
-        ok(!none.ok && none.reason === 'Tidak ada gambar di baris ini', 'baris tanpa gambar');
+        ok(!missing.ok && missing.reason === 'The image could not be loaded', 'missing image');
+        ok(!none.ok && none.reason === 'There is no image on this line', 'line without an image');
     });
-    test('klik sekali memindahkan kursor ke gambar; klik ganda memperbesarnya', () => {
-        setText('teks\n\n![uji](gambar/uji.png)'); waitImages(); cursorTo(0);
+    test('a single click moves the cursor to the image; a double click enlarges it', () => {
+        setText('text\n\n![test](images/test.png)'); waitImages(); cursorTo(0);
         viewed = null;
         ed.images.press(2, 0, false); pump();
-        eq(cursorLineNow(), 2, 'kursor setelah klik sekali');
-        eq(viewed, null, 'klik sekali tidak membuka penampil');
+        eq(cursorLineNow(), 2, 'cursor after a single click');
+        eq(viewed, null, 'a single click did not open the viewer');
         ed.images.press(2, 0, true);
-        ok(viewed !== null && (viewed as { pixbuf: GdkPixbuf.Pixbuf }).pixbuf.get_width() === 300, 'klik ganda tidak membuka penampil');
+        ok(viewed !== null && (viewed as { pixbuf: GdkPixbuf.Pixbuf }).pixbuf.get_width() === 300, 'a double click did not open the viewer');
     });
-    test('klik ganda memilih gambar yang tepat jika satu baris memuat beberapa gambar', () => {
-        setText('![a](gambar/uji.png) ![b](gambar/kecil.png)'); waitImages();
+    test('a double click picks the right image when one line holds several images', () => {
+        setText('![a](images/test.png) ![b](images/small.png)'); waitImages();
         viewed = null;
         ed.images.press(0, 1, true);
         const v = viewed as unknown as { pixbuf: GdkPixbuf.Pixbuf; title: string };
         eq([v.pixbuf.get_width(), v.title], [50, 'b']);
     });
-    test('zoomImage memakai baris kursor; tanpa gambar menampilkan pesan', () => {
-        setText('teks\n\n![uji](gambar/uji.png)'); waitImages();
+    test('zoomImage uses the cursor line; without an image it shows a message', () => {
+        setText('text\n\n![test](images/test.png)'); waitImages();
         cursorTo(2); viewed = null; ed.zoomImage();
-        ok(viewed !== null, 'gambar di baris kursor tidak dibuka');
+        ok(viewed !== null, 'the image on the cursor line was not opened');
         cursorTo(0); viewed = null; ed.zoomImage();
-        eq([viewed, message()], [null, 'Tidak ada gambar di baris ini']);
+        eq([viewed, message()], [null, 'There is no image on this line']);
     });
-    test('perintah menu Perbesar Gambar', () => {
+    test('the Zoom Image menu command', () => {
         cursorTo(2); viewed = null;
         action('zoom-image');
-        ok(viewed !== null, 'aksi tidak membuka penampil');
+        ok(viewed !== null, 'the action did not open the viewer');
     });
     ed.onViewImage = originalOnView;
 
-    test('penampil: gambar kecil dibuka 100%, gambar besar dipas ke jendela', () => {
+    test('viewer: a small image opens at 100%, a large image is fitted to the window', () => {
         const small = openViewer(makePixbuf(100, 80));
-        eq(small.zoom, 1, 'gambar kecil tidak diperbesar');
+        eq(small.zoom, 1, 'the small image was not enlarged');
         const big = openViewer(makePixbuf(3000, 2000));
-        ok(big.zoom < 0.5 && big.zoom > MIN_ZOOM, `zoom awal gambar besar ${big.zoom}`);
-        ok(big.area.get_size_request()[0] <= big.window.get_allocated_width(), 'gambar lebih lebar dari jendela');
+        ok(big.zoom < 0.5 && big.zoom > MIN_ZOOM, `initial zoom of the large image  ${big.zoom}`);
+        ok(big.area.get_size_request()[0] <= big.window.get_allocated_width(), 'the image is wider than the window');
         small.close(); big.close();
     });
-    test('zoom masuk/keluar mengalikan 1,25 dan dibatasi 5%–800%', () => {
+    test('zooming in/out multiplies by 1.25 and is limited to 5%–800%', () => {
         const v = openViewer(makePixbuf(100, 80));
         v.zoomIn(); eq(Math.round(v.zoom * 1000) / 1000, 1.25, 'zoom masuk');
         v.zoomOut(); v.zoomOut(); eq(Math.round(v.zoom * 1000) / 1000, 0.8, 'zoom keluar');
         for (let i = 0; i < 40; i++) v.zoomIn();
-        eq(v.zoom, MAX_ZOOM, 'batas atas');
+        eq(v.zoom, MAX_ZOOM, 'upper limit');
         for (let i = 0; i < 80; i++) v.zoomOut();
-        eq(v.zoom, MIN_ZOOM, 'batas bawah');
-        v.actual(); eq(v.zoom, 1, 'ukuran asli');
+        eq(v.zoom, MIN_ZOOM, 'lower limit');
+        v.actual(); eq(v.zoom, 1, 'actual size');
         v.close();
     });
-    test('ukuran area gambar mengikuti zoom', () => {
+    test('the size of the image area follows the zoom', () => {
         const v = openViewer(makePixbuf(400, 200));
         v.actual(); eq(v.area.get_size_request(), [400, 200], '100%');
         v.zoomIn(); eq(v.area.get_size_request(), [500, 250], '125%');
         v.close();
     });
-    test('Pas memperbesar gambar kecil, 0 mengembalikan 100%', () => {
+    test('Fit enlarges a small image, 0 restores 100%', () => {
         const v = openViewer(makePixbuf(100, 80));
         v.fit(); settleV();
-        ok(v.zoom > 1, `pas layar gambar kecil ${v.zoom}`);
-        v.handleKey(Gdk.KEY_0); eq(v.zoom, 1, 'ukuran asli');
+        ok(v.zoom > 1, `fit-to-screen of the small image  ${v.zoom}`);
+        v.handleKey(Gdk.KEY_0); eq(v.zoom, 1, 'actual size');
         v.close();
     });
-    test('tombol: + − 0 F Esc; tombol lain tidak ditangani', () => {
+    test('keys: + − 0 F Esc; other keys are not handled', () => {
         const v = openViewer(makePixbuf(100, 80));
         ok(v.handleKey(Gdk.KEY_plus) && Math.abs(v.zoom - 1.25) < 1e-9, '+');
         ok(v.handleKey(Gdk.KEY_minus) && Math.abs(v.zoom - 1) < 1e-9, '−');
-        ok(v.handleKey(Gdk.KEY_f), 'F'); settleV(); ok(v.zoom > 1, 'F memperbesar gambar kecil');
+        ok(v.handleKey(Gdk.KEY_f), 'F'); settleV(); ok(v.zoom > 1, 'F enlarges the small image');
         ok(v.handleKey(Gdk.KEY_0) && v.zoom === 1, '0');
-        ok(!v.handleKey(Gdk.KEY_a), 'tombol lain');
-        ok(v.handleKey(Gdk.KEY_Escape) && v.closed, 'Esc menutup');
+        ok(!v.handleKey(Gdk.KEY_a), 'other key');
+        ok(v.handleKey(Gdk.KEY_Escape) && v.closed, 'Esc closes');
     });
-    test('zoom di titik penunjuk: titik gambar di bawah penunjuk tidak bergeser', () => {
+    test('zoom at the pointer: the image point under the pointer does not shift', () => {
         const v = openViewer(makePixbuf(2000, 1500));
         v.actual(); settleV();
         const scroller = v['scroller'];
         scroller.get_hadjustment().set_value(0); scroller.get_vadjustment().set_value(0);
-        // Roda ke atas di titik (400, 300) pada gambar yang tergulir ke (0, 0).
+        // Wheel up at the point (400, 300) on an image scrolled to (0, 0).
         v.scrollZoom(-1, true, [400, 300]); settleV();
-        // Titik gambar (400, 300) kini di 500 × 375; agar tetap di (400, 300) layar, gulir (100, 75).
+        // The image point (400, 300) is now at 500 × 375; to stay at (400, 300) on screen, scroll (100, 75).
         const [h, vv] = [scroller.get_hadjustment().get_value(), scroller.get_vadjustment().get_value()];
         ok(Math.abs(h - 100) < 1.5 && Math.abs(vv - 75) < 1.5, `gulir (${h}, ${vv}), seharusnya (100, 75)`);
         v.close();
@@ -138,24 +138,24 @@ export function imageZoomTests(c: GuiContext): void {
         const scroller = v['scroller'];
         scroller.get_hadjustment().set_value(0); scroller.get_vadjustment().set_value(0);
         v.beginDrag();
-        v.dragBy(-50, -30);   // digeser ke kiri-atas = melihat bagian kanan-bawah
+        v.dragBy(-50, -30);   // moved to the top-left = seeing the bottom-right part
         eq([scroller.get_hadjustment().get_value(), scroller.get_vadjustment().get_value()], [50, 30], 'gulir');
-        v.endDrag(); ok(!v.dragBy(-500, -500), 'setelah lepas tombol, gerak tidak menggeser');
+        v.endDrag(); ok(!v.dragBy(-500, -500), 'after the button is released, movement does not shift');
         v.close();
     });
-    test('klik ganda di penampil: bergantian pas layar dan 100%', () => {
+    test('a double click in the viewer: alternates between fit-to-screen and 100%', () => {
         const v = openViewer(makePixbuf(3000, 2000));
         const fitted = v.zoom;
-        emitClick(v.area, 2); eq(v.zoom, 1, 'ke 100%');
+        emitClick(v.area, 2); eq(v.zoom, 1, 'to 100%');
         emitClick(v.area, 2); settleV();
-        ok(Math.abs(v.zoom - fitted) < 0.02, `kembali ke pas layar (${v.zoom} vs ${fitted})`);
+        ok(Math.abs(v.zoom - fitted) < 0.02, `back to fit-to-screen  (${v.zoom} vs ${fitted})`);
         v.close();
     });
-    test('fungsi bantu zoom', () => {
+    test('zoom helper functions', () => {
         eq([clampZoom(100), clampZoom(0), clampZoom(2)], [MAX_ZOOM, MIN_ZOOM, 2], 'clampZoom');
-        eq(fitZoom(1000, 500, 500, 500), 0.5, 'fitZoom mengikuti sisi yang lebih sempit');
+        eq(fitZoom(1000, 500, 500, 500), 0.5, 'fitZoom follows the narrower side');
     });
-    test('menggambar dengan zoom besar tidak memicu peringatan GTK/cairo', () => {
+    test('drawing at a large zoom does not trigger GTK/cairo warnings', () => {
         const warnings: string[] = [];
         const flags = GLib.LogLevelFlags.LEVEL_WARNING | GLib.LogLevelFlags.LEVEL_CRITICAL;
         const handlers = ['Gtk', 'Gdk', 'GLib-GObject'].map(domain =>
@@ -168,7 +168,7 @@ export function imageZoomTests(c: GuiContext): void {
         } finally {
             for (const [domain, id] of handlers) GLib.log_remove_handler(domain, id);
         }
-        eq(warnings, [], 'peringatan');
+        eq(warnings, [], 'warnings');
     });
     w.file = null;
 }

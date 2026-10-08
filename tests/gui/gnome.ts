@@ -70,7 +70,7 @@ export function gnomeTests(c: GuiContext): void {
         ok(w.win.get_visible_dialog() === shown, 'the shortcuts dialog is not shown');
         if (!hasAdwShortcutsDialog()) {
             const rows = descendants(shown).filter(x => x instanceof Adw.ActionRow).map(x => (x as Adw.ActionRow).title);
-            ok(rows.includes('Save') && rows.includes('Command Palette'), `shortcuts dialog contents:  ${rows.slice(0, 5).join(', ')}…`);
+            ok(rows.includes('Save') && rows.includes('Command Palette'), `shortcuts dialog contents: ${rows.slice(0, 5).join(', ')}…`);
         }
         if (shot) widgetPixbuf(w.win)?.savev(`${shot}-shortcuts.png`, 'png', [], []);
         shown.force_close();
@@ -82,7 +82,7 @@ export function gnomeTests(c: GuiContext): void {
         const light = applyTheme(false), dark = applyTheme(true);
         const style = Adw.StyleManager.get_default() as Adw.StyleManager & { get_system_supports_accent_colors?(): boolean };
         if (!style.get_system_supports_accent_colors?.()) eq([light.accent, dark.accent], ['#1c71d8', '#78aeed']);
-        else ok(/^#[0-9a-f]{6}$/.test(light.accent), `invalid system accent:  ${light.accent}`);
+        else ok(/^#[0-9a-f]{6}$/.test(light.accent), `invalid system accent: ${light.accent}`);
         w.setDark(false);
     });
 

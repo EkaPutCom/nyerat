@@ -146,7 +146,7 @@ export function harnessTests(c: GuiContext): void {
         ok(waitFor(() => runOf('Checkout')?.status === 'done'), `status: ${runOf('Checkout')?.status}`);
         eq(titles(2), ['Checkout with QRIS @pi #feature'], 'moved to Review when done');
         const card = kb.getBoard().columns[2].cards[0];
-        ok(card.notes[card.notes.length - 1].startsWith('↳ pi done'), `notes:  ${card.notes.join(' | ')}`);
+        ok(card.notes[card.notes.length - 1].startsWith('↳ pi done'), `notes: ${card.notes.join(' | ')}`);
         contains(card.notes[card.notes.length - 1], 'QRIS checkout added');
         contains(badge('Checkout'), 'done');
         eq(parseBoard(c.text()).columns[2].cards[0].text, card.text, 'the board change reached the document text');
@@ -156,7 +156,7 @@ export function harnessTests(c: GuiContext): void {
         const r = runOf('Checkout')!;
         const viewer = w.showRunLog(r);
         pump();
-        ok(viewer.window.title?.includes('pi Log'), `title:  ${viewer.window.title}`);
+        ok(viewer.window.title?.includes('pi Log'), `title: ${viewer.window.title}`);
         const text = r.trace.text();
         contains(text, 'pi --session test-session');
         contains(text, 'edit');
@@ -190,7 +190,7 @@ export function harnessTests(c: GuiContext): void {
             w.setOption('dark', false);
         }
         GLib.file_set_contents(GLib.build_filenamev([dir, 'release']), '');
-        ok(waitFor(() => runOf('Tidy up')?.status === 'done'), `second status:  ${runOf('Tidy up')?.status}`);
+        ok(waitFor(() => runOf('Tidy up')?.status === 'done'), `second status: ${runOf('Tidy up')?.status}`);
         eq(read('order').trim().split('\n').map(l => l.split(' ')[0]), ['start', 'finish', 'start', 'finish'], 'did not run at the same time');
         eq(titles(2).map(t => t.split(' ')[0]), ['Checkout', 'Tidy up']);
     });
