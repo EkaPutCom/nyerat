@@ -76,8 +76,8 @@ export const harnessFor = (agent: string | null): HarnessSpec | null => (agent &
 
 // ---------- Project ----------
 
-const PROJECT_TAG = /^(?:project|proyek)\/(.+)$/;   // "proyek": legacy Indonesian spelling, still accepted
-const PROJECT_LINE = /^(?:project|proyek):\s*["']?([^"'\s][^"']*?)["']?\s*$/i;
+const PROJECT_TAG = /^project\/(.+)$/;
+const PROJECT_LINE = /^project:\s*["']?([^"'\s][^"']*?)["']?\s*$/i;
 export const PROJECT_NAME = /^[\p{L}\p{N}_.-]+$/u;
 
 // The board's default project from the frontmatter ("project: web-ecommerce").
@@ -178,9 +178,9 @@ export function buildPrompt(card: Card, project: string, board: string, notes: L
 
 // ---------- Board ----------
 
-// The destination lists when the harness starts and finishes, recognized by their titles ("dikerjakan" etc. are legacy Indonesian names).
-const DOING = /^(dikerjakan|sedang dikerjakan|proses|progres|doing|in progress|wip)$/i;
-const REVIEW = /^(review|tinjau|ditinjau|perlu ditinjau|in review)$/i;
+// The destination lists when the harness starts and finishes, recognized by their titles.
+const DOING = /^(doing|in progress|wip)$/i;
+const REVIEW = /^(review|in review)$/i;
 
 export function stageColumn(board: Board, stage: 'doing' | 'review'): number {
     const re = stage === 'doing' ? DOING : REVIEW;
@@ -374,7 +374,7 @@ export function resultNote(agent: string, result: HarnessResult, stamp: string):
     if (!result.ok) return `↳ ${agent} failed ${stamp}: ${result.error}`;
     // Skip the opener ("Done.") and section headings ("**What changed:**"); take the first content line.
     const plain = result.summary.split('\n').map(l => l.replace(/^\s*(?:[#>*-]+\s*|\d+\.\s+)+/, '').replace(/\*\*/g, '').trim()).filter(Boolean);
-    const first = plain.find(l => !/^(selesai|sudah selesai|done|beres|ok)\b[.!]?$/i.test(l) && !l.endsWith(':')) ?? plain[0] ?? 'done';
+    const first = plain.find(l => !/^(done|ok)\b[.!]?$/i.test(l) && !l.endsWith(':')) ?? plain[0] ?? 'done';
     const clipped = first.length > 160 ? `${first.slice(0, 157)}…` : first;
     return `↳ ${agent} done ${stamp}: ${clipped}`;
 }

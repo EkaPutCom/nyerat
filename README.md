@@ -392,7 +392,7 @@ src/
 │   ├── journal.ts        pure: the action history and reconciliation of interruptions from the actual content
 │   ├── recovery.ts       pure: limited retries and excerpts of old history
 │   ├── path.ts           path validation and symlink rejection when writing (Gio)
-│   ├── transcript.ts     pure: conversation ↔ Markdown text (frontmatter + `## Anda` / `## Asisten`), titles and file names
+│   ├── transcript.ts     pure: conversation ↔ Markdown text (frontmatter + `## You` / `## Assistant`), titles and file names
 │   ├── chatstore.ts      save, list, load, and discard conversations in `<folder>/.nyerat/chats` (Gio)
 │   ├── provider.ts       the Provider interface (used by the real client and the fake provider in tests)
 │   ├── sse.ts            pure: reads SSE stream lines (text, reasoning, tool-call chunks, usage) and HTTP error messages
@@ -688,8 +688,6 @@ project: web-ecommerce          ← the board's default project
 - [ ] Test the cart @pi #project/shop-admin     ← the project tag wins over the frontmatter
 ```
 
-(The Indonesian spellings `proyek:` and `#proyek/…` are still accepted.)
-
 ```
 card + [[note]] ──buildPrompt()──► pi --mode rpc --name <title> [--session <id>]   (cwd = project folder)
   ▲                         stdin ▲            │ stdout: JSONL per line
@@ -708,7 +706,7 @@ card + [[note]] ──buildPrompt()──► pi --mode rpc --name <title> [--ses
 5. **Waiting for an answer.** `PiReader.line()` returns signals. An `extension_ui_request` with `select`/`confirm`/`input`/`editor` becomes a `HarnessAsk` and the run gets the status `waiting`; the answer is sent as an `extension_ui_response` with the same id (`confirmed`, `value`, or `cancelled`). If a request has a `timeout`, pi answers by itself with a default value after it, and Nyerat returns the status to `working` at the same moment. `notify` is only recorded in the log; `setStatus`/`setWidget` are ignored (TUI only). On `agent_settled`, an answer that ends in `?` (`endsWithQuestion()`) makes the run wait; a reply is sent as the next `prompt` to the same process (`PiReader.restart()` discards the old turn state), while *End without replying* closes stdin. Other answers close stdin immediately, and pi exits in an orderly way. *Steer* sends `steer`; *Reply* after finishing runs pi again with `--session <id>` and the same log.
 6. **Reading the result.** `PiReader` maps events (the `response` of `get_state`/a rejected command, `turn_start`, `message_update` text/reasoning, `tool_execution_start/end`, the assistant's `message_end` with `stopReason`/`usage.cost`, `agent_settled`) to `AgentTrace`, so the agent's `LogViewer` is reused. It fails if `stopReason` is error/aborted, the exit code is not 0 (the message = the last stderr line), or there is no answer.
 7. **Finishing and stopping.** After the process exits, the remaining output gets a 1.5-second grace period: grandchild processes (commands from the harness's `bash` tool) can keep the pipe open. *Stop* sends SIGTERM, then SIGKILL after 5 seconds. Closing the window stops all running harnesses.
-8. **Writing the board.** The card is looked up again by its text on the current board (`locateCard()`, must be unique). A board that is open is changed through its editor (one undo step); one that is not open is written straight to disk. The destination lists are recognized by their titles (*In Progress*/*Doing*, *Review*; the Indonesian *Dikerjakan* and *Tinjau* are still accepted); if there is none, the card is not moved.
+8. **Writing the board.** The card is looked up again by its text on the current board (`locateCard()`, must be unique). A board that is open is changed through its editor (one undo step); one that is not open is written straight to disk. The destination lists are recognized by their titles (*In Progress*/*Doing*, *Review*); if there is none, the card is not moved.
 
 ### How the assistant works (`agent/*`, `ui/chat.ts`)
 

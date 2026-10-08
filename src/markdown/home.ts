@@ -23,8 +23,8 @@ export interface Task {
     days: number;           // day difference from today; negative = overdue
 }
 
-// A column whose title looks like this holds finished cards even without checkboxes ("selesai"/"beres" are legacy Indonesian names).
-const DONE_COLUMN = /^(selesai|done|complete(d)?|beres)$/i;
+// A column whose title looks like this holds finished cards even without checkboxes.
+const DONE_COLUMN = /^(done|complete(d)?)$/i;
 const DAY = 24 * 60 * 60 * 1000;
 
 const daysBetween = (from: string, to: string): number =>

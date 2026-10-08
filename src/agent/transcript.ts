@@ -31,7 +31,7 @@ export interface SavedChat {
 }
 
 const HEADINGS: Record<Turn['role'], string> = { user: 'You', assistant: 'Assistant' };
-const MARKER = /^(\\*)## (You|Assistant|Anda|Asisten)[ \t]*$/;   // Anda/Asisten: legacy Indonesian headings, still readable
+const MARKER = /^(\\*)## (You|Assistant)[ \t]*$/;
 const TITLE_MAX = 60;
 
 const escapeLine = (line: string): string => MARKER.test(line) ? `\\${line}` : line;
@@ -86,7 +86,7 @@ export function parseChat(text: string): SavedChat | null {
         const m = MARKER.exec(line);
         if (m && !m[1]) {
             close();
-            current = { role: m[2] === 'You' || m[2] === 'Anda' ? 'user' : 'assistant', lines: [] };
+            current = { role: m[2] === 'You' ? 'user' : 'assistant', lines: [] };
         } else if (current) {
             current.lines.push(unescapeLine(line));
         }
@@ -94,7 +94,7 @@ export function parseChat(text: string): SavedChat | null {
     close();
     let work: WorkState | null = null;
     try {
-        const a = JSON.parse(meta.work ?? meta.pekerjaan ?? 'null');
+        const a = JSON.parse(meta.work ?? 'null');
         if (a) {
             work = parseWork(JSON.stringify({ goal: a.goal, steps: a.steps.map((s: any) => ({ text: s.text, status: s.status })), note: a.note }));
             if (work && Number.isInteger(a.actionStart) && a.actionStart >= 0) work.actionStart = a.actionStart;
@@ -106,9 +106,9 @@ export function parseChat(text: string): SavedChat | null {
         }
     } catch { /* Broken metadata does not block the conversation text. */ }
     let events: ActionEvent[] = [];
-    try { events = parseEvents(JSON.parse(meta.actions ?? meta.tindakan ?? '[]')); } catch { /* A broken journal is skipped. */ }
+    try { events = parseEvents(JSON.parse(meta.actions ?? '[]')); } catch { /* A broken journal is skipped. */ }
     if (!turns.length && !work && !events.length) return null;
-    let title = meta.title ?? meta.judul ?? '';
+    let title = meta.title ?? '';
     try {
         if (title.startsWith('"')) title = JSON.parse(title);
     } catch (e) {
@@ -118,7 +118,7 @@ export function parseChat(text: string): SavedChat | null {
     return {
         title: title || titleFrom(turns.find(t => t.role === 'user')?.content ?? ''),
         model: meta.model ?? '',
-        created: meta.created ?? meta.dibuat ?? '',
+        created: meta.created ?? '',
         turns,
         ...(work ? { work } : {}),
         ...(events.length ? { events } : {}),

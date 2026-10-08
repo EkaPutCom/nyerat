@@ -499,11 +499,11 @@ buildQuery: question ×1, selection ×0.5,
   <div class="chapnum">Chapter 3 · commits 2d0150f, 49021f3, 3f387e6 · <code>chatstore.ts</code>, <code>transcript.ts</code>, <code>context.ts</code>, <code>tools.ts</code></div>
   <h2>Memory a human can read, and names that do not mislead</h2>
   <h3>3a. A conversation as a Markdown file</h3>
-  <p>Each conversation is saved as one file in <code>&lt;folder&gt;/.nyerat/chats/</code>, with frontmatter (<code>judul</code>, <code>model</code>, <code>dibuat</code>) and then <code>## Anda</code> / <code>## Asisten</code> sections. These key and heading names are legacy Indonesian spellings kept so that existing conversation files still open. The format is deliberately readable and editable by humans, not a hidden database.</p>
+  <p>Each conversation is saved as one file in <code>&lt;folder&gt;/.nyerat/chats/</code>, with frontmatter (<code>title</code>, <code>model</code>, <code>created</code>) and then <code>## You</code> / <code>## Assistant</code> sections. The format is deliberately readable and editable by humans, not a hidden database.</p>
   <div class="grid2">
     <div class="panel">
       <h4>What is saved</h4>
-      <p style="margin:0;font-size:.88rem">Questions and answers. Starting in Chapter 5, also <code>pekerjaan</code> (the goal, steps, verification) and <code>tindakan</code> (the journal along with before/after snapshots), again legacy key names. The <code>.nyerat/</code> folder automatically gets a <code>.gitignore</code> containing <code>*</code>, because its contents include document excerpts.</p>
+      <p style="margin:0;font-size:.88rem">Questions and answers. Starting in Chapter 5, also <code>work</code> (the goal, steps, verification) and <code>actions</code> (the journal along with before/after snapshots). The <code>.nyerat/</code> folder automatically gets a <code>.gitignore</code> containing <code>*</code>, because its contents include document excerpts.</p>
     </div>
     <div class="panel">
       <h4>What is deliberately not saved</h4>
