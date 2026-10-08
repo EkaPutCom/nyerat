@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nyerat — Personal workbench for humans and AI agents</title>
-<meta name="description" content="Nyerat adalah personal workbench for humans and AI agents di desktop Linux. Agent menelusuri catatan, dokumen, riset, dan rencana Anda, lalu mengusulkan tindakan nyata yang Anda tinjau dan setujui dulu. Fondasinya editor Markdown yang langsung terformat. Dibuat dengan GTK 4, GJS, dan TypeScript.">
+<meta name="description" content="Nyerat is a personal workbench for humans and AI agents on the Linux desktop. The agent browses your notes, documents, research, and plans, then proposes real actions that you review and approve first. Its foundation is a Markdown editor that formats live. Built with GTK 4, GJS, and TypeScript.">
 <meta property="og:title" content="Nyerat — Personal workbench for humans and AI agents">
-<meta property="og:description" content="Agent AI yang bekerja di ruang kerja pribadi Anda: membaca konteks, mengusulkan perubahan, dan menulis hanya setelah Anda menyetujui selisihnya. Editor Markdown, kanban, riwayat Git.">
+<meta property="og:description" content="An AI agent that works in your personal workspace: it reads the context, proposes changes, and writes only after you approve the diff. A Markdown editor, kanban, and Git history.">
 <meta property="og:image" content="https://nyerat.ekaput.com/assets/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="631">
-<meta property="og:image:alt" content="Nyerat setelah agent AI memperbarui tanggal rilis di rencana dan memindahkan kartu tugas, atas persetujuan pengguna">
+<meta property="og:image:alt" content="Nyerat after the AI agent updated the release date in the plan and moved a task card, with the approval of the user">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://nyerat.ekaput.com/assets/og-image.png">
 <meta property="og:type" content="website">
@@ -58,7 +58,7 @@ kbd {
 .wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
 .narrow { width: min(760px, 100% - 32px); margin-inline: auto; }
 
-/* Navigasi */
+/* Navigation */
 header.nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
 header.nav .wrap { display: flex; align-items: center; gap: 22px; height: 60px; }
 .brand { font-weight: 700; font-size: 1.2rem; letter-spacing: -.01em; color: var(--text); text-decoration: none; display: flex; align-items: center; gap: 10px; }
@@ -91,7 +91,7 @@ h1 em { font-style: normal; color: var(--accent); }
 .shot figcaption { color: var(--muted); font-size: .92rem; margin-top: 12px; text-align: center; }
 figure { margin: 0; }
 
-/* Seksi */
+/* Sections */
 section { padding: 84px 0; }
 section.alt { background: var(--bg-alt); border-block: 1px solid var(--line); }
 .eyebrow { color: var(--accent); font-weight: 700; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 10px; }
@@ -101,13 +101,13 @@ h3 { font-size: 1.15rem; margin: 0 0 6px; }
 .center { text-align: center; }
 .center .sub { margin-inline: auto; }
 
-/* Grid fitur */
+/* Feature grid */
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; }
 .card p { margin: 0; color: var(--muted); font-size: .97rem; }
 .ico { width: 40px; height: 40px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); display: grid; place-items: center; font-size: 1.25rem; margin-bottom: 14px; }
 
-/* Baris fitur: teks + gambar */
+/* Feature rows: text + image */
 .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 56px; align-items: center; }
 .row.flip { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
 .row.flip .text { order: 2; }
@@ -124,7 +124,7 @@ h3 { font-size: 1.15rem; margin: 0 0 6px; }
 
 .note { color: var(--muted); font-size: .93rem; }
 
-/* CTA akhir & footer */
+/* Final CTA and footer */
 .final { text-align: center; padding: 96px 0; }
 .final .sub { margin-inline: auto; }
 .final h2 { font-size: clamp(1.9rem, 4.5vw, 2.9rem); }
@@ -132,7 +132,7 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; color: var(--muted)
 footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between; }
 footer a { color: var(--muted); }
 
-/* Kartu fitur bertaut */
+/* Linked feature cards */
 a.card { display: block; color: var(--text); text-decoration: none; transition: border-color .12s, transform .12s; }
 a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
 .card .more { display: inline-block; margin-top: 10px; color: var(--accent); font-size: .9rem; font-weight: 600; }
@@ -150,9 +150,9 @@ a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
       Nyerat
     </a>
     <nav>
-      <a class="hide-sm" href="#agent">Fitur agent</a>
-      <a class="hide-sm" href="#alur">Cara kerja</a>
-      <a class="hide-sm" href="#orkestrator">Orkestrator</a>
+      <a class="hide-sm" href="#agent">Agent features</a>
+      <a class="hide-sm" href="#flow">How it works</a>
+      <a class="hide-sm" href="#orchestrator">Orchestrator</a>
       <a href="docs/">Docs</a>
       <a class="btn small" href="https://github.com/EkaPutCom/nyerat">GitHub</a>
     </nav>
@@ -164,129 +164,129 @@ a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
 <!-- ========== HERO ========== -->
 <div class="hero">
   <div class="wrap">
-    <span class="pill">Sumber terbuka · Lisensi MIT · Untuk desktop Linux</span>
+    <span class="pill">Open source · MIT license · For the Linux desktop</span>
     <h1>Personal workbench<br><em>for humans and AI agents.</em></h1>
-    <p class="lead">Agent AI yang bekerja di folder catatan, rencana, dan papan tugas Anda. Ia menelusuri, merencanakan, dan mengusulkan perubahan nyata, lalu menunggu Anda menyetujui selisihnya sebelum menulis apa pun.</p>
+    <p class="lead">An AI agent that works in your folder of notes, plans, and task boards. It browses, plans, and proposes real changes, then waits for you to approve the diff before it writes anything.</p>
     <div class="cta">
-      <a class="btn" href="docs/">Mulai di dokumentasi</a>
-      <a class="btn ghost" href="https://github.com/EkaPutCom/nyerat">Lihat kode di GitHub</a>
+      <a class="btn" href="docs/">Start in the documentation</a>
+      <a class="btn ghost" href="https://github.com/EkaPutCom/nyerat">See the code on GitHub</a>
     </div>
     <figure class="shot">
-      <img src="assets/agent-selesai.png" width="1280" height="780" alt="Jendela Nyerat setelah agent memperbarui tanggal rilis di rencana peluncuran dan memindahkan kartu tugas, keduanya atas persetujuan pengguna">
+      <img src="assets/agent-done.png" width="1280" height="780" alt="The Nyerat window after the agent updated the release date in the launch plan and moved a task card, both with the approval of the user">
     </figure>
   </div>
 </div>
 
-<!-- ========== FITUR AGENT ========== -->
+<!-- ========== AGENT FEATURES ========== -->
 <section id="agent">
   <div class="wrap">
     <div class="center">
-      <p class="eyebrow">Fitur agent</p>
-      <h2>Agent yang bekerja, Anda yang memutuskan</h2>
-      <p class="sub">Minta hasil, bukan hanya jawaban. Agent membaca bebas, menulis hanya lewat usulan, dan memeriksa hasilnya sendiri.</p>
+      <p class="eyebrow">Agent features</p>
+      <h2>The agent works, you decide</h2>
+      <p class="sub">Ask for results, not only answers. The agent reads freely, writes only through proposals, and checks its own results.</p>
     </div>
 
-    <h3 class="grid-head">Memahami</h3>
+    <h3 class="grid-head">Understanding</h3>
     <div class="grid">
-      <a class="card" href="docs/konteks.html"><div class="ico">◎</div><h3>Konteks otomatis</h3><p>Dokumen terbuka (termasuk yang belum disimpan), pilihan, kursor, dan peta seluruh folder disusun sendiri. Lampirkan berkas utuh dengan <code>@namaberkas</code>, dan batasi yang dikirim lewat saklar.</p><span class="more">Konteks dan privasi →</span></a>
-      <a class="card" href="docs/penelusuran.html"><div class="ico">⌕</div><h3>Menelusuri berkas sendiri</h3><p><code>daftar_berkas</code>, <code>cari_dokumen</code>, <code>cari_teks</code>, dan <code>baca_berkas</code>. Jawaban mengutip berkas dan nomor baris.</p><span class="more">Alat baca →</span></a>
-      <a class="card" href="docs/penelusuran.html#git"><div class="ico">⑂</div><h3>Membaca riwayat Git</h3><p>“Kapan tanggal rilis diubah dan oleh siapa?” Dijawab dari <code>riwayat_git</code>, <code>lihat_commit</code>, dan <code>isi_versi</code>, tanpa pernah mengubah repositori.</p><span class="more">Alat Git →</span></a>
+      <a class="card" href="docs/context.html"><div class="ico">◎</div><h3>Automatic context</h3><p>The open documents (including unsaved ones), the selection, the cursor, and a map of the whole folder are assembled for you. Attach a whole file with <code>@filename</code>, and limit what is sent with the switches.</p><span class="more">Context and privacy →</span></a>
+      <a class="card" href="docs/browsing.html"><div class="ico">⌕</div><h3>Browsing files by itself</h3><p><code>list_files</code>, <code>search_documents</code>, <code>search_text</code>, and <code>read_file</code>. Answers quote the file and the line number.</p><span class="more">Read tools →</span></a>
+      <a class="card" href="docs/browsing.html#git"><div class="ico">⑂</div><h3>Reading the Git history</h3><p>“When was the release date changed and by whom?” Answered from <code>git_log</code>, <code>show_commit</code>, and <code>file_at_commit</code>, without ever changing the repository.</p><span class="more">Git tools →</span></a>
     </div>
 
-    <h3 class="grid-head">Bertindak, dengan persetujuan</h3>
+    <h3 class="grid-head">Acting, with approval</h3>
     <div class="grid">
-      <a class="card" href="docs/usulan.html#tindakan"><div class="ico">✎</div><h3>Usulan perubahan berkas</h3><p>Buat berkas, ganti teks (sekali atau semua kemunculan), sisipkan teks, buang ke Tempat Sampah, atau pindah dan ganti nama berkas.</p><span class="more">Tindakan yang tersedia →</span></a>
-      <a class="card" href="docs/kanban.html#agent"><div class="ico">▦</div><h3>Mengelola papan kanban</h3><p>Tambah, pindah, tandai, ubah, atau hapus kartu, serta tambah dan ganti nama daftar. Memindah kartu hanya menandai kartu itu di selisih.</p><span class="more">Papan dan agent →</span></a>
-      <a class="card" href="docs/usulan.html#tinjau"><div class="ico">±</div><h3>Jendela tinjau bergaya diff Git</h3><p>Setiap usulan tampil sebagai selisih baris dengan nomor dan konteks. Tidak ada yang tertulis sebelum Anda menekan Terapkan.</p><span class="more">Jendela tinjau →</span></a>
-      <a class="card" href="docs/usulan.html#paket"><div class="ico">❏</div><h3>Paket dan persetujuan sebagian</h3><p>Sampai 20 tindakan ditinjau sekaligus. Hapus centang per berkas untuk menerapkan sebagian saja; agent tahu mana yang diterima.</p><span class="more">Paket perubahan →</span></a>
-      <a class="card" href="docs/usulan.html#urungkan"><div class="ico">↶</div><h3>Catatan dan Urungkan</h3><p>Beri catatan bersama keputusan Anda supaya agent memperbaiki usulannya. Perubahan yang sudah diterapkan bisa diurungkan dengan aman.</p><span class="more">Urungkan →</span></a>
+      <a class="card" href="docs/proposals.html#actions"><div class="ico">✎</div><h3>File change proposals</h3><p>Create a file, replace text (once or every occurrence), insert text, move to the Trash, or move and rename a file.</p><span class="more">Available actions →</span></a>
+      <a class="card" href="docs/kanban.html#agent"><div class="ico">▦</div><h3>Managing kanban boards</h3><p>Add, move, mark, edit, or delete cards, and add and rename lists. Moving a card only marks that card in the diff.</p><span class="more">The board and the agent →</span></a>
+      <a class="card" href="docs/proposals.html#review"><div class="ico">±</div><h3>A review window in the style of a Git diff</h3><p>Every proposal appears as a line diff with numbers and context. Nothing is written before you press Apply.</p><span class="more">The review window →</span></a>
+      <a class="card" href="docs/proposals.html#batches"><div class="ico">❏</div><h3>Batches and partial approval</h3><p>Up to 20 actions are reviewed at once. Uncheck a file to apply only part of it; the agent knows which were accepted.</p><span class="more">Change batches →</span></a>
+      <a class="card" href="docs/proposals.html#undo"><div class="ico">↶</div><h3>Notes and Undo</h3><p>Add a note to your decision so the agent fixes its proposal. A change that has been applied can be undone safely.</p><span class="more">Undo →</span></a>
     </div>
 
-    <h3 class="grid-head">Menuntaskan pekerjaan</h3>
+    <h3 class="grid-head">Finishing the work</h3>
     <div class="grid">
-      <a class="card" href="docs/pekerjaan.html#rencana"><div class="ico">☰</div><h3>Rencana pekerjaan</h3><p>Permintaan beberapa langkah dicatat dengan <code>atur_pekerjaan</code>: tujuan dan langkah yang statusnya terlihat di panel.</p><span class="more">Rencana →</span></a>
-      <a class="card" href="docs/pekerjaan.html#verifikasi"><div class="ico">✓</div><h3>Verifikasi hasil</h3><p><code>verifikasi_pekerjaan</code> membaca ulang hasil sungguhan: teks wajib ada atau hilang, posisi kartu, dan struktur Markdown. Belum lulus, belum selesai.</p><span class="more">Verifikasi →</span></a>
-      <a class="card" href="docs/riwayat.html#pemulihan"><div class="ico">↻</div><h3>Journal dan pemulihan</h3><p>Usulan, keputusan, dan snapshot dicatat bersama percakapan. Pekerjaan yang terputus bisa dilanjutkan setelah aplikasi dibuka lagi.</p><span class="more">Pemulihan →</span></a>
+      <a class="card" href="docs/work.html#plan"><div class="ico">☰</div><h3>The work plan</h3><p>A request with several steps is recorded with <code>set_work</code>: a goal and steps whose status is visible in the panel.</p><span class="more">Plans →</span></a>
+      <a class="card" href="docs/work.html#verification"><div class="ico">✓</div><h3>Verifying the result</h3><p><code>verify_work</code> rereads the real result: text that must be present or gone, the position of cards, and the Markdown structure. Not passed, not finished.</p><span class="more">Verification →</span></a>
+      <a class="card" href="docs/history.html#recovery"><div class="ico">↻</div><h3>The journal and recovery</h3><p>Proposals, decisions, and snapshots are recorded together with the conversation. Interrupted work can be resumed after the app is opened again.</p><span class="more">Recovery →</span></a>
     </div>
 
-    <h3 class="grid-head">Transparan dan terkendali</h3>
+    <h3 class="grid-head">Transparent and under control</h3>
     <div class="grid">
-      <a class="card" href="docs/asisten.html"><div class="ico">✦</div><h3>Panel Asisten</h3><p>Jawaban mengalir, rincian konteks dan token tiap jawaban, model DeepSeek pilihan, dan mode <em>Berpikir mendalam</em>.</p><span class="more">Panel Asisten →</span></a>
-      <a class="card" href="docs/riwayat.html#percakapan"><div class="ico">❐</div><h3>Riwayat percakapan per folder</h3><p>Percakapan tersimpan sebagai Markdown di <code>.nyerat/chats</code>. Buka lagi dan lanjutkan kapan saja.</p><span class="more">Riwayat →</span></a>
-      <a class="card" href="docs/riwayat.html#log-agent"><div class="ico">▤</div><h3>Log agent</h3><p>Lini masa langsung tiap putaran model, penalaran, panggilan alat beserta argumen dan hasilnya, token, dan lamanya.</p><span class="more">Log agent →</span></a>
-      <a class="card" href="docs/orkestrator.html"><div class="ico">π</div><h3>Orkestrator harness pi</h3><p>Kartu bertanda <code>@pi</code> dikerjakan harness pi di repo proyek lain. Jawab pertanyaan dan permintaan izinnya langsung dari kartu.</p><span class="more">Orkestrator →</span></a>
+      <a class="card" href="docs/assistant.html"><div class="ico">✦</div><h3>The Assistant panel</h3><p>Streamed answers, the context and token details of every answer, a choice of DeepSeek models, and the <em>Deep thinking</em> mode.</p><span class="more">The Assistant panel →</span></a>
+      <a class="card" href="docs/history.html#conversations"><div class="ico">❐</div><h3>Conversation history per folder</h3><p>Conversations are saved as Markdown in <code>.nyerat/chats</code>. Open them again and continue at any time.</p><span class="more">History →</span></a>
+      <a class="card" href="docs/history.html#agent-log"><div class="ico">▤</div><h3>The agent log</h3><p>A live timeline of every model round, the reasoning, the tool calls with their arguments and results, the tokens, and the duration.</p><span class="more">The agent log →</span></a>
+      <a class="card" href="docs/orchestrator.html"><div class="ico">π</div><h3>The pi harness orchestrator</h3><p>A card marked <code>@pi</code> is worked on by the pi harness in another project repo. Answer its questions and permission requests straight from the card.</p><span class="more">The orchestrator →</span></a>
     </div>
   </div>
 </section>
 
-<!-- ========== CARA KERJA ========== -->
-<section class="alt" id="alur">
+<!-- ========== HOW IT WORKS ========== -->
+<section class="alt" id="flow">
   <div class="wrap">
     <div class="row">
       <div class="text">
-        <p class="eyebrow">Cara kerja</p>
-        <h2>Dari “ada yang tidak sinkron?” sampai selesai.</h2>
-        <p class="sub" style="margin-bottom:18px">Folder kerja berisi rencana peluncuran, catatan rapat, riset, dan papan tugas. Cukup minta dengan bahasa biasa:</p>
+        <p class="eyebrow">How it works</p>
+        <h2>From “is something out of sync?” to done.</h2>
+        <p class="sub" style="margin-bottom:18px">The work folder holds a launch plan, meeting notes, research, and a task board. Just ask in plain language:</p>
         <ul>
-          <li>“Adakah keputusan rapat yang belum masuk ke rencana peluncuran?” Agent menemukan rilis yang diundur ke 22 November, sementara rencana masih 15 November</li>
-          <li>“Perbarui tanggal rilisnya dan pindahkan kartu materi rilis ke Dikerjakan.” Dua usulan muncul untuk ditinjau, masing-masing dengan selisihnya</li>
-          <li>Untuk pekerjaan beberapa langkah, agent memeriksa hasilnya, misalnya tanggal lama tidak tersisa di berkas mana pun, sebelum menyatakan selesai</li>
+          <li>“Is there a meeting decision that has not made it into the launch plan yet?” The agent finds that the release was postponed to 22 November, while the plan still says 15 November</li>
+          <li>“Update the release date and move the release material card to In Progress.” Two proposals appear for review, each with its diff</li>
+          <li>For work with several steps, the agent checks the result, for example that the old date is left in no file, before declaring it finished</li>
         </ul>
       </div>
-      <figure class="shot"><img src="assets/agent.gif" width="900" height="548" loading="lazy" alt="Animasi agent mengusulkan perubahan rencana dan papan tugas; pengguna menerapkan keduanya"><figcaption>Agent mengusulkan, pengguna menerapkan: rencana dan papan tugas ikut diperbarui</figcaption></figure>
+      <figure class="shot"><img src="assets/agent.gif" width="900" height="548" loading="lazy" alt="Animation of the agent proposing changes to a plan and a task board; the user applies both"><figcaption>The agent proposes, the user applies: the plan and the task board are updated too</figcaption></figure>
     </div>
 
     <div class="row flip">
       <div class="text">
-        <p class="eyebrow">Kendali ada di Anda</p>
-        <h2>Setiap tindakan bisa diperiksa dulu.</h2>
+        <p class="eyebrow">You stay in control</p>
+        <h2>Every action can be checked first.</h2>
         <ul>
-          <li>Alat baca langsung berjalan; alat tulis hanya menghasilkan usulan</li>
-          <li>Hanya berkas Markdown di folder kerja; nama di luar folder, bertitik, atau berisi <code>..</code> ditolak</li>
-          <li>Berkas yang berubah sejak diusulkan tidak ditimpa; agent diminta mengusulkan ulang</li>
-          <li>Hapus berarti ke Tempat Sampah, dan setiap penerapan bisa diurungkan</li>
-          <li>Saklar konteks menentukan dokumen yang dikirim ke DeepSeek, dengan API key milik Anda</li>
-          <li>Semua tetap Markdown biasa yang bisa di-diff dan di-commit ke Git</li>
+          <li>Read tools run right away; write tools only produce proposals</li>
+          <li>Only Markdown files in the work folder; names outside the folder, starting with a dot, or containing <code>..</code> are rejected</li>
+          <li>A file that changed since it was proposed is not overwritten; the agent is asked to propose again</li>
+          <li>Delete means to the Trash, and every application can be undone</li>
+          <li>The context switches decide which documents are sent to DeepSeek, with your own API key</li>
+          <li>Everything stays plain Markdown that can be diffed and committed to Git</li>
         </ul>
-        <p class="sub" style="margin:18px 0 0">Belum tersedia: pemeriksaan kontradiksi otomatis, penyedia model selain DeepSeek, dan agent Nyerat yang menjalankan perintah. <a href="docs/keterbatasan.html">Lihat keterbatasan</a>.</p>
+        <p class="sub" style="margin:18px 0 0">Not available yet: an automatic contradiction check, model providers other than DeepSeek, and a Nyerat agent that runs commands. <a href="docs/limitations.html">See the limitations</a>.</p>
       </div>
-      <figure class="shot"><img src="assets/usulan-diff.png" width="860" height="620" loading="lazy" alt="Jendela tinjau usulan agent: selisih satu baris tanggal rilis dengan tombol Tolak dan Terapkan"><figcaption>Jendela tinjau: tanggal rilis berubah dari 15 ke 22 November</figcaption></figure>
+      <figure class="shot"><img src="assets/proposal-diff.png" width="860" height="620" loading="lazy" alt="The review window of an agent proposal: a one-line diff of the release date with the Reject and Apply buttons"><figcaption>The review window: the release date changes from 15 to 22 November</figcaption></figure>
     </div>
 
     <div class="row">
       <div class="text">
-        <p class="eyebrow">Sampai terverifikasi</p>
-        <h2>Belum lulus pemeriksaan, belum selesai.</h2>
-        <p class="sub" style="margin-bottom:18px">Untuk pekerjaan beberapa langkah, agent menyusun rencana yang terlihat di panel, mengusulkan perubahannya sebagai satu paket, lalu membaca ulang hasil sungguhan.</p>
+        <p class="eyebrow">Until verified</p>
+        <h2>Not passed the check, not finished.</h2>
+        <p class="sub" style="margin-bottom:18px">For work with several steps, the agent writes a plan that is visible in the panel, proposes its changes as one batch, and then rereads the real result.</p>
         <ul>
-          <li>Rencana dengan langkah yang dicentang saat ada kemajuan</li>
-          <li>Pemeriksaan teks wajib ada atau hilang di seluruh folder, posisi kartu, dan struktur Markdown</li>
-          <li>Paket bisa diurungkan, dan pekerjaan yang terputus bisa dilanjutkan</li>
+          <li>A plan whose steps are checked as there is progress</li>
+          <li>Checks for text that must be present or gone across the whole folder, the position of cards, and the Markdown structure</li>
+          <li>A batch can be undone, and interrupted work can be resumed</li>
         </ul>
-        <p style="margin-top:18px"><a href="docs/pekerjaan.html">Rencana dan verifikasi →</a></p>
+        <p style="margin-top:18px"><a href="docs/work.html">Plans and verification →</a></p>
       </div>
-      <figure class="shot"><img src="assets/pekerjaan.gif" width="900" height="548" loading="lazy" alt="Animasi agent mencatat rencana tiga langkah, mengusulkan paket perubahan, lalu memverifikasi hasil dan menandai semua langkah selesai"><figcaption>Rencana, paket perubahan, verifikasi, lalu selesai dan terverifikasi</figcaption></figure>
+      <figure class="shot"><img src="assets/work.gif" width="900" height="548" loading="lazy" alt="Animation of the agent recording a three-step plan, proposing a change batch, then verifying the result and marking every step done"><figcaption>The plan, the change batch, the verification, and then done and verified</figcaption></figure>
     </div>
   </div>
 </section>
 
-<!-- ========== ORKESTRATOR ========== -->
-<section id="orkestrator">
+<!-- ========== ORCHESTRATOR ========== -->
+<section id="orchestrator">
   <div class="wrap">
     <div class="row">
       <div class="text">
-        <p class="eyebrow">Orkestrator</p>
-        <h2>Tugaskan kartu ke agent lain.</h2>
-        <p class="sub" style="margin-bottom:18px">Tulis <code>@pi</code> di kartu kanban, klik kanan, lalu <em>Kerjakan dengan pi</em>. Harness <a href="https://pi.dev">pi</a> bekerja di repo proyek yang Anda pilih, dan Nyerat mengatur sisanya.</p>
+        <p class="eyebrow">Orchestrator</p>
+        <h2>Assign cards to another agent.</h2>
+        <p class="sub" style="margin-bottom:18px">Write <code>@pi</code> on a kanban card, right-click, then <em>Work on it with pi</em>. The <a href="https://pi.dev">pi</a> harness works in the project repo that you choose, and Nyerat handles the rest.</p>
         <ul>
-          <li>Kartu pindah ke Dikerjakan saat mulai dan ke Review saat selesai, dengan ringkasan hasil</li>
-          <li>Pertanyaan dan permintaan izin pi dijawab dari kartu: <em>Jawab pi…</em>, <em>Beri Arahan</em>, atau <em>Balas</em></li>
-          <li>Satu proyek dikerjakan satu harness; kartu lain mengantre</li>
-          <li>Log pi berisi alat, penalaran, token, biaya, dan id sesi</li>
+          <li>The card moves to In Progress on start and to Review when done, with a summary of the result</li>
+          <li>Questions and permission requests from pi are answered from the card: <em>Answer pi…</em>, <em>Steer</em>, or <em>Reply</em></li>
+          <li>One project is worked on by one harness; other cards queue</li>
+          <li>The pi log holds the tools, the reasoning, the tokens, the cost, and the session id</li>
         </ul>
-        <p style="margin-top:18px"><a href="docs/orkestrator.html">Baca panduan orkestrator →</a></p>
+        <p style="margin-top:18px"><a href="docs/orchestrator.html">Read the orchestrator guide →</a></p>
       </div>
-      <figure class="shot"><img src="assets/pi.gif" width="900" height="548" loading="lazy" alt="Animasi papan kanban: kartu @pi ditugaskan, satu bekerja dan satu antre, keduanya selesai ke Review, lalu kartu ketiga menunggu jawaban"><figcaption>Kartu @pi bekerja, mengantre, selesai ke Review, lalu menunggu jawaban Anda</figcaption></figure>
+      <figure class="shot"><img src="assets/pi.gif" width="900" height="548" loading="lazy" alt="Animation of a kanban board: @pi cards are assigned, one works and one queues, both finish to Review, then a third card waits for an answer"><figcaption>@pi cards work, queue, finish to Review, then wait for your answer</figcaption></figure>
     </div>
   </div>
 </section>
@@ -294,13 +294,13 @@ a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
 <!-- ========== CTA ========== -->
 <section class="alt final">
   <div class="narrow">
-    <h2>Coba Nyerat hari ini</h2>
-    <p class="sub">Gratis dan terbuka. Fondasinya editor Markdown yang langsung terformat, dengan papan kanban, diagram Mermaid, dan riwayat Git, semuanya di jendela GTK 4 yang ringan.</p>
+    <h2>Try Nyerat today</h2>
+    <p class="sub">Free and open. Its foundation is a Markdown editor that formats live, with a kanban board, Mermaid diagrams, and Git history, all in a light GTK 4 window.</p>
     <div class="cta">
-      <a class="btn" href="docs/">Pasang dan mulai</a>
-      <a class="btn ghost" href="docs/editor.html">Fitur ruang kerja</a>
+      <a class="btn" href="docs/">Install and start</a>
+      <a class="btn ghost" href="docs/editor.html">Workspace features</a>
     </div>
-    <p class="note" style="margin-top:28px">Untuk developer: <a href="belajar-agent.html">belajar membangun agent dari Nyerat</a> dan <a href="belajar-performa.html">belajar performa dari editornya</a>.</p>
+    <p class="note" style="margin-top:28px">For developers: <a href="learn-agent.html">learn to build an agent from Nyerat</a> and <a href="learn-performance.html">learn performance from its editor</a>.</p>
   </div>
 </section>
 
@@ -308,8 +308,8 @@ a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
 
 <footer>
   <div class="wrap">
-    <span>Nyerat · dibuat oleh Eka Putra · Lisensi MIT</span>
-    <span><a href="docs/">Dokumentasi</a> · <a href="belajar-agent.html">Belajar agent</a> · <a href="belajar-performa.html">Belajar performa</a> · <a href="https://github.com/EkaPutCom/nyerat">GitHub</a></span>
+    <span>Nyerat · made by Eka Putra · MIT license</span>
+    <span><a href="docs/">Documentation</a> · <a href="learn-agent.html">Learn agents</a> · <a href="learn-performance.html">Learn performance</a> · <a href="https://github.com/EkaPutCom/nyerat">GitHub</a></span>
   </div>
 </footer>
 
