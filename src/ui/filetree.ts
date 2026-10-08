@@ -14,7 +14,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
-import { createFile, createFolder, moveEntry, renameEntry, trashEntry } from '../fileops.js';
+import { copyEntry, createFile, createFolder, moveEntry, renameEntry, trashEntry } from '../fileops.js';
 import { newInbox, serializeInbox } from '../markdown/inbox.js';
 import { newBoard, serializeBoard } from '../markdown/kanban.js';
 import { confirmDialog, promptDialog, showError } from './dialogs.js';
@@ -471,7 +471,7 @@ export class FileTree {
         return popupMenu(this.widget, this.contextMenu(rowPath), px, py);
     }
 
-    // ---------- Moving through drag and drop ----------
+    // ---------- Drag and drop: moving inside the tree, copying in from a file manager ----------
 
     private setupDrag(): void {
         const source = new Gtk.DragSource({ actions: Gdk.DragAction.MOVE });
@@ -489,42 +489,58 @@ export class FileTree {
         source.connect('drag-end', () => { this.dragSource = null; });
         this.list.add_controller(source);
 
-        const target = new Gtk.DropTarget({ actions: Gdk.DragAction.MOVE });
-        target.set_gtypes([GObject.TYPE_STRING]);
+        const target = this.dropTarget();
         target.connect('motion', (_t, x, y) => {
             const dir = this.dropDirAt(x, y);
-            const valid = this.canMoveTo(dir);
-            this.highlightDrop(valid ? this.positionAtPoint(x, y) : -1);
+            const action = this.dropAction(dir);
+            this.highlightDrop(action ? this.positionAtPoint(x, y) : -1);
             this.scheduleExpand(x, y);
-            return valid ? Gdk.DragAction.MOVE : NO_ACTION;
+            return action;
         });
         target.connect('leave', () => {
             this.highlightDrop(-1);
             this.cancelExpand();
         });
-        target.connect('drop', (_t, _value, x, y) => {
+        target.connect('drop', (_t, value, x, y) => {
             this.cancelExpand();
             this.highlightDrop(-1);
-            const dir = this.dropDirAt(x, y);
-            return this.canMoveTo(dir) && this.moveTo(this.dragSource!, dir!);
+            return this.dropInto(value, this.dropDirAt(x, y));
         });
         this.list.add_controller(target);
     }
 
     private setupTitleDrop(box: Gtk.Box): void {
-        const target = new Gtk.DropTarget({ actions: Gdk.DragAction.MOVE });
-        target.set_gtypes([GObject.TYPE_STRING]);
+        const target = this.dropTarget();
         target.connect('motion', () => {
-            const valid = this.canMoveTo(this.root);
-            if (valid) box.add_css_class('side-drop'); else box.remove_css_class('side-drop');
-            return valid ? Gdk.DragAction.MOVE : NO_ACTION;
+            const action = this.dropAction(this.root);
+            if (action) box.add_css_class('side-drop'); else box.remove_css_class('side-drop');
+            return action;
         });
         target.connect('leave', () => box.remove_css_class('side-drop'));
-        target.connect('drop', () => {
+        target.connect('drop', (_t, value) => {
             box.remove_css_class('side-drop');
-            return this.canMoveTo(this.root) && this.moveTo(this.dragSource!, this.root!);
+            return this.dropInto(value, this.root);
         });
         box.add_controller(target);
+    }
+
+    // Accepts a path from our own drag (moved) and files from a file manager (copied).
+    private dropTarget(): Gtk.DropTarget {
+        const target = new Gtk.DropTarget({ actions: Gdk.DragAction.MOVE | Gdk.DragAction.COPY });
+        target.set_gtypes([Gdk.FileList.$gtype, GObject.TYPE_STRING]);
+        return target;
+    }
+
+    private dropAction(dir: string | null): Gdk.DragAction {
+        if (this.dragSource) return this.canMoveTo(dir) ? Gdk.DragAction.MOVE : NO_ACTION;
+        return dir ? Gdk.DragAction.COPY : NO_ACTION;
+    }
+
+    private dropInto(value: unknown, dir: string | null): boolean {
+        if (!dir) return false;
+        if (this.dragSource) return this.canMoveTo(dir) && this.moveTo(this.dragSource, dir);
+        const files = value instanceof Gdk.FileList ? value.get_files() : [];
+        return this.copyInto(files.map(f => f.get_path()).filter((p): p is string => !!p), dir);
     }
 
     // Highlight the target row with the selection; -1 = restore the highlight to the open file.
@@ -577,6 +593,27 @@ export class FileTree {
         if (dir !== this.root && this.dirStores.has(dir)) this.expand(dir);
         this.reveal(target);
         this.onMoved(source, target);
+        return true;
+    }
+
+    // Copy files from outside (a file manager) into dir. Only folders, Markdown files, and images
+    // are copied, since other files would not show in the tree.
+    copyInto(sources: string[], dir: string): boolean {
+        const accepted = sources.filter(p => isDirectory(p) || isMarkdownFile(p) || isImageFile(p));
+        let last: string | null = null;
+        try {
+            for (const source of accepted) last = copyEntry(source, dir);
+        } catch (e) {
+            this.dialogs.error((e as Error).message);
+        }
+        if (accepted.length < sources.length) {
+            const skipped = sources.filter(p => !accepted.includes(p)).map(p => GLib.path_get_basename(p)).join(', ');
+            this.dialogs.error(fmt(_('Only folders, Markdown files, and images can be added. Skipped: {names}'), { names: skipped }));
+        }
+        if (!last) return false;
+        this.refresh(dir);
+        if (dir !== this.root && this.dirStores.has(dir)) this.expand(dir);
+        this.reveal(last);
         return true;
     }
 

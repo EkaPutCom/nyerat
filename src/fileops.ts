@@ -68,6 +68,47 @@ export function moveEntry(source: string, destDir: string): string | null {
     return target;
 }
 
+// A free name in dir: the name itself, or "name (2).ext", "name (3).ext", … if it is taken.
+function freeName(dir: string, name: string): string {
+    if (!exists(join(dir, name))) return name;
+    const dot = name.lastIndexOf('.');
+    const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ''];
+    for (let n = 2; ; n++) {
+        const candidate = `${stem} (${n})${ext}`;
+        if (!exists(join(dir, candidate))) return candidate;
+    }
+}
+
+function copyRecursive(source: Gio.File, target: Gio.File): void {
+    if (source.query_file_type(Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, null) !== Gio.FileType.DIRECTORY) {
+        source.copy(target, Gio.FileCopyFlags.NOFOLLOW_SYMLINKS, null, null);
+        return;
+    }
+    target.make_directory(null);
+    const children = source.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, null);
+    let info: Gio.FileInfo | null;
+    while ((info = children.next_file(null))) {
+        copyRecursive(source.get_child(info.get_name()), target.get_child(info.get_name()));
+    }
+    children.close(null);
+}
+
+// Copy a file/folder (e.g. dropped from a file manager) into destDir. A name that is already
+// taken gets a number ("photo (2).png") instead of overwriting. Returns the new path.
+export function copyEntry(source: string, destDir: string): string {
+    const name = GLib.path_get_basename(source);
+    if (destDir === source || destDir.startsWith(`${source}/`)) {
+        throw new Error('A folder cannot be copied into itself.');
+    }
+    const target = join(destDir, freeName(destDir, name));
+    try {
+        copyRecursive(Gio.File.new_for_path(source), Gio.File.new_for_path(target));
+    } catch (e) {
+        throw new Error(`Failed to copy “${name}”: ${(e as Error).message}`);
+    }
+    return target;
+}
+
 // Path after source is moved to target: the path itself or what is inside it (if source is a folder).
 export function remapPath(path: string, source: string, target: string): string | null {
     if (path === source) return target;

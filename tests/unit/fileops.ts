@@ -1,7 +1,7 @@
 // File operation tests: create files/folders and move.
 
 import GLib from 'gi://GLib';
-import { createFile, createFolder, moveEntry, remapPath, renameEntry } from '../../src/fileops.js';
+import { copyEntry, createFile, createFolder, moveEntry, remapPath, renameEntry } from '../../src/fileops.js';
 import { section, test, eq, ok, tmp } from '../framework.js';
 
 const throws = (fn: () => unknown, part: string): void => {
@@ -58,6 +58,16 @@ export function fileOpsTests(): void {
         eq(renameEntry(at('r3.md'), 'r3.md'), null, 'same name');
         throws(() => renameEntry(at('r3.md'), 'r2'), 'already exists');
         throws(() => renameEntry(at('r3.md'), 'a/b'), '/');
+    });
+    test('copyEntry copies files and folders, numbering a name clash, and refuses into itself', () => {
+        createFolder(base, 'cp'); createFile(at('cp'), 'inside');
+        GLib.file_set_contents(at('pic.png'), 'x');
+        eq(copyEntry(at('pic.png'), at('cp')), at('cp', 'pic.png'), 'file');
+        eq(copyEntry(at('pic.png'), at('cp')), at('cp', 'pic (2).png'), 'clash');
+        ok(exists(at('pic.png')), 'the source stays');
+        eq(copyEntry(at('cp'), at('target')), at('target', 'cp'), 'folder');
+        ok(exists(at('target', 'cp', 'inside.md')) && exists(at('target', 'cp', 'pic (2).png')), 'folder contents');
+        throws(() => copyEntry(at('cp'), at('cp')), 'itself');
     });
     test('remapPath follows moves of files and folders', () => {
         eq(remapPath('/a/b.md', '/a/b.md', '/c/b.md'), '/c/b.md', 'file');

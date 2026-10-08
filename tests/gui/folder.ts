@@ -322,6 +322,24 @@ export function folderTests(c: GuiContext): void {
         ok(ft.moveTo(abs('z-empty', 'sub'), proj), 'move it back');
         eq(w.file, abs('sub', 'inner', 'd.md'), 'document path after the parent folder moved');
     });
+    test('files dropped from outside are copied in; a name clash gets a number; other types are skipped', () => {
+        errors.length = 0;
+        const outside = GLib.build_filenamev([tmp, 'outside']);
+        GLib.mkdir_with_parents(GLib.build_filenamev([outside, 'pics']), 0o755);
+        const img = GLib.build_filenamev([outside, 'photo.png']);
+        GLib.file_set_contents(img, 'png');
+        GLib.file_set_contents(GLib.build_filenamev([outside, 'pics', 'p.md']), '# P');
+        const pdf = GLib.build_filenamev([outside, 'doc.pdf']);
+        GLib.file_set_contents(pdf, 'pdf');
+        ok(ft.copyInto([img, GLib.build_filenamev([outside, 'pics']), pdf], abs('z-empty')), 'copyInto failed');
+        ok(GLib.file_test(img, GLib.FileTest.EXISTS), 'the source must stay');
+        ok(childNames(abs0('z-empty')).includes('photo.png'), 'the image row is missing');
+        ok(GLib.file_test(abs('z-empty', 'pics', 'p.md'), GLib.FileTest.EXISTS), 'the folder contents were not copied');
+        ok(!GLib.file_test(abs('z-empty', 'doc.pdf'), GLib.FileTest.EXISTS), 'the pdf must be skipped');
+        eq(errors.length, 1, 'one message about the skipped file');
+        ok(ft.copyInto([img], abs('z-empty')), 'second copy');
+        ok(childNames(abs0('z-empty')).includes('photo (2).png'), 'the clash did not get a number');
+    });
     buf.set_modified(false);
     w.file = null;
     ft.onOpenFile = openBefore;
