@@ -216,38 +216,6 @@ a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
       <a class="card" href="docs/history.html#agent-log"><div class="ico">▤</div><h3>The agent log</h3><p>A live timeline of every model round, the reasoning, the tool calls with their arguments and results, the tokens, and the duration.</p><span class="more">The agent log →</span></a>
       <a class="card" href="docs/orchestrator.html"><div class="ico">π</div><h3>The pi harness orchestrator</h3><p>A card marked <code>@pi</code> is worked on by the pi harness in another project repo. Answer its questions and permission requests straight from the card.</p><span class="more">The orchestrator →</span></a>
     </div>
-
-    <div class="row flip">
-      <div class="text">
-        <p class="eyebrow">You stay in control</p>
-        <h2>Every action can be checked first.</h2>
-        <ul>
-          <li>Read tools run right away; write tools only produce proposals</li>
-          <li>Only Markdown files in the work folder; names outside the folder, starting with a dot, or containing <code>..</code> are rejected</li>
-          <li>A file that changed since it was proposed is not overwritten; the agent is asked to propose again</li>
-          <li>Delete means to the Trash, and every application can be undone</li>
-          <li>The context switches decide which documents are sent to DeepSeek, with your own API key</li>
-          <li>Everything stays plain Markdown that can be diffed and committed to Git</li>
-        </ul>
-        <p class="sub" style="margin:18px 0 0">Not available yet: an automatic contradiction check, model providers other than DeepSeek, and a Nyerat agent that runs commands. <a href="docs/limitations.html">See the limitations</a>.</p>
-      </div>
-      <figure class="shot"><img src="assets/proposal-diff.png" width="860" height="620" loading="lazy" alt="The review window of an agent proposal: a one-line diff of the release date with the Reject and Apply buttons"><figcaption>The review window: the release date changes from 15 to 22 November</figcaption></figure>
-    </div>
-
-    <div class="row">
-      <div class="text">
-        <p class="eyebrow">Until verified</p>
-        <h2>Not passed the check, not finished.</h2>
-        <p class="sub" style="margin-bottom:18px">For work with several steps, the agent writes a plan that is visible in the panel, proposes its changes as one batch, and then rereads the real result.</p>
-        <ul>
-          <li>A plan whose steps are checked as there is progress</li>
-          <li>Checks for text that must be present or gone across the whole folder, the position of cards, and the Markdown structure</li>
-          <li>A batch can be undone, and interrupted work can be resumed</li>
-        </ul>
-        <p style="margin-top:18px"><a href="docs/work.html">Plans and verification →</a></p>
-      </div>
-      <figure class="shot"><img src="assets/work.gif" width="900" height="548" loading="lazy" alt="Animation of the agent recording a three-step plan, proposing a change batch, then verifying the result and marking every step done"><figcaption>The plan, the change batch, the verification, and then done and verified</figcaption></figure>
-    </div>
   </div>
 </section>
 
