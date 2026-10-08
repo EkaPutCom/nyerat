@@ -1,6 +1,6 @@
-// Tes kemampuan tindakan agent: alat sunting baru, hapus/pindah berkas, aksi kanban tambahan, persetujuan sebagian,
-// catatan pengguna, Urungkan (kebalikan perubahan), alat riwayat Git, dan verifikasi struktur. Tanpa GUI dan jaringan,
-// kecuali satu tes yang menjalankan git sungguhan di folder sementara.
+// Tests for agent action capabilities: new edit tools, delete/move files, extra kanban actions, partial approval,
+// user notes, Undo (the inverse of a change), Git history tools, and structure verification. Without a GUI and network,
+// except one test that runs real git in a temporary folder.
 
 import GLib from 'gi://GLib';
 import type { SourceFile } from '../../src/agent/context.js';
@@ -15,25 +15,25 @@ import { localLinks, newIssues, resolveLink, structureIssues } from '../../src/m
 import { agentGit } from '../../src/git.js';
 import { section, test, eq, ok, contains, settle, tmp } from '../framework.js';
 
-const NOTES = '---\njudul: rapat\n---\n# Rapat\n\nRilis 15 November.\nCatatan: 15 November final.\n';
-const PAPAN = '---\nkanban: true\n---\n\n## Rencana\n\n- [ ] Materi rilis\n\n## Dikerjakan\n\n## Selesai\n\n- [x] Pesan tempat\n';
-const base = (): SourceFile[] => [{ name: 'rapat.md', text: NOTES }, { name: 'papan.md', text: PAPAN }, { name: 'arsip/lama.md', text: '# Lama\n' }];
+const NOTES = '---\ntitle: meeting\n---\n# Meeting\n\nRelease November 15.\nNote: November 15 final.\n';
+const BOARD = '---\nkanban: true\n---\n\n## Plan\n\n- [ ] Release material\n\n## In Progress\n\n## Done\n\n- [x] Book venue\n';
+const base = (): SourceFile[] => [{ name: 'meeting.md', text: NOTES }, { name: 'board.md', text: BOARD }, { name: 'archive/old.md', text: '# Old\n' }];
 
 const planned = (name: string, args: object, files = base()): Change => {
-    const r = planChange(name, JSON.stringify({ alasan: 'uji', ...args }), files);
+    const r = planChange(name, JSON.stringify({ reason: 'test', ...args }), files);
     if (!r.ok) throw new Error(r.message);
     return r.change;
 };
 const refused = (name: string, args: object, files = base()): string => {
-    const r = planChange(name, JSON.stringify({ alasan: 'uji', ...args }), files);
-    ok(!r.ok, 'seharusnya ditolak');
+    const r = planChange(name, JSON.stringify({ reason: 'test', ...args }), files);
+    ok(!r.ok, 'should have been rejected');
     return r.ok ? '' : r.message;
 };
 
 const call = (name: string, args: unknown, id = name): ToolCall => ({ id, name, arguments: JSON.stringify(args) });
 const result = (toolCalls: ToolCall[] = []): ChatResult => ({ usage: null, cancelled: false, toolCalls, reasoning: '' });
 
-// Sesi dengan disk di memori; provider memutar daftar panggilan alat lalu menjawab. Pesan alat yang kembali dikumpulkan.
+// A session with an in-memory disk; the provider plays a list of tool calls and then answers. The tool messages that come back are collected.
 function harness(steps: ToolCall[][], answer: (changes: Change[]) => ProposalResult = () => ({ applied: true })) {
     const disk = new Map(base().map(f => [f.name, f.text]));
     const files = () => [...disk].map(([name, text]) => ({ name, text }));
@@ -54,9 +54,9 @@ function harness(steps: ToolCall[][], answer: (changes: Change[]) => ProposalRes
     const provider: Provider = { chat: async (req: ChatRequest) => {
         for (const m of req.messages) if (m.role === 'tool' && !replies.includes(m.content)) replies.push(m.content);
         if (n < steps.length) return result(steps[n++]);
-        req.onText('Selesai.'); return result();
+        req.onText('Done.'); return result();
     } };
-    const input = () => ({ question: 'Kerjakan', active: null, selection: '', files: files(), mentions: [], options: { activeDocument: true, selection: true, project: true }, budget: 8000 });
+    const input = () => ({ question: 'Do it', active: null, selection: '', files: files(), mentions: [], options: { activeDocument: true, selection: true, project: true }, budget: 8000 });
     return { disk, session, handlers, replies, run: () => settle(session.ask(input(), provider, 'fake', handlers)) };
 }
 function sync(disk: Map<string, string>, c: Change): void {
@@ -66,92 +66,92 @@ function sync(disk: Map<string, string>, c: Change): void {
 }
 
 export function agentActionTests(): void {
-    section('Agent: alat sunting dan berkas');
+    section('Agent: edit and file tools');
 
-    test('ubah_berkas semua=true mengganti setiap kemunculan; tanpa itu tetap menolak yang tidak unik', () => {
-        eq(planned('ubah_berkas', { nama: 'rapat', teks_lama: '15 November', teks_baru: '22 November', semua: true }).after, NOTES.replaceAll('15 November', '22 November'));
-        contains(refused('ubah_berkas', { nama: 'rapat', teks_lama: '15 November', teks_baru: '22 November' }), 'semua=true');
+    test('edit_file all=true replaces every occurrence; without it a non-unique one is still rejected', () => {
+        eq(planned('edit_file', { name: 'meeting', old_text: 'November 15', new_text: 'November 22', all: true }).after, NOTES.replaceAll('November 15', 'November 22'));
+        contains(refused('edit_file', { name: 'meeting', old_text: 'November 15', new_text: 'November 22' }), 'all=true');
     });
 
-    test('sisip_teks: awal setelah frontmatter, akhir, dan setelah baris dengan pengaman isi_baris', () => {
-        eq(planned('sisip_teks', { nama: 'rapat', posisi: 'awal', teks: '> Ringkasan' }).after, NOTES.replace('---\n# Rapat', '---\n> Ringkasan\n# Rapat'));
-        eq(planned('sisip_teks', { nama: 'rapat', posisi: 'akhir', teks: '- Tindak lanjut\n' }).after, `${NOTES}- Tindak lanjut\n`);
-        eq(planned('sisip_teks', { nama: 'rapat', posisi: 'setelah_baris', baris: 6, isi_baris: 'Rilis 15 November.', teks: 'Disetujui semua.' }).after,
-            NOTES.replace('Rilis 15 November.\n', 'Rilis 15 November.\nDisetujui semua.\n'));
-        contains(refused('sisip_teks', { nama: 'rapat', posisi: 'setelah_baris', baris: 5, isi_baris: 'Rilis 15 November.', teks: 'x' }), 'ada di baris 6');
-        contains(refused('sisip_teks', { nama: 'rapat', posisi: 'setelah_baris', baris: 99, isi_baris: 'x', teks: 'x' }), '"baris" harus');
-        contains(refused('sisip_teks', { nama: 'rapat', posisi: 'setelah_baris', baris: 6, teks: 'x' }), 'isi_baris');
-        contains(refused('sisip_teks', { nama: 'rapat', posisi: 'tengah', teks: 'x' }), 'posisi');
-        // Berkas tanpa baris baru di akhir: hanya sisipan di ujung yang menambahkannya.
-        const bare = [{ name: 'a.md', text: 'satu\ndua' }];
-        eq(planned('sisip_teks', { nama: 'a', posisi: 'akhir', teks: 'tiga' }, bare).after, 'satu\ndua\ntiga\n');
-        eq(planned('sisip_teks', { nama: 'a', posisi: 'awal', teks: 'nol' }, bare).after, 'nol\nsatu\ndua');
-        eq(planned('sisip_teks', { nama: 'a', posisi: 'akhir', teks: 'isi' }, [{ name: 'a.md', text: '' }]).after, 'isi\n');
+    test('insert_text: start after the frontmatter, end, and after a line with the line_text safeguard', () => {
+        eq(planned('insert_text', { name: 'meeting', position: 'start', text: '> Summary' }).after, NOTES.replace('---\n# Meeting', '---\n> Summary\n# Meeting'));
+        eq(planned('insert_text', { name: 'meeting', position: 'end', text: '- Follow-up\n' }).after, `${NOTES}- Follow-up\n`);
+        eq(planned('insert_text', { name: 'meeting', position: 'after_line', line: 6, line_text: 'Release November 15.', text: 'Approved by all.' }).after,
+            NOTES.replace('Release November 15.\n', 'Release November 15.\nApproved by all.\n'));
+        contains(refused('insert_text', { name: 'meeting', position: 'after_line', line: 5, line_text: 'Release November 15.', text: 'x' }), 'is on line 6');
+        contains(refused('insert_text', { name: 'meeting', position: 'after_line', line: 99, line_text: 'x', text: 'x' }), 'The "line" argument must');
+        contains(refused('insert_text', { name: 'meeting', position: 'after_line', line: 6, text: 'x' }), 'line_text');
+        contains(refused('insert_text', { name: 'meeting', position: 'middle', text: 'x' }), 'position');
+        // A file without a newline at the end: only an insertion at the end adds one.
+        const bare = [{ name: 'a.md', text: 'one\ntwo' }];
+        eq(planned('insert_text', { name: 'a', position: 'end', text: 'three' }, bare).after, 'one\ntwo\nthree\n');
+        eq(planned('insert_text', { name: 'a', position: 'start', text: 'zero' }, bare).after, 'zero\none\ntwo');
+        eq(planned('insert_text', { name: 'a', position: 'end', text: 'content' }, [{ name: 'a.md', text: '' }]).after, 'content\n');
     });
 
-    test('hapus_berkas dan pindah_berkas: bentuk usulan, nama tujuan aman, tujuan terpakai ditolak', () => {
-        const del = planned('hapus_berkas', { nama: 'arsip/lama' });
-        eq([del.kind, del.file, del.before, del.after], ['delete', 'arsip/lama.md', '# Lama\n', '']);
-        const move = planned('pindah_berkas', { nama: 'rapat', tujuan: 'arsip/rapat-okt' });
-        eq([move.kind, move.file, move.to, move.after], ['move', 'rapat.md', 'arsip/rapat-okt.md', NOTES]);
-        contains(refused('pindah_berkas', { nama: 'rapat', tujuan: '../luar' }), 'tidak valid');
-        contains(refused('pindah_berkas', { nama: 'rapat', tujuan: 'PAPAN.md' }), 'sudah ada');
-        contains(refused('pindah_berkas', { nama: 'rapat', tujuan: 'rapat.md' }), 'sama');
-        contains(refused('hapus_berkas', { nama: 'tidak-ada' }), 'tidak ditemukan');
+    test('delete_file dan move_file: the proposal shape, a safe destination name, a taken destination is rejected', () => {
+        const del = planned('delete_file', { name: 'archive/old' });
+        eq([del.kind, del.file, del.before, del.after], ['delete', 'archive/old.md', '# Old\n', '']);
+        const move = planned('move_file', { name: 'meeting', destination: 'archive/meeting-oct' });
+        eq([move.kind, move.file, move.to, move.after], ['move', 'meeting.md', 'archive/meeting-oct.md', NOTES]);
+        contains(refused('move_file', { name: 'meeting', destination: '../outside' }), 'not valid');
+        contains(refused('move_file', { name: 'meeting', destination: 'BOARD.md' }), 'already exists');
+        contains(refused('move_file', { name: 'meeting', destination: 'meeting.md' }), 'same');
+        contains(refused('delete_file', { name: 'nonexistent' }), 'was not found');
     });
 
-    test('ubah_kanban: ubah teks kartu, hapus kartu, dan kelola daftar; daftar berisi kartu tidak bisa dihapus', () => {
-        const kanban = (args: object) => planned('ubah_kanban', { nama: 'papan', ...args }).after;
-        contains(kanban({ aksi: 'ubah', kartu: 'Materi', teks_baru: 'Materi rilis v2 #penting' }), '- [ ] Materi rilis v2 #penting');
-        ok(!kanban({ aksi: 'hapus', kartu: 'Pesan tempat' }).includes('Pesan tempat'), 'kartu tidak terhapus');
-        contains(kanban({ aksi: 'tambah_daftar', daftar: 'Ditunda' }), '## Ditunda');
-        contains(kanban({ aksi: 'ganti_nama_daftar', daftar: 'Dikerjakan', teks_baru: 'Sedang jalan' }), '## Sedang jalan');
-        ok(!kanban({ aksi: 'hapus_daftar', daftar: 'Dikerjakan' }).includes('## Dikerjakan'), 'daftar kosong tidak terhapus');
-        contains(refused('ubah_kanban', { nama: 'papan', aksi: 'hapus_daftar', daftar: 'Rencana' }), 'masih berisi 1 kartu');
-        contains(refused('ubah_kanban', { nama: 'papan', aksi: 'tambah_daftar', daftar: 'selesai' }), 'sudah ada');
-        contains(refused('ubah_kanban', { nama: 'papan', aksi: 'ubah', kartu: 'Materi' }), 'teks_baru');
+    test('edit_kanban: change card text, delete a card, and manage lists; a list containing cards cannot be deleted', () => {
+        const kanban = (args: object) => planned('edit_kanban', { name: 'board', ...args }).after;
+        contains(kanban({ action: 'edit', card: 'Release', new_text: 'Release material v2 #important' }), '- [ ] Release material v2 #important');
+        ok(!kanban({ action: 'delete', card: 'Book venue' }).includes('Book venue'), 'the card was not deleted');
+        contains(kanban({ action: 'add_list', list: 'Postponed' }), '## Postponed');
+        contains(kanban({ action: 'rename_list', list: 'In Progress', new_text: 'Running' }), '## Running');
+        ok(!kanban({ action: 'delete_list', list: 'In Progress' }).includes('## In Progress'), 'the empty list was not deleted');
+        contains(refused('edit_kanban', { name: 'board', action: 'delete_list', list: 'Plan' }), 'still contains 1 cards');
+        contains(refused('edit_kanban', { name: 'board', action: 'add_list', list: 'done' }), 'already exists');
+        contains(refused('edit_kanban', { name: 'board', action: 'edit', card: 'Release' }), 'new_text');
     });
 
-    test('kebalikan perubahan dan pemeriksaan keadaan untuk tiap jenis', () => {
+    test('the inverse of a change and the state check for each kind', () => {
         const read = (files: Map<string, string>) => (f: string) => files.get(f) ?? null;
         const kinds: Change[] = [
-            { kind: 'create', file: 'baru.md', before: '', after: 'isi\n', reason: 'r' },
-            { kind: 'edit', file: 'a.md', before: 'lama\n', after: 'baru\n', reason: 'r' },
-            { kind: 'delete', file: 'a.md', before: 'lama\n', after: '', reason: 'r' },
-            { kind: 'move', file: 'a.md', to: 'b/a.md', before: 'lama\n', after: 'lama\n', reason: 'r' },
+            { kind: 'create', file: 'new.md', before: '', after: 'content\n', reason: 'r' },
+            { kind: 'edit', file: 'a.md', before: 'old\n', after: 'new\n', reason: 'r' },
+            { kind: 'delete', file: 'a.md', before: 'old\n', after: '', reason: 'r' },
+            { kind: 'move', file: 'a.md', to: 'b/a.md', before: 'old\n', after: 'old\n', reason: 'r' },
         ];
         for (const c of kinds) {
-            const disk = new Map(c.kind === 'create' ? [] : [['a.md', 'lama\n']]);
-            eq(changeState(c, read(disk)), 'before', `${c.kind} sebelum`);
+            const disk = new Map(c.kind === 'create' ? [] : [['a.md', 'old\n']]);
+            eq(changeState(c, read(disk)), 'before', `${c.kind} before`);
             eq(preflight(c, read(disk)), null, `${c.kind} preflight`);
             sync(disk, c);
-            eq(changeState(c, read(disk)), 'after', `${c.kind} sesudah`);
+            eq(changeState(c, read(disk)), 'after', `${c.kind} after`);
             const back = invertChange(c);
-            eq(preflight(back, read(disk)), null, `${c.kind} urungkan preflight`);
+            eq(preflight(back, read(disk)), null, `${c.kind} undo preflight`);
             sync(disk, back);
-            eq([...disk], c.kind === 'create' ? [] : [['a.md', 'lama\n']], `${c.kind} kembali`);
+            eq([...disk], c.kind === 'create' ? [] : [['a.md', 'old\n']], `${c.kind} restored`);
         }
-        contains(preflight(kinds[3], f => f === 'a.md' ? 'lama\n' : 'ada') ?? '', 'b/a.md sudah ada');
-        contains(preflight(kinds[1], () => 'disunting pengguna') ?? '', 'berubah sejak diusulkan');
+        contains(preflight(kinds[3], f => f === 'a.md' ? 'old\n' : 'present') ?? '', 'b/a.md already exists');
+        contains(preflight(kinds[1], () => 'edited by the user') ?? '', 'changed since it was proposed');
     });
 
-    test('paket: berkas yang dihapus/dipindah tidak boleh disentuh tindakan lain; hapus dan pindah bisa dipaket', () => {
-        const act = (alat: string, args: object) => ({ alat, argumen: JSON.stringify({ alasan: 'x', ...args }) });
-        const blocked = planBatch(JSON.stringify({ tindakan: [act('ubah_berkas', { nama: 'rapat', teks_lama: 'Rilis', teks_baru: 'Peluncuran' }), act('pindah_berkas', { nama: 'rapat', tujuan: 'arsip/rapat' })] }), base());
-        contains(blocked.error ?? '', 'dihapus atau dipindah');
-        const after = planBatch(JSON.stringify({ tindakan: [act('pindah_berkas', { nama: 'rapat', tujuan: 'arsip/rapat' }), act('ubah_berkas', { nama: 'arsip/rapat', teks_lama: 'Rilis', teks_baru: 'x' })] }), base());
-        contains(after.error ?? '', 'dihapus atau dipindah');
-        const ok2 = planBatch(JSON.stringify({ tindakan: [act('pindah_berkas', { nama: 'rapat', tujuan: 'arsip/rapat' }), act('hapus_berkas', { nama: 'arsip/lama' })] }), base());
+    test('batch: a deleted/moved file must not be touched by another action; delete and move can be batched', () => {
+        const act = (tool: string, args: object) => ({ tool, arguments: JSON.stringify({ reason: 'x', ...args }) });
+        const blocked = planBatch(JSON.stringify({ actions: [act('edit_file', { name: 'meeting', old_text: 'Release', new_text: 'Launch' }), act('move_file', { name: 'meeting', destination: 'archive/meeting' })] }), base());
+        contains(blocked.error ?? '', 'deleted or moved');
+        const after = planBatch(JSON.stringify({ actions: [act('move_file', { name: 'meeting', destination: 'archive/meeting' }), act('edit_file', { name: 'archive/meeting', old_text: 'Release', new_text: 'x' })] }), base());
+        contains(after.error ?? '', 'deleted or moved');
+        const ok2 = planBatch(JSON.stringify({ actions: [act('move_file', { name: 'meeting', destination: 'archive/meeting' }), act('delete_file', { name: 'archive/old' })] }), base());
         eq(ok2.changes.map(c => c.kind), ['move', 'delete']);
         const disk = new Map(base().map(f => [f.name, f.text]));
         eq(applyBatch(ok2.changes, { read: f => disk.get(f) ?? null, write: c => sync(disk, c), rollback: () => {} }), null);
-        eq([...disk.keys()].sort(), ['arsip/rapat.md', 'papan.md']);
+        eq([...disk.keys()].sort(), ['archive/meeting.md', 'board.md']);
     });
 
-    test('journal: pindah/hapus divalidasi, dipulihkan setelah interupsi, dan status diurungkan diterima', () => {
+    test('journal: move/delete are validated, recovered after an interruption, and the undone status is accepted', () => {
         const move: Change = { kind: 'move', file: 'a.md', to: 'b.md', before: 'x', after: 'x', reason: 'r' };
-        const ev = (changes: Change[], status: ActionEvent['status'] = 'proposed'): ActionEvent => ({ id: '1', question: 'q', tool: 'pindah_berkas', status, changes, summary: '', time: 't' });
-        eq(parseEvents([ev([move]), ev([{ ...move, to: '../luar.md' }]), ev([{ ...move, to: undefined }]), ev([move], 'reverted')]).length, 2);
+        const ev = (changes: Change[], status: ActionEvent['status'] = 'proposed'): ActionEvent => ({ id: '1', question: 'q', tool: 'move_file', status, changes, summary: '', time: 't' });
+        eq(parseEvents([ev([move]), ev([{ ...move, to: '../outside.md' }]), ev([{ ...move, to: undefined }]), ev([move], 'reverted')]).length, 2);
         const events = [ev([move]), ev([{ kind: 'delete', file: 'c.md', before: 'y', after: '', reason: 'r' }])];
         reconcileEvents(events, [{ name: 'b.md', text: 'x' }]);
         eq(events.map(e => e.status), ['applied', 'applied']);
@@ -160,135 +160,135 @@ export function agentActionTests(): void {
         eq(pending[0].status, 'interrupted');
     });
 
-    section('Agent: verifikasi struktur');
+    section('Agent: structure verification');
 
-    test('struktur: tabel, heading melompat/kosong, blok kode tidak ditutup; isi kode dan frontmatter diabaikan', () => {
-        const text = '---\njudul: x\n---\n# A\n### Lompat\n##\n\n| a | b |\n| - | - |\n| 1 |\n| 1 | 2 |\n\n```\n# bukan heading\n| x |\n';
+    test('structure: tables, skipped/empty headings, an unclosed code block; code contents and frontmatter are ignored', () => {
+        const text = '---\ntitle: x\n---\n# A\n### Jump\n##\n\n| a | b |\n| - | - |\n| 1 |\n| 1 | 2 |\n\n```\n# not a heading\n| x |\n';
         const issues = structureIssues(text).map(i => i.text);
-        ok(issues.some(t => t.includes('melompat dari H1 ke H3')), issues.join('\n'));
-        ok(issues.some(t => t.includes('heading kosong')), issues.join('\n'));
-        ok(issues.some(t => t.includes('1 sel, judul 2 kolom')), issues.join('\n'));
-        ok(issues.some(t => t.includes('tidak ditutup')), issues.join('\n'));
+        ok(issues.some(t => t.includes('jumps from H1 to H3')), issues.join('\n'));
+        ok(issues.some(t => t.includes('empty heading')), issues.join('\n'));
+        ok(issues.some(t => t.includes('1 cells, header has 2 columns')), issues.join('\n'));
+        ok(issues.some(t => t.includes('is not closed')), issues.join('\n'));
         eq(issues.length, 4, issues.join('\n'));
-        eq(structureIssues('## Mulai dari H2\n### Turun satu\n').length, 0);
+        eq(structureIssues('## Start from H2\n### Down one\n').length, 0);
     });
 
-    test('tautan lokal: diambil di luar kode, URL dan jangkar dilewati, path relatif diselesaikan', () => {
-        const links = localLinks('[a](../b.md#x) ![g](gambar.png) [web](https://x.id) [j](#atas) `[k](kode.md)` [s](<dengan%20spasi.md>)');
-        eq(links.map(l => l.target), ['../b.md', 'gambar.png', 'dengan spasi.md']);
-        eq(resolveLink('bab/satu.md', '../b.md'), 'b.md');
-        eq(resolveLink('satu.md', '../b.md'), null);
-        eq(newIssues([{ line: 1, key: 'x', text: '' }], [{ line: 9, key: 'x', text: '' }, { line: 10, key: 'x', text: 'baru' }]).map(i => i.text), ['baru']);
+    test('local links: taken outside code, URLs and anchors skipped, relative paths resolved', () => {
+        const links = localLinks('[a](../b.md#x) ![g](image.png) [web](https://x.id) [j](#top) `[k](code.md)` [s](<with%20space.md>)');
+        eq(links.map(l => l.target), ['../b.md', 'image.png', 'with space.md']);
+        eq(resolveLink('chapter/one.md', '../b.md'), 'b.md');
+        eq(resolveLink('one.md', '../b.md'), null);
+        eq(newIssues([{ line: 1, key: 'x', text: '' }], [{ line: 9, key: 'x', text: '' }, { line: 10, key: 'x', text: 'new' }]).map(i => i.text), ['new']);
     });
 
-    test('verifyWork: "*" mencari sisa teks di seluruh folder; struktur hanya menggagalkan masalah baru', () => {
-        const files = [{ name: 'a.md', text: 'Rilis 22 November\n' }, { name: 'b.md', text: 'masih 15 November\n[ke c](c.md)\n' }];
-        const v = verifyWork(JSON.stringify({ pemeriksaan: [{ berkas: '*', jenis: 'tidak_ada', teks: '15 November' }, { berkas: '*', jenis: 'ada', teks: '22 November' }] }), files);
+    test('verifyWork: "*" looks for leftover text in the whole folder; structure only fails new problems', () => {
+        const files = [{ name: 'a.md', text: 'Release November 22\n' }, { name: 'b.md', text: 'still November 15\n[to c](c.md)\n' }];
+        const v = verifyWork(JSON.stringify({ checks: [{ file: '*', kind: 'absent', text: 'November 15' }, { file: '*', kind: 'present', text: 'November 22' }] }), files);
         eq(v.checks.map(c => c.passed), [false, true]);
         contains(v.checks[0].label, 'b.md:1');
         const broken = '| a | b |\n| - | - |\n| 1 |\n';
-        const struct = (baseline: string | null) => verifyWork(JSON.stringify({ pemeriksaan: [{ berkas: 'b.md', jenis: 'struktur' }] }), [{ name: 'b.md', text: `${broken}[ke c](c.md)\n` }], () => baseline).checks[0];
+        const struct = (baseline: string | null) => verifyWork(JSON.stringify({ checks: [{ file: 'b.md', kind: 'structure' }] }), [{ name: 'b.md', text: `${broken}[to c](c.md)\n` }], () => baseline).checks[0];
         eq(struct(null).passed, false);
-        contains(struct(null).label, 'tautan ke "c.md"');
-        eq(struct(`${broken}[ke c](c.md)\n`).passed, true);
-        contains(struct(`${broken}[ke c](c.md)\n`).label, '2 masalah lama');
-        eq(struct('[ke c](c.md)\n').passed, false);
-        eq(verifyWork(JSON.stringify({ pemeriksaan: [{ berkas: 'a.md', jenis: 'ada' }] }), files).checks[0].label, 'Pemeriksaan tidak valid');
+        contains(struct(null).label, 'the link to "c.md"');
+        eq(struct(`${broken}[to c](c.md)\n`).passed, true);
+        contains(struct(`${broken}[to c](c.md)\n`).label, '2 old problems');
+        eq(struct('[to c](c.md)\n').passed, false);
+        eq(verifyWork(JSON.stringify({ checks: [{ file: 'a.md', kind: 'present' }] }), files).checks[0].label, 'Invalid check');
     });
 
-    section('Agent: persetujuan sebagian, catatan, dan verifikasi otomatis');
+    section('Agent: partial approval, notes, and automatic verification');
 
-    const act = (alat: string, args: object) => ({ alat, argumen: JSON.stringify({ alasan: 'x', ...args }) });
-    const pack = call('usulkan_paket', { tindakan: [
-        act('ubah_berkas', { nama: 'rapat', teks_lama: '15 November', teks_baru: '22 November', semua: true }),
-        act('ubah_kanban', { nama: 'papan', aksi: 'pindah', kartu: 'Materi', daftar: 'Dikerjakan' }),
-        act('hapus_berkas', { nama: 'arsip/lama' }),
+    const act = (tool: string, args: object) => ({ tool, arguments: JSON.stringify({ reason: 'x', ...args }) });
+    const pack = call('propose_batch', { actions: [
+        act('edit_file', { name: 'meeting', old_text: 'November 15', new_text: 'November 22', all: true }),
+        act('edit_kanban', { name: 'board', action: 'move', card: 'Release', list: 'In Progress' }),
+        act('delete_file', { name: 'archive/old' }),
     ] });
 
-    test('paket diterapkan sebagian: hanya berkas terpilih berubah, journal mencatat dua keputusan, model diberi tahu', () => {
-        const h = harness([[pack]], () => ({ applied: true, accepted: [0, 2], note: 'Papan biar saya atur sendiri' }));
+    test('a batch applied partly: only the chosen files change, the journal records two decisions, the model is told', () => {
+        const h = harness([[pack]], () => ({ applied: true, accepted: [0, 2], note: 'I will arrange the board myself' }));
         const r = h.run();
         eq(r.applied, 2);
-        contains(h.disk.get('rapat.md')!, '22 November');
-        eq(h.disk.get('papan.md'), PAPAN);
-        eq(h.disk.has('arsip/lama.md'), false);
-        eq(h.session.events.map(e => [e.status, e.changes.map(c => c.file)]), [['applied', ['rapat.md', 'arsip/lama.md']], ['rejected', ['papan.md']]]);
-        const reply = h.replies.find(m => m.includes('sebagian'))!;
-        contains(reply, 'Ditolak (jangan ulangi tanpa ditanya): papan.md');
-        contains(reply, 'Catatan pengguna: Papan biar saya atur sendiri');
+        contains(h.disk.get('meeting.md')!, 'November 22');
+        eq(h.disk.get('board.md'), BOARD);
+        eq(h.disk.has('archive/old.md'), false);
+        eq(h.session.events.map(e => [e.status, e.changes.map(c => c.file)]), [['applied', ['meeting.md', 'archive/old.md']], ['rejected', ['board.md']]]);
+        const reply = h.replies.find(m => m.includes('only part'))!;
+        contains(reply, 'Rejected (do not repeat without asking): board.md');
+        contains(reply, 'User note: I will arrange the board myself');
     });
 
-    test('usulan tunggal ditolak dengan catatan: catatan sampai ke model', () => {
-        const h = harness([[call('ubah_berkas', { nama: 'rapat', teks_lama: 'Rilis 15', teks_baru: 'Rilis 16', alasan: 'x' })]], () => ({ applied: false, note: 'Tanggalnya 22, bukan 16' }));
+    test('a single proposal rejected with a note: the note reaches the model', () => {
+        const h = harness([[call('edit_file', { name: 'meeting', old_text: 'Release November 15', new_text: 'Release November 16', reason: 'x' })]], () => ({ applied: false, note: 'The date is 22, not 16' }));
         h.run();
-        ok(h.replies.some(m => m.includes('Catatan pengguna: Tanggalnya 22, bukan 16')), h.replies.join('\n'));
+        ok(h.replies.some(m => m.includes('User note: The date is 22, not 16')), h.replies.join('\n'));
     });
 
-    test('verifikasi otomatis: berkas terhapus dicek tidak ada, struktur berkas yang diubah ikut diperiksa', () => {
-        const breakTable = call('sisip_teks', { nama: 'rapat', posisi: 'akhir', teks: '| a | b |\n| - | - |\n| 1 |', alasan: 'x' }, 's1');
-        const del = call('hapus_berkas', { nama: 'arsip/lama', alasan: 'x' }, 'h1');
-        const verify = call('verifikasi_pekerjaan', { pemeriksaan: [{ berkas: 'rapat.md', jenis: 'ada', teks: '| a | b |' }] });
-        const h = harness([[call('atur_pekerjaan', { tujuan: 'g', langkah: [{ teks: 'a', status: 'done' }], catatan: '' })], [breakTable], [del], [verify]]);
+    test('automatic verification: a deleted file is checked as absent, the structure of a changed file is checked too', () => {
+        const breakTable = call('insert_text', { name: 'meeting', position: 'end', text: '| a | b |\n| - | - |\n| 1 |', reason: 'x' }, 's1');
+        const del = call('delete_file', { name: 'archive/old', reason: 'x' }, 'h1');
+        const verify = call('verify_work', { checks: [{ file: 'meeting.md', kind: 'present', text: '| a | b |' }] });
+        const h = harness([[call('set_work', { goal: 'g', steps: [{ text: 'a', status: 'done' }], note: '' })], [breakTable], [del], [verify]]);
         h.run();
         const checks = h.session.work!.verification!.checks;
-        ok(checks.some(c => c.file === 'arsip/lama.md' && c.passed && c.label.includes('dihapus')), JSON.stringify(checks));
-        ok(checks.some(c => c.file === 'rapat.md' && !c.passed && c.label.includes('1 sel, judul 2 kolom')), JSON.stringify(checks));
+        ok(checks.some(c => c.file === 'archive/old.md' && c.passed && c.label.includes('deleted')), JSON.stringify(checks));
+        ok(checks.some(c => c.file === 'meeting.md' && !c.passed && c.label.includes('1 cells, header has 2 columns')), JSON.stringify(checks));
         eq(h.session.work!.status, 'paused');
     });
 
-    section('Agent: alat riwayat Git');
+    section('Agent: Git history tools');
 
-    test('parseGitCall memvalidasi commit dan berkas; formatGit merapikan log, diff, dan isi versi', () => {
-        eq(parseGitCall('riwayat_git', '{}'), { kind: 'log', file: null, limit: 15 });
-        eq(parseGitCall('riwayat_git', '{"berkas":"rencana.md","maks":500}'), { kind: 'log', file: 'rencana.md', limit: 50 });
-        for (const bad of ['--output=/tmp/x', 'main', 'abc', 'HEAD;rm']) contains(parseGitCall('lihat_commit', JSON.stringify({ commit: bad })) as string, 'tidak valid');
-        contains(parseGitCall('isi_versi', '{"commit":"HEAD~2","berkas":"../x.md"}') as string, 'tidak valid');
-        contains(parseGitCall('isi_versi', '{"commit":"HEAD"}') as string, 'wajib');
-        const log = formatGit({ kind: 'log', file: null, limit: 5 }, { ok: true, text: '\x1ea1b2c3d\x1f2026-10-01 10:00\x1fEka\x1fUndur rilis\n\nM\trencana.md\nR100\tlama.md\tarsip/lama.md\n' });
-        eq(log.content, 'a1b2c3d 2026-10-01 10:00 · Eka · Undur rilis\n  ubah rencana.md\n  pindah lama.md → arsip/lama.md');
-        eq(log.summary, '1 commit');
-        eq(formatGit({ kind: 'show', commit: 'HEAD', file: null }, { ok: true, text: 'a1b2 2026 · Eka · x\n' }).summary, 'tanpa perubahan');
-        eq(formatGit({ kind: 'file', commit: 'HEAD', file: 'a.md' }, { ok: true, text: 'satu\ndua\n' }).content, '[a.md pada HEAD, 2 baris]\n1│ satu\n2│ dua');
-        eq(formatGit({ kind: 'log', file: null, limit: 1 }, { ok: false, message: 'fatal: not a git repository' }).content, 'Folder kerja bukan repositori Git.');
+    test('parseGitCall validates the commit and file; formatGit tidies the log, diff, and file contents', () => {
+        eq(parseGitCall('git_log', '{}'), { kind: 'log', file: null, limit: 15 });
+        eq(parseGitCall('git_log', '{"file":"plan.md","max":500}'), { kind: 'log', file: 'plan.md', limit: 50 });
+        for (const bad of ['--output=/tmp/x', 'main', 'abc', 'HEAD;rm']) contains(parseGitCall('show_commit', JSON.stringify({ commit: bad })) as string, 'not valid');
+        contains(parseGitCall('file_at_commit', '{"commit":"HEAD~2","file":"../x.md"}') as string, 'not valid');
+        contains(parseGitCall('file_at_commit', '{"commit":"HEAD"}') as string, 'required');
+        const log = formatGit({ kind: 'log', file: null, limit: 5 }, { ok: true, text: '\x1ea1b2c3d\x1f2026-10-01 10:00\x1fEka\x1fPostpone release\n\nM\tplan.md\nR100\told.md\tarchive/old.md\n' });
+        eq(log.content, 'a1b2c3d 2026-10-01 10:00 · Eka · Postpone release\n  edit plan.md\n  move old.md → archive/old.md');
+        eq(log.summary, '1 commits');
+        eq(formatGit({ kind: 'show', commit: 'HEAD', file: null }, { ok: true, text: 'a1b2 2026 · Eka · x\n' }).summary, 'no changes');
+        eq(formatGit({ kind: 'file', commit: 'HEAD', file: 'a.md' }, { ok: true, text: 'one\ntwo\n' }).content, '[a.md at HEAD, 2 lines]\n1│ one\n2│ two');
+        eq(formatGit({ kind: 'log', file: null, limit: 1 }, { ok: false, message: 'fatal: not a git repository' }).content, 'The work folder is not a Git repository.');
     });
 
-    test('sesi: alat Git hanya ditawarkan bila ada handler; hasilnya kembali ke model', () => {
+    test('session: Git tools are only offered when there is a handler; the result goes back to the model', () => {
         const asked: GitRequest[] = [];
-        const h = harness([[call('riwayat_git', { berkas: 'rapat.md' })]]);
+        const h = harness([[call('git_log', { file: 'meeting.md' })]]);
         let tools: string[] = [];
-        h.handlers.git = async request => { asked.push(request); return { ok: true, text: '\x1ea1b2c3d\x1f2026-10-01 10:00\x1fEka\x1fUndur rilis\n\nM\trapat.md\n' }; };
+        h.handlers.git = async request => { asked.push(request); return { ok: true, text: '\x1ea1b2c3d\x1f2026-10-01 10:00\x1fEka\x1fPostpone release\n\nM\tmeeting.md\n' }; };
         const provider: Provider = { chat: async req => { tools = req.tools?.map(t => t.name) ?? tools; return result(); } };
         settle(h.session.ask({ question: 'q', active: null, selection: '', files: base(), mentions: [], options: { activeDocument: true, selection: true, project: true }, budget: 8000 }, provider, 'fake', h.handlers));
-        ok(tools.includes('riwayat_git') && tools.includes('isi_versi'), tools.join(','));
+        ok(tools.includes('git_log') && tools.includes('file_at_commit'), tools.join(','));
         h.run();
-        eq(asked, [{ kind: 'log', file: 'rapat.md', limit: 15 }]);
-        ok(h.replies.some(m => m.includes('Undur rilis')), h.replies.join('\n'));
+        eq(asked, [{ kind: 'log', file: 'meeting.md', limit: 15 }]);
+        ok(h.replies.some(m => m.includes('Postpone release')), h.replies.join('\n'));
         delete h.handlers.git;
         settle(h.session.ask({ question: 'q', active: null, selection: '', files: base(), mentions: [], options: { activeDocument: true, selection: true, project: true }, budget: 8000 }, provider, 'fake', h.handlers));
-        ok(!tools.includes('riwayat_git'), 'alat Git ditawarkan tanpa handler');
+        ok(!tools.includes('git_log'), 'Git tool offered without a handler');
     });
 
-    test('agentGit di repositori sungguhan: log, diff, dan isi versi terbatas pada Markdown tidak tersembunyi', () => {
+    test('agentGit in a real repository: log, diff, and file contents are limited to non-hidden Markdown', () => {
         const root = GLib.build_filenamev([tmp, 'git-agent']);
-        GLib.mkdir_with_parents(GLib.build_filenamev([root, '.rahasia']), 0o755);
+        GLib.mkdir_with_parents(GLib.build_filenamev([root, '.secret']), 0o755);
         const write = (name: string, text: string) => GLib.file_set_contents(GLib.build_filenamev([root, name]), text);
         const git = (...args: string[]) => {
-            const [okRun, , , status] = GLib.spawn_sync(root, ['git', '-c', 'user.name=Uji', '-c', 'user.email=uji@contoh.id', ...args], null, GLib.SpawnFlags.SEARCH_PATH, null);
-            ok(okRun && status === 0, `git ${args.join(' ')} gagal`);
+            const [okRun, , , status] = GLib.spawn_sync(root, ['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], null, GLib.SpawnFlags.SEARCH_PATH, null);
+            ok(okRun && status === 0, `git ${args.join(' ')} failed`);
         };
         git('init', '-q');
-        write('rencana.md', 'Rilis 15 November\n'); write('.rahasia/x.md', 'rahasia\n'); write('kode.txt', 'x\n');
-        git('add', '-A'); git('commit', '-qm', 'Awal');
-        write('rencana.md', 'Rilis 22 November\n'); write('.rahasia/x.md', 'rahasia 2\n');
-        git('commit', '-qam', 'Undur rilis');
+        write('plan.md', 'Release November 15\n'); write('.secret/x.md', 'secret\n'); write('code.txt', 'x\n');
+        git('add', '-A'); git('commit', '-qm', 'Initial');
+        write('plan.md', 'Release November 22\n'); write('.secret/x.md', 'secret 2\n');
+        git('commit', '-qam', 'Postpone release');
         const log = formatGit({ kind: 'log', file: null, limit: 10 }, settle(agentGit(root, { kind: 'log', file: null, limit: 10 })));
-        contains(log.content, 'Undur rilis');
-        contains(log.content, 'ubah rencana.md');
-        ok(!log.content.includes('rahasia') && !log.content.includes('kode.txt'), log.content);
+        contains(log.content, 'Postpone release');
+        contains(log.content, 'edit plan.md');
+        ok(!log.content.includes('secret') && !log.content.includes('code.txt'), log.content);
         const show = formatGit({ kind: 'show', commit: 'HEAD', file: null }, settle(agentGit(root, { kind: 'show', commit: 'HEAD', file: null })));
-        contains(show.content, '+Rilis 22 November');
-        ok(!show.content.includes('rahasia'), show.content);
-        const old = formatGit({ kind: 'file', commit: 'HEAD~1', file: 'rencana.md' }, settle(agentGit(root, { kind: 'file', commit: 'HEAD~1', file: 'rencana.md' })));
-        contains(old.content, '1│ Rilis 15 November');
+        contains(show.content, '+Release November 22');
+        ok(!show.content.includes('secret'), show.content);
+        const old = formatGit({ kind: 'file', commit: 'HEAD~1', file: 'plan.md' }, settle(agentGit(root, { kind: 'file', commit: 'HEAD~1', file: 'plan.md' })));
+        contains(old.content, '1│ Release November 15');
     });
 }

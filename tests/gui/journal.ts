@@ -7,7 +7,7 @@ import Adw from 'gi://Adw?version=1';
 import { section, test, eq, ok, tmp, optVal, settle as settlePromise } from '../framework.js';
 import { readTextFile } from '../../src/files.js';
 import { localDate } from '../../src/markdown/home.js';
-import { clock } from '../../src/markdown/jurnal.js';
+import { clock } from '../../src/markdown/journal.js';
 import { moveCard } from '../../src/markdown/kanban.js';
 import { readActivity } from '../../src/activity.js';
 import { AppSettings } from '../../src/settings.js';
@@ -20,7 +20,7 @@ import { promptDialog } from '../../src/ui/dialogs.js';
 import { descendants, widgetPixbuf } from '../widgets.js';
 import type { GuiContext } from './context.js';
 
-export function jurnalTests(c: GuiContext): void {
+export function journalTests(c: GuiContext): void {
     const { w, pump } = c;
 
     section('Jurnal');
@@ -209,8 +209,8 @@ export function jurnalTests(c: GuiContext): void {
         close(win);
     });
 
-    // --shot-jurnal=<prefix>: simpan <prefix>-jurnal.png, -jurnal-gelap.png, -beranda.png, -catat.png.
-    const shot = optVal('shot-jurnal');
+    // --shot-journal=<prefix>: simpan <prefix>-jurnal.png, -jurnal-gelap.png, -beranda.png, -catat.png.
+    const shot = optVal('shot-journal');
     if (!shot) return;
     const { win } = open({ width: 1100, height: 760, sidebar: true });
     settlePromise(win.openJournal()!);

@@ -1,4 +1,4 @@
-// Tes model inbox.
+// Inbox model tests.
 
 import { ageOf, captureItem, composeItem, deleteItem, isInbox, itemMeta, newInbox, parseInbox, serializeInbox, updateItem } from '../../src/markdown/inbox.js';
 import { isKanban } from '../../src/markdown/kanban.js';
@@ -8,59 +8,59 @@ import { INBOX } from '../fixtures.js';
 export function inboxModelTests(): void {
     section('Inbox (model)');
 
-    test('isInbox: hanya jika frontmatter memuat penanda inbox', () => {
-        eq([isInbox(INBOX), isInbox('# Biasa\n\n- a'), isInbox('---\njudul: a\n---\n\n- a'), isInbox('- a\n\ninbox: true'),
+    test('isInbox: only if the frontmatter contains the inbox marker', () => {
+        eq([isInbox(INBOX), isInbox('# Plain\n\n- a'), isInbox('---\ntitle: a\n---\n\n- a'), isInbox('- a\n\ninbox: true'),
             isInbox('---\nINBOX: "True"\n---'), isInbox('---\ninbox: false\n---'), isInbox('---\ninboxes: true\n---')],
             [true, false, false, false, true, false, false]);
-        ok(!isKanban(INBOX), 'inbox bukan kanban');
+        ok(!isKanban(INBOX), 'an inbox is not kanban');
     });
-    test('parseInbox: head, item, catatan, dan outro', () => {
+    test('parseInbox: head, items, notes, and outro', () => {
         const inbox = parseInbox(INBOX);
-        eq(inbox.head, ['---', 'inbox: true', '---', '', '# Inbox', '', 'Tempat menangkap ide.'], 'head');
-        eq(inbox.items.map(i => i.text), ['Ide SQLite #idea ➕ 2026-10-07 14:22', 'Baca artikel HIG #read #gnome ➕ 2026-10-07 13:32', 'Item tanpa waktu']);
-        eq(inbox.items[0].notes, ['catatan satu', '', 'catatan dua'], 'catatan item');
-        eq(inbox.outro, ['Penutup biasa'], 'outro');
+        eq(inbox.head, ['---', 'inbox: true', '---', '', '# Inbox', '', 'A place to capture ideas.'], 'head');
+        eq(inbox.items.map(i => i.text), ['SQLite idea #idea ➕ 2026-10-07 14:22', 'Read HIG article #read #gnome ➕ 2026-10-07 13:32', 'Item without time']);
+        eq(inbox.items[0].notes, ['note one', '', 'note two'], 'item notes');
+        eq(inbox.outro, ['Plain closing'], 'outro');
     });
-    test('serializeInbox(parseInbox(x)) = x untuk inbox baku', () => eq(serializeInbox(parseInbox(INBOX)), INBOX));
-    test('butir daftar di frontmatter bukan item', () => {
-        const text = '---\ninbox: true\ntags:\n- a\n- b\n---\n\n- satu\n';
+    test('serializeInbox(parseInbox(x)) = x for the standard inbox', () => eq(serializeInbox(parseInbox(INBOX)), INBOX));
+    test('list bullets in the frontmatter are not items', () => {
+        const text = '---\ninbox: true\ntags:\n- a\n- b\n---\n\n- one\n';
         const inbox = parseInbox(text);
-        eq(inbox.items.map(i => i.text), ['satu']);
-        eq(serializeInbox(inbox), text, 'frontmatter utuh');
+        eq(inbox.items.map(i => i.text), ['one']);
+        eq(serializeInbox(inbox), text, 'frontmatter intact');
     });
-    test('inbox baru ditulis dan dikenali lagi, tanpa item', () => {
+    test('a new inbox is written and recognized again, without items', () => {
         const text = serializeInbox(newInbox());
-        ok(isInbox(text), 'tidak dikenali');
+        ok(isInbox(text), 'not recognized');
         eq(parseInbox(text).items, []);
-        eq(serializeInbox(parseInbox(text)), text, 'stabil');
+        eq(serializeInbox(parseInbox(text)), text, 'stable');
     });
-    test('captureItem menyisipkan di atas dengan waktu tangkap, kecuali teks sudah memuatnya', () => {
+    test('captureItem inserts at the top with a capture time, unless the text already has one', () => {
         let inbox = parseInbox(INBOX);
-        inbox = captureItem(inbox, '  Ide baru #x  ', new Date(2026, 9, 8, 9, 5));
-        eq(inbox.items[0].text, 'Ide baru #x ➕ 2026-10-08 09:05', 'waktu lokal berformat dua digit');
+        inbox = captureItem(inbox, '  New idea #x  ', new Date(2026, 9, 8, 9, 5));
+        eq(inbox.items[0].text, 'New idea #x ➕ 2026-10-08 09:05', 'local time formatted with two digits');
         eq(inbox.items.length, 4);
-        eq(captureItem(inbox, 'sudah ➕ 2026-01-01 10:00', new Date()).items[0].text, 'sudah ➕ 2026-01-01 10:00', 'tidak ditimpa');
-        ok(captureItem(inbox, '   ', new Date()) === inbox, 'teks kosong diabaikan');
+        eq(captureItem(inbox, 'already ➕ 2026-01-01 10:00', new Date()).items[0].text, 'already ➕ 2026-01-01 10:00', 'not overwritten');
+        ok(captureItem(inbox, '   ', new Date()) === inbox, 'empty text is ignored');
     });
-    test('updateItem dan deleteItem tidak mengubah inbox asal', () => {
+    test('updateItem and deleteItem do not change the original inbox', () => {
         const a = parseInbox(INBOX);
-        const b = updateItem(a, 2, { text: 'Diubah' });
-        eq([a.items[2].text, b.items[2].text], ['Item tanpa waktu', 'Diubah']);
+        const b = updateItem(a, 2, { text: 'Changed' });
+        eq([a.items[2].text, b.items[2].text], ['Item without time', 'Changed']);
         const c = deleteItem(a, 0);
-        eq([a.items.length, c.items.length, c.items[0].text.startsWith('Baca')], [3, 2, true]);
+        eq([a.items.length, c.items.length, c.items[0].text.startsWith('Read')], [3, 2, true]);
     });
-    test('itemMeta: judul, tag, dan waktu tangkap', () => {
-        const m = itemMeta('Baca artikel HIG #read #gnome ➕ 2026-10-07 13:32');
-        eq([m.title, m.tags], ['Baca artikel HIG', ['read', 'gnome']]);
-        eq(m.captured?.getTime(), new Date(2026, 9, 7, 13, 32).getTime(), 'waktu');
-        eq(itemMeta('Hanya tanggal ➕ 2026-10-07').captured?.getTime(), new Date(2026, 9, 7, 0, 0).getTime(), 'tanpa jam');
-        eq(itemMeta('Tanpa waktu').captured, null);
+    test('itemMeta: title, tags, and capture time', () => {
+        const m = itemMeta('Read HIG article #read #gnome ➕ 2026-10-07 13:32');
+        eq([m.title, m.tags], ['Read HIG article', ['read', 'gnome']]);
+        eq(m.captured?.getTime(), new Date(2026, 9, 7, 13, 32).getTime(), 'time');
+        eq(itemMeta('Date only ➕ 2026-10-07').captured?.getTime(), new Date(2026, 9, 7, 0, 0).getTime(), 'without a time of day');
+        eq(itemMeta('Without time').captured, null);
     });
-    test('composeItem mempertahankan waktu tangkap yang lama', () => {
-        eq(composeItem(' Judul ', ['#a', 'b', ''], 'lama ➕ 2026-10-07 13:32'), 'Judul #a #b ➕ 2026-10-07 13:32');
-        eq(composeItem('Judul', []), 'Judul');
+    test('composeItem keeps the old capture time', () => {
+        eq(composeItem(' Title ', ['#a', 'b', ''], 'old ➕ 2026-10-07 13:32'), 'Title #a #b ➕ 2026-10-07 13:32');
+        eq(composeItem('Title', []), 'Title');
     });
-    test('ageOf: menit, jam, hari, lalu tanggal', () => {
+    test('ageOf: minutes, hours, days, then a date', () => {
         const now = new Date(2026, 9, 7, 15, 0);
         const ago = (min: number) => ageOf(new Date(now.getTime() - min * 60000), now);
         eq([ago(0), ago(10), ago(60), ago(150), ago(60 * 24 * 3), ago(60 * 24 * 8)],

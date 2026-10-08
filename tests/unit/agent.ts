@@ -32,15 +32,15 @@ Badai menghantam pada malam ketiga. Laras menyembunyikan surat itu di balik jake
 
 const BAB3 = `# Bab 3: Pulau
 
-Mereka menemukan pulau tanpa nama. Tidak ada yang tahu siapa pemiliknya.
+Mereka menemukan pulau tanpa name. Tidak ada yang tahu siapa pemiliknya.
 `;
 
-const FILES: SourceFile[] = [{ name: 'bab-1.md', text: BAB1 }, { name: 'bab-3.md', text: BAB3 }];
+const FILES: SourceFile[] = [{ name: 'chapter-1.md', text: BAB1 }, { name: 'chapter-3.md', text: BAB3 }];
 
 const input = (over: Partial<ContextInput> = {}): ContextInput => ({
     question: 'Apa yang terjadi pada surat Laras?',
     recent: [],
-    active: { name: 'bab-2.md', text: BAB2, cursorLine: 6 },
+    active: { name: 'chapter-2.md', text: BAB2, cursorLine: 6 },
     selection: '',
     files: FILES,
     mentions: [],
@@ -57,7 +57,7 @@ export function agentTests(): void {
     });
 
     test('splitChunks memotong per heading dengan jalur heading dan nomor baris', () => {
-        const chunks = splitChunks('bab-1.md', BAB1);
+        const chunks = splitChunks('chapter-1.md', BAB1);
         eq(chunks.map(c => c.heading), ['Bab 1: Pelabuhan', 'Bab 1: Pelabuhan › Pertemuan']);
         eq(chunks.map(c => [c.start, c.end]), [[0, 3], [4, 7]]);
         contains(chunks[1].text, 'Laras membawa surat');
@@ -78,10 +78,10 @@ export function agentTests(): void {
     });
 
     test('rankChunks menaruh potongan paling relevan di atas dan membuang yang tidak cocok', () => {
-        const chunks = [...splitChunks('bab-1.md', BAB1), ...splitChunks('bab-3.md', BAB3)];
-        const ranked = rankChunks(chunks, new Map(tokenize('pulau tanpa nama').map(t => [t, 1])));
+        const chunks = [...splitChunks('chapter-1.md', BAB1), ...splitChunks('chapter-3.md', BAB3)];
+        const ranked = rankChunks(chunks, new Map(tokenize('pulau tanpa name').map(t => [t, 1])));
         eq(ranked.length, 1);
-        eq(ranked[0].chunk.file, 'bab-3.md');
+        eq(ranked[0].chunk.file, 'chapter-3.md');
         eq(rankChunks(chunks, new Map([['zzz', 1]])).length, 0);
     });
 
@@ -104,35 +104,35 @@ export function agentTests(): void {
 
     test('potongan relevan dari berkas lain masuk ke konteks tambahan, yang tak relevan tidak', () => {
         const b = buildContext(input({ question: 'Siapa yang membawa surat dari ayahnya?' }));
-        contains(b.note, 'berkas="bab-1.md"');
+        contains(b.note, 'berkas="chapter-1.md"');
         contains(b.note, 'Laras membawa surat dari ayahnya');
-        ok(!b.note.includes('pulau tanpa nama'), 'potongan tak relevan ikut');
+        ok(!b.note.includes('pulau tanpa name'), 'potongan tak relevan ikut');
         ok(b.items.some(i => i.kind === 'excerpt'), 'item potongan tidak ada');
     });
 
     test('pertanyaan lanjutan memakai pertanyaan sebelumnya untuk mencari ("dan dia?")', () => {
-        const b = buildContext(input({ question: 'Lalu kenapa dia kecewa?', recent: ['Ceritakan tentang pulau tanpa nama'] }));
-        contains(b.note, 'bab-3.md');
+        const b = buildContext(input({ question: 'Lalu kenapa dia kecewa?', recent: ['Ceritakan tentang pulau tanpa name'] }));
+        contains(b.note, 'chapter-3.md');
     });
 
     test('pilihan dan posisi kursor ada di konteks tambahan', () => {
         const b = buildContext(input({ selection: 'Badai menghantam pada malam ketiga.' }));
         contains(b.note, '<pilihan>\nBadai menghantam pada malam ketiga.\n</pilihan>');
-        contains(b.note, 'bab-2.md, baris 7, bagian “Bab 2: Pelayaran › Badai”');
+        contains(b.note, 'chapter-2.md, baris 7, bagian “Bab 2: Pelayaran › Badai”');
     });
 
     test('@mention melampirkan berkas utuh; yang tidak dikenal dilaporkan', () => {
-        const b = buildContext(input({ question: 'Bandingkan dengan @bab-3 dan @hilang', mentions: ['bab-3', 'hilang'] }));
-        contains(b.note, '<berkas nama="bab-3.md">');
+        const b = buildContext(input({ question: 'Bandingkan dengan @chapter-3 dan @hilang', mentions: ['chapter-3', 'hilang'] }));
+        contains(b.note, '<berkas name="chapter-3.md">');
         eq(b.unknownMentions, ['hilang']);
         ok(b.items.some(i => i.kind === 'mention'), 'item lampiran tidak ada');
     });
 
     test('baris naskah bernomor di dokumen aktif, potongan, dan lampiran (nomor asli, termasuk pada jendela kursor)', () => {
-        const b = buildContext(input({ question: 'Siapa yang membawa surat dari ayahnya?', mentions: ['bab-3'] }));
+        const b = buildContext(input({ question: 'Siapa yang membawa surat dari ayahnya?', mentions: ['chapter-3'] }));
         contains(b.system, '7│ Badai menghantam pada malam ketiga.');
-        contains(b.note, '7│ Di dermaga, Raka bertemu Laras.');       // potongan dari bab-1: nomor baris di berkasnya
-        contains(b.note, '3│ Mereka menemukan pulau tanpa nama.');   // lampiran
+        contains(b.note, '7│ Di dermaga, Raka bertemu Laras.');       // potongan dari chapter-1: nomor baris di berkasnya
+        contains(b.note, '3│ Mereka menemukan pulau tanpa name.');   // lampiran
         contains(b.system, 'jangan ikut mengutipnya');
         const filler = Array.from({ length: 4000 }, (_, i) => `Baris ke-${i} di bab 99.`).join('\n');
         const w = buildContext(input({ active: { name: 'aktif.md', text: `# Aktif\n\n${filler}\n`, cursorLine: 2502 }, budget: 12_000 }));
@@ -143,8 +143,8 @@ export function agentTests(): void {
         const withTools = buildContext(input());
         const without = buildContext(input({ options: { activeDocument: true, selection: true, project: false } }));
         ok(!withTools.system.includes('@namaberkas') && !without.system.includes('@namaberkas'), 'instruksi masih menyarankan @namaberkas');
-        contains(withTools.system, 'cari_teks');
-        ok(!without.system.includes('cari_teks'), 'instruksi alat ada padahal alat tidak diberikan');
+        contains(withTools.system, 'search_text');
+        ok(!without.system.includes('search_text'), 'instruksi alat ada padahal alat tidak diberikan');
     });
 
     test('opsi dimatikan: tanpa dokumen aktif, pilihan, atau proyek', () => {
@@ -157,9 +157,9 @@ export function agentTests(): void {
 
     test('peta proyek memuat daftar berkas dengan heading dan menandai berkas yang dibuka', () => {
         const b = buildContext(input());
-        contains(b.system, '- bab-1.md · ');
+        contains(b.system, '- chapter-1.md · ');
         contains(b.system, 'Bab 1: Pelabuhan | Pertemuan');
-        contains(b.system, '- bab-2.md (sedang dibuka)');
+        contains(b.system, '- chapter-2.md (sedang dibuka)');
     });
 
     test('anggaran token tidak terlampaui pada buku besar; dokumen aktif dipotong di sekitar kursor', () => {
@@ -176,7 +176,7 @@ export function agentTests(): void {
         contains(b.note, 'Wicaksono');
     });
 
-    test('matchMention: nama lengkap, tanpa ekstensi, atau akhiran path; findMentions membaca @ di teks', () => {
+    test('matchMention: name lengkap, tanpa ekstensi, atau akhiran path; findMentions membaca @ di teks', () => {
         const files = [{ name: 'bab/01-awal.md', text: '' }, { name: 'catatan.md', text: '' }];
         eq(matchMention('catatan', files)?.name, 'catatan.md');
         eq(matchMention('@Catatan.MD', files)?.name, 'catatan.md');
@@ -210,8 +210,8 @@ export function agentTests(): void {
         eq(parseStreamLine('data: {"choices":[{"delta":{"content":"Halo"}}]}'), chunk({ text: 'Halo' }));
         eq(parseStreamLine('data: {"choices":[{"delta":{"reasoning_content":"hmm","content":null}}]}'), chunk({ reasoning: 'hmm' }));
         eq(parseStreamLine('data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":20,"prompt_cache_hit_tokens":64}}'), chunk({ usage: { prompt: 100, cached: 64, completion: 20 } }));
-        eq(parseStreamLine('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"cari_teks","arguments":"{\\"te"}}]}}]}'),
-            chunk({ tools: [{ index: 0, id: 'c1', name: 'cari_teks', arguments: '{"te' }] }));
+        eq(parseStreamLine('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"search_text","arguments":"{\\"te"}}]}}]}'),
+            chunk({ tools: [{ index: 0, id: 'c1', name: 'search_text', arguments: '{"te' }] }));
         eq(parseStreamLine('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ks\\":1}"}}]}}]}'),
             chunk({ tools: [{ index: 0, arguments: 'ks":1}' }] }));
         eq(parseStreamLine('data: [DONE]'), { kind: 'done' });
@@ -304,85 +304,85 @@ export function apiKeyTests(): void {
 
 export function toolTests(): void {
     const files: SourceFile[] = [
-        { name: 'bab-1.md', text: BAB1 },
-        { name: 'bab-2.md', text: BAB2 },
-        { name: 'bab-3.md', text: BAB3 },
+        { name: 'chapter-1.md', text: BAB1 },
+        { name: 'chapter-2.md', text: BAB2 },
+        { name: 'chapter-3.md', text: BAB3 },
         { name: 'catatan/tokoh.md', text: '# Tokoh\n\n- Laras: pembawa surat\n- Hasan: nakhoda\n' },
     ];
 
     section('Asisten: alat penelusuran');
 
-    test('daftar_berkas menyebut semua berkas beserta heading', () => {
-        const r = runTool('daftar_berkas', '', files);
-        contains(r.content, '- bab-1.md · ');
+    test('list_files menyebut semua berkas beserta heading', () => {
+        const r = runTool('list_files', '', files);
+        contains(r.content, '- chapter-1.md · ');
         contains(r.content, 'catatan/tokoh.md');
         contains(r.content, 'Bab 2: Pelayaran');
         eq(r.summary, '4 berkas');
     });
 
-    test('cari_teks: kemunculan persis dengan nama berkas dan nomor baris, tanpa membedakan huruf besar/kecil', () => {
-        const r = runTool('cari_teks', '{"teks":"laras"}', files);
-        contains(r.content, 'bab-1.md:7: Di dermaga, Raka bertemu Laras.');
-        contains(r.content, 'bab-2.md:7: Badai menghantam');
+    test('search_text: kemunculan persis dengan name berkas dan nomor baris, tanpa membedakan huruf besar/kecil', () => {
+        const r = runTool('search_text', '{"text":"laras"}', files);
+        contains(r.content, 'chapter-1.md:7: Di dermaga, Raka bertemu Laras.');
+        contains(r.content, 'chapter-2.md:7: Badai menghantam');
         contains(r.content, 'catatan/tokoh.md:3: - Laras: pembawa surat');
         eq(r.summary, '3 baris');
-        const only = runTool('cari_teks', '{"teks":"Laras","berkas":"bab-2"}', files);
-        ok(!only.content.includes('bab-1.md'), 'filter berkas diabaikan');
-        contains(runTool('cari_teks', '{"teks":"Zebua"}', files).content, 'tidak ditemukan');
+        const only = runTool('search_text', '{"text":"Laras","file":"chapter-2"}', files);
+        ok(!only.content.includes('chapter-1.md'), 'filter berkas diabaikan');
+        contains(runTool('search_text', '{"text":"Zebua"}', files).content, 'tidak ditemukan');
     });
 
-    test('cari_teks membatasi jumlah baris dan melaporkan sisanya', () => {
+    test('search_text membatasi jumlah baris dan melaporkan sisanya', () => {
         const many = [{ name: 'x.md', text: Array.from({ length: 100 }, (_, i) => `Raka ke-${i}`).join('\n') }];
-        const r = runTool('cari_teks', '{"teks":"raka"}', many);
+        const r = runTool('search_text', '{"text":"raka"}', many);
         contains(r.content, '100 baris memuat');
         contains(r.content, '60 kemunculan lagi tidak ditampilkan');
         eq(r.content.split('\n').filter(l => l.startsWith('x.md:')).length, 40);
     });
 
-    test('cari_dokumen mengembalikan potongan paling relevan beserta lokasinya', () => {
-        const r = runTool('cari_dokumen', '{"kueri":"pulau tanpa nama"}', files);
-        contains(r.content, '[bab-3.md › Bab 3: Pulau · baris 1–');
-        contains(r.content, 'pulau tanpa nama');
+    test('search_documents mengembalikan potongan paling relevan beserta lokasinya', () => {
+        const r = runTool('search_documents', '{"query":"pulau tanpa name"}', files);
+        contains(r.content, '[chapter-3.md › Bab 3: Pulau · baris 1–');
+        contains(r.content, 'pulau tanpa name');
         eq(r.summary, '1 potongan');
-        contains(runTool('cari_dokumen', '{"kueri":"zzz qqq"}', files).content, 'Tidak ada bagian naskah yang cocok');
+        contains(runTool('search_documents', '{"query":"zzz qqq"}', files).content, 'Tidak ada bagian naskah yang cocok');
     });
 
-    test('baca_berkas: bernomor baris, bisa per rentang, tahu total baris', () => {
-        const all = runTool('baca_berkas', '{"nama":"bab-3"}', files);
-        contains(all.content, '[bab-3.md, baris 1–');
+    test('read_file: bernomor baris, bisa per rentang, tahu total baris', () => {
+        const all = runTool('read_file', '{"name":"chapter-3"}', files);
+        contains(all.content, '[chapter-3.md, baris 1–');
         contains(all.content, '1│ # Bab 3: Pulau');
-        const part = runTool('baca_berkas', '{"nama":"bab-1.md","dari_baris":5,"sampai_baris":6}', files);
-        contains(part.content, '[bab-1.md, baris 5–6 dari ');
+        const part = runTool('read_file', '{"name":"chapter-1.md","from_line":5,"to_line":6}', files);
+        contains(part.content, '[chapter-1.md, baris 5–6 dari ');
         contains(part.content, '5│ ## Pertemuan');
         ok(!part.content.includes('1│'), 'baris di luar rentang ikut');
         eq(part.summary, 'baris 5–6');
     });
 
-    test('baca_berkas memotong berkas panjang dan menunjuk lanjutannya', () => {
+    test('read_file memotong berkas panjang dan menunjuk lanjutannya', () => {
         const long = [{ name: 'panjang.md', text: Array.from({ length: 5000 }, (_, i) => `Baris isi nomor ${i + 1} dengan kalimat yang cukup panjang.`).join('\n') }];
-        const r = runTool('baca_berkas', '{"nama":"panjang.md"}', long);
+        const r = runTool('read_file', '{"name":"panjang.md"}', long);
         ok(estimateTokens(r.content) < 6500, 'hasil melewati batas');
-        const next = /dari_baris=(\d+)/.exec(r.content);
+        const next = /from_line=(\d+)/.exec(r.content);
         ok(next, 'tidak ada petunjuk lanjutan');
-        contains(runTool('baca_berkas', `{"nama":"panjang.md","dari_baris":${next[1]}}`, long).content, `${next[1]}│ Baris isi`);
+        contains(runTool('read_file', `{"name":"panjang.md","from_line":${next[1]}}`, long).content, `${next[1]}│ Baris isi`);
     });
 
     test('galat dikembalikan sebagai teks yang bisa dipahami model, tidak melempar', () => {
-        contains(runTool('baca_berkas', '{"nama":"tokoh"}', files).content, '');   // "tokoh" cocok dengan catatan/tokoh.md lewat akhiran path
-        contains(runTool('baca_berkas', '{"nama":"tokoh"}', files).content, 'catatan/tokoh.md');
-        contains(runTool('baca_berkas', '{"nama":"bab-9"}', files).content, 'tidak ditemukan');
-        contains(runTool('baca_berkas', '{}', files).content, 'wajib');
-        contains(runTool('cari_teks', '{rusak', files).content, 'bukan JSON');
-        contains(runTool('hapus_berkas', '{}', files).content, 'tidak dikenal');
-        contains(runTool('daftar_berkas', '', []).content, 'Belum ada berkas');
+        contains(runTool('read_file', '{"name":"tokoh"}', files).content, '');   // "tokoh" cocok dengan catatan/tokoh.md lewat akhiran path
+        contains(runTool('read_file', '{"name":"tokoh"}', files).content, 'catatan/tokoh.md');
+        contains(runTool('read_file', '{"name":"chapter-9"}', files).content, 'tidak ditemukan');
+        contains(runTool('read_file', '{}', files).content, 'wajib');
+        contains(runTool('search_text', '{rusak', files).content, 'bukan JSON');
+        contains(runTool('delete_file', '{}', files).content, 'tidak dikenal');
+        contains(runTool('list_files', '', []).content, 'Belum ada berkas');
     });
 
     test('describeCall menyusun frasa antarmuka', () => {
-        eq(describeCall('cari_teks', '{"teks":"Hasan","berkas":"bab-2.md"}'), 'Mencari teks “Hasan” di bab-2.md');
-        eq(describeCall('baca_berkas', '{"nama":"bab-1.md","dari_baris":10}'), 'Membaca bab-1.md (dari baris 10)');
-        eq(describeCall('cari_dokumen', '{"kueri":"surat"}'), 'Mencari “surat”');
-        eq(describeCall('daftar_berkas', ''), 'Melihat daftar berkas');
-        eq(describeCall('cari_teks', '{rusak'), 'Mencari teks “”');
+        eq(describeCall('search_text', '{"text":"Hasan","file":"chapter-2.md"}'), 'Mencari teks “Hasan” di chapter-2.md');
+        eq(describeCall('read_file', '{"name":"chapter-1.md","from_line":10}'), 'Membaca chapter-1.md (dari baris 10)');
+        eq(describeCall('search_documents', '{"query":"surat"}'), 'Mencari “surat”');
+        eq(describeCall('list_files', ''), 'Melihat daftar berkas');
+        eq(describeCall('search_text', '{rusak'), 'Mencari teks “”');
     });
 
     section('Asisten: loop agen');
@@ -400,7 +400,7 @@ export function toolTests(): void {
                 snapshots.push([...req.messages]);
                 if (calls.length === 1) {
                     req.onText('Saya cek dulu.');
-                    return result({ toolCalls: [{ id: 'c1', name: 'cari_teks', arguments: '{"teks":"surat"}' }], reasoning: 'perlu mencari' });
+                    return result({ toolCalls: [{ id: 'c1', name: 'search_text', arguments: '{"text":"surat"}' }], reasoning: 'perlu mencari' });
                 }
                 req.onText('Laras.');
                 return result();
@@ -412,7 +412,7 @@ export function toolTests(): void {
         const streamed: string[] = [];
         const r = settle(session.ask(turn(), provider, 'm', { ...nohandlers, onText: d => streamed.push(d), onTool: s => steps.push({ ...s }) }));
         eq(calls.length, 2);
-        ok(calls[0].tools && calls[0].tools.some(t => t.name === 'baca_berkas'), 'alat tidak diberikan');
+        ok(calls[0].tools && calls[0].tools.some(t => t.name === 'read_file'), 'alat tidak diberikan');
         eq(calls[0].thinking, true);
         const second = snapshots[1];
         const assistant = second[second.length - 2];
@@ -422,7 +422,7 @@ export function toolTests(): void {
         eq((assistant as { reasoning?: string }).reasoning, 'perlu mencari');   // penalaran dikembalikan bersama panggilan alat
         eq(tool.role, 'tool');
         eq((tool as { toolCallId: string }).toolCallId, 'c1');
-        contains(tool.content, 'bab-1.md:7');
+        contains(tool.content, 'chapter-1.md:7');
         eq(steps.map(s => [s.id, s.summary === '' ? 'mulai' : 'selesai']), [['c1', 'mulai'], ['c1', 'selesai']]);
         eq(steps[0].label, 'Mencari teks “surat”');
         eq(streamed.join(''), 'Saya cek dulu.\n\nLaras.');
@@ -437,12 +437,12 @@ export function toolTests(): void {
         let seen = '';
         const provider: Provider = {
             async chat(req) {
-                if (req.tools) return result({ toolCalls: [{ id: 'c', name: 'baca_berkas', arguments: '{"nama":"bab-2.md"}' }] });
+                if (req.tools) return result({ toolCalls: [{ id: 'c', name: 'read_file', arguments: '{"name":"chapter-2.md"}' }] });
                 seen = req.messages[req.messages.length - 1].content;
                 return result();
             },
         };
-        settle(new ChatSession().ask(turn({ active: { name: 'bab-2.md', text: '# Bab 2\n\nVersi baru yang belum disimpan.\n', cursorLine: 0 } }), provider, 'm', nohandlers));
+        settle(new ChatSession().ask(turn({ active: { name: 'chapter-2.md', text: '# Bab 2\n\nVersi baru yang belum disimpan.\n', cursorLine: 0 } }), provider, 'm', nohandlers));
         contains(seen, 'Versi baru yang belum disimpan.');
     });
 
@@ -459,7 +459,7 @@ export function toolTests(): void {
             async chat(req) {
                 rounds++;
                 lastHadTools = !!req.tools;
-                if (req.tools) return result({ toolCalls: [{ id: `c${rounds}`, name: 'daftar_berkas', arguments: '' }] });
+                if (req.tools) return result({ toolCalls: [{ id: `c${rounds}`, name: 'list_files', arguments: '' }] });
                 req.onText('Cukup.');
                 return result();
             },
@@ -479,7 +479,7 @@ export function toolTests(): void {
             async chat(req) {
                 const last = req.messages[req.messages.length - 1];
                 if (last.role === 'tool') outcomes.push(last.content);
-                if (++n <= 3) return result({ toolCalls: [{ id: `c${n}`, name: 'baca_berkas', arguments: '{"nama":"besar.md"}' }] });
+                if (++n <= 3) return result({ toolCalls: [{ id: `c${n}`, name: 'read_file', arguments: '{"name":"besar.md"}' }] });
                 req.onText('selesai');
                 return result();
             },
@@ -502,8 +502,8 @@ export function toolTests(): void {
 
     test('toApiMessage: bentuk pesan di API (alat dan penalaran)', () => {
         eq(toApiMessage({ role: 'tool', toolCallId: 'c1', content: 'hasil' }), { role: 'tool', tool_call_id: 'c1', content: 'hasil' });
-        eq(toApiMessage({ role: 'assistant', content: '', reasoning: 'mikir', toolCalls: [{ id: 'c1', name: 'cari_teks', arguments: '{}' }] }),
-            { role: 'assistant', content: '', reasoning_content: 'mikir', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'cari_teks', arguments: '{}' } }] });
+        eq(toApiMessage({ role: 'assistant', content: '', reasoning: 'mikir', toolCalls: [{ id: 'c1', name: 'search_text', arguments: '{}' }] }),
+            { role: 'assistant', content: '', reasoning_content: 'mikir', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'search_text', arguments: '{}' } }] });
         eq(toApiMessage({ role: 'assistant', content: 'halo' }), { role: 'assistant', content: 'halo' });
         eq(toApiMessage({ role: 'user', content: 'tanya' }), { role: 'user', content: 'tanya' });
     });

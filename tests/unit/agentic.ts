@@ -14,15 +14,15 @@ import { section, test, eq, ok, contains, settle } from '../framework.js';
 const call = (name: string, args: unknown): ToolCall => ({ id: name, name, arguments: JSON.stringify(args) });
 const result = (toolCalls: ToolCall[] = []): ChatResult => ({ usage: null, cancelled: false, toolCalls, reasoning: '' });
 const goal = 'Sinkronkan tanggal rilis dan papan';
-const plan = (done: boolean) => call('atur_pekerjaan', { tujuan: goal, langkah: [{ teks: 'Sinkronkan rencana dan papan', status: done ? 'done' : 'pending' }], catatan: '' });
-const batch = call('usulkan_paket', { tindakan: [
-    { alat: 'ubah_berkas', argumen: JSON.stringify({ nama: 'rencana.md', teks_lama: '15 November', teks_baru: '22 November', alasan: 'Keputusan rapat' }) },
-    { alat: 'ubah_kanban', argumen: JSON.stringify({ nama: 'papan.md', aksi: 'pindah', kartu: 'Materi rilis', daftar: 'Dikerjakan', alasan: 'Mulai pengerjaan' }) },
+const plan = (done: boolean) => call('set_work', { destination: goal, langkah: [{ text: 'Sinkronkan rencana dan papan', status: done ? 'done' : 'pending' }], catatan: '' });
+const batch = call('propose_batch', { actions: [
+    { tool: 'edit_file', arguments: JSON.stringify({ name: 'rencana.md', old_text: '15 November', new_text: '22 November', reason: 'Keputusan rapat' }) },
+    { tool: 'edit_kanban', arguments: JSON.stringify({ name: 'papan.md', action: 'move', card: 'Materi rilis', list: 'Dikerjakan', reason: 'Mulai pengerjaan' }) },
 ] });
-const verify = call('verifikasi_pekerjaan', { pemeriksaan: [
-    { berkas: 'rencana.md', jenis: 'ada', teks: '22 November' },
-    { berkas: 'rencana.md', jenis: 'tidak_ada', teks: '15 November' },
-    { berkas: 'papan.md', jenis: 'kanban', teks: 'Materi rilis', daftar: 'Dikerjakan', selesai: false },
+const verify = call('verify_work', { checks: [
+    { file: 'rencana.md', kind: 'present', text: '22 November' },
+    { file: 'rencana.md', kind: 'absent', text: '15 November' },
+    { file: 'papan.md', kind: 'kanban', text: 'Materi rilis', list: 'Dikerjakan', done: false },
 ] });
 
 const initial = (): SourceFile[] => [{ name: 'rencana.md', text: '# Rencana\nRilis 15 November\n' },
@@ -92,7 +92,7 @@ export function agenticTests(): void {
         eq(r.applied, 2); eq(h.proposals(), 1);
         eq(h.session.work?.status, 'complete');
         const saved = parseChat(h.checkpoint());
-        eq(saved?.work?.status, 'complete'); eq(saved?.events?.find(e => e.tool === 'usulkan_paket')?.status, 'applied');
+        eq(saved?.work?.status, 'complete'); eq(saved?.events?.find(e => e.tool === 'propose_batch')?.status, 'applied');
         contains(h.disk.get('rencana.md')!, '22 November');
     });
     test('percakapan baru selama respons tertunda tidak dicampur dengan hasil pekerjaan lama', () => {
@@ -115,7 +115,7 @@ export function agenticTests(): void {
         h.run([[plan(false)], [batch], [plan(true)], [verify]]);
         eq(h.session.work?.verification?.passed, false); eq(h.session.work?.status, 'paused');
         const omitted = harness();
-        omitted.run([[plan(false)], [batch], [plan(true)], [call('verifikasi_pekerjaan', { pemeriksaan: [{ berkas: 'rencana.md', jenis: 'ada', teks: '22 November' }] })]]);
+        omitted.run([[plan(false)], [batch], [plan(true)], [call('verify_work', { checks: [{ file: 'rencana.md', kind: 'present', text: '22 November' }] })]]);
         eq(omitted.session.work?.verification?.passed, false);
     });
     test('paket ditolak tidak mengubah disk; keputusan tetap ada setelah pemulihan', () => {
@@ -144,7 +144,7 @@ export function agenticTests(): void {
         let n = 0;
         settle(restored.ask(h.input(), { chat: async req => {
             if (n++ === 0) {
-                ok(req.messages.some(m => m.content?.includes('Diterapkan: usulkan_paket')), 'hasil terdahulu tidak ada di konteks');
+                ok(req.messages.some(m => m.content?.includes('Diterapkan: propose_batch')), 'hasil terdahulu tidak ada di konteks');
                 eq(req.messages[req.messages.length - 1].content.includes(goal), true);
                 return result([plan(true), verify]);
             }

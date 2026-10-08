@@ -34,7 +34,7 @@ export async function liveAgentic(provider: Provider, model: string, thinking: b
             });
             const plan = readTextFile(path('rencana.md')), board = readTextFile(path('tugas.md'));
             let passed = proposals > 0 && readTextFile(path('rapat.md')) === original['rapat.md'];
-            if (decision === 'approve') passed &&= r.applied === 2 && session.events.some(e => e.tool === 'usulkan_paket' && e.status === 'applied') && session.work?.status === 'complete' && plan.includes('22 November') && !plan.includes('15 November') && board.includes('## Dikerjakan\n\n- [ ] Materi rilis');
+            if (decision === 'approve') passed &&= r.applied === 2 && session.events.some(e => e.tool === 'propose_batch' && e.status === 'applied') && session.work?.status === 'complete' && plan.includes('22 November') && !plan.includes('15 November') && board.includes('## Dikerjakan\n\n- [ ] Materi rilis');
             if (decision === 'reject') passed &&= r.applied === 0 && plan === original['rencana.md'] && board === original['tugas.md'] && session.work?.status !== 'complete';
             if (decision === 'conflict') passed &&= r.applied === 0 && plan === '# Disunting pengguna\n' && board === original['tugas.md'] && session.work?.status !== 'complete';
             print(`${passed ? GREEN : RED}${passed ? '✓' : '✗'} agentic ${decision}: ${proposals} usulan, ${r.applied} perubahan, status ${session.work?.status ?? 'tanpa rencana'}${RESET}`);

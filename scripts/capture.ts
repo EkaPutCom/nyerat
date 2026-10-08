@@ -462,7 +462,7 @@ function main(app: Adw.Application): void {
     w.chat.keyStore = { get: async () => ({ key: 'contoh', source: 'env' }), set: async () => 'env', clear: async () => {} };
     for (const dark of [false, true]) {
         w.chat.makeProvider = () => scripted([
-            [{ id: 'a', name: 'cari_teks', arguments: '{"teks":"Rilis publik"}' }, { id: 'b', name: 'baca_berkas', arguments: '{"nama":"rapat-1-okt"}' }],
+            [{ id: 'a', name: 'search_text', arguments: '{"teks":"Rilis publik"}' }, { id: 'b', name: 'read_file', arguments: '{"nama":"rapat-1-okt"}' }],
             ANSWER,
         ]);
         w.setDark(dark);
@@ -483,8 +483,8 @@ function main(app: Adw.Application): void {
     // ───────── Agent mengusulkan perubahan (jendela tinjau, lalu diterapkan) ─────────
     const idle = (ms: number) => { for (let i = 0; i < ms / 10; i++) { pump(); GLib.usleep(10000); } };
     w.chat.makeProvider = () => scripted([
-        [{ id: 'u1', name: 'ubah_berkas', arguments: JSON.stringify({ nama: 'rencana/peluncuran.md', teks_lama: '- Rilis publik: 15 November', teks_baru: '- Rilis publik: 22 November', alasan: 'Rapat 1 Oktober mengundur rilis publik ke 22 November.' }) }],
-        [{ id: 'u2', name: 'ubah_kanban', arguments: JSON.stringify({ nama: 'tugas.md', aksi: 'pindah', kartu: 'Siapkan materi rilis', daftar: 'Dikerjakan', alasan: 'Sari mulai menyiapkan materi rilis.' }) }],
+        [{ id: 'u1', name: 'edit_file', arguments: JSON.stringify({ nama: 'rencana/peluncuran.md', old_text: '- Rilis publik: 15 November', new_text: '- Rilis publik: 22 November', alasan: 'Rapat 1 Oktober mengundur rilis publik ke 22 November.' }) }],
+        [{ id: 'u2', name: 'edit_kanban', arguments: JSON.stringify({ nama: 'tugas.md', aksi: 'pindah', kartu: 'Siapkan materi rilis', daftar: 'Dikerjakan', alasan: 'Sari mulai menyiapkan materi rilis.' }) }],
         ANSWER_ACT,
     ], 'agent');
     const nextViewer = () => {
@@ -579,7 +579,7 @@ function main(app: Adw.Application): void {
     }
 
     // ───────── Zoom gambar ─────────
-    const picture = GLib.build_filenamev([GLib.get_current_dir(), 'tests/samples/gambar/contoh.png']);
+    const picture = GLib.build_filenamev([GLib.get_current_dir(), 'tests/samples/images/example.png']);
     load(`# Gambar\n\nKlik ganda gambar untuk memperbesarnya.\n\n![Contoh gambar](${picture})\n`, false, 4, false);
     idle(1200);
     cursorTo(4);
@@ -679,20 +679,20 @@ function main(app: Adw.Application): void {
     const steps = (...status: string[]) => ['Cari keputusan rapat yang belum masuk rencana', 'Perbarui rencana, papan, dan catatan rapat', 'Periksa hasilnya'].map((teks, i) => ({ teks, status: status[i] }));
     const goal = 'Sinkronkan jadwal rilis dengan keputusan rapat 1 Oktober';
     w.chat.makeProvider = () => scripted([
-        [tool('p1', 'atur_pekerjaan', { tujuan: goal, langkah: steps('done', 'pending', 'pending'), catatan: 'Rilis publik diundur ke 22 November.' })],
-        [tool('p2', 'usulkan_paket', { tindakan: [
-            { alat: 'ubah_berkas', argumen: JSON.stringify({ nama: 'rencana/peluncuran.md', teks_lama: '- Rilis publik: 15 November', teks_baru: '- Rilis publik: 22 November', alasan: 'Rapat 1 Oktober mengundur rilis publik.' }) },
-            { alat: 'ubah_kanban', argumen: JSON.stringify({ nama: 'tugas.md', aksi: 'pindah', kartu: 'Siapkan materi rilis', daftar: 'Dikerjakan', alasan: 'Sari mulai menyiapkan materi rilis.' }) },
-            { alat: 'sisip_teks', argumen: JSON.stringify({ nama: 'catatan/rapat-8-okt.md', posisi: 'akhir', teks: '\nRencana peluncuran sudah diperbarui ke 22 November.\n', alasan: 'Catat bahwa rencana sudah disinkronkan.' }) },
+        [tool('p1', 'set_work', { tujuan: goal, langkah: steps('done', 'pending', 'pending'), catatan: 'Rilis publik diundur ke 22 November.' })],
+        [tool('p2', 'propose_batch', { tindakan: [
+            { alat: 'edit_file', argumen: JSON.stringify({ nama: 'rencana/peluncuran.md', old_text: '- Rilis publik: 15 November', new_text: '- Rilis publik: 22 November', alasan: 'Rapat 1 Oktober mengundur rilis publik.' }) },
+            { alat: 'edit_kanban', argumen: JSON.stringify({ nama: 'tugas.md', aksi: 'pindah', kartu: 'Siapkan materi rilis', daftar: 'Dikerjakan', alasan: 'Sari mulai menyiapkan materi rilis.' }) },
+            { alat: 'insert_text', argumen: JSON.stringify({ nama: 'catatan/rapat-8-okt.md', posisi: 'akhir', teks: '\nRencana peluncuran sudah diperbarui ke 22 November.\n', alasan: 'Catat bahwa rencana sudah disinkronkan.' }) },
         ] })],
-        [tool('p3', 'atur_pekerjaan', { tujuan: goal, langkah: steps('done', 'done', 'pending'), catatan: 'Paket diterapkan.' })],
-        [tool('p4', 'verifikasi_pekerjaan', { pemeriksaan: [
+        [tool('p3', 'set_work', { tujuan: goal, langkah: steps('done', 'done', 'pending'), catatan: 'Paket diterapkan.' })],
+        [tool('p4', 'verify_work', { pemeriksaan: [
             { berkas: 'rencana/peluncuran.md', jenis: 'ada', teks: 'Rilis publik: 22 November' },
-            { berkas: '*', jenis: 'tidak_ada', teks: '15 November' },
+            { berkas: '*', jenis: 'absent', teks: '15 November' },
             { berkas: 'tugas.md', jenis: 'kanban', teks: 'Siapkan materi rilis #pemasaran @{2026-11-10}', daftar: 'Dikerjakan', selesai: false },
             { berkas: 'catatan/rapat-8-okt.md', jenis: 'ada', teks: 'sudah diperbarui ke 22 November' },
         ] })],
-        [tool('p5', 'atur_pekerjaan', { tujuan: goal, langkah: steps('done', 'done', 'done'), catatan: 'Semua pemeriksaan lulus.' })],
+        [tool('p5', 'set_work', { tujuan: goal, langkah: steps('done', 'done', 'done'), catatan: 'Semua pemeriksaan lulus.' })],
         'Selesai dan terverifikasi. Rencana memakai **22 November**, tanggal lama tidak tersisa di berkas mana pun, kartu *Siapkan materi rilis* ada di *Dikerjakan*, dan catatan rapat 8 Oktober mencatat pembaruannya.',
     ], 'pekerjaan');
     streamFrames = true;
@@ -737,8 +737,8 @@ function main(app: Adw.Application): void {
     w.setOption('sidebar', true);
     w.sidebar.setPage('history');
     w.chat.makeProvider = () => scripted([
-        [tool('g1', 'riwayat_git', { berkas: 'rencana.md' })],
-        [tool('g2', 'lihat_commit', { commit: 'HEAD', berkas: 'rencana.md' })],
+        [tool('g1', 'git_log', { berkas: 'rencana.md' })],
+        [tool('g2', 'show_commit', { commit: 'HEAD', berkas: 'rencana.md' })],
         'Tanggal **15 November** pertama kali masuk di commit *Perjelas tujuan dan tanggal* oleh Eka Putra; commit sebelumnya hanya menulis "Beta tertutup: Oktober". Baris *Evaluasi: 30 November* belum di-commit.',
     ]);
     w.chat.reset();

@@ -16,8 +16,8 @@ export function tabTests(c: GuiContext): void {
     GLib.mkdir_with_parents(dir, 0o755);
     const path = (name: string) => GLib.build_filenamev([dir, name]);
     const put = (name: string, text: string) => { GLib.file_set_contents(path(name), text); return path(name); };
-    const bab1 = put('bab-1.md', '# Bab Satu\n\nRaka berusia dua puluh tahun.\n');
-    const bab2 = put('bab-2.md', '# Bab Dua\n\n## Bagian\n\nIsi bab dua.\n');
+    const bab1 = put('chapter-1.md', '# Bab Satu\n\nRaka berusia dua puluh tahun.\n');
+    const bab2 = put('chapter-2.md', '# Bab Dua\n\n## Bagian\n\nIsi bab dua.\n');
     const papan = put('papan.md', '---\nkanban: true\n---\n\n## Rencana\n\n- [ ] Kartu\n');
     const settle = () => { for (let i = 0; i < 30; i++) { pump(); GLib.usleep(10000); } };
     const tabsShown = () => w.tabBar.widget.tabs_revealed;
@@ -44,7 +44,7 @@ export function tabTests(c: GuiContext): void {
         eq(w.file, bab2, 'file aktif');
         eq(w.editor.getText().startsWith('# Bab Dua'), true, 'isi tab aktif');
         eq(ed.getText().startsWith('# Bab Satu'), true, 'isi tab pertama');
-        eq(w.win.get_title(), 'bab-2.md — Nyerat', 'judul jendela');
+        eq(w.win.get_title(), 'chapter-2.md — Nyerat', 'judul jendela');
     });
     test('outline dan hitungan kata mengikuti tab aktif', () => {
         eq(w.outline.count, 2, 'heading bab 2');
@@ -147,7 +147,7 @@ export function tabTests(c: GuiContext): void {
         w.switchTab(-1); settle();
         eq(w.file, bab1, 'file aktif');
         w.setOption('autosave', false);
-        const other = w.chat.host.files().find(f => f.name === 'bab-2.md');
+        const other = w.chat.host.files().find(f => f.name === 'chapter-2.md');
         ok(other?.text.includes('BELUM-DISIMPAN'), 'asisten membaca versi di disk');
         // Bersihkan: tutup tab kedua tanpa menyimpan.
         w.switchTab(1); settle();
@@ -158,7 +158,7 @@ export function tabTests(c: GuiContext): void {
 
     // ---------- Pemulihan tab ----------
     section('Pemulihan tab');
-    const bab3 = put('bab-3.md', '# Bab Tiga\n\nBaris kedua.\n\nBaris ketiga yang dituju kursor.\n');
+    const bab3 = put('chapter-3.md', '# Bab Tiga\n\nBaris kedua.\n\nBaris ketiga yang dituju kursor.\n');
     const settingsFor = (extra: Partial<AppSettings>): AppSettings => AppSettings.inMemory({ welcomed: true, home: false, dark: false, autosave: false, ...extra });
     // Jendela kedua mendaftarkan ulang aksi aplikasi; hancurkan lalu kembalikan aksi ke jendela tes utama.
     const closeWindow = (win: MainWindow) => {
@@ -182,11 +182,11 @@ export function tabTests(c: GuiContext): void {
         w2.openFile(bab3); settle();
         w2.editor.restoreCursor(20); settle();
         w2.openFile(bab2); settle();
-        w2.switchTab(-1); settle();   // bab-3 aktif (urutan tab: bab-1, kosong, bab-3, bab-2)
+        w2.switchTab(-1); settle();   // chapter-3 aktif (urutan tab: chapter-1, kosong, chapter-3, chapter-2)
         ok(w2.onClose(), 'onClose() menolak menutup');
         eq(s.tabs.map(t => t.file), [bab1, bab3, bab2], 'tab tercatat');
         eq(s.activeTab, 1, 'tab aktif');
-        eq(s.tabs[1].cursor, 20, 'kursor bab-3');
+        eq(s.tabs[1].cursor, 20, 'kursor chapter-3');
         closeWindow(w2);
     });
     test('membuka tanpa argumen memulihkan tab, tab aktif, dan kursor', () => {
@@ -196,7 +196,7 @@ export function tabTests(c: GuiContext): void {
         eq(w2.file, bab3, 'tab aktif');
         eq(w2.editor.cursorOffset, 20, 'kursor tab aktif');
         ok(!w2.editor.buffer.get_modified(), 'dokumen dipulihkan ditandai berubah');
-        eq(opened(w2), [bab2, bab1, bab3], 'urutan tab');   // mulai dari tab sesudah bab-3
+        eq(opened(w2), [bab2, bab1, bab3], 'urutan tab');   // mulai dari tab sesudah chapter-3
         closeWindow(w2);
     });
     test('file yang hilang dilewati dan tidak dibuat ulang', () => {

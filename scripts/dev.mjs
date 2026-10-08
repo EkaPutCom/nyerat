@@ -1,15 +1,15 @@
-// npm run dev: build ulang + buka ulang aplikasi setiap ada file yang disimpan.
+// npm run dev: rebuild + reopen the app every time a file is saved.
 //
-// GJS tidak bisa memuat ulang kode yang sedang berjalan (tidak ada HMR seperti di
-// browser), jadi setiap build selesai aplikasinya ditutup lalu dibuka lagi.
-// Bersamaan dengan itu, `tsc --watch` memeriksa tipe dan melaporkan kesalahannya
-// di terminal yang sama (Vite sendiri tidak memeriksa tipe).
+// GJS cannot reload running code (there is no HMR like in a browser), so every time a
+// build finishes the app is closed and opened again.
+// At the same time, `tsc --watch` checks types and reports errors in the same terminal
+// (Vite itself does not check types).
 //
-// Argumen setelah `--` diteruskan ke aplikasi:
-//   npm run dev -- catatan.md
-//   npm run dev -- ~/catatan
+// Arguments after `--` are passed on to the app:
+//   npm run dev -- notes.md
+//   npm run dev -- ~/notes
 //
-// Perhatian: perubahan di editor yang belum disimpan hilang setiap aplikasi dibuka ulang.
+// Note: unsaved changes in the editor are lost every time the app is reopened.
 
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -23,23 +23,23 @@ const color = (code, text) => (process.stdout.isTTY ? `\x1b[${code}m${text}\x1b[
 const log = (tag, code, message) => console.log(`${color(code, `[${tag}]`)} ${message}`);
 const info = message => log('dev', 36, message);
 
-// ---------- Aplikasi ----------
+// ---------- App ----------
 
-let app = null;          // proses gjs yang sedang berjalan
+let app = null;          // the gjs process that is running
 let restarting = false;
 
 function startApp() {
     const child = spawn('gjs', ['-m', 'dist/nyerat.js', ...APP_ARGS], { cwd: ROOT, stdio: 'inherit' });
     app = child;
     child.on('exit', (code, signal) => {
-        if (app !== child) return;  // proses lama yang sengaja dihentikan saat restart
+        if (app !== child) return;  // old process that was deliberately stopped during restart
         app = null;
-        if (!restarting) info(`aplikasi ditutup (${signal ?? `kode ${code}`}); akan dibuka lagi setelah perubahan berikutnya`);
+        if (!restarting) info(`app closed (${signal ?? `code ${code}`}); it will be reopened after the next change`);
     });
-    child.on('error', error => info(`gagal menjalankan gjs: ${error.message}`));
+    child.on('error', error => info(`failed to run gjs: ${error.message}`));
 }
 
-// Hentikan aplikasi lama (jika ada) dan tunggu sampai benar-benar keluar.
+// Stop the old app (if any) and wait until it has really exited.
 function stopApp() {
     const child = app;
     if (!child) return Promise.resolve();
@@ -60,17 +60,17 @@ async function restartApp() {
     await stopApp();
     startApp();
     restarting = false;
-    info(wasRunning ? 'aplikasi dibuka ulang' : 'aplikasi dibuka');
+    info(wasRunning ? 'app reopened' : 'app opened');
 }
 
-// ---------- Pemeriksaan tipe ----------
+// ---------- Type checking ----------
 
-// detached: tsc berjalan di grup prosesnya sendiri, supaya saat berhenti seluruh
-// grup (npx beserta tsc yang dijalankannya) bisa dihentikan sekaligus.
+// detached: tsc runs in its own process group, so when stopping the whole
+// group (npx and the tsc it launched) can be stopped at once.
 const tsc = spawn('npx', ['tsc', '--noEmit', '--watch', '--preserveWatchOutput'],
     { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
 const prefixLines = stream => stream.on('data', chunk => {
-    for (const line of chunk.toString().split('\n')) if (line.trim()) log('tipe', 35, line);
+    for (const line of chunk.toString().split('\n')) if (line.trim()) log('type', 35, line);
 });
 prefixLines(tsc.stdout);
 prefixLines(tsc.stderr);
@@ -79,8 +79,8 @@ prefixLines(tsc.stderr);
 
 const watcher = await build({ root: ROOT, configFile: path.join(ROOT, 'vite.config.ts'), logLevel: 'warn', build: { watch: {} } });
 
-// Satu putaran build: START → BUNDLE_END atau ERROR → END. Vite tetap mengirim END
-// walaupun build gagal, jadi kegagalan dicatat dan aplikasi tidak dibuka ulang.
+// One build round: START → BUNDLE_END or ERROR → END. Vite still sends END
+// even when the build fails, so the failure is recorded and the app is not reopened.
 let failed = false;
 watcher.on('event', event => {
     if (event.code === 'START') {
@@ -89,26 +89,26 @@ watcher.on('event', event => {
     }
     if (event.code === 'BUNDLE_END') event.result?.close?.();
     if (event.code === 'ERROR') {
-        failed = true;  // detail error sudah dicetak Vite
+        failed = true;  // Vite already printed the error details
         event.result?.close?.();
     }
     if (event.code === 'END') {
-        if (failed) log('dev', 31, 'build gagal; aplikasi lama tetap berjalan');
+        if (failed) log('dev', 31, 'build failed; the old app keeps running');
         else restartApp();
     }
 });
 
-// ---------- Selesai (Ctrl+C) ----------
+// ---------- Exit (Ctrl+C) ----------
 
 let exiting = false;
 async function shutdown() {
     if (exiting) return;
     exiting = true;
-    info('berhenti');
+    info('stopping');
     try {
-        process.kill(-tsc.pid, 'SIGTERM');  // pid negatif = seluruh grup proses
+        process.kill(-tsc.pid, 'SIGTERM');  // negative pid = the whole process group
     } catch {
-        // sudah berhenti
+        // already stopped
     }
     await watcher.close();
     await stopApp();
@@ -117,4 +117,4 @@ async function shutdown() {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-info(`memantau perubahan di src/ dan tests/ (Ctrl+C untuk berhenti)${APP_ARGS.length ? `; argumen aplikasi: ${APP_ARGS.join(' ')}` : ''}`);
+info(`watching changes in src/ and tests/ (Ctrl+C to stop)${APP_ARGS.length ? `; app arguments: ${APP_ARGS.join(' ')}` : ''}`);

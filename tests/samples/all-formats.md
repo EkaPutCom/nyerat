@@ -63,11 +63,11 @@ Gambar dari internet: ![Logo GTK](https://www.gtk.org/assets/img/logo-gtk-sm.png
 
 Gambar lokal dengan path relatif:
 
-![gambar lokal](gambar/contoh.png)
+![gambar lokal](images/example.png)
 
-Gambar dengan judul: ![gambar lokal](gambar/contoh.png "Judul gambar")
+Gambar dengan judul: ![gambar lokal](images/example.png "Judul gambar")
 
-Dua gambar dalam satu baris: ![satu](gambar/contoh.png) ![dua](https://www.gtk.org/assets/img/logo-gtk-sm.png)
+Dua gambar dalam satu baris: ![satu](images/example.png) ![dua](https://www.gtk.org/assets/img/logo-gtk-sm.png)
 
 Gambar yang tidak ada: ![file hilang](gambar/tidak-ada.png)
 

@@ -1,21 +1,21 @@
-// Tes otomatis Nyerat. Dibundel Vite menjadi dist/run-tests.js.
+// Automated tests for Nyerat. Bundled by Vite into dist/run-tests.js.
 //
-//   npm test                                         build, lalu semua tes termasuk mouse di Xvfb
-//   npm run test:ui                                 build, lalu semua tes termasuk mouse di desktop
-//   gjs -m dist/run-tests.js --no-gui                hanya tes konversi Markdown → HTML
-//   gjs -m dist/run-tests.js --mouse                 tambah klik mouse sungguhan (pointer akan bergerak)
-//   gjs -m dist/run-tests.js --screenshot=a.png      simpan tangkapan layar jendela editor
-//   gjs -m dist/run-tests.js --shot-proposal=/tmp/p  simpan tangkapan jendela tinjau usulan agent (/tmp/p-<n>-tinjau.png dan -utama.png)
-//   gjs -m dist/run-tests.js --shot-inbox=/tmp/i     simpan tangkapan inbox terang/gelap (/tmp/i-terang.png, /tmp/i-gelap.png)
-//   gjs -m dist/run-tests.js --shot-harness=/tmp/h   simpan tangkapan papan dengan kartu pi bekerja/antre dan log pi (/tmp/h-papan.png, -log.png)
-//   gjs -m dist/run-tests.js --shot-tree-menu=/tmp/m  simpan tangkapan menu klik kanan pohon berkas dan papan kanban baru (/tmp/m-menu.png, -papan.png)
-//   gjs -m dist/run-tests.js --shot-wikilink=/tmp/w   simpan tangkapan saran [[catatan]] terang/gelap (/tmp/w-terang.png, -terang-saran.png, -gelap*.png)
-//   gjs -m dist/run-tests.js --shot-gnome=/tmp/g      simpan tangkapan jendela sempit, dialog pintasan, tema terang/gelap (/tmp/g-sempit.png, -pintasan.png, -terang.png, -gelap.png)
-//   gjs -m dist/run-tests.js --shot-home=/tmp/b       simpan tangkapan Beranda terang/gelap/sempit (/tmp/b-terang.png, -gelap.png, -sempit.png)
-//   gjs -m dist/run-tests.js --shot-jurnal=/tmp/j     simpan tangkapan jurnal terang/gelap, Beranda, dan dialog catat cepat (/tmp/j-jurnal.png, -jurnal-gelap.png, -beranda.png, -catat.png)
-//   gjs -m dist/run-tests.js --shot-due=/tmp/d        simpan tangkapan kalender tenggat dan dialog kartu terang/gelap (/tmp/d-kalender.png, -dialog.png, -dialog-gelap.png)
+//   npm test                                         build, then all tests including the mouse in Xvfb
+//   npm run test:ui                                 build, then all tests including the mouse on the desktop
+//   gjs -m dist/run-tests.js --no-gui                only the Markdown → HTML conversion tests
+//   gjs -m dist/run-tests.js --mouse                 add real mouse clicks (the pointer will move)
+//   gjs -m dist/run-tests.js --screenshot=a.png      save a screenshot of the editor window
+//   gjs -m dist/run-tests.js --shot-proposal=/tmp/p  save screenshots of the agent proposal review window (/tmp/p-<n>-review.png and -main.png)
+//   gjs -m dist/run-tests.js --shot-inbox=/tmp/i     save screenshots of the inbox light/dark (/tmp/i-light.png, /tmp/i-dark.png)
+//   gjs -m dist/run-tests.js --shot-harness=/tmp/h   save screenshots of the board with pi cards working/queued and the pi log (/tmp/h-board.png, -log.png)
+//   gjs -m dist/run-tests.js --shot-tree-menu=/tmp/m  save screenshots of the file tree right-click menu and a new kanban board (/tmp/m-menu.png, -board.png)
+//   gjs -m dist/run-tests.js --shot-wikilink=/tmp/w   save screenshots of [[note]] suggestions light/dark (/tmp/w-light.png, -light-suggest.png, -dark*.png)
+//   gjs -m dist/run-tests.js --shot-gnome=/tmp/g      save screenshots of the narrow window, shortcuts dialog, light/dark theme (/tmp/g-narrow.png, -shortcuts.png, -light.png, -dark.png)
+//   gjs -m dist/run-tests.js --shot-home=/tmp/b       save screenshots of Home light/dark/narrow (/tmp/b-light.png, -dark.png, -narrow.png)
+//   gjs -m dist/run-tests.js --shot-journal=/tmp/j     save screenshots of the journal light/dark, Home, and the quick capture dialog (/tmp/j-journal.png, -journal-dark.png, -home.png, -capture.png)
+//   gjs -m dist/run-tests.js --shot-due=/tmp/d        save screenshots of the due date calendar and the card dialog light/dark (/tmp/d-calendar.png, -dialog.png, -dialog-dark.png)
 //
-// Tes GUI membuka jendela sungguhan, jadi perlu sesi desktop (X11/Wayland).
+// GUI tests open real windows, so a desktop session (X11/Wayland) is needed.
 
 import Adw from 'gi://Adw?version=1';
 import GLib from 'gi://GLib';
@@ -35,7 +35,7 @@ import { tableTests } from './unit/table.js';
 import { kanbanModelTests } from './unit/kanban.js';
 import { inboxModelTests } from './unit/inbox.js';
 import { homeModelTests } from './unit/home.js';
-import { jurnalModelTests } from './unit/jurnal.js';
+import { journalModelTests } from './unit/journal.js';
 import { codeLanguageTests } from './unit/codelang.js';
 import { htmlTests } from './unit/html.js';
 import { dbmlTests } from './unit/dbml.js';
@@ -76,7 +76,7 @@ import { robustnessTests } from './gui/robust.js';
 import { historyTests } from './gui/history.js';
 import { tabTests } from './gui/tabs.js';
 import { homeTests } from './gui/home.js';
-import { jurnalTests } from './gui/jurnal.js';
+import { journalTests } from './gui/journal.js';
 
 setRoot(import.meta.url);
 
@@ -89,7 +89,7 @@ function runUnitTests(): void {
     kanbanModelTests();
     inboxModelTests();
     homeModelTests();
-    jurnalModelTests();
+    journalModelTests();
     codeLanguageTests();
     htmlTests();
     dbmlTests();
@@ -128,8 +128,8 @@ function runGuiTests(app: Adw.Application): void {
         c.w.win.destroy();
         return;
     }
-    if (opt('only-jurnal')) {
-        jurnalTests(c);
+    if (opt('only-journal')) {
+        journalTests(c);
         c.buf.set_modified(false);
         c.w.win.destroy();
         return;
@@ -164,8 +164,8 @@ function runGuiTests(app: Adw.Application): void {
     inboxTests(c);
     harnessTests(c);
     dialogTests(c);
-    // Tes folder membuat jendela lain dan mengganti aksi aplikasi. Periksa undo/redo
-    // mouse selagi aksi masih terhubung ke jendela konteks ini.
+    // The folder tests create another window and replace the app actions. Check undo/redo
+    // with the mouse while the actions are still connected to this context's window.
     if (opt('with-kanban-mouse')) kanbanMouseTests(c);
     folderTests(c);
     if (opt('with-kanban-mouse')) folderMouseTests(c);
@@ -175,7 +175,7 @@ function runGuiTests(app: Adw.Application): void {
     gnomeTests(c);
     tabTests(c);
     homeTests(c);
-    jurnalTests(c);
+    journalTests(c);
     historyTests(c);
     chatTests(c);
     robustnessTests(c);
@@ -187,26 +187,26 @@ function runGuiTests(app: Adw.Application): void {
         ed.view.scroll_to_iter(buf.get_start_iter(), 0, false, 0, 0);
         for (let i = 0; i < 20; i++) { pump(); GLib.usleep(20000); }
         widgetPixbuf(w.win)?.savev(shot, 'png', [], []);
-        print(`\n${DIM}Tangkapan layar: ${shot}${RESET}`);
+        print(`\n${DIM}Screenshot: ${shot}${RESET}`);
     }
 
     buf.set_modified(false);
     w.win.destroy();
 }
 
-// ───────────────────────── Jalankan ─────────────────────────
+// ───────────────────────── Run ─────────────────────────
 
 runUnitTests();
 
 if (opt('with-kanban-mouse') && opt('no-gui')) {
     recordFailure();
-    print(`${RED}Opsi tes mouse tidak bisa digabung dengan --no-gui.${RESET}`);
+    print(`${RED}The mouse test option cannot be combined with --no-gui.${RESET}`);
 }
 
 if (!opt('no-gui')) {
     if (!Gdk.Display.get_default() && !GLib.getenv('DISPLAY') && !GLib.getenv('WAYLAND_DISPLAY')) {
         if (opt('with-kanban-mouse')) recordFailure();
-        print(`\n${DIM}Tes GUI dilewati: tidak ada display.${RESET}`);
+        print(`\n${DIM}GUI tests skipped: there is no display.${RESET}`);
     } else {
         const app = new Adw.Application({ application_id: 'com.ekaput.Nyerat.Test', flags: Gio.ApplicationFlags.NON_UNIQUE });
         app.connect('activate', () => {
@@ -216,7 +216,7 @@ if (!opt('no-gui')) {
                     runGuiTests(app);
                 } catch (e) {
                     recordFailure();
-                    print(`${RED}Tes GUI berhenti: ${errorMessage(e)}${RESET}\n${e instanceof Error ? e.stack : ''}`);
+                    print(`${RED}GUI tests stopped: ${errorMessage(e)}${RESET}\n${e instanceof Error ? e.stack : ''}`);
                 }
                 app.release();
                 app.quit();
@@ -228,5 +228,5 @@ if (!opt('no-gui')) {
 }
 
 const { passed, failed } = summary();
-print(`\n${failed ? RED : GREEN}${passed} lulus, ${failed} gagal${RESET}`);
+print(`\n${failed ? RED : GREEN}${passed} passed, ${failed} failed${RESET}`);
 System.exit(failed ? 1 : 0);

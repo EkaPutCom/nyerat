@@ -430,7 +430,6 @@ export async function harnessTextDialog(parent: Gtk.Window | null, options: { ti
     const area = textArea();
     box.append(area.widget);
     GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { area.view.grab_focus(); return GLib.SOURCE_REMOVE; });
-    const accepted = await modalWindow(parent, options.title, 520, box, [_('Batal')
     const accepted = await modalWindow(parent, options.title, 520, box, [_('Cancel'), _('Send')], 0, 1, i => i === 0 || !!area.text().trim()) === 1;
     return accepted ? area.text().trim() : null;
 }

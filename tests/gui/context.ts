@@ -75,7 +75,7 @@ export function createContext(app: Adw.Application): GuiContext {
     pump();
     // Folder gambar uji (dibuat oleh tes Gambar) dan dokumen contoh.
     const imgDir = GLib.build_filenamev([tmp, 'gambar']);
-    const samplePath = GLib.build_filenamev([ROOT, 'tests', 'samples', 'semua-format.md']);
+    const samplePath = GLib.build_filenamev([ROOT, 'tests', 'samples', 'all-formats.md']);
     const images = () => ed.images.blocks;
     // Tunggu sampai semua gambar selesai dimuat.
     const waitImages = () => {

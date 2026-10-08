@@ -73,7 +73,7 @@ export class OverlaySlots {
         this.queued = 0;
     }
 
-    // Taruh slot di (x, y) koordinat buffer.
+    // Put the slot at (x, y) in buffer coordinates.
     place(slot: Gtk.Box, x: number, y: number): void {
         this.view.move_overlay(slot, x, y);
         slot.set_opacity(1);

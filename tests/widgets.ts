@@ -1,5 +1,5 @@
-// Pembantu tes GUI untuk GTK 4: tangkapan layar widget, menelusuri anak widget, dan memicu
-// klik tanpa mouse sungguhan. Juga dipakai scripts/capture.ts.
+// Helpers for GTK 4 GUI tests: widget screenshots, walking widget children, and triggering
+// clicks without a real mouse. Also used by scripts/capture.ts.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
@@ -7,12 +7,12 @@ import Graphene from 'gi://Graphene';
 import GdkX11 from 'gi://GdkX11?version=4.0';
 import type GdkPixbuf from 'gi://GdkPixbuf';
 
-// Tangkapan layar widget. GTK 4 tidak lagi memberi GdkWindow yang bisa dibaca pikselnya
-// (gdk_pixbuf_get_from_window); widget digambar ulang lewat GtkWidgetPaintable lalu
-// dirender jadi tekstur oleh renderer jendelanya.
+// Widget screenshot. GTK 4 no longer gives a GdkWindow whose pixels can be read
+// (gdk_pixbuf_get_from_window); the widget is redrawn through a GtkWidgetPaintable and then
+// rendered into a texture by its window's renderer.
 export function widgetPixbuf(widget: Gtk.Widget): GdkPixbuf.Pixbuf | null {
-    // Ukuran intrinsik paintable, bukan get_width(): jendela CSD lebih besar beberapa piksel
-    // (bingkainya), dan menggambarnya ke ukuran widget menyusutkan gambar sehingga garis 1 px hilang.
+    // The paintable's intrinsic size, not get_width(): a CSD window is a few pixels larger
+    // (its frame), and drawing it at the widget size shrinks the image so 1 px lines disappear.
     const paintable = new Gtk.WidgetPaintable({ widget });
     const width = paintable.get_intrinsic_width(), height = paintable.get_intrinsic_height();
     const renderer = widget.get_native()?.get_renderer();
@@ -25,15 +25,15 @@ export function widgetPixbuf(widget: Gtk.Widget): GdkPixbuf.Pixbuf | null {
     return Gdk.pixbuf_get_from_texture(renderer.render_texture(node, viewport));
 }
 
-// Semua keturunan widget (tanpa widget itu sendiri), urut kedalaman lebih dulu.
+// All descendants of a widget (without the widget itself), depth first.
 export function descendants(root: Gtk.Widget): Gtk.Widget[] {
     const result: Gtk.Widget[] = [];
     for (let child = root.get_first_child(); child; child = child.get_next_sibling()) result.push(child, ...descendants(child));
     return result;
 }
 
-// Picu klik tombol `button` pada widget lewat GestureClick-nya, seolah GTK menerima klik di (x, y).
-// count = klik ke berapa (2 = klik ganda). Melempar jika widget tidak punya penerima klik itu.
+// Trigger a click of button `button` on a widget through its GestureClick, as if GTK received a click at (x, y).
+// count = which click it is (2 = double click). Throws if the widget has no such click receiver.
 export function emitClick(widget: Gtk.Widget, count = 1, x = 1, y = 1, button = 1): void {
     const controllers = widget.observe_controllers();
     for (let i = 0; i < controllers.get_n_items(); i++) {
@@ -43,33 +43,33 @@ export function emitClick(widget: Gtk.Widget, count = 1, x = 1, y = 1, button = 
             return;
         }
     }
-    throw new Error(`widget ${widget.constructor.name} tidak punya GestureClick tombol ${button}`);
+    throw new Error(`widget ${widget.constructor.name} has no GestureClick for button ${button}`);
 }
 
-// Baris ListBox (tanpa placeholder, yang di GTK 4 juga anak ListBox).
+// ListBox rows (without the placeholder, which in GTK 4 is also a child of the ListBox).
 export function listRows(list: Gtk.ListBox): Gtk.ListBoxRow[] {
     const rows: Gtk.ListBoxRow[] = [];
     for (let row = list.get_row_at_index(0); row; row = list.get_row_at_index(rows.length)) rows.push(row);
     return rows;
 }
 
-// Titik (x, y) pada widget dalam koordinat layar X11, untuk menggerakkan pointer XTest ke sana.
-// GTK 4 tidak memberi posisi jendela di layar; posisinya ditanyakan ke server X lewat `toRoot`
-// (MouseInput.toRoot) dengan XID permukaan jendelanya.
+// The point (x, y) on a widget in X11 screen coordinates, to move the XTest pointer there.
+// GTK 4 gives no window position on screen; the position is asked from the X server through `toRoot`
+// (MouseInput.toRoot) with the XID of the window's surface.
 export function screenPoint(widget: Gtk.Widget, x: number, y: number, toRoot: (xid: number, x: number, y: number) => [number, number]): [number, number] {
     const native = widget.get_native();
-    if (!native) throw new Error('widget belum berada di jendela');
+    if (!native) throw new Error('the widget is not in a window yet');
     const [valid, nx, ny] = widget.translate_coordinates(native, x, y);
-    if (!valid) throw new Error('koordinat widget tidak bisa diterjemahkan');
-    // Jendela GTK 4 bisa berbayang (CSD): widget jendela tidak berada di pojok permukaannya.
+    if (!valid) throw new Error('the widget coordinates cannot be translated');
+    // A GTK 4 window can have a shadow (CSD): the window widget is not at the corner of its surface.
     const [sx, sy] = native.get_surface_transform();
     const surface = native.get_surface();
-    if (!(surface instanceof GdkX11.X11Surface)) throw new Error('tes mouse membutuhkan GDK_BACKEND=x11');
-    // Tipe @girs menyebut xlib.Window; saat runtime XID berupa angka.
+    if (!(surface instanceof GdkX11.X11Surface)) throw new Error('mouse tests require GDK_BACKEND=x11');
+    // The @girs types say xlib.Window; at runtime the XID is a number.
     return toRoot(surface.get_xid() as unknown as number, nx + sx, ny + sy);
 }
 
-// Hitung tekan/gerak/lepas tombol mouse yang sampai ke widget (sebelum ditangani anak/handler lain).
+// Count the mouse button press/motion/release that reach the widget (before being handled by children/other handlers).
 export function countPointerEvents(widget: Gtk.Widget): { presses: number; motions: number; releases: number; stop(): void } {
     const counts = { presses: 0, motions: 0, releases: 0, stop: () => widget.remove_controller(legacy) };
     const legacy = new Gtk.EventControllerLegacy({ propagation_phase: Gtk.PropagationPhase.CAPTURE });

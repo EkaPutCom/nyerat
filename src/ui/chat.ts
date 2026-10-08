@@ -59,8 +59,8 @@ const SUGGESTIONS = [
 
 const KIND_LABEL = { map: _('Map'), active: _('Document'), selection: _('Selection'), mention: _('Attachment'), excerpt: _('Excerpt') };
 
-const fmtTokens = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1).replace('.', ',')} rb` : `${n}`;
 const fmtTokens = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+
 const usageText = (u: Usage, toolCalls: number, applied = 0): string => [
     fmt(u.cached ? _('{prompt} in ({cached} from cache)') : _('{prompt} in'), { prompt: fmtTokens(u.prompt), cached: fmtTokens(u.cached) }),
     fmt(_('{completion} out'), { completion: fmtTokens(u.completion) }),

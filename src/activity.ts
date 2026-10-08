@@ -6,7 +6,7 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import { readTextFile, writeTextFile } from './files.js';
-import { parseActivity, serializeActivity, type Activity } from './markdown/jurnal.js';
+import { parseActivity, serializeActivity, type Activity } from './markdown/journal.js';
 import { localDate } from './markdown/home.js';
 
 const enc = new TextEncoder();

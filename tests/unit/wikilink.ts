@@ -1,4 +1,4 @@
-// Tes tautan [[catatan]] gaya Obsidian: penguraian, pencarian berkas, saran nama, penyorotan inline, dan ekspor HTML.
+// Tests for Obsidian-style [[note]] links: parsing, file lookup, name suggestions, inline highlighting, and HTML export.
 
 import { section, test, eq, ok, contains } from '../framework.js';
 import { newNotePath, noteSection, parseWikiLink, wikiLinksIn, resolveWikiLink, suggestNotes, wikiQuery, wikiTargetFor } from '../../src/markdown/wikilink.js';
@@ -6,93 +6,93 @@ import { parseInline } from '../../src/markdown/inline.js';
 import { cellMarkup, NOTE_URI } from '../../src/markdown/pango.js';
 import { body } from './helpers.js';
 
-const FILES = ['Ide.md', 'Jurnal/Catatan Harian.md', 'Jurnal/Ide.md', 'proyek/rencana-buku.md', 'proyek/sub/Bab 1.markdown', 'gambar.png'];
+const FILES = ['Idea.md', 'Journal/Daily Note.md', 'Journal/Idea.md', 'project/book-plan.md', 'project/sub/Chapter 1.markdown', 'image.png'];
 
 export function wikiLinkTests(): void {
-    section('Tautan [[catatan]]');
-    test('isi [[...]] diurai menjadi target, bagian, dan alias', () => {
-        eq(parseWikiLink('Catatan'), { target: 'Catatan', heading: '', alias: '' });
-        eq(parseWikiLink('Jurnal/Ide#Bagian Dua|lihat ide'), { target: 'Jurnal/Ide', heading: 'Bagian Dua', alias: 'lihat ide' });
-        eq(parseWikiLink('#Pembuka'), { target: '', heading: 'Pembuka', alias: '' });
+    section('[[note]] links');
+    test('the [[...]] contents are parsed into target, section, and alias', () => {
+        eq(parseWikiLink('Note'), { target: 'Note', heading: '', alias: '' });
+        eq(parseWikiLink('Journal/Idea#Section Two|see idea'), { target: 'Journal/Idea', heading: 'Section Two', alias: 'see idea' });
+        eq(parseWikiLink('#Intro'), { target: '', heading: 'Intro', alias: '' });
     });
-    test('target dicari menurut nama berkas tanpa ekstensi dan tanpa membedakan huruf besar', () => {
-        eq(resolveWikiLink('catatan harian', FILES, null), 'Jurnal/Catatan Harian.md');
-        eq(resolveWikiLink('Bab 1', FILES, null), 'proyek/sub/Bab 1.markdown');
-        eq(resolveWikiLink('rencana-buku.md', FILES, null), 'proyek/rencana-buku.md');
-        eq(resolveWikiLink('tidak ada', FILES, null), null);
-        eq(resolveWikiLink('gambar', FILES, null), null, 'berkas bukan Markdown');
+    test('the target is looked up by file name without extension and case-insensitively', () => {
+        eq(resolveWikiLink('daily note', FILES, null), 'Journal/Daily Note.md');
+        eq(resolveWikiLink('Chapter 1', FILES, null), 'project/sub/Chapter 1.markdown');
+        eq(resolveWikiLink('book-plan.md', FILES, null), 'project/book-plan.md');
+        eq(resolveWikiLink('nonexistent', FILES, null), null);
+        eq(resolveWikiLink('image', FILES, null), null, 'not a Markdown file');
     });
-    test('nama kembar: folder dokumen asal menang, lalu path terpendek; target berfolder dicocokkan dengan akhir path', () => {
-        eq(resolveWikiLink('Ide', FILES, 'Jurnal/Catatan Harian.md'), 'Jurnal/Ide.md');
-        eq(resolveWikiLink('Ide', FILES, 'proyek/rencana-buku.md'), 'Ide.md');
-        eq(resolveWikiLink('Ide', FILES, null), 'Ide.md');
-        eq(resolveWikiLink('jurnal/ide', FILES, null), 'Jurnal/Ide.md');
-        eq(resolveWikiLink('sub/Bab 1', FILES, null), 'proyek/sub/Bab 1.markdown');
+    test('duplicate names: the folder of the source document wins, then the shortest path; a target with a folder is matched against the end of the path', () => {
+        eq(resolveWikiLink('Idea', FILES, 'Journal/Daily Note.md'), 'Journal/Idea.md');
+        eq(resolveWikiLink('Idea', FILES, 'project/book-plan.md'), 'Idea.md');
+        eq(resolveWikiLink('Idea', FILES, null), 'Idea.md');
+        eq(resolveWikiLink('journal/idea', FILES, null), 'Journal/Idea.md');
+        eq(resolveWikiLink('sub/Chapter 1', FILES, null), 'project/sub/Chapter 1.markdown');
     });
-    test('catatan baru dibuat di samping dokumen asal; nama yang keluar folder atau tersembunyi ditolak', () => {
-        eq(newNotePath('Baru', 'Jurnal/Catatan Harian.md'), 'Jurnal/Baru.md');
-        eq(newNotePath('Baru', null), 'Baru.md');
-        eq(newNotePath('arsip/Lama', 'Jurnal/x.md'), 'arsip/Lama.md');
-        eq(newNotePath('Bab.markdown', null), 'Bab.markdown');
-        for (const bad of ['../luar', 'a/../b', '.rahasia', 'a//b', 'a:b', '  ']) eq(newNotePath(bad, null), null, bad);
+    test('a new note is created next to the source document; names that leave the folder or are hidden are rejected', () => {
+        eq(newNotePath('New', 'Journal/Daily Note.md'), 'Journal/New.md');
+        eq(newNotePath('New', null), 'New.md');
+        eq(newNotePath('archive/Old', 'Journal/x.md'), 'archive/Old.md');
+        eq(newNotePath('Chapter.markdown', null), 'Chapter.markdown');
+        for (const bad of ['../outside', 'a/../b', '.secret', 'a//b', 'a:b', '  ']) eq(newNotePath(bad, null), null, bad);
     });
-    test('saran memakai nama pendek bila unik, path bila kembar', () => {
-        eq(wikiTargetFor('Jurnal/Catatan Harian.md', FILES), 'Catatan Harian');
-        eq(wikiTargetFor('Jurnal/Ide.md', FILES), 'Jurnal/Ide');
+    test('a suggestion uses the short name if unique, the path if duplicate', () => {
+        eq(wikiTargetFor('Journal/Daily Note.md', FILES), 'Daily Note');
+        eq(wikiTargetFor('Journal/Idea.md', FILES), 'Journal/Idea');
     });
-    test('teks yang sedang diketik setelah [[ dikenali; [[ yang sudah ditutup, alias, bagian, dan kode tidak', () => {
-        eq(wikiQuery('lihat [[cat'), 'cat');
-        eq(wikiQuery('lihat [['), '');
-        eq(wikiQuery('lihat [[a]] lalu'), null);
-        eq(wikiQuery('[[a|teks'), null);
+    test('text being typed after [[ is recognized; a closed [[, alias, section, and code are not', () => {
+        eq(wikiQuery('see [[no'), 'no');
+        eq(wikiQuery('see [['), '');
+        eq(wikiQuery('see [[a]] then'), null);
+        eq(wikiQuery('[[a|text'), null);
         eq(wikiQuery('[[a#bag'), null);
-        eq(wikiQuery('`kode [[x'), null);
-        eq(wikiQuery('tanpa tautan'), null);
+        eq(wikiQuery('`code [[x'), null);
+        eq(wikiQuery('no link'), null);
     });
-    test('saran: awalan nama dulu, awalan kata, lalu potongan path; berkas bukan Markdown dilewati', () => {
-        eq(suggestNotes('ide', FILES), ['Ide.md', 'Jurnal/Ide.md']);
-        eq(suggestNotes('har', FILES), ['Jurnal/Catatan Harian.md']);
-        eq(suggestNotes('jurnal', FILES), ['Jurnal/Catatan Harian.md', 'Jurnal/Ide.md']);
+    test('suggestions: name prefix first, word prefix, then a path fragment; non-Markdown files are skipped', () => {
+        eq(suggestNotes('idea', FILES), ['Idea.md', 'Journal/Idea.md']);
+        eq(suggestNotes('dai', FILES), ['Journal/Daily Note.md']);
+        eq(suggestNotes('journal', FILES), ['Journal/Daily Note.md', 'Journal/Idea.md']);
         eq(suggestNotes('', FILES).length, 5);
-        eq(suggestNotes('', FILES, 2).length, 2, 'batas jumlah');
+        eq(suggestNotes('', FILES, 2).length, 2, 'count limit');
         eq(suggestNotes('zzz', FILES), []);
     });
-    test('penyorotan: hanya nama atau alias yang jadi tautan, kurung dan target alias disembunyikan', () => {
-        const r = parseInline('a [[Catatan]] b');
+    test('highlighting: only the name or alias becomes the link, the brackets and the alias target are hidden', () => {
+        const r = parseInline('a [[Note]] b');
         ok(r.tags.some(([n, s, e]) => n === 'link' && s === 4 && e === 11), JSON.stringify(r.tags));
         eq(r.marks, [[2, 4], [11, 13]]);
-        const alias = parseInline('[[Jurnal/Ide|ide lama]]');
+        const alias = parseInline('[[Journal/Idea|old idea]]');
         ok(alias.tags.some(([n, s, e]) => n === 'link' && s === 13 && e === 21), JSON.stringify(alias.tags));
         eq(alias.marks, [[0, 13], [21, 23]]);
     });
-    test('penyorotan: [[ ]] kosong, kode inline, dan isi tautan tidak diformat lagi', () => {
+    test('highlighting: empty [[ ]], inline code, and link contents are not formatted again', () => {
         eq(parseInline('[[ ]]').tags, []);
-        ok(!parseInline('`[[x]]`').tags.some(([n]) => n === 'link'), 'tautan di dalam kode');
-        ok(!parseInline('[[nama_file_ini]]').tags.some(([n]) => n === 'italic'), 'garis bawah jadi miring');
-        eq(parseInline('- [ ] tugas').tags, [], 'kotak tugas');
+        ok(!parseInline('`[[x]]`').tags.some(([n]) => n === 'link'), 'a link inside code');
+        ok(!parseInline('[[file_name_here]]').tags.some(([n]) => n === 'italic'), 'underscore became italic');
+        eq(parseInline('- [ ] task').tags, [], 'task box');
     });
-    test('ekspor HTML: [[catatan]] menjadi tautan ke berkas .md', () => {
-        contains(body('lihat [[Catatan Harian]]'), '<a class="wikilink" href="Catatan%20Harian.md">Catatan Harian</a>');
-        contains(body('[[Jurnal/Ide#Bagian Dua|ide]]'), '<a class="wikilink" href="Jurnal/Ide.md#bagian-dua">ide</a>');
-        contains(body('[[#Pembuka]]'), '<a class="wikilink" href="#pembuka">Pembuka</a>');
+    test('HTML export: [[note]] becomes a link to a .md file', () => {
+        contains(body('see [[Daily Note]]'), '<a class="wikilink" href="Daily%20Note.md">Daily Note</a>');
+        contains(body('[[Journal/Idea#Section Two|idea]]'), '<a class="wikilink" href="Journal/Idea.md#section-two">idea</a>');
+        contains(body('[[#Intro]]'), '<a class="wikilink" href="#intro">Intro</a>');
         contains(body('[[a<b]]'), '>a&lt;b</a>');
         contains(body('`[[x]]`'), '<code>[[x]]</code>');
     });
-    test('wikiLinksIn: urut kemunculan, tanpa duplikat, kode inline dilewati', () => {
+    test('wikiLinksIn: in order of appearance, without duplicates, inline code skipped', () => {
         eq(wikiLinksIn('[[A]] `[[B]]` [[a]] [[A#x]] [[C|c]]').map(l => `${l.target}#${l.heading}`), ['A#', 'A#x', 'C#']);
     });
-    test('noteSection mengambil bagian sampai heading setingkat berikutnya, melewati blok kode', () => {
-        const doc = '# Judul\n\n## Warna\n\nbiru\n\n```\n# bukan heading\n```\n\n### Sub\n\nisi\n\n## Lain\n\nx';
-        eq(noteSection(doc, 'warna'), '## Warna\n\nbiru\n\n```\n# bukan heading\n```\n\n### Sub\n\nisi');
+    test('noteSection takes the part up to the next heading of the same level, skipping code blocks', () => {
+        const doc = '# Title\n\n## Color\n\nblue\n\n```\n# not a heading\n```\n\n### Sub\n\ncontent\n\n## Other\n\nx';
+        eq(noteSection(doc, 'color'), '## Color\n\nblue\n\n```\n# not a heading\n```\n\n### Sub\n\ncontent');
         eq(noteSection(doc, 'Lain'), '## Lain\n\nx');
-        eq(noteSection(doc, 'tidak ada'), null);
+        eq(noteSection(doc, 'nonexistent'), null);
     });
-    test('markup kartu: [[catatan]] menjadi <a> yang bisa diklik, isi lain tetap', () => {
+    test('card markup: [[note]] becomes a clickable <a>, other content stays', () => {
         const colors = { code: '#c', codeBg: '#b', link: '#l', mark: '#m' };
-        const m = cellMarkup('Baca [[Spek#Warna|warna]] **cepat**', colors, true);
-        contains(m, `<a href="${NOTE_URI}Spek%23Warna%7Cwarna"><span foreground="#l" underline="single">warna</span></a>`);
-        contains(m, '<span font_weight="bold">cepat</span>');
-        ok(!cellMarkup('[[Spek]]', colors).includes('<a '), 'tanpa opsi tautan tidak jadi <a>');
-        ok(!cellMarkup('`[[Spek]]`', colors, true).includes('<a '), 'kode inline');
+        const m = cellMarkup('Read [[Spec#Color|color]] **fast**', colors, true);
+        contains(m, `<a href="${NOTE_URI}Spec%23Color%7Ccolor"><span foreground="#l" underline="single">color</span></a>`);
+        contains(m, '<span font_weight="bold">fast</span>');
+        ok(!cellMarkup('[[Spec]]', colors).includes('<a '), 'without the link option it does not become <a>');
+        ok(!cellMarkup('`[[Spec]]`', colors, true).includes('<a '), 'kode inline');
     });
 }

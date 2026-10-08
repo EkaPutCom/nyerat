@@ -4,7 +4,7 @@
 //   npm run test:live -- --thinking    dengan mode berpikir
 //   npm run test:live -- --model=deepseek-v4-pro
 //
-// Memakai naskah tests/samples/buku-contoh (sengaja berisi kontradiksi: usia Raka 17 vs 25, nama Hasan vs Hasyim,
+// Memakai naskah tests/samples/sample-book (sengaja berisi kontradiksi: usia Raka 17 vs 25, name Hasan vs Hasyim,
 // kapal putih vs hitam) dan menjalankan ChatSession + DeepSeek + alat penelusuran yang sama dengan aplikasi.
 // Key tidak pernah dicetak.
 
@@ -47,13 +47,13 @@ async function main(): Promise<boolean> {
         return false;
     }
 
-    const root = GLib.build_filenamev([ROOT, 'tests', 'samples', 'buku-contoh']);
+    const root = GLib.build_filenamev([ROOT, 'tests', 'samples', 'sample-book']);
     const book = readProject(root, null);
     if (!book.length) {
         print(`${RED}Naskah contoh tidak ditemukan di ${root}${RESET}`);
         return false;
     }
-    const activeName = 'bab-2.md';
+    const activeName = 'chapter-2.md';
     const activeText = book.find(f => f.name === activeName)!.text;
     const files = book.filter(f => f.name !== activeName);
 
@@ -86,7 +86,7 @@ async function main(): Promise<boolean> {
             if (r.toolCalls < sc.minTools) problems.push(`alat dipanggil ${r.toolCalls}x, harapan ≥ ${sc.minTools}`);
             for (const re of sc.mustMention) if (!re.test(r.text)) problems.push(`jawaban tidak menyebut ${re}`);
             if (sc.cite) {
-                // Kutipan lokasi seperti `bab-2.md:7` harus menunjuk baris yang benar-benar ada dan relevan (anti nomor karangan).
+                // Kutipan lokasi seperti `chapter-2.md:7` harus menunjuk baris yang benar-benar ada dan relevan (anti nomor karangan).
                 const cites = [...r.text.matchAll(/(bab-\d\.md)[:` ]*(?:baris\s*)?:?(\d+)/g)];
                 for (const [, name, n] of cites) {
                     const line = book.find(f => f.name === name)?.text.split('\n')[Number(n) - 1] ?? '';

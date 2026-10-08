@@ -1,4 +1,4 @@
-// Tes GUI: Dokumen contoh semua format (tests/samples/semua-format.md).
+// Tes GUI: Dokumen contoh semua format (tests/samples/all-formats.md).
 
 import { type TagName } from '../../src/editor/tags.js';
 import { readTextFile } from '../../src/files.js';
@@ -9,7 +9,7 @@ import type { GuiContext } from './context.js';
 export function sampleTests(c: GuiContext): void {
     const { w, ed, buf, pump, text, cursorTo, tagAt, samplePath } = c;
 
-    section('Dokumen contoh semua format (tests/samples/semua-format.md)');
+    section('Dokumen contoh semua format (tests/samples/all-formats.md)');
     const offsetOf = (needle: string) => {
         const t = text(), i = t.indexOf(needle);
         ok(i >= 0, `teks ${JSON.stringify(needle)} tidak ditemukan`);

@@ -39,10 +39,10 @@ export function chatTests(c: GuiContext): void {
 
     const book = GLib.build_filenamev([tmp, 'buku-asisten']);
     GLib.mkdir_with_parents(book, 0o755);
-    GLib.file_set_contents(GLib.build_filenamev([book, 'bab-1.md']), '# Bab 1\n\nRaka bertemu Laras di dermaga. Laras membawa surat dari ayahnya.\n');
-    GLib.file_set_contents(GLib.build_filenamev([book, 'bab-2.md']), '# Bab 2\n\nBadai menghantam kapal.\n');
+    GLib.file_set_contents(GLib.build_filenamev([book, 'chapter-1.md']), '# Bab 1\n\nRaka bertemu Laras di dermaga. Laras membawa surat dari ayahnya.\n');
+    GLib.file_set_contents(GLib.build_filenamev([book, 'chapter-2.md']), '# Bab 2\n\nBadai menghantam kapal.\n');
     w.openFolder(book, false);
-    w.load(GLib.build_filenamev([book, 'bab-2.md']));
+    w.load(GLib.build_filenamev([book, 'chapter-2.md']));
     pump();
 
     const labels = (): string[] => {
@@ -101,10 +101,10 @@ export function chatTests(c: GuiContext): void {
         const [system, user] = [seen[0].messages[0].content, seen[0].messages[1].content];
         contains(system, 'Laras menyembunyikan surat');                   // dokumen aktif (isi buffer)
         contains(user, '<pilihan>\nBadai menghantam kapal.\n</pilihan>');
-        contains(user, 'berkas="bab-1.md"');                               // potongan relevan dari berkas lain
+        contains(user, 'berkas="chapter-1.md"');                               // potongan relevan dari berkas lain
         contains(user, 'Laras membawa surat dari ayahnya');
-        contains(system, '- bab-1.md · ');                                 // peta proyek memuat berkas lain
-        ok(!system.includes('bab-2.md · '), 'berkas aktif seharusnya di peta sebagai "sedang dibuka"');
+        contains(system, '- chapter-1.md · ');                                 // peta proyek memuat berkas lain
+        ok(!system.includes('chapter-2.md · '), 'berkas aktif seharusnya di peta sebagai "sedang dibuka"');
     });
 
     test('jawaban tampil sebagai markup, ada proses berpikir, rincian konteks, dan pemakaian token', () => {
@@ -114,7 +114,7 @@ export function chatTests(c: GuiContext): void {
         ok(!text.includes('**'), 'tanda markdown tampil mentah');
         contains(text, 'Mencari di naskah.');
         contains(text, 'Konteks: ≈');
-        contains(text, 'potongan dari bab-1.md');
+        contains(text, 'potongan dari chapter-1.md');
         contains(text, '1,5 rb masuk (1,2 rb dari cache) · 12 keluar');
         ok(panel.contextButton.get_label()!.startsWith('Konteks · ≈'), `tombol konteks: ${panel.contextButton.get_label()}`);
         eq(panel.session.history.length, 2);
@@ -146,10 +146,10 @@ export function chatTests(c: GuiContext): void {
         eq(seen[0].messages[1].content, 'Siapa yang membawa surat dari ayahnya?');
     });
 
-    test('@nama melampirkan berkas utuh; nama tak dikenal dilaporkan di rincian konteks', () => {
+    test('@name melampirkan berkas utuh; name tak dikenal dilaporkan di rincian konteks', () => {
         seen.length = 0;
-        settle(panel.ask('Samakan gayanya dengan @bab-1 dan @tidak-ada'));
-        contains(seen[0].messages[seen[0].messages.length - 1].content, '<berkas nama="bab-1.md">');
+        settle(panel.ask('Samakan gayanya dengan @chapter-1 dan @tidak-ada'));
+        contains(seen[0].messages[seen[0].messages.length - 1].content, '<berkas name="chapter-1.md">');
         contains(all(), 'tidak ditemukan: @tidak-ada');
     });
 
@@ -167,8 +167,8 @@ export function chatTests(c: GuiContext): void {
         popover.popdown();
         pump();
         const shown = texts.join('\n');
-        contains(shown, 'Dokumen: bab-2.md (utuh)');
-        contains(shown, 'Potongan: bab-1.md');
+        contains(shown, 'Dokumen: chapter-2.md (utuh)');
+        contains(shown, 'Potongan: chapter-1.md');
         contains(shown, 'Total ≈');
         panel.input.buffer.set_text('', -1);
     });
@@ -293,7 +293,7 @@ export function chatTests(c: GuiContext): void {
                 if (last.role === 'tool') toolResult = last.content;
                 if (round === 1) {
                     return { usage: { prompt: 100, cached: 0, completion: 5 }, cancelled: false, reasoning: '',
-                        toolCalls: [{ id: 'c1', name: 'cari_teks', arguments: '{"teks":"Badai"}' }, { id: 'c2', name: 'baca_berkas', arguments: '{"nama":"bab-2"}' }] };
+                        toolCalls: [{ id: 'c1', name: 'search_text', arguments: '{"text":"Badai"}' }, { id: 'c2', name: 'read_file', arguments: '{"name":"chapter-2"}' }] };
                 }
                 req.onText('Badai ada di bab 2.');
                 return { usage: { prompt: 300, cached: 100, completion: 8 }, cancelled: false, toolCalls: [], reasoning: '' };
@@ -302,7 +302,7 @@ export function chatTests(c: GuiContext): void {
         settle(panel.ask('Di bab mana ada badai?'));
         const text = all();
         contains(text, 'Mencari teks “Badai” → 1 baris');
-        contains(text, 'Membaca bab-2 → baris 1–');
+        contains(text, 'Membaca chapter-2 → baris 1–');
         contains(text, 'Badai ada di bab 2.');
         contains(text, '400 masuk (100 dari cache) · 13 keluar · 2 penelusuran');
         contains(toolResult, 'Badai menghantam kapal.');
@@ -310,7 +310,7 @@ export function chatTests(c: GuiContext): void {
     });
 
     test('model lama dinormalkan; mode berpikir tersimpan dan diteruskan ke sesi', () => {
-        panel.setModel('deepseek-chat');   // nama dari pengaturan versi sebelumnya
+        panel.setModel('deepseek-chat');   // name dari pengaturan versi sebelumnya
         eq(panel.model, 'deepseek-flash');
         panel.thinkingCheck.set_active(true);
         eq(panel.session.thinking, true);
@@ -475,45 +475,45 @@ export function chatTests(c: GuiContext): void {
     test('usulan ubah: kartu menampilkan selisih; Terapkan mengubah editor dan bisa dibatalkan, disk belum tersentuh', () => {
         setText('# Bab 2\n\nBadai menghantam kapal.\n');
         w.editor.buffer.set_modified(false);
-        const diskBefore = diskOf('bab-2.md');
-        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-2.md', teks_lama: 'Badai menghantam kapal.', teks_baru: 'Badai menghantam kapal itu.', alasan: 'lebih jelas' }), 'apply');
+        const diskBefore = diskOf('chapter-2.md');
+        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-2.md', old_text: 'Badai menghantam kapal.', new_text: 'Badai menghantam kapal itu.', reason: 'lebih jelas' }), 'apply');
         const text = all();
-        contains(text, 'Ubah bab-2.md');
+        contains(text, 'Ubah chapter-2.md');
         contains(lastDiff, '@@ -1,3 +1,3 @@');
         contains(lastDiff, '-Badai menghantam kapal.');
         contains(lastDiff, '+Badai menghantam kapal itu.');
         contains(text, 'Diterapkan.');
         contains(text, '1 perubahan diterapkan');
         eq(w.editor.getText(), '# Bab 2\n\nBadai menghantam kapal itu.\n');
-        eq(diskOf('bab-2.md'), diskBefore);
+        eq(diskOf('chapter-2.md'), diskBefore);
         w.editor.buffer.undo();
         eq(w.editor.getText(), '# Bab 2\n\nBadai menghantam kapal.\n');
     });
 
     test('usulan ubah pada berkas yang tidak terbuka ditulis ke disk setelah Terapkan', () => {
-        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-1', teks_lama: 'membawa surat dari ayahnya', teks_baru: 'membawa surat dari ibunya', alasan: 'x' }), 'apply');
-        contains(diskOf('bab-1.md'), 'membawa surat dari ibunya');
+        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-1', old_text: 'membawa surat dari ayahnya', new_text: 'membawa surat dari ibunya', reason: 'x' }), 'apply');
+        contains(diskOf('chapter-1.md'), 'membawa surat dari ibunya');
     });
 
     test('Tolak: berkas tidak berubah dan model diberi tahu', () => {
-        const before = diskOf('bab-1.md');
-        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-1.md', teks_lama: 'Raka bertemu Laras', teks_baru: 'Raka bertemu Hasan', alasan: 'x' }), 'reject');
-        eq(diskOf('bab-1.md'), before);
+        const before = diskOf('chapter-1.md');
+        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-1.md', old_text: 'Raka bertemu Laras', new_text: 'Raka bertemu Hasan', reason: 'x' }), 'reject');
+        eq(diskOf('chapter-1.md'), before);
         contains(all(), 'Ditolak.');
         ok(!all().includes('perubahan diterapkan'), 'dihitung diterapkan');
     });
 
     test('menutup jendela tinjau sama dengan menolak', () => {
-        const before = diskOf('bab-1.md');
-        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'bab-1.md', teks_lama: 'Raka bertemu Laras', teks_baru: 'Raka bertemu Hasan', alasan: 'x' }), 'close');
-        eq(diskOf('bab-1.md'), before);
+        const before = diskOf('chapter-1.md');
+        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-1.md', old_text: 'Raka bertemu Laras', new_text: 'Raka bertemu Hasan', reason: 'x' }), 'close');
+        eq(diskOf('chapter-1.md'), before);
         contains(all(), 'Ditolak.');
     });
 
     test('Hentikan saat usulan menunggu: jendela tinjau tertutup dan kartu menjadi Dibatalkan', () => {
-        panel.makeProvider = () => proposalProvider('ubah_berkas', { nama: 'bab-1.md', teks_lama: 'Raka bertemu Laras', teks_baru: 'x', alasan: 'x' });
+        panel.makeProvider = () => proposalProvider('edit_file', { name: 'chapter-1.md', old_text: 'Raka bertemu Laras', new_text: 'x', reason: 'x' });
         panel.reset();
-        const before = diskOf('bab-1.md');
+        const before = diskOf('chapter-1.md');
         const done = panel.ask('Tolong ubah');
         for (let i = 0; i < 300 && !panel.viewer; i++) { pump(); GLib.usleep(5000); }
         ok(panel.viewer, 'jendela tinjau tidak terbuka');
@@ -521,11 +521,11 @@ export function chatTests(c: GuiContext): void {
         settle(done);
         contains(all(), 'Dibatalkan.');
         eq(panel.viewer, null);
-        eq(diskOf('bab-1.md'), before);
+        eq(diskOf('chapter-1.md'), before);
     });
 
     test('usulan berkas baru: Terapkan menulis dan membukanya di tab', () => {
-        proposeAndPress(proposalProvider('buat_berkas', { nama: 'rencana/oktober', isi: '# Oktober\n\n- Tulis bab 3\n', alasan: 'rencana bulan ini' }), 'apply');
+        proposeAndPress(proposalProvider('create_file', { name: 'rencana/oktober', content: '# Oktober\n\n- Tulis bab 3\n', reason: 'rencana bulan ini' }), 'apply');
         eq(diskOf('rencana/oktober.md'), '# Oktober\n\n- Tulis bab 3\n');
         contains(all(), 'Berkas baru rencana/oktober.md');
         contains(lastDiff, '@@ -0,0 +1,3 @@');
@@ -543,11 +543,11 @@ export function chatTests(c: GuiContext): void {
 
         const press = (provider: Provider) => { proposeAndPress(provider, 'apply'); for (let i = 0; i < 40; i++) { pump(); GLib.usleep(8000); } };   // papan memuat ulang di idle
         try {
-        press(proposalProvider('ubah_kanban', { nama: 'tugas', aksi: 'tambah', kartu: 'Susun jadwal revisi @{2026-11-02}', daftar: 'dikerjakan', alasan: 'permintaan pengguna' }));
+        press(proposalProvider('edit_kanban', { name: 'tugas', action: 'add', card: 'Susun jadwal revisi @{2026-11-02}', list: 'dikerjakan', reason: 'permintaan pengguna' }));
         contains(lastDiff, '+- [ ] Susun jadwal revisi @{2026-11-02}');
         eq(w.board.getBoard().columns[1].cards.map(c => c.text), ['Riset pelabuhan', 'Susun jadwal revisi @{2026-11-02}']);
 
-        press(proposalProvider('ubah_kanban', { nama: 'tugas', aksi: 'pindah', kartu: 'Kirim undangan', daftar: 'Selesai', alasan: 'sudah dikirim' }));
+        press(proposalProvider('edit_kanban', { name: 'tugas', action: 'move', card: 'Kirim undangan', list: 'Selesai', reason: 'sudah dikirim' }));
         eq(w.board.getBoard().columns[2].cards.map(c => c.text), ['Pesan tempat', 'Kirim undangan @{2026-10-20}']);
         eq(w.board.getBoard().columns[0].cards.map(c => c.text), ['Tulis laporan #penting']);
         const prefix = optVal('shot-proposal');
@@ -562,18 +562,18 @@ export function chatTests(c: GuiContext): void {
         }
     });
 
-    test('paket beberapa berkas: satu keputusan menerapkan semua diff dan journal dipulihkan', () => {
-        const tindakan = ['rencana/paket-a', 'rencana/paket-b'].map(nama => ({ alat: 'buat_berkas', argumen: JSON.stringify({ nama, isi: '# Jadwal rilis\n\nRilis: 22 November\n', alasan: 'Sinkronkan keputusan rapat dalam satu paket' }) }));
-        proposeAndPress(proposalProvider('usulkan_paket', { tindakan }), 'apply');
+    test('paket beberapa file: satu keputusan menerapkan semua diff dan journal dipulihkan', () => {
+        const tindakan = ['rencana/paket-a', 'rencana/paket-b'].map(name => ({ tool: 'create_file', arguments: JSON.stringify({ name, content: '# Jadwal rilis\n\nRilis: 22 November\n', reason: 'Sinkronkan keputusan rapat dalam satu paket' }) }));
+        proposeAndPress(proposalProvider('propose_batch', { tindakan }), 'apply');
         contains(lastDiff, 'Berkas: rencana/paket-a.md');
         contains(lastDiff, 'Berkas: rencana/paket-b.md');
         eq(diskOf('rencana/paket-a.md'), diskOf('rencana/paket-b.md'));
         contains(all(), 'Diterapkan.');
-        const saved = listChats(book).find(chat => readTextFile(chat.path).includes('usulkan_paket'));
+        const saved = listChats(book).find(chat => readTextFile(chat.path).includes('propose_batch'));
         ok(saved, 'checkpoint paket tidak tersimpan');
         ok(panel.openChat(saved.path), 'pemulihan gagal');
-        eq(panel.session.events.find(e => e.tool === 'usulkan_paket')?.status, 'applied');
-        contains(all(), 'Diterapkan: usulkan_paket');
+        eq(panel.session.events.find(e => e.tool === 'propose_batch')?.status, 'applied');
+        contains(all(), 'Diterapkan: propose_batch');
         const prefix = optVal('shot-agentic');
         if (prefix) {
             for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
@@ -583,7 +583,7 @@ export function chatTests(c: GuiContext): void {
 
     test('checkpoint rencana terbuka lagi dengan tombol lanjutkan, tema terang dan gelap', () => {
         panel.reset();
-        panel.makeProvider = () => proposalProvider('atur_pekerjaan', { tujuan: 'Sinkronkan jadwal rilis', langkah: [{ teks: 'Baca keputusan rapat', status: 'done' }, { teks: 'Periksa rencana dan kartu tugas', status: 'pending' }], catatan: 'Tanggal rilis: 22 November' });
+        panel.makeProvider = () => proposalProvider('set_work', { destination: 'Sinkronkan jadwal rilis', langkah: [{ text: 'Baca keputusan rapat', status: 'done' }, { text: 'Periksa rencana dan kartu tugas', status: 'pending' }], catatan: 'Tanggal rilis: 22 November' });
         settle(panel.ask('Sinkronkan jadwal rilis'));
         // Rencana tampil sebagai daftar centang: satu baris per langkah, bukan teks "- [x]", dan tidak diulang di baris langkah.
         const workRows = (): Gtk.Widget[] => {
@@ -637,9 +637,9 @@ export function chatTests(c: GuiContext): void {
     test('paket: hapus centang satu berkas → hanya yang dicentang diterapkan; Urungkan mengembalikannya', () => {
         GLib.file_set_contents(GLib.build_filenamev([book, 'jadwal-a.md']), 'Rilis 15 November\n');
         GLib.file_set_contents(GLib.build_filenamev([book, 'jadwal-b.md']), 'Rilis 15 November\n');
-        const tindakan = ['jadwal-a', 'jadwal-b'].map(nama => ({ alat: 'ubah_berkas', argumen: JSON.stringify({ nama, teks_lama: '15 November', teks_baru: '22 November', alasan: 'keputusan rapat' }) }));
+        const tindakan = ['jadwal-a', 'jadwal-b'].map(name => ({ tool: 'edit_file', arguments: JSON.stringify({ name, old_text: '15 November', new_text: '22 November', reason: 'keputusan rapat' }) }));
         toolReplies.length = 0;
-        proposeAndPress(recording('usulkan_paket', { tindakan }), 'apply', viewer => {
+        proposeAndPress(recording('propose_batch', { tindakan }), 'apply', viewer => {
             eq(viewer.checks.length, 2);
             viewer.checks[1].set_active(false);
             eq(viewer.applyButton.get_label(), 'Terapkan 1 dari 2');
@@ -668,7 +668,7 @@ export function chatTests(c: GuiContext): void {
     });
 
     test('Urungkan gagal tanpa menimpa bila berkas sudah disunting lagi', () => {
-        proposeAndPress(proposalProvider('ubah_berkas', { nama: 'jadwal-a', teks_lama: '15 November', teks_baru: '23 November', alasan: 'x' }), 'apply');
+        proposeAndPress(proposalProvider('edit_file', { name: 'jadwal-a', old_text: '15 November', new_text: '23 November', reason: 'x' }), 'apply');
         GLib.file_set_contents(GLib.build_filenamev([book, 'jadwal-a.md']), 'Disunting pengguna\n');
         buttons().find(b => b.get_label() === 'Urungkan')!.emit('clicked');
         eq(diskOf('jadwal-a.md'), 'Disunting pengguna\n');
@@ -678,7 +678,7 @@ export function chatTests(c: GuiContext): void {
 
     test('Tolak dengan catatan: catatan sampai ke model dan tampil di kartu', () => {
         toolReplies.length = 0;
-        proposeAndPress(recording('ubah_berkas', { nama: 'bab-1.md', teks_lama: 'Raka bertemu Laras', teks_baru: 'Raka bertemu Hasan', alasan: 'x' }), 'reject', viewer => viewer.noteEntry.set_text('Namanya tetap Laras'));
+        proposeAndPress(recording('edit_file', { name: 'chapter-1.md', old_text: 'Raka bertemu Laras', new_text: 'Raka bertemu Hasan', reason: 'x' }), 'reject', viewer => viewer.noteEntry.set_text('Namanya tetap Laras'));
         contains(all(), 'Ditolak: Namanya tetap Laras');
         ok(toolReplies.some(m => m.includes('Catatan pengguna: Namanya tetap Laras')), toolReplies.join('\n'));
     });
@@ -689,7 +689,7 @@ export function chatTests(c: GuiContext): void {
         w.openFile(from);
         pump();
         try {
-            proposeAndPress(proposalProvider('pindah_berkas', { nama: 'pindahan', tujuan: 'arsip/pindahan', alasan: 'arsipkan' }), 'apply');
+            proposeAndPress(proposalProvider('move_file', { name: 'pindahan', destination: 'arsip/pindahan', reason: 'arsipkan' }), 'apply');
             contains(lastDiff, 'Pindah: pindahan.md → arsip/pindahan.md');
             eq(diskOf('arsip/pindahan.md'), '# Pindahan\n');
             ok(!GLib.file_test(from, GLib.FileTest.EXISTS), 'asal masih ada');
@@ -704,12 +704,12 @@ export function chatTests(c: GuiContext): void {
         }
     });
 
-    test('hapus berkas: dibuang ke Tempat Sampah setelah Terapkan, ditolak tidak menyentuhnya', () => {
+    test('hapus file: dibuang ke Tempat Sampah setelah Terapkan, ditolak tidak menyentuhnya', () => {
         const path = GLib.build_filenamev([book, 'usang.md']);
         GLib.file_set_contents(path, '# Usang\n');
-        proposeAndPress(proposalProvider('hapus_berkas', { nama: 'usang', alasan: 'duplikat' }), 'reject');
+        proposeAndPress(proposalProvider('delete_file', { name: 'usang', reason: 'duplikat' }), 'reject');
         ok(GLib.file_test(path, GLib.FileTest.EXISTS), 'terhapus padahal ditolak');
-        proposeAndPress(proposalProvider('hapus_berkas', { nama: 'usang', alasan: 'duplikat' }), 'apply');
+        proposeAndPress(proposalProvider('delete_file', { name: 'usang', reason: 'duplikat' }), 'apply');
         contains(lastDiff, 'Dibuang ke Tempat Sampah: usang.md');
         contains(lastDiff, '-# Usang');
         if (all().includes('Gagal diterapkan')) return;   // lingkungan tanpa Tempat Sampah
@@ -718,11 +718,11 @@ export function chatTests(c: GuiContext): void {
 
     test('penerapan menolak isi yang berubah sejak diusulkan dan path di luar folder', () => {
         const apply = panel.host.applyChange!;
-        const stale = apply({ kind: 'edit', file: 'bab-1.md', before: 'isi lama', after: 'isi baru', reason: '' });
+        const stale = apply({ kind: 'edit', file: 'chapter-1.md', before: 'isi lama', after: 'isi baru', reason: '' });
         contains(stale ?? '', 'berubah sejak diusulkan');
         contains(apply({ kind: 'create', file: '../luar.md', before: '', after: 'x', reason: '' }) ?? '', 'di luar folder');
         ok(!GLib.file_test(GLib.build_filenamev([tmp, 'luar.md']), GLib.FileTest.EXISTS), 'berkas tertulis di luar folder');
-        contains(apply({ kind: 'create', file: 'bab-1.md', before: '', after: 'x', reason: '' }) ?? '', 'sudah ada');
+        contains(apply({ kind: 'create', file: 'chapter-1.md', before: '', after: 'x', reason: '' }) ?? '', 'sudah ada');
     });
 
     test('jawaban panjang: panel menempel di bawah sampai baris terakhir dan footer terlihat', () => {

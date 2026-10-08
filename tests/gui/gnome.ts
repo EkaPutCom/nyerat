@@ -88,8 +88,8 @@ export function gnomeTests(c: GuiContext): void {
 
     if (shot) {
         test('tangkapan layar penampil gambar (Adw.Window)', () => {
-            const pixbuf = GdkPixbuf.Pixbuf.new_from_file(GLib.build_filenamev([ROOT, 'tests', 'samples', 'gambar', 'contoh.png']));
-            const viewer = new ImageViewer(w.win, pixbuf, 'contoh.png');
+            const pixbuf = GdkPixbuf.Pixbuf.new_from_file(GLib.build_filenamev([ROOT, 'tests', 'samples', 'images', 'example.png']));
+            const viewer = new ImageViewer(w.win, pixbuf, 'example.png');
             viewer.show(); settle();
             widgetPixbuf(viewer.window)?.savev(`${shot}-gambar.png`, 'png', [], []);
             viewer.window.destroy(); settle(5);

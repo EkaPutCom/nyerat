@@ -54,7 +54,7 @@ import { dueTasks, localDate, moveRecent, openInboxes, rememberRecent, splitRece
 import {
     activityLines, addNote, agentActivity, boardEvents, clock, commitActivity, harnessActivity, journalName, journalStats, mergeActivity, newJournal,
     type Activity, type ActivityKind,
-} from './markdown/jurnal.js';
+} from './markdown/journal.js';
 import { isInbox, newInbox, parseInbox, serializeInbox, type Inbox } from './markdown/inbox.js';
 import { assignCard, cardMeta, countCards, isKanban, newBoard, parseBoard, serializeBoard, updateCard, type Board, type Card, type Position } from './markdown/kanban.js';
 import { Orchestrator } from './orchestrator.js';
