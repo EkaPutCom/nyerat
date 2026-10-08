@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learning GTK with Nyerat</title>
+<meta name="description" content="Learning notes on how Nyerat grew from a GTK 3 TextView into a GTK 4 + libadwaita GNOME app: which GTK features each Nyerat feature uses, why, and which code never touches GTK.">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f5f2;
+  --surface: #fcfcfb;
+  --surface-2: #efeee9;
+  --line: #dcdad3;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --text-3: #7a7974;
+  --before: #eb6834;
+  --before-soft: #fbe3d8;
+  --after: #2a78d6;
+  --after-soft: #dbe8f8;
+  --neutral: #b9b7af;
+  --code-bg: #efeee9;
+  --warn-bg: #fff6df;
+  --warn-line: #e3c472;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211;
+    --surface: #1a1a19;
+    --surface-2: #242422;
+    --line: #34342f;
+    --text: #ffffff;
+    --text-2: #c3c2b7;
+    --text-3: #93928a;
+    --before: #d95926;
+    --before-soft: #3a2419;
+    --after: #3987e5;
+    --after-soft: #17283d;
+    --neutral: #55544e;
+    --code-bg: #242422;
+    --warn-bg: #2c2717;
+    --warn-line: #7a6624;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211;
+  --surface: #1a1a19;
+  --surface-2: #242422;
+  --line: #34342f;
+  --text: #ffffff;
+  --text-2: #c3c2b7;
+  --text-3: #93928a;
+  --before: #d95926;
+  --before-soft: #3a2419;
+  --after: #3987e5;
+  --after-soft: #17283d;
+  --neutral: #55544e;
+  --code-bg: #242422;
+  --warn-bg: #2c2717;
+  --warn-line: #7a6624;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+}
+code, pre, .mono { font-family: ui-monospace, "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace; font-size: .88em; }
+code { background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; line-height: 1.5; margin: 12px 0; }
+pre code { background: none; padding: 0; font-size: .85em; }
+a { color: var(--after); }
+h1, h2, h3 { line-height: 1.25; letter-spacing: -.01em; }
+h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin: 0 0 .4em; }
+h2 { font-size: 1.55rem; margin: 0 0 .3em; }
+h3 { font-size: 1.1rem; margin: 1.6em 0 .4em; }
+p { margin: .6em 0; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+header.hero { padding: 56px 0 28px; }
+.eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; color: var(--text-3); font-weight: 600; }
+.lede { font-size: 1.12rem; color: var(--text-2); max-width: 46em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 18px 0 0; }
+nav.toc a { font-size: .85rem; text-decoration: none; color: var(--text-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; background: var(--surface); }
+nav.toc a:hover { color: var(--text); border-color: var(--text-3); }
+section.chapter { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px clamp(16px, 3vw, 32px); margin: 22px 0; box-shadow: var(--shadow); }
+.chapnum { font-size: .8rem; color: var(--text-3); font-weight: 600; }
+.meta { font-size: .82rem; color: var(--text-3); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+.grid2 > * { min-width: 0; }
+p code, li code, td code, dd code, .note code { overflow-wrap: anywhere; }
+.panel { border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--surface); min-width: 0; }
+.panel h4 { margin: 0 0 8px; font-size: .95rem; display: flex; gap: 8px; align-items: center; }
+.tag { display: inline-block; font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+.tag.old { background: var(--before-soft); color: var(--text); border: 1px solid var(--before); }
+.tag.new { background: var(--after-soft); color: var(--text); border: 1px solid var(--after); }
+.lesson { border-left: 3px solid var(--after); background: var(--after-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.lesson b:first-child { display: block; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); margin-bottom: 2px; }
+.caveat { border-left: 3px solid var(--warn-line); background: var(--warn-bg); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: .93rem; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: .82rem; color: var(--text-2); margin: 6px 0 10px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.scroll-x { overflow-x: auto; }
+table.data { border-collapse: collapse; width: 100%; font-size: .88rem; }
+table.data th, table.data td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; }
+details { margin: 10px 0; }
+details summary { cursor: pointer; color: var(--text-2); font-size: .88rem; }
+
+/* comparison bars */
+.cmp { display: grid; grid-template-columns: minmax(130px, 210px) 1fr; gap: 4px 14px; align-items: center; font-size: .86rem; }
+.cmp .lbl { color: var(--text-2); line-height: 1.25; }
+.cmp .bars { display: grid; gap: 3px; position: relative; }
+.cmp .bar { height: 12px; border-radius: 0 4px 4px 0; min-width: 2px; position: relative; }
+.cmp .bar.b { background: var(--before); }
+.cmp .bar.a { background: var(--after); }
+.cmp .row { display: flex; align-items: center; gap: 8px; }
+.cmp .row .v { font-size: .78rem; color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cmp .row .v b { color: var(--text); }
+.cmp .row .barwrap { flex: 0 1 auto; display: flex; }
+.cmp .sep { grid-column: 1 / -1; height: 6px; }
+.delta { font-weight: 700; }
+@media (max-width: 560px) { .cmp { grid-template-columns: 1fr; } .cmp .lbl { margin-top: 6px; } }
+
+/* timeline chart */
+.chart { width: 100%; display: block; overflow: visible; }
+.chart text { fill: var(--text-2); font-size: 11px; }
+.chart .axis { stroke: var(--line); }
+.chart .grid { stroke: var(--line); stroke-dasharray: 2 3; }
+.chart .valtxt { fill: var(--text); font-weight: 600; }
+#tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: .8rem; box-shadow: 0 6px 20px rgba(0,0,0,.15); max-width: 300px; opacity: 0; transition: opacity .08s; }
+
+/* data structure diagram */
+.arr { display: flex; flex-wrap: wrap; gap: 3px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .75rem; }
+.cell { border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; background: var(--surface-2); min-width: 28px; text-align: center; }
+.cell.hot { background: var(--before-soft); border-color: var(--before); }
+.cell.cool { background: var(--after-soft); border-color: var(--after); }
+.cell.null { color: var(--text-3); border-style: dashed; background: transparent; }
+.cell .i { display: block; font-size: .65rem; color: var(--text-3); }
+.doclines { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .74rem; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.doclines div { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 8px; transition: background .25s; }
+.doclines div:last-child { border-bottom: 0; }
+.doclines .n { color: var(--text-3); width: 22px; text-align: right; flex: none; }
+.doclines .hot { background: var(--before-soft); }
+.doclines .cool { background: var(--after-soft); }
+.doclines .cp { box-shadow: inset 3px 0 0 var(--text-3); }
+.doclines.click div { cursor: pointer; }
+.doclines.click div:hover { outline: 1px solid var(--text-3); outline-offset: -1px; }
+.arrow { text-align: center; color: var(--text-3); font-size: .85rem; margin: 6px 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: .8rem; }
+.kv dt { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--text-2); }
+.kv dd { margin: 0; }
+
+/* simulation */
+.sim { border: 1px solid var(--after); border-radius: 12px; padding: 16px; margin: 20px 0 6px; background: linear-gradient(var(--after-soft), var(--surface) 90px); }
+.sim > h3 { margin-top: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sim .kind { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--text-2); background: var(--surface); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 10px 0; font-size: .88rem; }
+.controls label { display: flex; align-items: center; gap: 8px; color: var(--text-2); }
+.controls input[type=range] { width: 170px; accent-color: var(--after); }
+.controls output { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; min-width: 4.5em; }
+button { font: inherit; font-size: .88rem; border: 1px solid var(--after); background: var(--after); color: #fff; padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+button.ghost { background: var(--surface); color: var(--text); border-color: var(--line); }
+button:disabled { opacity: .5; cursor: progress; }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--after); outline-offset: 2px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+.stat .k { font-size: .74rem; color: var(--text-3); }
+.stat .v { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat .s { font-size: .74rem; color: var(--text-2); }
+.stat.old { border-top: 3px solid var(--before); }
+.stat.new { border-top: 3px solid var(--after); }
+.minimap { display: grid; gap: 1px; margin: 6px 0; }
+.minimap i { display: block; height: 7px; background: var(--surface-2); border-radius: 1px; transition: background .2s; }
+.minimap i.hot { background: var(--before); }
+.minimap i.cool { background: var(--after); }
+.minimap i.view { outline: 1px solid var(--text); outline-offset: -1px; }
+.note { font-size: .8rem; color: var(--text-3); }
+.track-label { font-size: .8rem; color: var(--text-2); margin: 10px 0 2px; }
+@media (max-width: 600px) {
+  table.data.cards thead { display: none; }
+  table.data.cards, table.data.cards tbody, table.data.cards tr, table.data.cards td { display: block; width: 100%; }
+  table.data.cards tr { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+  table.data.cards td { border: 0; padding: 2px 0; white-space: normal; }
+  table.data.cards td:first-child { font-weight: 650; }
+  table.data.cards td:not(:first-child)::before { content: attr(data-k) ": "; color: var(--text-3); font-size: .8rem; }
+  .sim { padding: 12px; }
+  .controls label { flex: 1 1 100%; display: grid; grid-template-columns: 7.5em 1fr auto; }
+  .controls input[type=range] { width: 100%; min-width: 0; }
+}
+footer { color: var(--text-3); font-size: .82rem; padding: 30px 0 60px; }
+.timeline-steps { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
+.timeline-steps li { display: grid; grid-template-columns: 86px 1fr; gap: 10px; font-size: .9rem; }
+.timeline-steps .h { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem; color: var(--text-3); padding-top: 2px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 22px 0 6px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.kpi .big { font-size: 1.9rem; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.kpi .from { color: var(--text-3); font-size: .85rem; }
+.kpi .what { font-size: .85rem; color: var(--text-2); }
+/* extras specific to the GTK page */
+:root { --third: #1f8f6b; --third-soft: #d7efe6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --third: #34b38a; --third-soft: #16302a; } }
+:root[data-theme="dark"] { --third: #34b38a; --third-soft: #16302a; }
+.tag.pure { background: var(--third-soft); color: var(--text); border: 1px solid var(--third); }
+.principle { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 14px 0; }
+.principle .panel p { margin: 0; font-size: .88rem; color: var(--text-2); }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0; font-size: .82rem; }
+.flow .node { border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 5px 10px; }
+.flow .node.gtk { border-color: var(--before); background: var(--before-soft); }
+.flow .node.gio { border-color: var(--after); background: var(--after-soft); }
+.flow .node.pure { border-color: var(--third); background: var(--third-soft); }
+.flow .to { color: var(--text-3); }
+figure { margin: 16px 0; }
+figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+figcaption { font-size: .8rem; color: var(--text-3); margin-top: 6px; }
+.era { display: inline-block; font-size: .7rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text-2); margin-right: 4px; }
+.widgets { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
+.widgets code { font-size: .78rem; border: 1px solid var(--line); }
+.widgets code.adw { border-color: var(--after); background: var(--after-soft); }
+.widgets code.gio { border-color: var(--third); background: var(--third-soft); }
+textarea, input[type=text] { font: inherit; font-size: .85rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; max-width: 100%; width: 100%; }
+.field { display: grid; gap: 4px; margin: 8px 0; font-size: .85rem; color: var(--text-2); }
+.chars { display: flex; flex-wrap: wrap; gap: 3px; margin: 10px 0; }
+.chars .ch { border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; background: var(--surface); min-width: 44px; text-align: center; font-size: .78rem; }
+.chars .ch.wide { border-color: var(--before); background: var(--before-soft); }
+.chars .ch b { display: block; font-size: 1rem; font-weight: 500; }
+.chars .ch .i { display: block; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .66rem; color: var(--text-3); }
+.track { position: relative; height: 22px; border-radius: 4px; background: var(--surface-2); margin: 4px 0 12px; }
+.track i { position: absolute; top: 3px; bottom: 3px; border-radius: 3px; }
+.track i.have { background: var(--neutral); }
+.track i.want { background: var(--after); }
+.track i.rm { background: var(--before); }
+.track i.add { background: var(--third); }
+.winsim { border: 2px solid var(--text-3); border-radius: 10px; overflow: hidden; background: var(--surface); margin: 10px 0; transition: width .15s; max-width: 100%; }
+.winsim .hb { height: 26px; border-bottom: 1px solid var(--line); background: var(--surface-2); font-size: .72rem; display: flex; align-items: center; justify-content: center; color: var(--text-2); }
+.winsim .body { display: flex; height: 150px; position: relative; }
+.winsim .pane { font-size: .72rem; padding: 6px; overflow: hidden; color: var(--text-2); }
+.winsim .side { width: 25%; background: var(--surface-2); border-right: 1px solid var(--line); }
+.winsim .chat { width: 32%; background: var(--after-soft); border-left: 1px solid var(--line); }
+.winsim .doc { flex: 1; }
+.winsim .float { position: absolute; top: 0; bottom: 0; box-shadow: 0 4px 18px rgba(0,0,0,.25); z-index: 1; }
+.winsim .float.side { left: 0; width: 55%; }
+.winsim .float.chat { right: 0; width: 70%; }
+.frames { display: grid; gap: 4px; margin: 10px 0; font-size: .8rem; }
+.frames .f { display: grid; grid-template-columns: 70px 1fr; gap: 8px; align-items: center; }
+.frames .slots { display: flex; gap: 3px; flex-wrap: wrap; }
+.frames .slots span { border-radius: 4px; padding: 1px 6px; border: 1px solid var(--line); background: var(--surface-2); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .72rem; }
+.frames .slots span.key { border-color: var(--before); background: var(--before-soft); }
+.frames .slots span.hl { border-color: var(--after); background: var(--after-soft); }
+.frames .slots span.draw { border-color: var(--third); background: var(--third-soft); }
+table.data td.wrap, table.data th.wrap { white-space: normal; }
+</style>
+</head>
+<body>
+<div id="tip" role="tooltip"></div>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow"><a href="index.html">← Nyerat</a> · Learning notes · October 3–8, 2026</div>
+  <h1>Learning GTK from Nyerat</h1>
+  <p class="lede">Nyerat began as a single <code>GtkSourceView</code> in a GTK 3 window that hid Markdown syntax. Five days later it is a GNOME app on <b>GTK 4 + libadwaita</b> with tabs, panels that fold on narrow windows, dialogs that return a Promise, GSettings, list models, <code>.ui</code> templates, translations, and a Flatpak manifest. This page follows that path commit by commit. For each Nyerat feature it names the GTK pieces it uses and explains why. It also covers the third of the code that <b>never touches GTK</b>, which is why most of the app can be tested without a window.</p>
+  <div class="kpis">
+    <div class="kpi"><div class="what">Lines in files that import GTK/Adw</div><div class="big">11,316</div><div class="from">from 1,235 · 6a0f03d → f74d5b5</div></div>
+    <div class="kpi"><div class="what">Lines without any GTK import</div><div class="big">4,668</div><div class="from">pure TypeScript in <code>markdown/</code>, <code>agent/</code>, …; plus 1,723 lines that use only Gio/GLib</div></div>
+    <div class="kpi"><div class="what"><code>Adw.*</code> references in <code>src/</code></div><div class="big">121</div><div class="from">from 0 before c85aa0d (October 6)</div></div>
+    <div class="kpi"><div class="what">Layouts written as <code>.ui</code> templates</div><div class="big">6</div><div class="from">header bar, status bar, find bar, chat, palette, preferences</div></div>
+  </div>
+  <nav class="toc" aria-label="Table of contents">
+    <a href="#journey">Journey</a>
+    <a href="#layers">Layers</a>
+    <a href="#ch1">1 · GJS app</a>
+    <a href="#ch2">2 · TextBuffer &amp; tags</a>
+    <a href="#ch3">3 · Main loop</a>
+    <a href="#ch4">4 · Widgets above text</a>
+    <a href="#ch5">5 · Input &amp; drag</a>
+    <a href="#ch6">6 · GTK 3 → 4</a>
+    <a href="#ch7">7 · libadwaita</a>
+    <a href="#ch8">8 · Actions &amp; settings</a>
+    <a href="#ch9">9 · List models</a>
+    <a href="#ch10">10 · Templates</a>
+    <a href="#ch11">11 · GNOME citizen</a>
+    <a href="#ch12">12 · Workbench features</a>
+    <a href="#ch13">13 · Code without GTK</a>
+    <a href="#pitfalls">Pitfalls</a>
+    <a href="#lessons">Lessons</a>
+  </nav>
+</header>
+
+<!-- ============================================================ -->
+<section class="chapter" id="journey">
+  <div class="chapnum">The big picture</div>
+  <h2>The journey: three eras of the same app</h2>
+  <p>Each row is a commit that changed how Nyerat uses GTK. The bar splits the <code>src/</code> lines into three layers: files that import <b>GTK/Adw/GtkSourceView/WebKit</b>, files that import only <b>Gio/GLib</b> (files, processes, settings), and files with <b>no <code>gi://</code> import at all</b>. Hover over a row to see the numbers. The counts come from <code>git show &lt;commit&gt;:&lt;file&gt;</code> for each file, so they are real measurements, not estimates.</p>
+  <div class="legend"><span style="--c:var(--before)">Imports GTK / Adw</span><span style="--c:var(--after)">Only Gio / GLib</span><span style="--c:var(--third)">No GI import (pure)</span></div>
+  <svg class="chart" id="chart-layers" viewBox="0 0 900 600" role="img" aria-label="Lines of code per layer for each milestone commit"></svg>
+  <ol class="timeline-steps">
+    <li><span class="h">6a0f03d</span><span><span class="era">GTK 3</span><b>Chapters 1, 2</b> · The first editor: <code>Gtk.Application</code>, <code>GtkSource.View</code> 4, text tags that hide Markdown syntax, images placed with <code>add_child_in_window()</code>.</span></li>
+    <li><span class="h">4667616</span><span><span class="era">GTK 3</span><b>Chapter 1</b> · TypeScript bundled by Vite; GJS modules stay <code>external</code>.</span></li>
+    <li><span class="h">a86dfb4</span><span><span class="era">GTK 3</span><b>Chapter 9</b> · Open a folder: sidebar with Files/Outline tabs (<code>Gtk.TreeView</code> + <code>TreeStore</code>).</span></li>
+    <li><span class="h">8e3ce86</span><span><span class="era">GTK 3</span><b>Chapter 4</b> · Tables drawn as a <code>Gtk.Grid</code> above hidden text; the hidden-tag size changes from 1 to 256 because emoji failed to draw.</span></li>
+    <li><span class="h">fc7592a</span><span><span class="era">GTK 3</span><b>Chapter 5</b> · Image viewer: zoom at the pointer, drag to pan, drawn with cairo.</span></li>
+    <li><span class="h">c0fb9d4</span><span><span class="era">GTK 3</span><b>Chapter 5</b> · Kanban board with its own pointer drag (ghost card, drop marker, auto scroll).</span></li>
+    <li><span class="h">7f32cc8</span><span><span class="era">GTK 3</span><b>Chapter 4</b> · Mermaid diagrams rendered by a hidden WebKitGTK and pasted as a picture.</span></li>
+    <li><span class="h">50dd86b</span><span><span class="era">GTK 3</span><b>Chapter 2</b> · Tags applied by difference (<code>setTagRanges</code>) so typing in long documents stays fast.</span></li>
+    <li><span class="h">c989744</span><span><span class="era">GTK 3</span><b>Chapter 13</b> · History tab: <code>git</code> run through <code>Gio.Subprocess</code>, never blocking.</span></li>
+    <li><span class="h">5999e22</span><span><span class="era">GTK 3</span><b>Chapter 5</b> · Create, move (drag and drop), rename, and trash files in the tree.</span></li>
+    <li><span class="h">f6d4147</span><span><span class="era">GTK 3</span><b>Chapter 7</b> · Document tabs, one <code>MarkdownView</code> per tab.</span></li>
+    <li><span class="h">472c298</span><span><span class="era">GTK 3</span><b>Chapter 3</b> · <code>replaceAllText()</code> and background autosave: a 650 KB manuscript opens without freezing.</span></li>
+    <li><span class="h">295d7b9</span><span><span class="era">GTK 4</span><b>Chapter 6</b> · Migration to GTK 4, GtkSourceView 5, and WebKitGTK 6.0 (63 files, +1,813/−1,275).</span></li>
+    <li><span class="h">9079384</span><span><span class="era">GTK 4</span><b>Chapter 4</b> · Overlays scroll with the text again (<code>OverlaySlots</code> reallocates on scroll).</span></li>
+    <li><span class="h">36ae571</span><span><span class="era">GTK 4</span><b>Chapter 12</b> · <code>Gtk.Calendar</code> date picker for kanban due dates.</span></li>
+    <li><span class="h">e87b422</span><span><span class="era">GTK 4</span><b>Chapter 12</b> · <code>[[note]]</code> links: Ctrl+click and a suggestion <code>Gtk.Popover</code> that keeps focus in the text.</span></li>
+    <li><span class="h">c85aa0d</span><span><span class="era">Adw</span><b>Chapter 7</b> · libadwaita: <code>Adw.Application</code>, <code>ApplicationWindow</code>, <code>HeaderBar</code>, <code>StyleManager</code>, <code>AboutDialog</code>.</span></li>
+    <li><span class="h">3fe7fdd</span><span><span class="era">Adw</span><b>Chapter 7</b> · Dialogs move to <code>Adw.Dialog</code> and <code>Adw.AlertDialog</code>.</span></li>
+    <li><span class="h">614f171</span><span><span class="era">Adw</span><b>Chapter 8</b> · Settings move to GSettings with a compiled schema.</span></li>
+    <li><span class="h">9e7ffda</span><span><span class="era">Adw</span><b>Chapter 8</b> · <code>Adw.PreferencesDialog</code> and a command palette built on <code>Gio.Action</code>.</span></li>
+    <li><span class="h">ad0f095</span><span><span class="era">Adw</span><b>Chapter 7</b> · <code>Adw.TabView</code>/<code>TabBar</code> for tabs and <code>Adw.OverlaySplitView</code> for the side panels.</span></li>
+    <li><span class="h">1f364e4</span><span><span class="era">Adw</span><b>Chapter 10</b> · Header bar, status bar, find bar, and chat panel move to <code>Gtk.Template</code>.</span></li>
+    <li><span class="h">b51c43b</span><span><span class="era">Adw</span><b>Chapter 9</b> · Manual lists replaced by <code>Gio.ListStore</code> + <code>Gtk.ListView</code>; the file tree uses <code>TreeListModel</code>.</span></li>
+    <li><span class="h">1a1a716</span><span><span class="era">Adw</span><b>Chapter 11</b> · App ID <code>com.ekaput.Nyerat</code>, desktop file, metainfo, icons, Meson, Flatpak.</span></li>
+    <li><span class="h">9750175</span><span><span class="era">Adw</span><b>Chapters 7, 11</b> · GNOME HIG pass: Promise dialogs, <code>Adw.Breakpoint</code>, shortcuts dialog, Adwaita colors, gettext.</span></li>
+    <li><span class="h">b31556d</span><span><span class="era">Adw</span><b>Chapter 7</b> · Agent plan checklist with <code>Adw.Spinner</code> and a <code>Gtk.Spinner</code> fallback.</span></li>
+    <li><span class="h">efecb82</span><span><span class="era">Adw</span><b>Chapter 2</b> · Hanging indent for list items: negative <code>indent</code> tags made on demand.</span></li>
+    <li><span class="h">222dc97</span><span><span class="era">Adw</span><b>Chapter 12</b> · Inbox view (<code>Adw.Clamp</code>, <code>Adw.StatusPage</code>, <code>Gtk.ListBox</code> as a boxed list).</span></li>
+    <li><span class="h">79ad33d</span><span><span class="era">Adw</span><b>Chapter 12</b> · Home tab (<code>Gtk.FlowBox</code> of folder cards, <code>Adw.ActionRow</code>s).</span></li>
+    <li><span class="h">d21cfb0</span><span><span class="era">Adw</span><b>Chapter 4</b> · Code blocks become a horizontally scrolling <code>Gtk.ScrolledWindow</code> overlay.</span></li>
+    <li><span class="h">5877392</span><span><span class="era">Adw</span><b>Chapter 12</b> · Daily journal with quick capture and an activity log (JSONL, no GTK).</span></li>
+    <li><span class="h">c237d7c</span><span><span class="era">Adw</span><b>Chapter 12</b> · Image files show in the file tree and open in the image viewer.</span></li>
+    <li><span class="h">f74d5b5</span><span><span class="era">Adw</span><b>Chapter 13</b> · Home reads boards and inboxes past the first 300 files.</span></li>
+  </ol>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="layers">
+  <div class="chapnum">Before reading the chapters</div>
+  <h2>Three layers, one direction</h2>
+  <p>The most important GTK decision in Nyerat is not a widget. It is <b>where GTK is allowed to appear</b>. The rule has held since the first commit: Markdown rules live in <code>src/markdown/</code> and never import GTK; the editor engine reports through callbacks and knows nothing about files or menus; <code>window.ts</code> is the only place that connects the components.</p>
+  <div class="principle">
+    <div class="panel"><h4><span class="tag old">GTK</span></h4><p><code>editor/</code>, <code>ui/</code>, <code>window.ts</code>, <code>actions.ts</code>. Widgets, text tags, event controllers, dialogs. Tested with a real window on Xvfb (<code>tests/gui/</code>).</p></div>
+    <div class="panel"><h4><span class="tag new">Gio / GLib</span></h4><p><code>files.ts</code>, <code>fileops.ts</code>, <code>git.ts</code>, <code>settings.ts</code>, <code>orchestrator.ts</code>, <code>activity.ts</code>, the network part of <code>agent/</code>. No widgets, but the GLib main loop and its async I/O.</p></div>
+    <div class="panel"><h4><span class="tag pure">Pure</span></h4><p><code>markdown/</code>, most of <code>agent/</code>, <code>gitlog.ts</code>, <code>editor/offsets.ts</code>. Strings in, values out. Tested in <code>tests/unit/</code> with <code>--no-gui</code>.</p></div>
+  </div>
+  <div class="flow" aria-label="Direction of dependencies">
+    <span class="node gtk">window.ts</span><span class="to">→</span>
+    <span class="node gtk">ui/* · editor/*</span><span class="to">→</span>
+    <span class="node gio">files · git · settings</span><span class="to">→</span>
+    <span class="node pure">markdown/* · agent/* (pure)</span>
+  </div>
+  <p class="note">A lower layer never imports an upper one. When you learn GTK from this code, start in a pure module (for example <code>markdown/kanban.ts</code>) to see the data, then read the widget that draws it (<code>ui/kanban.ts</code>). The widget is short because the decisions were made before GTK was involved.</p>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch1">
+  <div class="chapnum">Chapter 1 · commits 6a0f03d, 4667616 · <code>src/main.ts</code>, <code>src/app.ts</code>, <code>vite.config.ts</code></div>
+  <h2>A GTK app in GJS: not Node, not a browser</h2>
+  <p><b>What GJS is.</b> GJS is SpiderMonkey (Firefox's JavaScript engine) plus GObject Introspection. Any library that ships a typelib can be imported with <code>gi://</code>: GTK, GLib, Gio, Pango, GtkSourceView, WebKit, libsecret, libsoup. There is no <code>fs</code>, no <code>fetch</code>, no <code>setTimeout</code> from Node. Files go through Gio, timers through <code>GLib.timeout_add</code>, HTTP through libsoup.</p>
+  <div class="grid2">
+    <div class="panel">
+      <h4><span class="tag old">First commit</span> GTK 3</h4>
+<pre><code>import Gtk from 'gi://Gtk?version=3.0';
+const app = new Gtk.Application({
+  application_id: APP_ID,
+  flags: Gio.ApplicationFlags.NON_UNIQUE });
+app.connect('activate', () =&gt; {
+  const settings = loadSettings();   // JSON file
+  new MainWindow(app, settings, file);
+  saveSettings(settings);
+});</code></pre>
+    </div>
+    <div class="panel">
+      <h4><span class="tag new">Now</span> GTK 4 + libadwaita</h4>
+<pre><code>import './i18n.js';   // gettext first
+import Adw from 'gi://Adw?version=1';
+const app = new Adw.Application({
+  application_id: APP_ID,
+  flags: Gio.ApplicationFlags.NON_UNIQUE });
+app.connect('activate', () =&gt; {
+  new MainWindow(app, new AppSettings(), path);
+});   // GSettings saves itself</code></pre>
+    </div>
+  </div>
+  <h3>The pieces you meet first</h3>
+  <ul>
+    <li><b><code>Gtk.Application</code> / <code>Adw.Application</code></b>: owns the main loop, registers the app ID on D-Bus, holds actions and accelerators. <code>NON_UNIQUE</code> lets each command open its own process, which keeps tests and <code>npm run dev</code> simple.</li>
+    <li><b>Versioned imports</b>: <code>gi://Gtk?version=4.0</code>, <code>gi://GtkSource?version=5</code>, <code>gi://WebKit?version=6.0</code>. Without the version, GJS picks whatever is installed first, and GTK 3 and 4 cannot live in one process.</li>
+    <li><b>Vite as a bundler, not a runtime</b>: TypeScript is compiled into <code>dist/</code>; <code>gi://</code>, <code>system</code>, <code>gettext</code>, and <code>cairo</code> are marked <code>external</code>. The same config copies <code>mermaid.min.js</code>, the compiled GSettings schema, and the icons next to the bundle.</li>
+    <li><b>Optional libraries</b>: WebKitGTK, libsoup, and libsecret are loaded with a dynamic <code>import()</code> the first time they are needed. A missing typelib then disables one feature instead of crashing the app.</li>
+  </ul>
+  <div class="lesson"><b>Lesson</b>Treat GJS as its own platform. Everything a browser or Node gives you for free has a GLib/Gio equivalent, and that equivalent is integrated with the GTK main loop, which is what you want anyway.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch2">
+  <div class="chapnum">Chapter 2 · commits 6a0f03d, 8e3ce86, 50dd86b, efecb82 · <code>editor/tags.ts</code>, <code>editor/tagsync.ts</code>, <code>editor/offsets.ts</code></div>
+  <h2>The editor is one TextBuffer and many TextTags</h2>
+  <p><b>The idea.</b> Nyerat shows formatted Markdown while the file stays plain text. There is no separate preview widget: the <code>GtkSource.Buffer</code> holds the exact file contents, and <b><code>Gtk.TextTag</code>s</b> change how ranges look. A heading gets a tag with <code>scale: 2.0</code>; the <code>##</code> marker gets a tag that makes it almost invisible, except on the line with the cursor.</p>
+  <div class="grid2">
+    <div class="panel">
+      <h4>Tags as data</h4>
+<pre><code>const TAG_DEFS = {
+  h1: { scale: 2.0, weight: 800,
+        pixels_above_lines: 22 },
+  bold: { weight: Pango.Weight.BOLD },
+  code: { family: FONT_MONO, scale: 0.9 },
+  // last = highest priority
+  marker: { weight: NORMAL, ... },
+  hidden: { size: TINY },   // 256, not 1
+};</code></pre>
+      <p class="note">Tag priority is creation order, so <code>marker</code>, <code>dim</code>, and <code>hidden</code> are created last.</p>
+    </div>
+    <div class="panel">
+      <h4>What GTK features this uses</h4>
+      <div class="widgets"><code>GtkSource.Buffer</code><code>GtkSource.View</code><code>Gtk.TextTag</code><code>Gtk.TextIter</code><code>Gtk.TextMark</code><code>Pango.Weight</code><code>GtkSource.SearchContext</code><code>GtkSource.LanguageManager</code><code>GtkSource.StyleSchemeManager</code></div>
+      <p class="note">GtkSourceView adds undo grouping, search with highlighting (find bar), and per-language highlighting that Nyerat reuses for code block contents (<code>editor/codehighlight.ts</code>).</p>
+    </div>
+  </div>
+  <h3>Three things the TextBuffer teaches you</h3>
+  <p><b>1. Positions are code points.</b> <code>Gtk.TextIter</code> counts Unicode characters; JavaScript strings count UTF-16 units. An emoji is 1 in GTK and 2 in JS. The Markdown parser works on JS strings, so every offset is converted right before it touches the buffer with <code>makeCpMap()</code>. Try it below.</p>
+  <p><b>2. Hiding text is a layout question.</b> The <code>invisible</code> tag property crashed GTK 3 (“Byte index is off the end of the line”). Nyerat hides markers with a tiny font instead. That size was 1 at first; commit 8e3ce86 raised it to 256 Pango units (<code>TINY</code>) because a 1-unit emoji font fails to draw.</p>
+  <p><b>3. Tags that change size cost a relayout.</b> Removing a tag from the whole buffer and applying it again makes GTK lay out every line again. In a 30 KB document that once cost about 300 ms per keystroke. Commit 50dd86b introduced <code>setTagRanges()</code>: read where the tag is now, compute the difference with where it should be, and touch only that. The second simulation runs this exact code. <a href="learn-performance.html">Learn performance</a> has the measurements.</p>
+  <p><b>Later, the same tool for layout.</b> Commit efecb82 added a hanging indent for list items with a negative <code>indent</code> plus <code>left_margin</code> on a tag. Because the prefix width (<code>- </code>, <code>10. </code>, <code>- [ ] </code>) varies, <code>editor/listindent.ts</code> creates one tag per pixel width on demand and updates its margin when the editor column changes.</p>
+
+  <div class="sim" id="sim-offsets">
+    <h3>Simulation: UTF-16 offsets vs GTK positions <span class="kind">real logic · copy of <code>makeCpMap()</code></span></h3>
+    <label class="field">Text<input type="text" id="off-text" value="Ship 🚀 **v2** 🎉 now"></label>
+    <div class="chars" id="off-chars" aria-live="polite"></div>
+    <div class="stats" id="off-stats"></div>
+    <p class="note">Orange cells are surrogate pairs: two JavaScript units, one GTK position. Passing the JavaScript index straight to <code>get_iter_at_offset()</code> would put the bold tag one character too far right for every emoji before it.</p>
+  </div>
+
+  <div class="sim" id="sim-tags">
+    <h3>Simulation: apply the difference, not everything <span class="kind">real logic · copy of <code>normalize()</code>/<code>subtract()</code></span></h3>
+    <p class="note">A 200-character line. Grey = where the tag is now, blue = where the highlighter wants it. Red is removed and green is applied by <code>setTagRanges()</code>.</p>
+    <label class="field">Current ranges (have)<input type="text" id="tag-have" value="0-20, 40-60, 100-130"></label>
+    <label class="field">Wanted ranges (want)<input type="text" id="tag-want" value="0-20, 45-60, 100-130, 150-170"></label>
+    <div class="track-label">have</div><div class="track" id="tr-have"></div>
+    <div class="track-label">want</div><div class="track" id="tr-want"></div>
+    <div class="track-label">operations</div><div class="track" id="tr-ops"></div>
+    <div class="stats" id="tag-stats"></div>
+  </div>
+  <div class="lesson"><b>Lesson</b>A <code>TextBuffer</code> with tags is a small styled document model. Keep the text as the only truth, keep every tag inside one line where you can, and change tags by difference.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch3">
+  <div class="chapnum">Chapter 3 · commits 6a0f03d, 472c298, d7afe2f · <code>editor/view.ts</code>, <code>files.ts</code></div>
+  <h2>The main loop: idle priorities, not threads</h2>
+  <p><b>The problem.</b> Every keystroke emits <code>changed</code> on the buffer, and moving the cursor emits <code>mark-set</code>. Highlighting in those handlers directly means highlighting several times per frame during paste, undo, or auto-repeat.</p>
+  <p><b>The design.</b> Handlers only queue work. <code>queueHighlight()</code> schedules one <code>GLib.idle_add(GLib.PRIORITY_HIGH_IDLE, …)</code> and ignores further calls until it runs. <code>PRIORITY_HIGH_IDLE</code> (100) runs before GTK redraws (120) and before its background relayout (125), so the frame that is drawn already has the new tags and nothing flickers.</p>
+<pre><code>queueHighlight(): void {
+    if (this.destroyed || this.highlightQueued) return;
+    this.highlightQueued = GLib.idle_add(GLib.PRIORITY_HIGH_IDLE, () =&gt; {
+        this.highlightQueued = 0;
+        this.highlight();
+        return GLib.SOURCE_REMOVE;
+    });
+}</code></pre>
+  <div class="sim" id="sim-idle">
+    <h3>Simulation: many signals, one pass <span class="kind">model of the queueing rule</span></h3>
+    <div class="controls">
+      <label>Changes in one frame <input type="range" id="idle-n" min="1" max="12" value="5"><output id="idle-n-out">5</output></label>
+    </div>
+    <div class="frames" id="idle-frames"></div>
+    <div class="stats" id="idle-stats"></div>
+  </div>
+  <h3>When idle is not enough</h3>
+  <ul>
+    <li><b>Opening a long document</b> (d7afe2f): the first 200 lines get their tags at once; the rest are filled in idle turns of at most 8 ms between drawing and layout, lines near the cursor first. The longest pause opening a 651 KB manuscript fell from 162 to 71 ms.</li>
+    <li><b>Replacing all the text</b> (472c298): <code>replaceAllText()</code> scrolls to the top before <code>set_text()</code> so GTK does not lay out every line on the first draw (669 → 162 ms on GTK 3). It only scrolls to the cursor if the view already has a height; GTK 4 runs a scroll queued before allocation with empty geometry.</li>
+    <li><b>Disk writes</b>: autosave uses <code>Gio.File.replace_contents_bytes_async()</code>, which writes and fsyncs in a worker thread and calls back on the main thread. Synchronous writes wait for pending ones to the same path first.</li>
+    <li><b>Processes</b>: <code>git</code> runs through <code>Gio.Subprocess</code> + <code>communicate_utf8_async()</code>; the pi harness reads pipes with <code>GLib.IOChannel</code> + <code>io_add_watch</code>.</li>
+  </ul>
+  <div class="caveat"><b>Cleanup is manual.</b> GTK 4 through GJS does not emit <code>destroy</code> for a widget that JavaScript still holds. Every component with idles or timers keeps their IDs, has a <code>destroy()</code> method and a <code>destroyed</code> flag, and is cleaned up from the window's <code>unrealize</code> signal. The GTK 4 audit (<code>docs/audit-gtk4.md</code>) found three places where this was missing.</div>
+  <div class="lesson"><b>Lesson</b>In GTK you rarely need threads. Use idle priorities to merge work and order it around drawing, and use the <code>_async</code> variants of Gio for I/O.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch4">
+  <div class="chapnum">Chapter 4 · commits 6a0f03d, 8e3ce86, 7f32cc8, 9079384, d21cfb0 · <code>editor/overlays.ts</code>, <code>images.ts</code>, <code>tablelayer.ts</code>, <code>codelayer.ts</code>, <code>mermaid.ts</code></div>
+  <h2>Widgets above the text without touching the text</h2>
+  <p><b>The need.</b> Images, table grids, diagrams, and scrollable code blocks are widgets, but the document must stay plain Markdown. A <code>GtkTextChildAnchor</code> would put an object character into the buffer and into the undo history, so Nyerat never uses one.</p>
+  <p><b>The technique.</b> The lines a block covers are shrunk with a hidden tag, empty space is reserved below them with <code>pixels_below_lines</code>, and the widget is placed in that space at buffer coordinates. When the cursor enters the block, the widget hides and the raw text returns for editing.</p>
+  <div class="grid2">
+    <div class="panel">
+      <h4><span class="tag old">GTK 3</span></h4>
+<pre><code>const box = new Gtk.EventBox({ visible_window: false });
+view.add_child_in_window(box,
+    Gtk.TextWindowType.TEXT, 0, 0);
+view.move_child(box, x, y);
+box.destroy();   // when the block goes away</code></pre>
+    </div>
+    <div class="panel">
+      <h4><span class="tag new">GTK 4</span> <code>OverlaySlots</code></h4>
+<pre><code>const slot = slots.borrow();   // a Box already
+                               // added with add_overlay()
+slots.place(slot, x, y);       // move_overlay()
+slots.release(slot);           // empty + hide,
+                               // reused by the next block</code></pre>
+    </div>
+  </div>
+  <p>Two GTK 4.14 quirks shaped <code>OverlaySlots</code>:</p>
+  <ul>
+    <li><b>Overlays cannot be removed.</b> <code>gtk_text_view_remove()</code> only knows edge and anchored children, so removing an overlay ends with “is not a child”. Slots are borrowed and returned instead; the number of slots is the largest number of blocks ever visible.</li>
+    <li><b>Overlays do not follow scrolling by themselves</b> (9079384). The scroll offset is applied only in the TextView's own <code>size_allocate</code>, and scrolling does not reallocate it. Every adjustment change therefore calls <code>queue_allocate()</code> on the TextView and on the overlay container, once immediately and once in idle.</li>
+  </ul>
+  <table class="data cards">
+    <thead><tr><th>Block</th><th class="wrap">Widget inside the slot</th><th class="wrap">Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Image</td><td data-k="Widget" class="wrap"><code>Gtk.Picture</code> from a <code>Gdk.Texture</code></td><td data-k="Notes" class="wrap">Remote images load through Gio; double click opens the viewer (Chapter 5).</td></tr>
+      <tr><td>Table</td><td data-k="Widget" class="wrap"><code>Gtk.Grid</code> of <code>Gtk.Label</code>s with Pango markup</td><td data-k="Notes" class="wrap">Cell Markdown → markup by the pure <code>markdown/pango.ts</code>; built only when visible (8d976da).</td></tr>
+      <tr><td>Code block</td><td data-k="Widget" class="wrap"><code>Gtk.ScrolledWindow</code> with its own horizontal scroll</td><td data-k="Notes" class="wrap">A TextView wraps all or nothing, so long code lines would widen the document (d21cfb0).</td></tr>
+      <tr><td>Mermaid / DBML</td><td data-k="Widget" class="wrap"><code>Gtk.Picture</code> of a WebKit snapshot</td><td data-k="Notes" class="wrap">A <code>WebKit.WebView</code> that is never shown runs mermaid.js; the snapshot becomes a texture. DBML is translated to Mermaid by pure code.</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Two later fixes are about first frames: a new overlay stays transparent until it is placed (007c4e9) and a new editor stays hidden until its column margins are set (07ba09a). Without them, images blink at the top-left corner and text briefly sticks to the left edge.</p>
+  <div class="lesson"><b>Lesson</b>When a widget does not support what you need (here: removing an overlay), pool and reuse instead of fighting it. Write the reason in a comment, because the next reader will try the obvious API first.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch5">
+  <div class="chapnum">Chapter 5 · commits fc7592a, c0fb9d4, 5999e22, 295d7b9 · <code>gtkutil.ts</code>, <code>ui/kanban.ts</code>, <code>ui/filetree.ts</code>, <code>ui/imageviewer.ts</code></div>
+  <h2>Input: from event signals to controllers</h2>
+  <p>GTK 3 widgets emitted <code>button-press-event</code> and <code>key-press-event</code>. GTK 4 removed those signals; input is handled by <b>event controllers</b> attached to a widget. Nyerat wraps the common cases in <code>gtkutil.ts</code> so every layer writes them the same way:</p>
+<pre><code>export function onClick(widget, handler, button = 1): Gtk.GestureClick {
+    const gesture = new Gtk.GestureClick({ button });
+    gesture.connect('pressed', (g, count, x, y) =&gt; {
+        if (handler(count, x, y, g.get_current_event_state()) === true)
+            g.set_state(Gtk.EventSequenceState.CLAIMED);   // stop here
+    });
+    widget.add_controller(gesture);
+    return gesture;
+}</code></pre>
+  <table class="data cards">
+    <thead><tr><th>Feature</th><th class="wrap">GTK pieces</th><th class="wrap">Why this way</th></tr></thead>
+    <tbody>
+      <tr><td>Editor keys</td><td data-k="GTK" class="wrap"><code>Gtk.EventControllerKey</code> (<code>onKeyPress</code>)</td><td data-k="Why" class="wrap">Enter continues lists, Tab moves table cells, arrows drive the <code>[[</code> suggestion popover.</td></tr>
+      <tr><td>Kanban drag</td><td data-k="GTK" class="wrap"><code>Gtk.GestureDrag</code>, <code>Gtk.Fixed</code> ghost layer, <code>Gtk.WidgetPaintable</code>, <code>Gtk.Overlay</code></td><td data-k="Why" class="wrap">Its own pointer handling instead of DnD: a ghost image of the card follows the pointer, a drop marker, auto scroll at the edges; testable with synthetic events.</td></tr>
+      <tr><td>File tree move</td><td data-k="GTK" class="wrap"><code>Gtk.DragSource</code>, <code>Gtk.DropTarget</code>, <code>Gdk.DragAction.MOVE</code></td><td data-k="Why" class="wrap">Real drag and drop between rows; folders open when hovered for 600 ms. The drag icon is a themed icon paintable passed to <code>set_icon()</code>, not a widget (<code>GtkDragIcon</code> gives a Gtk-CRITICAL).</td></tr>
+      <tr><td>Image viewer</td><td data-k="GTK" class="wrap"><code>EventControllerScroll</code>, <code>EventControllerMotion</code>, <code>GestureDrag</code>, a custom widget with <code>vfunc_snapshot</code></td><td data-k="Why" class="wrap">Zoom at the pointer, pan by dragging; the texture is drawn with <code>append_scaled_texture()</code> and a NEAREST filter above 300% instead of cairo + pixbuf (deprecated in 4.20).</td></tr>
+      <tr><td>Context menus</td><td data-k="GTK" class="wrap"><code>Gtk.PopoverMenu</code> from a <code>Gio.Menu</code>, a <code>Gio.SimpleActionGroup</code></td><td data-k="Why" class="wrap">Menus are written as plain <code>MenuEntry[]</code> (<code>ui/menu.ts</code>); tests call the entry's <code>run()</code>.</td></tr>
+    </tbody>
+  </table>
+  <div class="lesson"><b>Lesson</b>Controllers compose: a widget can have a click gesture, a drag gesture, and a key controller, each with its own propagation phase. Claim the event sequence when you handle it, so the widget below does not act as well.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch6">
+  <div class="chapnum">Chapter 6 · commits 295d7b9, 9079384, eda4a32 · <code>docs/audit-gtk4.md</code></div>
+  <h2>GTK 3 → GTK 4: what changed in practice</h2>
+  <p>The migration was one commit touching 63 files, followed by an audit that listed the GTK 3 patterns that still worked but were no longer the GTK 4 way. These are the replacements Nyerat made, in the order you are likely to meet them:</p>
+  <div class="scroll-x">
+  <table class="data cards">
+    <thead><tr><th>GTK 3</th><th>GTK 4 in Nyerat</th><th class="wrap">Where</th></tr></thead>
+    <tbody>
+      <tr><td><code>container.add()</code>, <code>pack_start()</code></td><td data-k="GTK 4"><code>box.append()</code>, <code>set_child()</code>, <code>pack()</code> helper</td><td data-k="Where" class="wrap"><code>gtkutil.ts</code></td></tr>
+      <tr><td><code>get_children()</code>, <code>destroy()</code> on a child</td><td data-k="GTK 4"><code>childrenOf()</code>, <code>removeWidget()</code>, <code>removeChildren()</code></td><td data-k="Where" class="wrap"><code>gtkutil.ts</code>; a ListBox is emptied row by row because <code>remove_all()</code> also removes the placeholder</td></tr>
+      <tr><td><code>button-press-event</code>, <code>key-press-event</code></td><td data-k="GTK 4"><code>Gtk.GestureClick</code>, <code>Gtk.EventControllerKey</code></td><td data-k="Where" class="wrap">Chapter 5</td></tr>
+      <tr><td><code>size-allocate</code> signal</td><td data-k="GTK 4"><code>notify::width</code>/adjustment signals, <code>get_width()</code></td><td data-k="Where" class="wrap">editor margins, overlays</td></tr>
+      <tr><td><code>Gtk.EventBox</code></td><td data-k="GTK 4">Any widget + a controller</td><td data-k="Where" class="wrap">images, tables</td></tr>
+      <tr><td><code>add_child_in_window()</code></td><td data-k="GTK 4"><code>add_overlay()</code> + <code>OverlaySlots</code></td><td data-k="Where" class="wrap">Chapter 4</td></tr>
+      <tr><td><code>get_iter_at_line()</code> → iter</td><td data-k="GTK 4">returns <code>[ok, iter]</code>; <code>iterAtLine()</code></td><td data-k="Where" class="wrap"><code>gtkutil.ts</code></td></tr>
+      <tr><td><code>dialog.run()</code>, <code>FileChooserNative</code></td><td data-k="GTK 4"><code>Gtk.FileDialog</code>, <code>Adw.Dialog</code>, <code>modal()</code> → Promise</td><td data-k="Where" class="wrap">Chapter 7</td></tr>
+      <tr><td><code>TreeView</code> + <code>TreeStore</code></td><td data-k="GTK 4"><code>TreeListModel</code> + <code>ListView</code></td><td data-k="Where" class="wrap">Chapter 9</td></tr>
+      <tr><td><code>ComboBoxText</code></td><td data-k="GTK 4"><code>Gtk.DropDown</code> + <code>Gtk.StringList</code></td><td data-k="Where" class="wrap">model picker in the chat panel</td></tr>
+      <tr><td><code>Picture.new_for_pixbuf</code></td><td data-k="GTK 4"><code>textureFromPixbuf()</code> → <code>Gdk.MemoryTexture</code></td><td data-k="Where" class="wrap"><code>gtkutil.ts</code></td></tr>
+      <tr><td><code>show()</code> / <code>hide()</code> / <code>show_all()</code></td><td data-k="GTK 4"><code>set_visible()</code>; widgets are visible by default</td><td data-k="Where" class="wrap">everywhere</td></tr>
+      <tr><td><code>get_style_context().add_class()</code></td><td data-k="GTK 4"><code>add_css_class()</code>; <code>CssProvider.load_from_string()</code> (4.12+)</td><td data-k="Where" class="wrap"><code>ui/theme.ts</code></td></tr>
+      <tr><td><code>Gtk.ShortcutsWindow</code></td><td data-k="GTK 4"><code>Adw.ShortcutsDialog</code> (1.8+) or an <code>Adw.Dialog</code> fallback</td><td data-k="Where" class="wrap"><code>ui/shortcuts.ts</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><b>A GTK 4 surprise:</b> <code>hexpand</code>/<code>vexpand</code> now propagate upward. One expanding label inside the History tab made the whole sidebar expand. The side panels are given an explicit <code>hexpand: false</code>, and a test guards it.</p>
+  <p><b>Another one:</b> on X11, if a format command makes the selection empty for a moment, GTK 4 drops the new selection (PRIMARY clipboard). <code>wrapSelection()</code> inserts and deletes at the edges of the selection instead of replacing it.</p>
+  <div class="lesson"><b>Lesson</b>Port first, then audit. A big-bang port that keeps behavior is easier to verify; modernizing deprecated-but-working APIs is a separate list of small, testable changes.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch7">
+  <div class="chapnum">Chapter 7 · commits c85aa0d, 3fe7fdd, ad0f095, 90699c3, 9750175, b31556d · <code>window.ts</code>, <code>ui/dialogs.ts</code>, <code>ui/tabbar.ts</code></div>
+  <h2>libadwaita: the GNOME layer on top of GTK</h2>
+  <p>GTK gives widgets; libadwaita gives the <b>GNOME patterns</b>: header bars, dialogs that are bottom sheets on phones, toasts, tab views, split views, breakpoints, and the Adwaita style with named colors. Nyerat moved to it in one day, one pattern per commit.</p>
+  <table class="data cards">
+    <thead><tr><th>Pattern</th><th class="wrap">libadwaita API</th><th class="wrap">In Nyerat</th></tr></thead>
+    <tbody>
+      <tr><td>Window</td><td data-k="API" class="wrap"><code>Adw.ApplicationWindow</code>, <code>Adw.ToolbarView</code>, <code>Adw.HeaderBar</code>, <code>Adw.WindowTitle</code></td><td data-k="In Nyerat" class="wrap">Main window; secondary windows (history, image viewer, proposals, agent log) use <code>Adw.Window</code> + <code>ToolbarView</code>, not <code>set_titlebar()</code>.</td></tr>
+      <tr><td>Theme</td><td data-k="API" class="wrap"><code>Adw.StyleManager</code>, <code>Adw.ColorScheme</code></td><td data-k="In Nyerat" class="wrap">Follow system / light / dark; interface CSS uses <code>@accent_color</code>, <code>@card_bg_color</code>, … Only document surfaces (tags, tables, diagrams) keep hex colors.</td></tr>
+      <tr><td>Dialogs</td><td data-k="API" class="wrap"><code>Adw.Dialog</code>, <code>Adw.AlertDialog</code>, <code>Adw.AboutDialog</code>, <code>Adw.PreferencesDialog</code></td><td data-k="In Nyerat" class="wrap">Card editor, confirmations (destructive response appearance), About, Preferences.</td></tr>
+      <tr><td>Notifications</td><td data-k="API" class="wrap"><code>Adw.ToastOverlay</code>, <code>Adw.Toast</code></td><td data-k="In Nyerat" class="wrap">“Committed successfully” and other messages that need no answer.</td></tr>
+      <tr><td>Tabs</td><td data-k="API" class="wrap"><code>Adw.TabView</code>, <code>Adw.TabBar</code>, <code>Adw.TabPage</code></td><td data-k="In Nyerat" class="wrap">One page per document or Home; a page is only a marker, the window's own <code>Gtk.Stack</code> shows the editor or the board. The bar autohides with one tab.</td></tr>
+      <tr><td>Side panels</td><td data-k="API" class="wrap"><code>Adw.OverlaySplitView</code></td><td data-k="In Nyerat" class="wrap">Sidebar (Files/Outline/History) and the Assistant panel, bound to GSettings.</td></tr>
+      <tr><td>Adaptive</td><td data-k="API" class="wrap"><code>Adw.Breakpoint</code>, <code>Adw.BreakpointCondition</code></td><td data-k="In Nyerat" class="wrap">Assistant folds below 900 sp, sidebar below 600 sp. Try the simulation.</td></tr>
+      <tr><td>Pages</td><td data-k="API" class="wrap"><code>Adw.Clamp</code>, <code>Adw.StatusPage</code>, <code>Adw.ActionRow</code>, <code>Adw.ButtonContent</code></td><td data-k="In Nyerat" class="wrap">Home and Inbox (Chapter 12).</td></tr>
+      <tr><td>Progress</td><td data-k="API" class="wrap"><code>Adw.Spinner</code> (1.6+)</td><td data-k="In Nyerat" class="wrap">Agent plan checklist; <code>Gtk.Spinner</code> when the system libadwaita is older.</td></tr>
+    </tbody>
+  </table>
+  <h3>Dialogs without a nested main loop</h3>
+  <p>GTK 4 removed <code>gtk_dialog_run()</code> on purpose: a main loop inside a handler lets other code run in the middle of that handler. Nyerat's GTK 3 dialogs returned their answer synchronously; commit 9750175 changed them to return a <code>Promise</code> through <code>modal()</code>. To keep tests and question-free paths synchronous, callers continue with <code>after()</code>, which accepts either a value or a Promise:</p>
+<pre><code>export type Awaitable&lt;T&gt; = T | Promise&lt;T&gt;;
+export function after&lt;T, R&gt;(value: Awaitable&lt;T&gt;, next: (v: T) =&gt; Awaitable&lt;R&gt;): Awaitable&lt;R&gt; {
+    return value instanceof Promise ? value.then(next) : next(value);
+}
+// a dialog stand-in in tests returns a plain value → the whole flow stays synchronous</code></pre>
+  <p class="note">A continuation after a dialog must check the state again: the tab or card may be gone by the time the user answers.</p>
+
+  <div class="sim" id="sim-bp">
+    <h3>Simulation: breakpoints and remembered panels <span class="kind">model of <code>addBreakpoints()</code> + <code>bindPanel()</code></span></h3>
+    <div class="controls">
+      <label>Window width <input type="range" id="bp-w" min="360" max="1400" step="10" value="1200"><output id="bp-w-out">1200 sp</output></label>
+    </div>
+    <div class="btnrow">
+      <button type="button" class="ghost" id="bp-side">Toggle sidebar</button>
+      <button type="button" class="ghost" id="bp-chat">Toggle Assistant</button>
+    </div>
+    <div class="winsim" id="bp-win"><div class="hb">Nyerat</div><div class="body" id="bp-body"></div></div>
+    <div class="stats" id="bp-stats"></div>
+    <p class="note">Narrow the window with both panels open, then widen it again: the panels come back because <code>bindPanel()</code> stored the setting from before the fold. Close a panel while wide and it stays closed after a fold and unfold. Without the pin, <code>OverlaySplitView</code> would always reopen it.</p>
+  </div>
+  <div class="lesson"><b>Lesson</b>Pick in this order: an <code>Adw.*</code> widget, then a GTK widget, then an Adwaita style class (<code>card</code>, <code>dim-label</code>, <code>boxed-list</code>, <code>navigation-sidebar</code>), and only then your own CSS. Newer APIs go behind feature detection (<code>'ShortcutsDialog' in Adw</code>) with a tested fallback.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch8">
+  <div class="chapnum">Chapter 8 · commits 614f171, 9e7ffda, 90699c3 · <code>actions.ts</code>, <code>settings.ts</code>, <code>ui/palette.ts</code></div>
+  <h2>One command, many entry points: Gio.Action and GSettings</h2>
+  <p><b>Actions.</b> Every command is a <code>Gio.SimpleAction</code> on the application, with accelerators from <code>set_accels_for_action()</code>. The menu item, the header button, the keyboard shortcut, and the command palette all activate the same action. Disabling an action (<code>set_enabled(false)</code>) dims the menu item and silences the shortcut at once; that is how text-editing actions turn off while the kanban board is shown.</p>
+<pre><code>const action = (name, accels, run) =&gt; {
+    const a = new Gio.SimpleAction({ name });
+    a.connect('activate', run);
+    app.add_action(a);
+    if (accels) app.set_accels_for_action(`app.${name}`, accels);
+};
+action('journal-capture', ['&lt;Control&gt;&lt;Shift&gt;j'], () =&gt; w.captureJournal());</code></pre>
+  <p><b>Settings.</b> A JSON file in <code>~/.config</code> became a GSettings schema (<code>data/com.ekaput.Nyerat.gschema.xml</code>), compiled at build time and loaded from next to the bundle when running from <code>dist/</code>. Three GSettings features remove whole classes of code:</p>
+  <ul>
+    <li><code>gsettings.create_action(key)</code>: a stateful toggle action whose state <i>is</i> the key (sidebar, Assistant, focus mode, typewriter, autosave).</li>
+    <li><code>gsettings.bind(key, widget, 'property', DEFAULT)</code>: the split view's <code>show-sidebar</code> and the preference switches follow the key both ways.</li>
+    <li><code>Gio.memory_settings_backend_new()</code>: tests get <code>AppSettings.inMemory()</code> and never touch the user's dconf.</li>
+  </ul>
+  <p><b>The palette</b> (Ctrl+Shift+P) lists the enabled actions that have a label in <code>commands.ts</code>, filtered as you type. Its rows are <code>Command</code> GObjects in a <code>Gio.ListStore</code> (Chapter 9).</p>
+  <div class="lesson"><b>Lesson</b>If something can be triggered from two places, make it an action. If something must be remembered, make it a GSettings key and bind it; do not write save/load code.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch9">
+  <div class="chapnum">Chapter 9 · commits a86dfb4, b51c43b · <code>ui/filetree.ts</code>, <code>ui/outline.ts</code>, <code>ui/history.ts</code>, <code>ui/palette.ts</code></div>
+  <h2>Lists as models: ListStore, ListView, TreeListModel</h2>
+  <p>GTK 3 lists were either a <code>TreeView</code> with cell renderers or a <code>ListBox</code> filled by hand. GTK 4's answer is a <b>model → selection → view</b> pipeline with a <b>factory</b> that makes and recycles row widgets. Only visible rows have widgets.</p>
+  <div class="flow" aria-label="List pipeline">
+    <span class="node gio">Gio.ListStore&lt;Command&gt;</span><span class="to">→</span>
+    <span class="node">Gtk.FilterListModel</span><span class="to">→</span>
+    <span class="node">Gtk.SingleSelection</span><span class="to">→</span>
+    <span class="node gtk">Gtk.ListView + SignalListItemFactory</span>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <h4>Items are GObjects</h4>
+<pre><code>class FileNode extends GObject.Object {
+  static { GObject.registerClass(
+    { GTypeName: 'NyeratFileNode' }, this); }
+  name = ''; path = ''; isDir = false;
+}</code></pre>
+      <p class="note">A list model holds GObjects, so plain JS data is wrapped once in a registered class.</p>
+    </div>
+    <div class="panel">
+      <h4>The file tree</h4>
+      <p class="note"><code>Gtk.TreeListModel</code> calls a <code>create_func</code> for each folder to get its children model. GTK also calls it just to ask whether a row can expand, so folder contents are cached in <code>dirStores</code>; a <code>Gio.FileMonitor</code> per read folder inserts/removes only the changed rows. <code>Gtk.TreeExpander</code> draws the arrow and indentation.</p>
+    </div>
+  </div>
+  <p>Where a list is short and every row is different (Home sections, Inbox items, the kanban columns), Nyerat still uses <code>Gtk.ListBox</code> with the <code>boxed-list</code> style or plain boxes. ListView pays off for long, uniform lists: the outline of a book, Git history, the file tree, the palette.</p>
+  <div class="lesson"><b>Lesson</b>Filtering or sorting a model is a property change, not a rebuild. The palette's search only calls <code>filter.changed()</code>; no row widgets are created or discarded by hand.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch10">
+  <div class="chapnum">Chapter 10 · commits 9e7ffda, 1f364e4 · <code>ui/*.ui</code>, <code>ui/headerbar.ts</code>, <code>ui/preferences.ts</code></div>
+  <h2>Gtk.Template: layout in XML, behavior in TypeScript</h2>
+  <p>A chain of <code>new Gtk.Box()</code> + <code>append()</code> hides the shape of a layout. Static layouts moved into <code>.ui</code> files that Vite bundles as text (<code>import xml from './headerbar.ui?raw'</code>). The class registers the template and names the children it needs:</p>
+<pre><code>export class HeaderBar extends Adw.Bin {          // Adw.HeaderBar is final: wrap it
+    static {
+        GObject.registerClass({
+            GTypeName: 'NyeratHeaderBar',
+            Template: uiTemplate(template),       // Uint8Array of the XML
+            InternalChildren: ['windowTitle'],    // → this._windowTitle
+        }, this);
+    }
+    declare _windowTitle: Adw.WindowTitle;
+}</code></pre>
+  <ul>
+    <li>Menus live in the same file as <code>&lt;menu&gt;</code> elements whose items point at actions (<code>app.journal</code>); the menu updates itself when an action is disabled.</li>
+    <li>Interface strings carry <code>translatable="yes"</code> so xgettext extracts them (Chapter 11).</li>
+    <li>Templates now: header bar, status bar, find bar, chat panel, command palette, preferences (with <code>AdwSwitchRow</code>, <code>AdwComboRow</code>, <code>AdwPreferencesGroup</code>).</li>
+    <li>Dynamic content (kanban cards, Home sections, the editor) stays in code, because it is built from data.</li>
+  </ul>
+  <div class="lesson"><b>Lesson</b>Final classes such as <code>Adw.HeaderBar</code> cannot be subclassed; wrap them in <code>Adw.Bin</code>. A <code>GTypeName</code> must be unique per process, so prefix it (<code>Nyerat…</code>).</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch11">
+  <div class="chapnum">Chapter 11 · commits 1a1a716, 9750175 · <code>i18n.ts</code>, <code>data/</code>, <code>meson.build</code>, <code>build-aux/flatpak/</code></div>
+  <h2>Becoming a GNOME citizen: ID, translations, accessibility, packaging</h2>
+  <ul>
+    <li><b>App ID</b> <code>com.ekaput.Nyerat</code> names the D-Bus service, the GSettings schema, the desktop file, the metainfo, and the icons. The About dialog and the window icon use it too.</li>
+    <li><b>gettext</b>: <code>_()</code>, <code>ngettext()</code>, <code>pgettext()</code> from <code>src/i18n.ts</code>. Text with values uses <code>fmt(_('… {name} …'), { name })</code>, never a template literal, so xgettext can extract it and translators can reorder words. <code>i18n.ts</code> is imported first in <code>main.ts</code> because ES modules evaluate dependencies first, and some labels are built at module top level.</li>
+    <li><b>Accessibility</b>: a status is never only a color or icon. Rows get <code>accessible_role</code> and <code>update_property(Gtk.AccessibleProperty.LABEL, …)</code>; everything is reachable by keyboard; the shortcuts dialog (Ctrl+?) lists the accelerators.</li>
+    <li><b>Packaging</b>: Meson installs the bundle, the schema, the icons (<code>hicolor/scalable</code> + <code>symbolic</code>), the desktop file, and the metainfo; the Flatpak manifest targets the GNOME 50 runtime. When running from <code>dist/</code>, <code>addBundledIcons()</code> adds the icon folder to <code>Gtk.IconTheme</code>.</li>
+  </ul>
+  <div class="caveat">The development machine has libadwaita 1.5 / GTK 4.14, while the Flatpak runtime is newer. That is why every newer API is feature-detected: <code>Adw.ShortcutsDialog</code> (1.8), the system accent (1.6), <code>Adw.Spinner</code> (1.6). <code>CssProvider.load_from_string()</code> sets the real minimum at GTK 4.12.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch12">
+  <div class="chapnum">Chapter 12 · commits 36ae571, e87b422, 222dc97, 79ad33d, 5877392, c237d7c</div>
+  <h2>Workbench features: each one is a pure model plus a thin view</h2>
+  <p>The newest features follow one recipe. A pure module in <code>markdown/</code> parses and serializes the file; a view in <code>ui/</code> draws it and reports changes through a callback; the window writes the change back into the buffer as one undo step. The GTK part is the smallest part.</p>
+  <table class="data cards">
+    <thead><tr><th>Feature</th><th class="wrap">Pure model (no GTK)</th><th class="wrap">GTK / Adw pieces</th></tr></thead>
+    <tbody>
+      <tr><td>Kanban board</td><td data-k="Model" class="wrap"><code>markdown/kanban.ts</code>: frontmatter <code>kanban: true</code>, <code>##</code> lists, <code>- [ ]</code> cards, tags, due dates</td><td data-k="GTK" class="wrap"><code>Gtk.Stack</code> (text ↔ board), <code>GestureDrag</code>, <code>Gtk.Fixed</code>, <code>WidgetPaintable</code>; card editor in an <code>Adw.Dialog</code> with a <code>Gtk.Calendar</code> due-date picker in a popover</td></tr>
+      <tr><td><code>[[note]]</code> links</td><td data-k="Model" class="wrap"><code>markdown/wikilink.ts</code>: parse, resolve by file name (case-insensitive, <code>folder/Note#Section</code>)</td><td data-k="GTK" class="wrap"><code>editor/wikicomplete.ts</code>: a <code>Gtk.Popover</code> pointed at the cursor rectangle (<code>buffer_to_window_coords</code>), focus stays in the TextView; table cells use <code>nyerat-note:</code> URIs on <code>activate-link</code></td></tr>
+      <tr><td>Inbox</td><td data-k="Model" class="wrap"><code>markdown/inbox.ts</code>: frontmatter <code>inbox: true</code>, one bullet per item, <code>➕ date time</code></td><td data-k="GTK" class="wrap"><code>Adw.Clamp</code>, <code>Adw.StatusPage</code> for the empty state, <code>Gtk.Entry</code> quick capture, <code>Gtk.ListBox</code> rows, <code>Adw.ButtonContent</code></td></tr>
+      <tr><td>Home</td><td data-k="Model" class="wrap"><code>markdown/home.ts</code>: due cards, unprocessed inbox items, recent files, greeting</td><td data-k="GTK" class="wrap"><code>Gtk.FlowBox</code> of folder cards (<code>card</code> style), <code>Adw.ActionRow</code>s, <code>Gtk.CheckButton</code> to finish a card in place, its own <code>Adw.TabPage</code></td></tr>
+      <tr><td>Daily journal</td><td data-k="Model" class="wrap"><code>markdown/journal.ts</code> + <code>activity.ts</code> (JSONL log in <code>.nyerat/activity</code>, merged into the Activity section)</td><td data-k="GTK" class="wrap">Quick capture through an action (Ctrl+Shift+J) and a small <code>Adw.Dialog</code>; the journal itself is a normal editor tab</td></tr>
+      <tr><td>Images in the file tree</td><td data-k="Model" class="wrap"><code>isImageFile()</code></td><td data-k="GTK" class="wrap">Same <code>ListView</code> rows; activation opens the <code>ImageViewer</code> (<code>Adw.Window</code>) instead of a tab</td></tr>
+    </tbody>
+  </table>
+  <figure><img src="assets/home.gif" alt="The Home tab with folder cards, due dates, and inbox items" loading="lazy" width="1200" height="750"><figcaption>Home: <code>Adw.Clamp</code> keeps the column readable, <code>Gtk.FlowBox</code> wraps the folder cards.</figcaption></figure>
+  <div class="lesson"><b>Lesson</b>“The Markdown text is the only source of truth” is a GTK design rule too: the board and inbox never hold state that the buffer does not have, so undo, autosave, Git, and the agent all keep working without knowing those views exist.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch13">
+  <div class="chapnum">Chapter 13 · <code>src/markdown/</code>, <code>src/agent/</code>, <code>files.ts</code>, <code>git.ts</code>, <code>orchestrator.ts</code></div>
+  <h2>The code that never touches GTK</h2>
+  <p>About 4,700 lines import nothing from GObject Introspection, and about 1,700 more use only Gio/GLib. This is deliberate. Code without widgets runs in <code>gjs -m dist/run-tests.js --no-gui</code> in a fraction of a second, has no main-loop timing, and can be read without knowing GTK.</p>
+  <h3>Pure modules (no <code>gi://</code>)</h3>
+  <table class="data cards">
+    <thead><tr><th>Module</th><th class="wrap">What it does</th><th class="wrap">Who draws it</th></tr></thead>
+    <tbody>
+      <tr><td><code>markdown/syntax.ts</code>, <code>inline.ts</code></td><td data-k="Does" class="wrap">Block and inline parsing into markers with offsets</td><td data-k="Drawn by" class="wrap"><code>editor/highlighter.ts</code> → tags</td></tr>
+      <tr><td><code>markdown/table.ts</code>, <code>pango.ts</code></td><td data-k="Does" class="wrap">Table model, alignment, edit commands; cell Markdown → Pango markup string</td><td data-k="Drawn by" class="wrap"><code>tablelayer.ts</code>, <code>tableedit.ts</code></td></tr>
+      <tr><td><code>markdown/kanban.ts</code>, <code>inbox.ts</code>, <code>home.ts</code>, <code>journal.ts</code>, <code>wikilink.ts</code></td><td data-k="Does" class="wrap">Parse/serialize the workbench formats; every operation returns a new value</td><td data-k="Drawn by" class="wrap"><code>ui/kanban.ts</code>, <code>ui/inbox.ts</code>, <code>ui/home.ts</code>, editor</td></tr>
+      <tr><td><code>markdown/dbml.ts</code>, <code>html.ts</code>, <code>lint.ts</code>, <code>chatmarkup.ts</code></td><td data-k="Does" class="wrap">DBML → Mermaid ER, HTML export, structure checks, chat Markdown → markup</td><td data-k="Drawn by" class="wrap">Mermaid layer, export action, agent, chat panel</td></tr>
+      <tr><td><code>editor/offsets.ts</code></td><td data-k="Does" class="wrap">UTF-16 ↔ code point maps, allocation-free word count</td><td data-k="Drawn by" class="wrap">Every tag operation</td></tr>
+      <tr><td><code>gitlog.ts</code></td><td data-k="Does" class="wrap">Parse <code>git log</code>/<code>diff</code> output into commits and hunks</td><td data-k="Drawn by" class="wrap">History tab, diff viewer</td></tr>
+      <tr><td><code>agent/context.ts</code>, <code>tools.ts</code>, <code>changes.ts</code>, <code>batch.ts</code>, <code>harness.ts</code>, …</td><td data-k="Does" class="wrap">Context building, BM25, tools, change proposals, preflight, pi prompt/queue</td><td data-k="Drawn by" class="wrap"><code>ui/chat.ts</code>, proposal viewer (see <a href="learn-agent.html">Learn agents</a>)</td></tr>
+    </tbody>
+  </table>
+  <h3>Gio/GLib without widgets</h3>
+  <div class="widgets">
+    <code class="gio">files.ts · GLib.file_get_contents, replace_contents_bytes_async</code>
+    <code class="gio">fileops.ts · Gio.File.move, trash</code>
+    <code class="gio">git.ts · Gio.SubprocessLauncher + communicate_utf8_async</code>
+    <code class="gio">orchestrator.ts · GLib.spawn_async_with_pipes + IOChannel</code>
+    <code class="gio">settings.ts · Gio.Settings + SettingsSchemaSource</code>
+    <code class="gio">activity.ts · append-only JSONL</code>
+    <code class="gio">agent/deepseek.ts · libsoup streaming</code>
+    <code class="gio">agent/apikey.ts · libsecret</code>
+    <code class="gio">agent/project.ts · Gio.FileEnumerator</code>
+  </div>
+  <p class="note">One GJS detail from <code>orchestrator.ts</code>: after GTK is loaded, <code>Gio.Subprocess.get_stdout_pipe()</code> triggers a Gjs-WARNING about <code>Gio.UnixInputStream</code>, so the harness reads its pipes with <code>GLib.IOChannel</code> and writes bytes with an explicit length.</p>
+  <h3>Why the split pays off</h3>
+  <ul>
+    <li><b>Tests</b>: 24 unit test files run without a display; 29 GUI test files cover what only a window can show.</li>
+    <li><b>Performance</b>: the parser and tag diff are measured by <code>npm run bench</code> without GTK in the way (<a href="learn-performance.html">Learn performance</a>).</li>
+    <li><b>The GTK 4 migration</b> did not touch <code>markdown/</code> at all: the pure line count went from 2,265 to 2,268 in commit 295d7b9.</li>
+  </ul>
+  <div class="lesson"><b>Lesson</b>Push decisions down into pure functions and keep widgets as thin adapters. When the toolkit changes (GTK 3 → 4, GTK → libadwaita), only the adapters move.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="pitfalls">
+  <div class="chapnum">Reference</div>
+  <h2>GTK pitfalls Nyerat hit, and the rule it kept</h2>
+  <div class="scroll-x">
+  <table class="data cards">
+    <thead><tr><th>Symptom</th><th class="wrap">Cause</th><th class="wrap">Rule</th></tr></thead>
+    <tbody>
+      <tr><td>Crash “Byte index is off the end of the line”</td><td data-k="Cause" class="wrap"><code>invisible</code> tag in GTK 3</td><td data-k="Rule" class="wrap">Hide with the <code>hidden</code> tag at size <code>TINY</code> = 256</td></tr>
+      <tr><td>Emoji not drawn</td><td data-k="Cause" class="wrap">Font size 1 Pango unit</td><td data-k="Rule" class="wrap">Never size 1; 256 is small enough</td></tr>
+      <tr><td>Tag in the wrong place after an emoji</td><td data-k="Cause" class="wrap">UTF-16 vs code points</td><td data-k="Rule" class="wrap"><code>makeCpMap()</code> right before touching the buffer</td></tr>
+      <tr><td>300 ms per keystroke</td><td data-k="Cause" class="wrap">Remove + reapply tags across the buffer</td><td data-k="Rule" class="wrap"><code>setTagRanges()</code> / <code>LineTagger</code></td></tr>
+      <tr><td>“GtkBox is not a child of GtkSourceView”</td><td data-k="Cause" class="wrap">Removing a TextView overlay in 4.14</td><td data-k="Rule" class="wrap">Borrow/return slots from <code>OverlaySlots</code></td></tr>
+      <tr><td>Images stay put while text scrolls</td><td data-k="Cause" class="wrap">Overlay offset updated only on allocation</td><td data-k="Rule" class="wrap"><code>queue_allocate()</code> on every scroll</td></tr>
+      <tr><td>Window cannot shrink</td><td data-k="Cause" class="wrap"><code>hscrollbar_policy: NEVER</code> forwards the minimum width</td><td data-k="Rule" class="wrap">Use <code>EXTERNAL</code></td></tr>
+      <tr><td>Sidebar suddenly expands</td><td data-k="Cause" class="wrap"><code>hexpand</code> propagates upward in GTK 4</td><td data-k="Rule" class="wrap">Explicit <code>hexpand: false</code> on side panels</td></tr>
+      <tr><td>“already disposed” criticals after closing</td><td data-k="Cause" class="wrap">Idle/timeout outliving the widget; no <code>destroy</code> signal for held widgets</td><td data-k="Rule" class="wrap"><code>destroy()</code> + <code>destroyed</code> flag, called from <code>unrealize</code></td></tr>
+      <tr><td>Answer cut off in the chat panel</td><td data-k="Cause" class="wrap"><code>set_value()</code> inside an adjustment's <code>changed</code> during allocation</td><td data-k="Rule" class="wrap">Scroll from an idle (<code>stickIdle</code>)</td></tr>
+      <tr><td>Gtk-CRITICAL when dragging a file</td><td data-k="Cause" class="wrap">A widget as <code>GtkDragIcon</code></td><td data-k="Rule" class="wrap"><code>DragSource.set_icon()</code> with a paintable</td></tr>
+      <tr><td>GLib-CRITICAL on exit</td><td data-k="Cause" class="wrap"><code>Gtk.AlertDialog</code> / <code>destroy_with_parent</code></td><td data-k="Rule" class="wrap"><code>Adw.AlertDialog</code> through <code>alert()</code></td></tr>
+      <tr><td>Gdk-CRITICAL <code>gdk_monitor_get_geometry</code> in tests</td><td data-k="Cause" class="wrap">A popover from a button outside the Xvfb monitor</td><td data-k="Rule" class="wrap">Keep test windows within 1280×800</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="lessons">
+  <div class="chapnum">Summary</div>
+  <h2>Lessons that carry over to other GTK apps</h2>
+  <ol>
+    <li><b>Decide where GTK may appear before writing widgets.</b> A pure model plus a thin view survived two toolkit migrations.</li>
+    <li><b>The text buffer is a document model.</b> Style it with tags, change tags by difference, and convert offsets at the boundary.</li>
+    <li><b>Use the main loop.</b> Idle priorities merge work and order it around drawing; Gio's async calls keep I/O off the main thread.</li>
+    <li><b>Clean up explicitly in GJS.</b> Store source IDs, add <code>destroy()</code>, and check a flag in every deferred callback.</li>
+    <li><b>Port, then audit, then modernize</b> in small commits with tests.</li>
+    <li><b>Let libadwaita carry the GNOME patterns</b>: dialogs, toasts, tabs, split views, breakpoints, named colors.</li>
+    <li><b>Actions and GSettings remove code</b>: one command for every entry point, bindings instead of save/load.</li>
+    <li><b>Models for long lists, templates for static layouts</b>, code for layouts built from data.</li>
+  </ol>
+  <p class="note">Related pages: <a href="learn-performance.html">Learn performance</a> (measurements behind Chapters 2–4) and <a href="learn-agent.html">Learn agents</a> (the pure <code>agent/</code> layer from Chapter 13).</p>
+</section>
+
+<footer>Nyerat · learning notes generated from the Git history of <a href="https://github.com/EkaPutCom/nyerat">EkaPutCom/nyerat</a>. Line counts per layer come from <code>git show</code> at each commit; the simulations say whether they copy real Nyerat code or model it.</footer>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const int = v => Math.round(v).toLocaleString('en-US');
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs = {}, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const stat = (k, v, s, cls = '') => '<div class="stat ' + cls + '"><div class="k">' + k + '</div><div class="v">' + v + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
+
+/* ---------- tooltip ---------- */
+const tip = $('#tip');
+function attachTip(node, html) {
+  node.addEventListener('mousemove', e => {
+    tip.innerHTML = html;
+    tip.style.opacity = 1;
+    const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+    tip.style.left = Math.max(4, x) + 'px';
+    tip.style.top = (e.clientY + 14) + 'px';
+  });
+  node.addEventListener('mouseleave', () => { tip.style.opacity = 0; });
+}
+
+/* ---------- layer chart (real counts from git show) ---------- */
+// [commit, date, era, label, gtk, gioOnly, pure, adwRefs, uiFiles]
+const layers = [
+  ['6a0f03d', 'Oct 3', 'GTK 3', 'First editor', 1235, 116, 755, 0, 0],
+  ['4667616', 'Oct 3', 'GTK 3', 'TypeScript + Vite', 1825, 62, 417, 0, 0],
+  ['8e3ce86', 'Oct 3', 'GTK 3', 'Table grid', 2996, 66, 703, 0, 0],
+  ['c0fb9d4', 'Oct 3', 'GTK 3', 'Kanban board', 4174, 66, 955, 0, 0],
+  ['7f32cc8', 'Oct 3', 'GTK 3', 'Mermaid (WebKit)', 4842, 66, 993, 0, 0],
+  ['c989744', 'Oct 4', 'GTK 3', 'Git history', 5634, 147, 1409, 0, 0],
+  ['f6a4cc7', 'Oct 4', 'GTK 3', 'Assistant', 6698, 749, 2163, 0, 0],
+  ['472c298', 'Oct 4', 'GTK 3', 'Long manuscripts', 7329, 881, 2265, 0, 0],
+  ['295d7b9', 'Oct 5', 'GTK 4', 'GTK 4 migration', 7976, 891, 2268, 0, 0],
+  ['6c47266', 'Oct 5', 'GTK 4', 'Agent plan & verify', 8366, 1089, 2848, 0, 0],
+  ['b1ab712', 'Oct 6', 'GTK 4', 'pi orchestrator', 8755, 1430, 3755, 0, 0],
+  ['e87b422', 'Oct 6', 'GTK 4', '[[note]] links', 9182, 1585, 4005, 0, 0],
+  ['c85aa0d', 'Oct 6', 'Adw', 'libadwaita', 9256, 1590, 4116, 20, 0],
+  ['9e7ffda', 'Oct 6', 'Adw', 'Preferences + palette', 9464, 1615, 4141, 48, 2],
+  ['1f364e4', 'Oct 6', 'Adw', 'Gtk.Template', 9306, 1615, 4141, 59, 6],
+  ['9750175', 'Oct 6', 'Adw', 'GNOME HIG pass', 9603, 1653, 4144, 102, 6],
+  ['222dc97', 'Oct 7', 'Adw', 'Inbox', 10216, 1653, 4280, 109, 6],
+  ['79ad33d', 'Oct 7', 'Adw', 'Home', 10693, 1663, 4409, 120, 6],
+  ['5877392', 'Oct 8', 'Adw', 'Journal', 11298, 1712, 4664, 121, 6],
+  ['f74d5b5', 'Oct 8', 'Adw', 'Now', 11316, 1723, 4668, 121, 6],
+];
+function fit(svg, H) {
+  const W = Math.max(300, Math.round(svg.parentNode.clientWidth || 900));
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.setAttribute('height', H);
+  return W;
+}
+function drawLayers() {
+  const svg = $('#chart-layers');
+  svg.innerHTML = '';
+  const narrow = (svg.parentNode.clientWidth || 900) < 620;
+  const row = narrow ? 34 : 26, T = 4, H = T + row * layers.length + 20;
+  const W = fit(svg, H), L = narrow ? 92 : 230, R = 54;
+  const max = 18000;
+  const x = v => (W - L - R) * v / max;
+  const parts = [[4, '--before'], [5, '--after'], [6, '--third']];
+  layers.forEach((d, i) => {
+    const g = el('g', {}, svg), y0 = T + row * i;
+    el('text', { x: 0, y: y0 + 15, class: 'mono' }, g).textContent = d[0];
+    const lbl = el('text', { x: narrow ? 0 : 64, y: y0 + (narrow ? 29 : 15) }, g);
+    lbl.textContent = narrow ? (d[3].length > 13 ? d[3].slice(0, 12) + '…' : d[3]) : d[2] + ' · ' + d[3];
+    let acc = L;
+    for (const [k, color] of parts) {
+      const w = x(d[k]);
+      el('rect', { x: acc, y: y0 + 5, width: Math.max(1, w - 1), height: 13, fill: css(color), rx: 2 }, g);
+      acc += w;
+    }
+    el('text', { x: acc + 6, y: y0 + 15, class: 'valtxt' }, g).textContent = int(d[4] + d[5] + d[6]);
+    el('rect', { x: 0, y: y0, width: W, height: row, fill: 'transparent' }, g);
+    attachTip(g, '<b>' + d[0] + '</b> · ' + d[1] + ' · ' + esc(d[2]) + '<br>' + esc(d[3]) +
+      '<br>GTK/Adw files: ' + int(d[4]) + ' lines<br>Gio/GLib only: ' + int(d[5]) + ' lines<br>No GI import: ' + int(d[6]) + ' lines' +
+      '<br><span style="color:var(--text-2)">' + d[7] + ' Adw.* references · ' + d[8] + ' .ui files</span>');
+  });
+  for (const v of [0, 6000, 12000, 18000]) {
+    el('text', { x: L + x(v), y: H - 4, 'text-anchor': v ? 'end' : 'start' }, svg).textContent = v ? (v / 1000) + 'k' : '0';
+  }
+}
+
+/* ---------- offsets: copy of editor/offsets.ts makeCpMap() ---------- */
+function makeCpMap(text) {
+  if (!/[\uD800-\uDFFF]/.test(text)) return x => x;
+  const map = new Int32Array(text.length + 1);
+  let cp = 0;
+  for (let i = 0; i < text.length; i++) {
+    map[i] = cp;
+    const c = text.charCodeAt(i);
+    if (c >= 0xD800 && c <= 0xDBFF && i + 1 < text.length) map[++i] = cp;
+    cp++;
+  }
+  map[text.length] = cp;
+  return x => map[x];
+}
+function drawOffsets() {
+  const text = $('#off-text').value;
+  const toCp = makeCpMap(text);
+  let html = '', u = 0;
+  for (const ch of text) {
+    const wide = ch.length > 1;
+    html += '<div class="ch' + (wide ? ' wide' : '') + '"><b>' + (ch === ' ' ? '␣' : esc(ch)) + '</b><span class="i">js ' + u + '</span><span class="i">gtk ' + toCp(u) + '</span></div>';
+    u += ch.length;
+  }
+  $('#off-chars').innerHTML = html;
+  const bold = text.indexOf('**');
+  const cpLen = toCp(text.length);
+  $('#off-stats').innerHTML =
+    stat('JavaScript length', text.length, 'UTF-16 units') +
+    stat('GTK length', cpLen, 'code points', 'new') +
+    stat('First <code>**</code>', bold < 0 ? '—' : 'js ' + bold + ' → gtk ' + toCp(bold), bold < 0 ? 'no bold marker' : (bold - toCp(bold)) + ' off without the map', bold > toCp(bold) ? 'old' : '');
+}
+
+/* ---------- tag diff: copies of editor/tagsync.ts normalize()/subtract() ---------- */
+function normalize(ranges) {
+  const sorted = ranges.filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
+  const out = [];
+  for (const [a, b] of sorted) {
+    const last = out[out.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+function subtract(a, b) {
+  const out = [];
+  let j = 0;
+  for (const [s0, e] of a) {
+    let s = s0;
+    while (j < b.length && b[j][1] <= s) j++;
+    for (let k = j; k < b.length && b[k][0] < e; k++) {
+      if (b[k][0] > s) out.push([s, b[k][0]]);
+      s = Math.max(s, b[k][1]);
+    }
+    if (s < e) out.push([s, e]);
+  }
+  return out;
+}
+const LINE = 200;
+const parseRanges = s => s.split(',').map(p => p.trim().match(/^(\d+)\s*-\s*(\d+)$/)).filter(Boolean)
+  .map(m => [Math.min(LINE, +m[1]), Math.min(LINE, +m[2])]);
+function paint(track, ranges, cls) {
+  track.innerHTML = ranges.map(([a, b]) => '<i class="' + cls + '" style="left:' + (a / LINE * 100) + '%;width:' + ((b - a) / LINE * 100) + '%"></i>').join('');
+}
+function drawTags() {
+  const have = normalize(parseRanges($('#tag-have').value));
+  const want = normalize(parseRanges($('#tag-want').value));
+  const rm = subtract(have, want), add = subtract(want, have);
+  paint($('#tr-have'), have, 'have');
+  paint($('#tr-want'), want, 'want');
+  $('#tr-ops').innerHTML = '';
+  paint($('#tr-ops'), rm, 'rm');
+  $('#tr-ops').innerHTML += add.map(([a, b]) => '<i class="add" style="left:' + (a / LINE * 100) + '%;width:' + ((b - a) / LINE * 100) + '%"></i>').join('');
+  const touched = [...rm, ...add].reduce((s, [a, b]) => s + b - a, 0);
+  const naive = have.reduce((s, [a, b]) => s + b - a, 0) + want.reduce((s, [a, b]) => s + b - a, 0);
+  $('#tag-stats').innerHTML =
+    stat('setTagRanges() calls', rm.length + add.length, rm.length + ' remove · ' + add.length + ' apply', 'new') +
+    stat('Characters relaid out', touched, 'only the difference', 'new') +
+    stat('Remove all + reapply', naive, (have.length + want.length) + ' calls; every tagged character', 'old');
+}
+
+/* ---------- idle coalescing model ---------- */
+function drawIdle() {
+  const n = +$('#idle-n').value;
+  $('#idle-n-out').textContent = n;
+  const keys = Array.from({ length: n }, (_, i) => '<span class="key">changed ' + (i + 1) + '</span>').join('');
+  $('#idle-frames').innerHTML =
+    '<div class="f"><span>direct</span><span class="slots">' + Array.from({ length: n }, (_, i) => '<span class="key">changed ' + (i + 1) + '</span><span class="hl">highlight</span>').join('') + '<span class="draw">draw</span></span></div>' +
+    '<div class="f"><span>queued</span><span class="slots">' + keys + '<span class="hl">idle 100: highlight</span><span class="draw">120: draw</span></span></div>';
+  $('#idle-stats').innerHTML =
+    stat('Highlight passes, direct', n, 'one per signal', 'old') +
+    stat('Highlight passes, queued', 1, 'before the frame is drawn', 'new');
+}
+
+/* ---------- breakpoint model: addBreakpoints() + bindPanel() ---------- */
+const bp = { side: true, chat: true, wide: {}, collapsed: { side: false, chat: false } };
+function setCollapsed(key, collapsed) {
+  if (bp.collapsed[key] === collapsed) return;
+  bp.collapsed[key] = collapsed;
+  if (collapsed) { bp.wide[key] = bp[key]; bp[key] = false; }
+  else if (key in bp.wide) { bp[key] = bp.wide[key]; delete bp.wide[key]; }
+}
+function drawBp() {
+  const w = +$('#bp-w').value;
+  $('#bp-w-out').textContent = w + ' sp';
+  setCollapsed('chat', w <= 900);
+  setCollapsed('side', w <= 600);
+  const body = $('#bp-body');
+  const pane = (cls, txt, float) => '<div class="pane ' + cls + (float ? ' float' : '') + '">' + txt + '</div>';
+  let html = '';
+  if (bp.side) html += pane('side', 'Files · Outline · History', bp.collapsed.side);
+  html += pane('doc', '# Document<br><br>Editor column');
+  if (bp.chat) html += pane('chat', 'Assistant', bp.collapsed.chat);
+  body.innerHTML = html;
+  $('#bp-win').style.width = Math.round(Math.min(1, w / 1400) * 100) + '%';
+  const st = k => bp[k] ? (bp.collapsed[k] ? 'open, floating' : 'open, docked') : 'closed';
+  const remembered = Object.keys(bp.wide).map(k => (k === 'side' ? 'sidebar' : 'Assistant') + '=' + (bp.wide[k] ? 'open' : 'closed')).join(', ') || '—';
+  $('#bp-stats').innerHTML =
+    stat('Sidebar', st('side'), w <= 600 ? 'breakpoint max-width: 600sp' : 'docked above 600 sp', bp.side ? 'new' : 'old') +
+    stat('Assistant', st('chat'), w <= 900 ? 'breakpoint max-width: 900sp' : 'docked above 900 sp', bp.chat ? 'new' : 'old') +
+    stat('Remembered (widePanels)', remembered, 'restored when the window widens');
+}
+$('#bp-side').addEventListener('click', () => { bp.side = !bp.side; drawBp(); });
+$('#bp-chat').addEventListener('click', () => { bp.chat = !bp.chat; drawBp(); });
+
+$('#off-text').addEventListener('input', drawOffsets);
+$('#tag-have').addEventListener('input', drawTags);
+$('#tag-want').addEventListener('input', drawTags);
+$('#idle-n').addEventListener('input', drawIdle);
+$('#bp-w').addEventListener('input', drawBp);
+drawLayers(); drawOffsets(); drawTags(); drawIdle(); drawBp();
+let t = 0;
+addEventListener('resize', () => { clearTimeout(t); t = setTimeout(drawLayers, 120); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawLayers);
+})();
+</script>
+</body>
+</html>
