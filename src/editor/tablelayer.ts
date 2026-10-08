@@ -18,7 +18,7 @@ import Pango from 'gi://Pango';
 import { TABLE_CELL_PAD_X, TABLE_CELL_PAD_Y } from '../config.js';
 import { parseTable, type TableRange } from '../markdown/table.js';
 import { cellMarkup, type MarkupColors } from '../markdown/pango.js';
-import type { Palette } from '../ui/theme.js';
+import type { Palette } from '../colors.js';
 import { setTagGroup, setTagRanges, type Range } from './tagsync.js';
 import { iterAtLine, lineSpanOffsets, onClick } from '../gtkutil.js';
 import { OverlaySlots } from './overlays.js';

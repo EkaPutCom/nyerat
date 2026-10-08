@@ -27,7 +27,7 @@ import { ProposalViewer } from './proposalviewer.js';
 import { LogViewer } from './logviewer.js';
 import { chatMarkup } from '../markdown/chatmarkup.js';
 import { escapeMarkup, type MarkupColors } from '../markdown/pango.js';
-import type { Palette } from './theme.js';
+import type { Palette } from '../colors.js';
 import { childrenOf, onKeyPress, pack, uiTemplate } from '../gtkutil.js';
 import template from './chat.ui?raw';
 import { _, fmt, ngettext } from '../i18n.js';

@@ -7,7 +7,7 @@
 import Gtk from 'gi://Gtk?version=4.0';
 import Pango from 'gi://Pango';
 import { FONT_MONO } from '../config.js';
-import type { Palette } from '../ui/theme.js';
+import type { Palette } from '../colors.js';
 
 const W = Pango.Weight, S = Pango.Style;
 

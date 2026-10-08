@@ -27,7 +27,7 @@ import {
 import { cellMarkup, escapeMarkup, NOTE_URI, type MarkupColors } from '../markdown/pango.js';
 import { parseWikiLink, wikiLinksIn, type WikiLink } from '../markdown/wikilink.js';
 import { confirmDialog, editCardDialog, promptDialog, type CardDraft } from './dialogs.js';
-import type { Palette } from './theme.js';
+import type { Palette } from '../colors.js';
 import { after, childrenOf, onClick, onKeyPress, pack, removeChildren, type Awaitable } from '../gtkutil.js';
 import { popupMenu, separator, type MenuEntry } from './menu.js';
 import { _, fmt, pgettext } from '../i18n.js';

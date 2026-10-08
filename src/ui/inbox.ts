@@ -20,7 +20,7 @@ import { ageOf, captureItem, deleteItem, itemMeta, newInbox, updateItem, type Ag
 import { cellMarkup, NOTE_URI, type MarkupColors } from '../markdown/pango.js';
 import { parseWikiLink, type WikiLink } from '../markdown/wikilink.js';
 import { editNoteDialog, type CardDraft } from './dialogs.js';
-import type { Palette } from './theme.js';
+import type { Palette } from '../colors.js';
 import { after, removeChildren, type Awaitable } from '../gtkutil.js';
 import { _, fmt, ngettext } from '../i18n.js';
 

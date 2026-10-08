@@ -51,7 +51,7 @@ import { cpLength } from './offsets.js';
 import type { Tags } from './tags.js';
 import type { LineSpan } from './tagsync.js';
 import type { HighlightResult, Heading, Marker } from './highlighter.js';
-import type { Palette } from '../ui/theme.js';
+import type { Palette } from '../colors.js';
 import { iterAtLine } from '../gtkutil.js';
 import { _, fmt } from '../i18n.js';
 
