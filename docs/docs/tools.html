@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent tool list · Nyerat Documentation</title>
+<meta name="description" content="A reference of all the Nyerat agent tools: read tools, Git tools, change proposal tools, and work control tools, with when approval is needed.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
+<main class="doc">
+<p class="eyebrow">Reference</p>
+<h1>Agent tool list</h1>
+<p class="lead">All the tools that the Nyerat agent can call. Read tools run right away; proposal tools always wait for your approval in the review window.</p>
+
+<h2 id="read">Read tools</h2>
+<div class="table-wrap"><table>
+  <tr><th>Tool</th><th>Function</th><th>Approval</th></tr>
+  <tr><td><code>list_files</code></td><td>The list of Markdown files with word counts and headings</td><td>No</td></tr>
+  <tr><td><code>search_documents</code></td><td>Search sections of files by topic (BM25)</td><td>No</td></tr>
+  <tr><td><code>search_text</code></td><td>Search for exact text</td><td>No</td></tr>
+  <tr><td><code>read_file</code></td><td>Read the contents of a file by line range</td><td>No</td></tr>
+</table></div>
+
+<h2 id="git">Git tools</h2>
+<p>Only available when the work folder is a Git repository.</p>
+<div class="table-wrap"><table>
+  <tr><th>Tool</th><th>Function</th><th>Approval</th></tr>
+  <tr><td><code>git_log</code></td><td>The latest commits of the folder or one file</td><td>No</td></tr>
+  <tr><td><code>show_commit</code></td><td>The diff of one commit</td><td>No</td></tr>
+  <tr><td><code>file_at_commit</code></td><td>The contents of a file at an old commit</td><td>No</td></tr>
+</table></div>
+
+<h2 id="proposals">Proposal tools</h2>
+<div class="table-wrap"><table>
+  <tr><th>Tool</th><th>Function</th><th>Approval</th></tr>
+  <tr><td><code>create_file</code></td><td>A new Markdown file</td><td>Yes</td></tr>
+  <tr><td><code>edit_file</code></td><td>Replace exact text (once or every occurrence)</td><td>Yes</td></tr>
+  <tr><td><code>insert_text</code></td><td>Insert text at the start, at the end, or after a given line</td><td>Yes</td></tr>
+  <tr><td><code>delete_file</code></td><td>Move a file to the Trash</td><td>Yes</td></tr>
+  <tr><td><code>move_file</code></td><td>Rename or move to another folder</td><td>Yes</td></tr>
+  <tr><td><code>edit_kanban</code></td><td>Kanban board cards and lists</td><td>Yes</td></tr>
+  <tr><td><code>propose_batch</code></td><td>1–20 of the actions above in one review, which may be applied partially</td><td>Yes</td></tr>
+</table></div>
+
+<h2 id="control">Work control tools</h2>
+<div class="table-wrap"><table>
+  <tr><th>Tool</th><th>Function</th><th>Approval</th></tr>
+  <tr><td><code>set_work</code></td><td>Record the goal and up to 20 steps with their status</td><td>No</td></tr>
+  <tr><td><code>verify_work</code></td><td>Check the actual result: text present/absent, kanban cards, Markdown structure</td><td>No</td></tr>
+</table></div>
+
+<h2 id="harness">External harness</h2>
+<div class="table-wrap"><table>
+  <tr><th>Harness</th><th>Triggered from</th><th>Works in</th></tr>
+  <tr><td><code>pi</code></td><td>A kanban card marked <code>@pi</code></td><td>The project folder you choose, not the Nyerat work folder</td></tr>
+</table></div>
+
+<h2 id="requirements">Availability requirements</h2>
+<ul>
+  <li>The read and proposal tools are only offered when the <em>Other files in the folder</em> switch is on and a work folder is open.</li>
+  <li>One question runs at most 10 model rounds; the last round has no tools.</li>
+</ul>
+</main>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

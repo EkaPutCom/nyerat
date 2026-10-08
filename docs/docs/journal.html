@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The daily journal · Nyerat Documentation</title>
+<meta name="description" content="The Nyerat daily journal: one Markdown file per day holding quick notes and work activity from kanban boards, agents, harnesses, and Git commits.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
+<main class="doc">
+<p class="eyebrow">Workspace</p>
+<h1>The daily journal</h1>
+<p class="lead">The journal records what happens in your work today. You write short notes at any time, and Nyerat completes them with the work activity that has already happened: cards that were moved, agent changes you approved, harness results, and Git commits. Everything is stored as a plain Markdown file.</p>
+
+<h2 id="opening">Opening today's journal</h2>
+<ul>
+  <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd>, the ☰ menu → <em>Today's Journal</em>, or the <em>Today's journal</em> row on <a href="home.html">Home</a>.</li>
+  <li>The journal is stored in <code>journal/YYYY-MM-DD.md</code> in the work folder. If it does not exist yet, the file is created from a template titled with today's date with the sections <em>Today's focus</em>, <em>Notes</em>, <em>Activity</em>, and <em>Summary</em>.</li>
+  <li>The journal needs an open work folder (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>).</li>
+  <li>The journal is a normal document: edit it, save it, commit it, and link it with <code>[[note]]</code> like any other file. Journals of other days are opened from the file tree.</li>
+</ul>
+
+<h2 id="capture">Quick capture</h2>
+<p><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> (or the + button on the Journal row on Home) opens a one-line dialog. The text goes to the end of the <em>Notes</em> section as a time-stamped item, for example <code>- 11:40 Flatpak cannot be tested on this machine yet</code>, without leaving the document you are working on.</p>
+<ul>
+  <li>If today's journal is open in a tab, the note goes in through its editor as one undo step. If not, the note is written straight to its file (the file is created from the template if it does not exist).</li>
+  <li>Markers are free to use as you like, for example <code>!</code> for a blocker, <code>?</code> for a question, or <code>→</code> to continue tomorrow. Nyerat does not interpret them, but the Assistant can use them when summarizing.</li>
+</ul>
+
+<h2 id="activity">Automatic activity</h2>
+<p>Throughout the day Nyerat records the work activity in this work folder:</p>
+<ul>
+  <li><strong>Kanban cards</strong> that move to another list, are checked as done, or are newly added, from the board view, from the checkbox on Home, or from a harness. A card whose text was only edited is not recorded.</li>
+  <li><strong>Agent changes</strong> that you apply from the review window (also when they are undone).</li>
+  <li><strong>Harness results</strong>, for example <em>pi finished “Fix checkout” in project shop</em>.</li>
+  <li><strong>Git commits</strong> of that day in the repo of the work folder (read straight from <code>git log</code> when the journal is opened).</li>
+</ul>
+<p>When the journal is opened, activity that is not there yet is merged into the <em>Activity</em> section as time-stamped items. The names of boards and files are written as <code>[[…]]</code> links that can be opened with <kbd>Ctrl</kbd>+click. The merge only <em>adds</em> lines: lines that you edited or deleted are not overwritten, and one <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes the whole merge.</p>
+<p>The activity log is stored in <code>.nyerat/activity/YYYY-MM-DD.jsonl</code> in the work folder (ignored by Git through <code>.nyerat/.gitignore</code>, and not browsed by the agent).</p>
+
+<h2 id="summary">The end-of-day summary</h2>
+<p>The command palette (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) → <em>Summarize Journal with Assistant</em> opens today's journal, opens the <a href="assistant.html">Assistant</a> panel, and asks it to propose a summary under <em>Summary</em>: what was finished, what blocked, and what continues tomorrow. The proposal appears in the <a href="proposals.html">review window</a> like any other agent change, so nothing is written before you press <em>Apply</em>. It needs a DeepSeek API key.</p>
+
+<h2 id="home">On Home</h2>
+<p>Home shows the <em>Today's journal</em> row with the number of notes in the journal and the activity recorded today (including what has not been merged into the file yet). Click the row to open the journal, or the + button for a quick capture.</p>
+</main>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

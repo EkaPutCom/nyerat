@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The pi orchestrator · Nyerat Documentation</title>
+<meta name="description" content="Assign Nyerat kanban cards to the pi harness working in another project folder, answer its questions and permission requests from the card, and watch its log.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
+<main class="doc">
+<p class="eyebrow">Agent</p>
+<h1>The pi orchestrator</h1>
+<p class="lead">Nyerat can orchestrate an external harness: a kanban card assigned to <code>@pi</code> is worked on by <a href="https://pi.dev">pi</a> in another project folder, for example a code repo, not in the Nyerat work folder.</p>
+
+<figure><img src="../assets/pi.gif" width="900" height="548" loading="lazy" alt="Animation of a kanban board: @pi cards are assigned, one works and one queues, both finish to Review, then a third card waits for an answer"><figcaption>@pi cards: assigned, working and queued, finished to Review, then waiting for an answer</figcaption></figure>
+
+
+<h2 id="assigning">Assigning cards</h2>
+<pre><code>---
+kanban: true
+project: web-ecommerce         <span class="c">← the default project of the board</span>
+---
+
+## Plan
+- [ ] Checkout with QRIS @pi #feature
+- [ ] Test the cart @pi #project/shop-admin     <span class="c">← the project tag wins over the frontmatter</span></code></pre>
+<ol>
+  <li>Write <code>@pi</code> in the card title, or fill in <em>Assigned to</em> in the card edit dialog.</li>
+  <li>Right-click the card → <em>Work on it with pi</em>.</li>
+  <li>The project is taken from the <code>#project/name</code> tag or from the board frontmatter <code>project: name</code>. The project folder is asked for once and then remembered in the settings; a card without a project is given a tag from the name of its folder.</li>
+</ol>
+<p>When it starts, the card moves to the <em>In Progress</em> list. When it finishes, it moves to <em>Review</em> with the note <code>↳ pi done …: summary</code>. If it fails, the card stays where it is with the note <code>↳ pi failed …: reason</code>.</p>
+
+<h2 id="context">Notes as context</h2>
+<p>Pi works in the project folder, so it cannot read the notes in the Nyerat work folder. Link the notes on the card with <a href="editor.html#wikilink"><code>[[ ]]</code></a>, and Nyerat copies their contents into the prompt.</p>
+<pre><code>- [ ] Checkout with QRIS [[Spec#Payment]] @pi
+  Follow the decisions in [[Meeting Notes]].</code></pre>
+<ul>
+  <li>Links in the title and in the notes of the card are both included, at most 10 per card. The names are looked up with the same rules as <kbd>Ctrl</kbd>+click in the editor.</li>
+  <li><code>[[Note#Section]]</code> only copies the part under that heading, up to the next heading of the same level.</li>
+  <li>The contents go into the <em>Related notes from Nyerat</em> section of the prompt, wrapped in a code block. Every note is cut at 8,000 characters, and the total is 24,000 characters. A note that is not found is still named, so that pi knows something is missing.</li>
+  <li>An open document is read from its editor, so unsaved edits are included.</li>
+  <li>The complete prompt, including the contents of the notes, is visible in the <a href="#log">pi log</a>.</li>
+  <li>The contents of the notes are taken at <em>Work on it with pi</em>. <em>Reply to pi</em> continues the same session without copying them again.</li>
+</ul>
+<p>On the board, a link in a card title can be clicked to open its note, and a link in the notes of a card is shown as a <code>↗ name</code> row below the chip. The notes field in the card edit dialog suggests names when you type <code>[[</code>.</p>
+
+<h2 id="status">Card status</h2>
+<div class="table-wrap"><table>
+  <tr><th>Chip</th><th>Meaning</th></tr>
+  <tr><td>◇</td><td>Assigned</td></tr>
+  <tr><td>◌</td><td>Queued: the same project is being worked on by another card</td></tr>
+  <tr><td>●</td><td>Working</td></tr>
+  <tr><td>⏸</td><td>Waiting for your answer</td></tr>
+  <tr><td>✓ / ✕ / ■</td><td>Done / failed / stopped</td></tr>
+</table></div>
+<p>One project folder is worked on by one harness at a time; other cards queue and start automatically.</p>
+<figure><img src="../assets/pi-board.png" width="1280" height="780" loading="lazy" alt="A kanban board with the card Checkout with QRIS showing pi working in In Progress and Test the cart showing pi queued in Plan"><figcaption>One card works, another card in the same project queues</figcaption></figure>
+
+
+<h2 id="answering">Answering pi</h2>
+<p>Pi runs in RPC mode, so its conversation can be continued from Nyerat:</p>
+<ul>
+  <li><strong>Questions.</strong> When the answer of pi ends with <code>?</code>, the card becomes ⏸ and stays in <em>In Progress</em>. Right-click → <em>Answer pi…</em> opens the question with an answer box.</li>
+  <li><strong>Permission and input.</strong> A pi extension that asks for permission (e.g. a confirmation before <code>rm -rf</code>) appears in the same dialog: <em>Allow</em>/<em>Deny</em>, a choice, or an input.</li>
+  <li><strong>Later</strong> leaves pi waiting; <strong>End without replying</strong> closes its session.</li>
+  <li><strong>Steer pi…</strong> while pi works: the guidance is received before the next step, without stopping the work.</li>
+  <li><strong>Reply to pi…</strong> after it finishes: continues the same pi session so the card is worked on again.</li>
+</ul>
+<figure><img src="../assets/pi-waiting.png" width="1280" height="780" loading="lazy" alt="A kanban board: the card Tidy up the README shows pi waiting for an answer in In Progress, two other cards finished in Review"><figcaption>A card waiting for an answer stays in In Progress</figcaption></figure>
+<figure class="narrow-fig"><img src="../assets/pi-answer.png" width="520" height="322" loading="lazy" alt="The Answer pi dialog with the question of pi about the README, an answer box, and the Later, End without replying, and Send buttons"><figcaption>The Answer pi dialog</figcaption></figure>
+
+
+<h2 id="log">Log and control</h2>
+<p>The card menu also has:</p>
+<ul>
+  <li><em>View pi Log</em>: tools, reasoning, answers, your requests and answers, tokens, cost, and the session id for <code>pi --session &lt;id&gt;</code></li>
+  <li><em>Stop pi</em> / <em>Cancel Queue</em></li>
+  <li><em>Remove Assignment</em> and <em>Change Project Folder…</em></li>
+</ul>
+<figure><img src="../assets/pi-log.png" width="760" height="640" loading="lazy" alt="The pi Log window with the prompt sent to pi, the session, the model reasoning, the bash and edit tool calls, and the finished summary"><figcaption>The pi log: the prompt from the card, the reasoning, the tools, and the summary</figcaption></figure>
+
+
+<h2 id="boundaries">Access boundaries</h2>
+<div class="callout warn"><strong>Pi writes freely in the project folder, without the Nyerat review window.</strong><p>Review the result in that project repo itself (pi is asked not to commit). Pi does not ask for tool permission by itself; permission requests come from the pi extensions you install, such as <code>permission-gate</code>.</p></div>
+<ul>
+  <li>The Markdown only names the <em>name</em> of the project. The name is mapped to a folder that can only be filled in through the choose-folder dialog, so a card or an agent cannot point the harness at an arbitrary folder.</li>
+  <li>The Nyerat work folder, its contents, its parents, the root, and relative paths are rejected as a project folder.</li>
+  <li>The contents of the notes linked with <code>[[ ]]</code> from the Nyerat work folder are sent to pi as part of the prompt (and to the model provider that pi uses). Do not link notes that must not leave. Only Markdown files in the work folder can be linked; dot folders, symlinks, and paths outside the work folder are not included.</li>
+  <li>Nyerat itself does not write to the project folder. Closing the window stops every harness that is running.</li>
+</ul>
+</main>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

@@ -1,38 +1,38 @@
-// Navigasi bersama dokumentasi: sidebar, saringan halaman, daftar isi, dan tombol sebelumnya/berikutnya.
-// Tambah halaman baru cukup di PAGES; urutannya juga menentukan pager.
+// Shared documentation navigation: the sidebar, the page filter, the table of contents, and the previous/next buttons.
+// Adding a new page only needs an entry in PAGES; the order also decides the pager.
 const PAGES = [
-  ['Memulai', [
-    ['index.html', 'Mulai cepat'],
-    ['konsep.html', 'Konsep dasar'],
+  ['Getting started', [
+    ['index.html', 'Quick start'],
+    ['concepts.html', 'Basic concepts'],
   ]],
   ['Agent', [
-    ['asisten.html', 'Panel Asisten'],
-    ['konteks.html', 'Konteks dan privasi'],
-    ['penelusuran.html', 'Menelusuri berkas dan Git'],
-    ['usulan.html', 'Usulan dan persetujuan'],
-    ['pekerjaan.html', 'Rencana dan verifikasi'],
-    ['riwayat.html', 'Riwayat, journal, dan log'],
-    ['orkestrator.html', 'Orkestrator pi'],
+    ['assistant.html', 'The Assistant panel'],
+    ['context.html', 'Context and privacy'],
+    ['browsing.html', 'Browsing files and Git'],
+    ['proposals.html', 'Proposals and approval'],
+    ['work.html', 'Plans and verification'],
+    ['history.html', 'History, journal, and log'],
+    ['orchestrator.html', 'The pi orchestrator'],
   ]],
-  ['Ruang kerja', [
-    ['editor.html', 'Editor Markdown'],
-    ['diagram.html', 'Diagram Mermaid dan DBML'],
-    ['kanban.html', 'Papan kanban'],
+  ['Workspace', [
+    ['editor.html', 'The Markdown editor'],
+    ['diagram.html', 'Mermaid and DBML diagrams'],
+    ['kanban.html', 'The kanban board'],
     ['inbox.html', 'Inbox'],
-    ['beranda.html', 'Beranda'],
-    ['jurnal.html', 'Jurnal harian'],
-    ['berkas.html', 'Berkas, tab, dan sidebar'],
-    ['git.html', 'Riwayat Git'],
+    ['home.html', 'Home'],
+    ['journal.html', 'The daily journal'],
+    ['files.html', 'Files, tabs, and the sidebar'],
+    ['git.html', 'Git history'],
   ]],
-  ['Referensi', [
-    ['alat.html', 'Daftar alat agent'],
-    ['shortcut.html', 'Shortcut'],
-    ['pengaturan.html', 'Pengaturan'],
-    ['keterbatasan.html', 'Keterbatasan'],
+  ['Reference', [
+    ['tools.html', 'Agent tool list'],
+    ['shortcuts.html', 'Shortcuts'],
+    ['settings.html', 'Settings'],
+    ['limitations.html', 'Limitations'],
   ]],
-  ['Untuk developer', [
-    ['../belajar-agent.html', 'Belajar membangun agent'],
-    ['../belajar-performa.html', 'Belajar performa'],
+  ['For developers', [
+    ['../learn-agent.html', 'Learn to build an agent'],
+    ['../learn-performance.html', 'Learn performance'],
   ]],
 ];
 
@@ -46,10 +46,10 @@ function el(tag, attrs = {}, text) {
   return n;
 }
 
-// Sidebar dan saringan
+// Sidebar and filter
 const side = document.getElementById('side');
 if (side) {
-  const search = el('input', { type: 'search', placeholder: 'Saring halaman…', 'aria-label': 'Saring halaman' });
+  const search = el('input', { type: 'search', placeholder: 'Filter pages…', 'aria-label': 'Filter pages' });
   side.append(search);
   const groups = [];
   for (const [title, items] of PAGES) {
@@ -65,7 +65,7 @@ if (side) {
     side.append(h, ul);
     groups.push([h, ul]);
   }
-  const empty = el('p', { class: 'empty', hidden: '' }, 'Tidak ada halaman yang cocok.');
+  const empty = el('p', { class: 'empty', hidden: '' }, 'No page matches.');
   side.append(empty);
   search.addEventListener('input', () => {
     const q = search.value.trim().toLowerCase();
@@ -84,7 +84,7 @@ if (side) {
   });
 }
 
-// Tombol menu di layar sempit
+// The menu button on a narrow screen
 const menuBtn = document.querySelector('.menu-btn');
 menuBtn?.addEventListener('click', () => {
   const open = document.body.classList.toggle('nav-open');
@@ -94,11 +94,11 @@ side?.addEventListener('click', (e) => {
   if (e.target.closest('a')) document.body.classList.remove('nav-open');
 });
 
-// Daftar isi dari h2, dengan penanda bagian yang sedang dibaca
+// The table of contents from h2, with a marker for the section being read
 const toc = document.getElementById('toc');
 const heads = [...document.querySelectorAll('main.doc h2')];
 if (toc && heads.length > 1) {
-  toc.append(el('p', {}, 'Di halaman ini'));
+  toc.append(el('p', {}, 'On this page'));
   const links = heads.map((h) => {
     if (!h.id) h.id = h.textContent.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const a = el('a', { href: `#${h.id}` }, h.textContent);
@@ -114,18 +114,18 @@ if (toc && heads.length > 1) {
   mark();
 }
 
-// Sebelumnya / berikutnya
+// Previous / next
 const main = document.querySelector('main.doc');
 const idx = flat.findIndex(([href]) => href === here);
 if (main && idx >= 0) {
-  const pager = el('nav', { class: 'pager', 'aria-label': 'Halaman sebelumnya dan berikutnya' });
+  const pager = el('nav', { class: 'pager', 'aria-label': 'Previous and next page' });
   const add = (item, cls, label) => {
     if (!item) return;
     const a = el('a', { href: item[0], class: cls });
     a.append(el('small', {}, label), document.createTextNode(item[1]));
     pager.append(a);
   };
-  add(flat[idx - 1], 'prev', '← Sebelumnya');
-  add(flat[idx + 1], 'next', 'Berikutnya →');
+  add(flat[idx - 1], 'prev', '← Previous');
+  add(flat[idx + 1], 'next', 'Next →');
   main.append(pager);
 }

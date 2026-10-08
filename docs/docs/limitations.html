@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Limitations · Nyerat Documentation</title>
+<meta name="description" content="What Nyerat cannot do yet: the limits of the agent, the external harness, the kanban board, the editor, and the export.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
+<main class="doc">
+<p class="eyebrow">Reference</p>
+<h1>Limitations</h1>
+<p class="lead">An honest list of what is not available yet, so you know the limits before relying on it.</p>
+
+<h2 id="agent">Agent</h2>
+<ul>
+  <li>DeepSeek is the only model provider so far.</li>
+  <li>There is no automatic contradiction check yet; contradictions can be asked about through the chat.</li>
+  <li>The Nyerat agent only touches Markdown files in the work folder. Running commands is only done by an external harness from a kanban card.</li>
+  <li>A batch has at most 20 actions. Moving a file does not update links in other files; the agent must propose that separately.</li>
+  <li>The search is keyword-based (BM25), not meaning-based; <code>search_text</code> does not recognize synonyms.</li>
+  <li>The Git tools only read what has been committed.</li>
+  <li>Undo restores a deleted file from the journal snapshot, not from the Trash.</li>
+  <li>The conversation history cannot be searched from the panel yet; search the files in <code>.nyerat/chats/</code>.</li>
+  <li>The token estimate is rough (3 characters per token).</li>
+</ul>
+
+<h2 id="harness">External harness</h2>
+<ul>
+  <li>Only pi so far. The run status (queued, working, log) only exists while the app is open.</li>
+  <li>A card is recognized by its text, so editing the title of a card that is being worked on breaks its status.</li>
+  <li>A question is recognized by a <code>?</code> at the end of the answer.</li>
+  <li>The <code>[[ ]]</code> notes on a card are copied only at <em>Work on it with pi</em>; <em>Reply to pi</em> does not copy them again. At most 10 notes, 8,000 characters per note and 24,000 in total. On the board, a link to a note that does not exist is shown the same as a normal link.</li>
+  <li>Without a permission extension such as <code>permission-gate</code>, all the pi tools run right away.</li>
+  <li>There is no worktree per card, interactive terminal, or diff view of the harness result in Nyerat yet.</li>
+</ul>
+
+<h2 id="kanban">The kanban board</h2>
+<ul>
+  <li>Only top-level list items become cards.</li>
+  <li>There is no archive or label editing through the interface yet; write <code>#tag</code> in the card title.</li>
+  <li>Moving a card with the keyboard is only possible through the right-click menu.</li>
+</ul>
+
+<h2 id="home">Home</h2>
+<ul>
+  <li>Due dates and the inbox are only read from the open work folder (at most 300 Markdown files).</li>
+  <li>Clicking a task opens its board without highlighting its card.</li>
+  <li>Recent files are recorded by Nyerat itself, not through the GNOME recent files list, so they do not appear in other apps.</li>
+</ul>
+
+<h2 id="journal">The daily journal</h2>
+<ul>
+  <li>One fixed journal folder (<code>journal/</code> in the work folder) with a fixed template; it cannot be set in Preferences yet.</li>
+  <li>Activity is only recorded while Nyerat is open and only for the open work folder. Cards moved by editing the board text, or boards changed outside Nyerat, are not recorded (their commits still appear).</li>
+  <li>Activity is merged when the journal is opened with <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd> or from Home, not while the journal is open. Opening the journal file from the file tree does not merge it.</li>
+  <li>Commits are recognized by their short hash: an amended or rebased commit can appear twice. Commits on other branches are not included.</li>
+  <li>Undoing an agent change is also recorded as an agent change.</li>
+</ul>
+
+<h2 id="editor">The editor and export</h2>
+<ul>
+  <li>An animated GIF only shows its first frame; an image changed on disk is reloaded after the app is opened again.</li>
+  <li>Long table cell text is cut with “…”, and the contents of a cell are only one line.</li>
+  <li>There is no side-by-side view or tab reordering by dragging yet.</li>
+  <li><code>[[ ]]</code> links: there is no backlinks panel or graph yet; renaming or moving a file does not update the links that point to it; the <code>![[ ]]</code> embeds and the <code>^id</code> block references are not supported yet; the <code>[[</code> suggestions are only file names, not headings yet.</li>
+  <li>HTML export does not embed local images and does not include the code block colors yet.</li>
+</ul>
+<h2 id="gnome">GNOME integration</h2>
+<ul>
+  <li>The interface is in English; the translation infrastructure (gettext) is in place, but no other language is available yet.</li>
+  <li>It has not been tested in a Wayland session; the tests run on X11.</li>
+  <li>Installing through Meson and the Flatpak build have not been tested. In Flatpak, <code>git</code> and <code>pi</code> must be available inside the sandbox.</li>
+  <li>The system accent color and the <code>Adw.ShortcutsDialog</code> shortcuts dialog are only used on libadwaita 1.6/1.8 and newer; on older versions the default Adwaita color and a plain shortcut list are used.</li>
+  <li>A floating panel in a narrow window does not close when the editor is clicked; close it with its button.</li>
+</ul>
+
+<p>The complete list is in the <em>Limitations</em> section of the <a href="https://github.com/EkaPutCom/nyerat#limitations">README</a>.</p>
+</main>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

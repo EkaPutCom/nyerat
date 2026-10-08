@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Papan kanban · Dokumentasi Nyerat</title>
-<meta name="description" content="Papan kanban Nyerat ala Trello yang tetap tersimpan sebagai berkas Markdown biasa: kartu, daftar, tag, tenggat dengan pemilih kalender, dan penugasan ke agent.">
+<title>The kanban board · Nyerat Documentation</title>
+<meta name="description" content="The Nyerat Trello-style kanban board that stays stored as a plain Markdown file: cards, lists, tags, due dates with a calendar picker, and assignment to agents.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="docs.css">
 </head>
@@ -18,68 +18,68 @@
   </a>
   <nav>
     <a href="index.html" aria-current="true">Docs</a>
-    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
     <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
   </nav>
 </header>
 
 <div class="layout">
-<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
 <main class="doc">
-<p class="eyebrow">Ruang kerja</p>
-<h1>Papan kanban</h1>
-<p class="lead">Berkas Markdown dengan <code>kanban: true</code> dibuka sebagai papan. Setiap perubahan ditulis kembali sebagai teks Markdown biasa yang bisa di-diff dan di-commit.</p>
+<p class="eyebrow">Workspace</p>
+<h1>The kanban board</h1>
+<p class="lead">A Markdown file with <code>kanban: true</code> opens as a board. Every change is written back as plain Markdown text that can be diffed and committed.</p>
 
-<figure><img src="../assets/kanban.gif" width="900" height="586" loading="lazy" alt="Animasi kartu kanban berpindah antar daftar Rencana, Dikerjakan, Review, dan Selesai"><figcaption>Kartu berpindah dari Rencana ke Dikerjakan hingga Review</figcaption></figure>
+<figure><img src="../assets/kanban.gif" width="900" height="586" loading="lazy" alt="Animation of kanban cards moving between the Plan, In Progress, Review, and Done lists"><figcaption>Cards move from Plan to In Progress and then to Review</figcaption></figure>
 
-<h2 id="format">Format berkas</h2>
+<h2 id="format">File format</h2>
 <pre><code>---
 kanban: true
 ---
 
-## Rencana
+## Plan
 
-- [ ] Tulis laporan #penting @{2026-10-20}
-  catatan kartu (baris yang diindentasi)
-- [ ] Kirim undangan
+- [ ] Write the report #important @{2026-10-20}
+  card notes (indented lines)
+- [ ] Send the invitations
 
-## Selesai
+## Done
 
-- [x] Pesan tempat</code></pre>
+- [x] Book the venue</code></pre>
 <ul>
-  <li>Heading <code>##</code> menjadi daftar, item <code>- [ ]</code> menjadi kartu, <code>[x]</code> berarti selesai.</li>
-  <li>Baris yang diindentasi di bawah kartu adalah catatannya.</li>
-  <li><code>#tag</code> tampil sebagai label berwarna; <code>@{2026-10-20}</code> sebagai tanggal tenggat, merah bila lewat batas.</li>
-  <li>Penanda <code>kanban-plugin:</code> dari plugin Kanban Obsidian tetap dikenali, dan hal yang tidak dikenali dipertahankan apa adanya.</li>
+  <li>A <code>##</code> heading becomes a list, a <code>- [ ]</code> item becomes a card, and <code>[x]</code> means done.</li>
+  <li>The indented lines below a card are its notes.</li>
+  <li><code>#tag</code> is shown as a colored label; <code>@{2026-10-20}</code> as a due date, red when it is overdue.</li>
+  <li>The <code>kanban-plugin:</code> marker of the Obsidian Kanban plugin is still recognized, and anything that is not recognized is preserved as it is.</li>
 </ul>
 
-<h2 id="membuat">Membuat papan</h2>
+<h2 id="creating">Creating a board</h2>
 <ul>
-  <li>Menu ☰ → <em>Papan Kanban Baru</em> membuat papan kosong yang belum bernama.</li>
-  <li>Klik kanan di pohon berkas → <em>Papan Kanban Baru…</em> langsung membuatnya sebagai berkas di folder itu, berisi daftar <em>Rencana</em>, <em>Dikerjakan</em>, dan <em>Selesai</em>.</li>
-  <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> beralih antara tampilan papan dan teks.</li>
+  <li>The ☰ menu → <em>New Kanban Board</em> creates an empty board that has no name yet.</li>
+  <li>Right-click in the file tree → <em>New Kanban Board…</em> creates it right away as a file in that folder, with the lists <em>Plan</em>, <em>In Progress</em>, and <em>Done</em>.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> switches between the board view and the text.</li>
 </ul>
 
-<h2 id="kartu">Bekerja dengan kartu</h2>
+<h2 id="cards">Working with cards</h2>
 <ul>
-  <li>Seret kartu antar daftar atau ke posisi lain di daftar yang sama; dekat tepi, papan bergulir otomatis.</li>
-  <li>Klik kartu untuk menyunting judul, catatan, tenggat, dan <em>Dikerjakan oleh</em>.</li>
-  <li>Tenggat bisa diketik (boleh dengan jam, mis. <code>2026-10-20 09:00</code>) atau dipilih lewat tombol kalender, dengan <em>Hari ini</em> dan <em>Kosongkan</em>. Memilih tanggal mempertahankan jam yang sudah diketik.</li>
+  <li>Drag a card between lists or to another position in the same list; near the edge, the board scrolls automatically.</li>
+  <li>Click a card to edit its title, notes, due date, and <em>Assigned to</em>.</li>
+  <li>The due date can be typed (with a time if you like, e.g. <code>2026-10-20 09:00</code>) or chosen with the calendar button, with <em>Today</em> and <em>Clear</em>. Choosing a date keeps the time that was already typed.</li>
 </ul>
-<figure class="narrow-fig"><img src="../assets/kanban-kartu.png" width="440" height="519" loading="lazy" alt="Dialog sunting kartu dengan kolom judul, tag, tenggat beserta tombol kalender, dikerjakan oleh, dan catatan"><figcaption>Dialog sunting kartu: tenggat dengan tombol kalender dan kolom Dikerjakan oleh</figcaption></figure>
+<figure class="narrow-fig"><img src="../assets/kanban-card.png" width="440" height="519" loading="lazy" alt="The card edit dialog with the title, tags, due date with a calendar button, assigned to, and notes fields"><figcaption>The card edit dialog: a due date with a calendar button and the Assigned to field</figcaption></figure>
 <ul>
-  <li>Klik kanan untuk pindahkan, naik/turun, dan hapus; centang untuk menandai selesai.</li>
-  <li><a href="editor.html#wikilink"><code>[[Catatan]]</code></a> di judul kartu tampil sebagai tautan yang bisa diklik. Tautan di catatan kartu tampil sebagai baris <code>↗ nama</code> di bawah chip. Kolom catatan di dialog kartu memberi saran nama saat mengetik <code>[[</code>.</li>
-  <li>Undo dan redo berlaku untuk perubahan di papan.</li>
+  <li>Right-click to move, move up/down, and delete; check the box to mark it done.</li>
+  <li><a href="editor.html#wikilink"><code>[[Note]]</code></a> in a card title is shown as a link that can be clicked. A link in the notes of a card is shown as a <code>↗ name</code> row below the chip. The notes field in the card dialog suggests names when you type <code>[[</code>.</li>
+  <li>Undo and redo apply to changes on the board.</li>
 </ul>
 
-<h2 id="agent">Papan dan agent</h2>
+<h2 id="agent">The board and the agent</h2>
 <ul>
-  <li>Agent Nyerat mengubah papan lewat <code>ubah_kanban</code>: menambah, memindah, menandai, mengubah, atau menghapus kartu dan daftar, selalu lewat <a href="usulan.html">jendela tinjau</a>.</li>
-  <li>Kartu bertanda <code>@pi</code> dikerjakan harness pi di folder proyek lain. Lihat <a href="orkestrator.html">Orkestrator pi</a>. Isi catatan yang ditautkan <code>[[ ]]</code> di kartu ikut masuk prompt pi sebagai <a href="orkestrator.html#konteks">konteks</a>.</li>
+  <li>The Nyerat agent changes the board through <code>edit_kanban</code>: adding, moving, marking, editing, or deleting cards and lists, always through the <a href="proposals.html">review window</a>.</li>
+  <li>A card marked <code>@pi</code> is worked on by the pi harness in another project folder. See <a href="orchestrator.html">The pi orchestrator</a>. The contents of the notes linked with <code>[[ ]]</code> on a card are included in the pi prompt as <a href="orchestrator.html#context">context</a>.</li>
 </ul>
 </main>
-<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
 </div>
 
 <script src="nav.js"></script>

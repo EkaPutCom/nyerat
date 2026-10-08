@@ -30,7 +30,7 @@ export class LogViewer {
     private stick = true;
     private stickIdle = 0;
 
-    constructor(parent: Gtk.Window | null, private readonly trace: AgentTrace, title = _('Log agent')) {
+    constructor(parent: Gtk.Window | null, private readonly trace: AgentTrace, title = _('Agent log')) {
         this.window = new Adw.Window({ transient_for: parent, default_width: 760, default_height: 640, title });
         const header = new Adw.HeaderBar();
 

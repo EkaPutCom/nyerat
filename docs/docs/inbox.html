@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Inbox · Dokumentasi Nyerat</title>
-<meta name="description" content="Inbox Nyerat: tempat menangkap ide, tautan, dan catatan cepat sebagai berkas Markdown biasa, dengan usia relatif, tag, dan sunting lewat dialog.">
+<title>Inbox · Nyerat Documentation</title>
+<meta name="description" content="The Nyerat inbox: a place to capture ideas, links, and quick notes as a plain Markdown file, with relative age, tags, and editing through a dialog.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="docs.css">
 </head>
@@ -18,51 +18,51 @@
   </a>
   <nav>
     <a href="index.html" aria-current="true">Docs</a>
-    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
     <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
   </nav>
 </header>
 
 <div class="layout">
-<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
 <main class="doc">
-<p class="eyebrow">Ruang kerja</p>
+<p class="eyebrow">Workspace</p>
 <h1>Inbox</h1>
-<p class="lead">Berkas Markdown dengan <code>inbox: true</code> dibuka sebagai inbox: tempat menangkap ide, tautan, dan catatan cepat untuk diproses nanti. Seperti papan kanban, isinya tetap teks Markdown biasa.</p>
+<p class="lead">A Markdown file with <code>inbox: true</code> opens as an inbox: a place to capture ideas, links, and quick notes to process later. Like a kanban board, its contents stay plain Markdown text.</p>
 
-<h2 id="format">Format berkas</h2>
+<h2 id="format">File format</h2>
 <pre><code>---
 inbox: true
 ---
 
 # Inbox
 
-Tempat menangkap ide, catatan, dan hal yang perlu diproses nanti.
+A place to capture ideas, notes, and things to process later.
 
-- Ide: Muara bisa memakai SQLite #idea ➕ 2026-10-07 14:22
-  catatan item (baris yang diindentasi)
-- Baca artikel tentang GNOME HIG #read ➕ 2026-10-07 13:32</code></pre>
+- Idea: Delta could use SQLite #idea ➕ 2026-10-07 14:22
+  item notes (indented lines)
+- Read the article about the GNOME HIG #read ➕ 2026-10-07 13:32</code></pre>
 <ul>
-  <li>Setiap butir daftar adalah satu catatan. Judul <code>#</code> dan paragraf sebelum butir pertama menjadi judul dan deskripsi halaman.</li>
-  <li><code>#tag</code> tampil sebagai chip; <code>➕ tanggal jam</code> adalah waktu tangkap yang dipakai untuk label usia ("10 menit lalu", "1 jam lalu", "3 hari lalu"; lebih dari seminggu menjadi tanggal). Catatan tanpa waktu tetap sah.</li>
-  <li>Baris yang diindentasi di bawah butir adalah isi catatannya; teks lain di bawah daftar dipertahankan apa adanya.</li>
+  <li>Every list item is one note. The <code>#</code> heading and the paragraph before the first item become the title and the description of the page.</li>
+  <li><code>#tag</code> is shown as a chip; <code>➕ date time</code> is the capture time used for the age label ("10 minutes ago", "1 hour ago", "3 days ago"; more than a week becomes a date). A note without a time is still valid.</li>
+  <li>Indented lines below an item are the contents of the note; other text below the list is preserved as it is.</li>
 </ul>
 
-<h2 id="bekerja">Bekerja dengan inbox</h2>
+<h2 id="working">Working with the inbox</h2>
 <ul>
-  <li><strong>Tangkap cepat:</strong> ketik di isian paling atas lalu <kbd>Enter</kbd>. Catatan masuk di paling atas dengan waktu saat itu.</li>
-  <li><em>Catatan Baru</em> membuka dialog dengan judul, tag, dan catatan. Klik sebuah catatan untuk menyuntingnya; waktu tangkapnya dipertahankan.</li>
-  <li>Tombol ✕ membuang catatan. Undo dan redo berlaku untuk semua perubahan.</li>
-  <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> beralih antara tampilan inbox dan teks.</li>
+  <li><strong>Quick capture:</strong> type in the topmost field and press <kbd>Enter</kbd>. The note goes in at the top with the current time.</li>
+  <li><em>New Note</em> opens a dialog with a title, tags, and notes. Click a note to edit it; its capture time is kept.</li>
+  <li>The ✕ button removes a note. Undo and redo apply to every change.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> switches between the inbox view and the text.</li>
 </ul>
 
-<h2 id="membuat">Membuat inbox</h2>
+<h2 id="creating">Creating an inbox</h2>
 <ul>
-  <li>Menu ☰ → <em>Inbox Baru</em> membuat inbox kosong yang belum bernama.</li>
-  <li>Klik kanan di pohon berkas → <em>Inbox Baru…</em> langsung membuatnya sebagai berkas di folder itu.</li>
+  <li>The ☰ menu → <em>New Inbox</em> creates an empty inbox that has no name yet.</li>
+  <li>Right-click in the file tree → <em>New Inbox…</em> creates it right away as a file in that folder.</li>
 </ul>
 </main>
-<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
 </div>
 
 <script src="nav.js"></script>

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context and privacy · Nyerat Documentation</title>
+<meta name="description" content="What Nyerat sends to the model, how the context is built automatically, @file attachments, and the switches that limit which documents are sent.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
+<main class="doc">
+<p class="eyebrow">Agent</p>
+<h1>Context and privacy</h1>
+<p class="lead">The model only knows what is sent. Nyerat builds the context automatically from the workspace, shows it to you, and gives you switches to limit it.</p>
+
+<h2 id="automatic">The automatically built context</h2>
+<p>Every question builds a new context, because the manuscript can change between questions. The order of priority:</p>
+<div class="table-wrap"><table>
+  <tr><th>Part</th><th>Contents</th><th>Budget limit</th></tr>
+  <tr><td>Selection</td><td>The text that is currently selected</td><td>8%</td></tr>
+  <tr><td>Active document</td><td>The editor contents, including unsaved ones; when long, a window around the cursor</td><td>40%</td></tr>
+  <tr><td><code>@file</code> attachments</td><td>The whole files you mention</td><td>20% per file</td></tr>
+  <tr><td>Project map</td><td>The name, word count, and headings of every Markdown file in the folder</td><td>6%</td></tr>
+  <tr><td>Relevant excerpts</td><td>The parts of other files that best match the question (at most 10)</td><td>40%</td></tr>
+</table></div>
+<p>The total budget is 48,000 tokens. Relevant excerpts are found with BM25 from the keywords of the question, the selection, and the two previous questions. There are no embeddings, so no model is downloaded and the manuscript is not sent just for searching.</p>
+<p>Every line of the manuscript is given its original line number, so the agent's quotes point to the right line.</p>
+
+<h2 id="mention">Attaching files with @</h2>
+<p>Write <code>@filename</code> in the message to attach a whole file from the first message on. The agent does not need a browsing round to read it. Even without <code>@</code> the agent can still search and read files by itself.</p>
+
+<h2 id="context-button">The Context button</h2>
+<p>The <em>Context</em> button below the panel details what will be sent with its estimated tokens, and has three switches:</p>
+<ul>
+  <li><strong>The currently open document</strong></li>
+  <li><strong>Selected text</strong></li>
+  <li><strong>Other files in the folder</strong>: when turned off, the agent gets no read tools and no proposal tools at all</li>
+</ul>
+<figure><img src="../assets/context.png" width="1280" height="780" loading="lazy" alt="The Context popover in the Assistant panel: three switches and the breakdown of the selection, the document, the project map, and the excerpts with estimated tokens"><figcaption>The context breakdown: the selected text is sent too, with its estimated tokens</figcaption></figure>
+
+
+<h2 id="privacy">What is sent to DeepSeek</h2>
+<div class="callout warn"><strong>The documents that are included are sent to the DeepSeek server.</strong><p>Turn off the <em>Other files in the folder</em> and <em>The currently open document</em> switches to ask without sending documents.</p></div>
+<ul>
+  <li>Dot folders (including <code>.nyerat/</code>) and <code>node_modules</code> are not read as manuscript.</li>
+  <li>The agent log and the model's thinking process are not sent to the model again and are not saved to files.</li>
+  <li>The API key is not written to the app settings.</li>
+</ul>
+
+<h2 id="cache">Prefix cache</h2>
+<p>The context is split so that the DeepSeek prefix cache is used: the instructions, the project map, and the active document are in a stable system message; the selection, the cursor, the attachments, and the relevant excerpts are in the user message. The part served from the cache is shown in the token details of every answer.</p>
+</main>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

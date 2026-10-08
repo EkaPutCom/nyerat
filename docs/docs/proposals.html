@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposals and approval · Nyerat Documentation</title>
+<meta name="description" content="How the Nyerat agent proposes new files, text changes, deletes, moves, and kanban changes through the review window, including batches, partial approval, notes, and Undo.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
+<main class="doc">
+<p class="eyebrow">Agent</p>
+<h1>Proposals and approval</h1>
+<p class="lead">The agent never writes by itself. Every action becomes a proposal with a diff that you review; files are only touched after you press <em>Apply</em>.</p>
+
+<figure><img src="../assets/proposal-diff.png" width="860" height="620" loading="lazy" alt="The review window of an agent proposal: a one-line diff of the release date with the Reject and Apply buttons"><figcaption>The review window: the release date changes from 15 to 22 November</figcaption></figure>
+
+<h2 id="actions">Actions that can be proposed</h2>
+<div class="table-wrap"><table>
+  <tr><th>Tool</th><th>Action</th></tr>
+  <tr><td><code>create_file</code></td><td>A new Markdown file; after it is applied it is opened in a tab right away</td></tr>
+  <tr><td><code>edit_file</code></td><td>Replace an exact piece of text that appears exactly once, or every occurrence with <code>all: true</code></td></tr>
+  <tr><td><code>insert_text</code></td><td>Insert text at the start of a file (after the frontmatter), at the end, or after a given line. A line number must come with the contents of that line, so a miscount is rejected</td></tr>
+  <tr><td><code>delete_file</code></td><td>Move a file to the Trash, not delete it permanently</td></tr>
+  <tr><td><code>move_file</code></td><td>Rename or move to another folder; an open document follows its new path</td></tr>
+  <tr><td><code>edit_kanban</code></td><td>Cards: <code>add</code>, <code>move</code>, <code>mark</code>, <code>edit</code>, <code>delete</code>. Lists: <code>add_list</code>, <code>rename_list</code>, <code>delete_list</code> (empty lists only)</td></tr>
+  <tr><td><code>propose_batch</code></td><td>Up to 20 of the actions above at once, reviewed in one window</td></tr>
+</table></div>
+
+<h2 id="review">The review window</h2>
+<ul>
+  <li>It opens automatically when the agent proposes, with the reason at the top and a colored diff in the style of a Git diff: line numbers, three lines of context, and several hunks.</li>
+  <li>The <em>Reject</em> and <em>Apply</em> buttons. Closing the window is the same as rejecting.</li>
+  <li>A compact status card remains in the panel with a <em>Review changes</em> button to open it again.</li>
+  <li>The result of Apply, Reject, an error, or Stop is sent back to the agent, so the agent does not insist after a rejection.</li>
+</ul>
+<figure><img src="../assets/proposal-kanban.png" width="860" height="620" loading="lazy" alt="The review window of an agent proposal: a kanban card moves from the Plan list to In Progress"><figcaption>Moving a card only marks that card, not the whole board</figcaption></figure>
+
+<h2 id="batches">Batches and partial approval</h2>
+<p>For work that touches several files, the agent uses <code>propose_batch</code>. All the diffs appear in one window with a checkbox per file.</p>
+<ul>
+  <li>Uncheck to reject part of it; the button changes to <em>Apply 2 of 3</em>.</li>
+  <li>The agent is told which files were applied and which were rejected.</li>
+  <li>Several changes to the same file are merged into one diff.</li>
+  <li>A file that is deleted or moved may not be touched by another action in the same batch, so every file is safe to apply on its own.</li>
+  <li>All the files are checked before any is written. If writing fails halfway, the files that were already written are restored where possible.</li>
+</ul>
+<figure><img src="../assets/proposal-batch.png" width="860" height="620" loading="lazy" alt="The review window of a three-file batch: one checkbox removed, a note for the agent filled in, the Apply 2 of 3 button"><figcaption>A three-file batch: one rejected through its checkbox, with a note for the agent</figcaption></figure>
+
+
+<h2 id="notes">Notes for the agent</h2>
+<p>The <em>Note for the agent</em> box below the diff is passed on together with your decision, e.g. the reason for rejecting or the correction you want, so the agent can fix its proposal.</p>
+
+<h2 id="undo">Undo</h2>
+<p>A proposal card that has been applied has an <em>Undo</em> button, also in a conversation that is opened again. Undo applies the reverse of the change through the same checks:</p>
+<ul>
+  <li>It fails without overwriting anything if the file has been edited again.</li>
+  <li>A deleted file is restored from the journal snapshot; a move is reversed.</li>
+  <li>The journal marks it <em>Undone</em> so the agent does not assume that the change still holds.</li>
+</ul>
+<p>Changes to an open document can also be undone with <kbd>Ctrl</kbd>+<kbd>Z</kbd>, because they are applied as one editor undo step.</p>
+
+<h2 id="safeguards">Safeguards</h2>
+<div class="callout"><strong>Always rejected</strong><p>A file name outside the work folder, starting with a dot, containing <code>..</code>, or passing through a symlink; files that are not Markdown; and applying to a file whose contents changed since it was proposed. The agent is then asked to propose again.</p></div>
+<ul>
+  <li>Kanban cards and lists are matched from their text and exactly one must match; otherwise the agent is given a list of candidates.</li>
+  <li><code>delete_list</code> only applies to an empty list so that cards do not disappear with it.</li>
+  <li>The proposal tools only exist when the <em>Other files in the folder</em> switch is on.</li>
+</ul>
+</main>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>
