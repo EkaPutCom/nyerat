@@ -9,7 +9,7 @@ import Pango from 'gi://Pango';
 import { commitFiles, fileLog, repoChanges, workingState, type GitFailure } from '../git.js';
 import { relativeTime, type ChangeKind, type Commit, type FileChange } from '../gitlog.js';
 import { pack, removeChildren } from '../gtkutil.js';
-import { _, fmt } from '../i18n.js';
+import { _, fmt, ngettext } from '../i18n.js';
 
 // Commits loaded per request; a long history is loaded incrementally.
 const PAGE_SIZE = 100;
@@ -213,7 +213,7 @@ export class History {
 
     private updateCommitButton(): void {
         const n = this.selected().length;
-        this.commitButton.set_label(n ? fmt(_('Commit {n} file'), { n }) : _('Commit'));
+        this.commitButton.set_label(n ? fmt(ngettext('Commit {n} file', 'Commit {n} files', n), { n }) : _('Commit'));
         this.commitButton.set_sensitive(n > 0);
     }
 
