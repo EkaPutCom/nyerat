@@ -1,7 +1,7 @@
 {
-  "tanggal": "2026-10-04",
-  "satuan": "ms",
-  "lingkungan": {
+  "date": "2026-10-04",
+  "unit": "ms",
+  "environment": {
     "gjs": 18002,
     "glib": "2.80.0",
     "gtk": "3.24.41",
@@ -9,10 +9,10 @@
     "backend": "x11",
     "commit": "7080c4ea602c2da3746c7e4a020a01208b129e60"
   },
-  "sebelum": "7080c4e (tablelayer.ts dan view.ts sebelum perubahan)",
-  "sesudah": "working tree dengan optimasi tabel; belum di-commit",
-  "metode": "Tiga proses GJS/Xvfb terpisah per varian; satu jendela baru, 500 blok mixed, lalu setText ulang dokumen yang sama. System.gc sebelum pengukuran; total sampai idle GTK, worst dari timer main loop 1 ms. unique mengganti teks satu sel pada setiap tabel. times bersifat inklusif dan tidak boleh dijumlahkan.",
-  "sampel": {
+  "before": "7080c4e (tablelayer.ts and view.ts before the change)",
+  "after": "working tree with the table optimization; not committed yet",
+  "method": "Three separate GJS/Xvfb processes per variant; one new window, 500 mixed blocks, then setText again on the same document. System.gc before measuring; total until GTK idle, worst from a 1 ms main loop timer. unique replaces the text of one cell in every table. times are inclusive and must not be summed.",
+  "samples": {
     "identical_before": [
       {
         "n": 500,
