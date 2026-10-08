@@ -64,7 +64,7 @@ const fmtTokens = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k`
 const usageText = (u: Usage, toolCalls: number, applied = 0): string => [
     fmt(u.cached ? _('{prompt} in ({cached} from cache)') : _('{prompt} in'), { prompt: fmtTokens(u.prompt), cached: fmtTokens(u.cached) }),
     fmt(_('{completion} out'), { completion: fmtTokens(u.completion) }),
-    ...toolCalls ? [fmt(_('{count} lookups'), { count: toolCalls })] : [],
+    ...toolCalls ? [fmt(ngettext('{count} lookup', '{count} lookups', toolCalls), { count: toolCalls })] : [],
     ...applied ? [fmt(ngettext('{count} change applied', '{count} changes applied', applied), { count: applied })] : [],
 ].join(' · ');
 
@@ -518,7 +518,7 @@ export class ChatPanel extends Gtk.Box {
 
     // A one-line summary of what is sent: the document, selection, attachments, and the number of excerpts per file.
     private describe(built: BuiltContext): string {
-        const parts = [`≈${fmtTokens(built.tokens)} token`];
+        const parts = [fmt(_('≈{tokens} tokens'), { tokens: fmtTokens(built.tokens) })];
         const excerpts = new Map<string, number>();
         for (const item of built.items) {
             if (item.kind === 'excerpt') {
@@ -528,7 +528,7 @@ export class ChatPanel extends Gtk.Box {
                 parts.push(item.label);
             }
         }
-        for (const [file, n] of excerpts) parts.push(fmt(_('{count} excerpts from {file}'), { count: n, file }));
+        for (const [file, n] of excerpts) parts.push(fmt(ngettext('{count} excerpt from {file}', '{count} excerpts from {file}', n), { count: n, file }));
         if (built.unknownMentions.length) parts.push(fmt(_('not found: {names}'), { names: built.unknownMentions.map(m => `@${m}`).join(', ') }));
         return fmt(_('Context: {parts}'), { parts: parts.join(' · ') });
     }

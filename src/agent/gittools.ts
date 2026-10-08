@@ -5,7 +5,7 @@
 import { cleanNewName } from './changes.js';
 import { estimateTokens } from './context.js';
 import type { ToolSpec } from './provider.js';
-import type { ToolOutcome } from './tools.js';
+import { plural, type ToolOutcome } from './tools.js';
 
 export const MAX_GIT_TOKENS = 6000;
 const MAX_LOG = 50;
@@ -114,16 +114,16 @@ export function formatGit(request: GitRequest, answer: GitAnswer): ToolOutcome {
             return [`${hash} ${date} · ${author} · ${subject.join(' ')}`, ...files].join('\n');
         });
         if (!commits.length) return { content: request.file ? `There are no commits for ${request.file} yet.` : 'There are no commits that touch Markdown files in this folder yet.', summary: '0 commits' };
-        return { content: clip(commits.join('\n'), 'reduce max or limit to one file'), summary: `${commits.length} commits` };
+        return { content: clip(commits.join('\n'), 'reduce max or limit to one file'), summary: plural(commits.length, 'commit', 'commits') };
     }
     if (request.kind === 'show') {
         if (!/^diff --git /m.test(answer.text)) return { content: `Commit ${request.commit} does not change Markdown files${request.file ? ` ${request.file}` : ''} in this folder.`, summary: 'no changes' };
         const lines = answer.text.split('\n').filter(l => !/^(index |diff --git |similarity index|dissimilarity index)/.test(l));
-        return { content: clip(lines.join('\n'), 'limit to one file'), summary: `${lines.filter(l => /^[+-](?![+-])/.test(l)).length} lines changed` };
+        return { content: clip(lines.join('\n'), 'limit to one file'), summary: `${plural(lines.filter(l => /^[+-](?![+-])/.test(l)).length, 'line', 'lines')} changed` };
     }
     const lines = answer.text.replace(/\n$/, '').split('\n');
     const body = lines.map((l, i) => `${i + 1}│ ${l}`).join('\n');
-    return { content: clip(`[${request.file} at ${request.commit}, ${lines.length} lines]\n${body}`, 'only the beginning is shown'), summary: `${lines.length} lines` };
+    return { content: clip(`[${request.file} at ${request.commit}, ${lines.length} lines]\n${body}`, 'only the beginning is shown'), summary: plural(lines.length, 'line', 'lines') };
 }
 
 export function describeGitCall(request: GitRequest | string, name: string): string {

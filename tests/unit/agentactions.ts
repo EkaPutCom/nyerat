@@ -246,7 +246,7 @@ export function agentActionTests(): void {
         contains(parseGitCall('file_at_commit', '{"commit":"HEAD"}') as string, 'required');
         const log = formatGit({ kind: 'log', file: null, limit: 5 }, { ok: true, text: '\x1ea1b2c3d\x1f2026-10-01 10:00\x1fEka\x1fPostpone release\n\nM\tplan.md\nR100\told.md\tarchive/old.md\n' });
         eq(log.content, 'a1b2c3d 2026-10-01 10:00 · Eka · Postpone release\n  edit plan.md\n  move old.md → archive/old.md');
-        eq(log.summary, '1 commits');
+        eq(log.summary, '1 commit');
         eq(formatGit({ kind: 'show', commit: 'HEAD', file: null }, { ok: true, text: 'a1b2 2026 · Eka · x\n' }).summary, 'no changes');
         eq(formatGit({ kind: 'file', commit: 'HEAD', file: 'a.md' }, { ok: true, text: 'one\ntwo\n' }).content, '[a.md at HEAD, 2 lines]\n1│ one\n2│ two');
         eq(formatGit({ kind: 'log', file: null, limit: 1 }, { ok: false, message: 'fatal: not a git repository' }).content, 'The work folder is not a Git repository.');

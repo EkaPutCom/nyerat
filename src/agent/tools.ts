@@ -5,6 +5,9 @@
 import { estimateTokens, matchMention, projectMap, rankChunks, splitChunks, tokenize, type SourceFile } from './context.js';
 import type { ToolSpec } from './provider.js';
 
+// "1 line" / "2 lines": the short result summary shown in the interface.
+export const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
 // Per-call limits; the total budget per question is kept by the caller (session.ts).
 export const MAX_RESULT_TOKENS = 6000;
 const MAX_SEARCH_HITS = 15;
@@ -80,7 +83,7 @@ function suggest(name: string, files: SourceFile[]): string {
 
 const listFiles = (files: SourceFile[]): ToolOutcome => ({
     content: files.length ? projectMap(files.map(f => ({ ...f, opened: false })), MAX_RESULT_TOKENS) : 'There are no document files in the project yet.',
-    summary: `${files.length} files`,
+    summary: plural(files.length, 'file', 'files'),
 });
 
 function searchDocuments(files: SourceFile[], args: Record<string, unknown>): ToolOutcome {
@@ -95,7 +98,7 @@ function searchDocuments(files: SourceFile[], args: Record<string, unknown>): To
         return `[${c.file} › ${c.heading || 'start of file'} · lines ${c.start + 1}–${c.end + 1}]\n${text}`;
     }).join('\n\n');
     const { text, clipped } = clip(body, MAX_RESULT_TOKENS);
-    return { content: clipped ? `${text}\n[… results truncated; narrow the query …]` : text, summary: `${ranked.length} snippets` };
+    return { content: clipped ? `${text}\n[… results truncated; narrow the query …]` : text, summary: plural(ranked.length, 'snippet', 'snippets') };
 }
 
 function searchText(files: SourceFile[], args: Record<string, unknown>): ToolOutcome {
@@ -120,7 +123,7 @@ function searchText(files: SourceFile[], args: Record<string, unknown>): ToolOut
     }
     if (!total) return { content: `The text "${needle}" was not found${only ? ` in ${only}` : ''}.`, summary: 'not found' };
     const more = total > lines.length ? `\n[… ${total - lines.length} more occurrences not shown; narrow with the file parameter …]` : '';
-    return { content: `${total} lines contain "${needle}":\n${lines.join('\n')}${more}`, summary: `${total} lines` };
+    return { content: `${total} lines contain "${needle}":\n${lines.join('\n')}${more}`, summary: plural(total, 'line', 'lines') };
 }
 
 function readFile(files: SourceFile[], args: Record<string, unknown>): ToolOutcome {

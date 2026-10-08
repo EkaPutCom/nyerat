@@ -343,7 +343,7 @@ export function toolTests(): void {
         const r = runTool('search_documents', '{"query":"island without a name"}', files);
         contains(r.content, '[chapter-3.md › Chapter 3: The Island · lines 1–');
         contains(r.content, 'island without a name');
-        eq(r.summary, '1 snippets');
+        eq(r.summary, '1 snippet');
         contains(runTool('search_documents', '{"query":"zzz qqq"}', files).content, 'No document section matches');
     });
 
