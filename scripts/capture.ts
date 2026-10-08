@@ -1,8 +1,8 @@
-// Memotret aplikasi sungguhan untuk landing page (docs/). Dibundel Vite menjadi dist/capture.js.
+// Takes screenshots of the real app for the landing page (docs/). Bundled by Vite into dist/capture.js.
 //
 //   npm run docs
 //
-// Menulis PNG dan GIF ke docs/assets/. Jendela sungguhan dibuka, jadi perlu sesi desktop.
+// Writes PNGs and GIFs to docs/assets/. A real window is opened, so a desktop session is needed.
 
 import GLib from 'gi://GLib';
 import Adw from 'gi://Adw?version=1';
@@ -22,51 +22,51 @@ import { widgetPixbuf } from '../tests/widgets.js';
 import { editCardDialog, findDialog, harnessAskDialog } from '../src/ui/dialogs.js';
 import { findEntry } from '../src/ui/menu.js';
 
-// Folder kerja contoh untuk tangkapan panel Asisten (provider palsu; tanpa jaringan dan tanpa API key):
-// satu proyek peluncuran produk dengan rencana, catatan rapat, riset, dan papan tugas.
+// A sample work folder for the Assistant panel screenshots (a fake provider; no network and no API key):
+// a product launch project with a plan, meeting notes, research, and a task board.
 const WORK: Record<string, string> = {
-    'rencana/peluncuran.md': '# Rencana Peluncuran Catat 1.0\n\n## Tujuan\n\nMerilis Catat 1.0 untuk pengguna Linux, lengkap dengan sinkronisasi folder.\n\n## Jadwal\n\n- Beta tertutup: 20 Oktober\n- Rilis publik: 15 November\n- Evaluasi: 30 November\n\n## Anggaran\n\nTotal Rp 45.000.000, termasuk desain ulang dan server uji.\n',
-    'catatan/rapat-1-okt.md': '# Rapat mingguan, 1 Oktober\n\n## Keputusan\n\n- Rilis publik diundur ke **22 November** karena pengujian sinkronisasi belum selesai.\n- Anggaran tidak berubah.\n- Sari menyiapkan materi rilis.\n\n## Tindak lanjut\n\n- [ ] Budi memperbaiki bug sinkronisasi\n- [ ] Dewi menjadwalkan uji coba beta\n',
-    'catatan/rapat-8-okt.md': '# Rapat mingguan, 8 Oktober\n\nBug sinkronisasi masih terbuka. Beta tertutup tetap 20 Oktober.\n',
-    'riset/pesaing.md': '# Riset pesaing\n\nTiga aplikasi catatan serupa; semuanya berbayar dan tertutup.\n',
-    'riset/pengguna.md': '# Wawancara pengguna\n\nLima pengguna menginginkan sinkronisasi tanpa akun.\n',
-    'tugas.md': '---\nkanban: true\n---\n\n## Rencana\n\n- [ ] Siapkan materi rilis #pemasaran @{2026-11-10}\n- [ ] Tulis catatan rilis #docs\n\n## Dikerjakan\n\n- [ ] Perbaiki bug sinkronisasi #bug #penting @{2026-10-25}\n\n## Selesai\n\n- [x] Desain ulang halaman utama #desain\n',
-    'ide.md': '# Ide\n\nFitur ekspor ke PDF.\n',
+    'plans/launch.md': '# Catat 1.0 Launch Plan\n\n## Goal\n\nRelease Catat 1.0 for Linux users, complete with folder syncing.\n\n## Schedule\n\n- Closed beta: 20 October\n- Public release: 15 November\n- Evaluation: 30 November\n\n## Budget\n\nTotal $3,000, including the redesign and a test server.\n',
+    'notes/meeting-1-oct.md': '# Weekly meeting, 1 October\n\n## Decisions\n\n- The public release is postponed to **22 November** because the sync testing is not finished.\n- The budget does not change.\n- Sari prepares the release material.\n\n## Follow-up\n\n- [ ] Budi fixes the sync bug\n- [ ] Dewi schedules the beta trial\n',
+    'notes/meeting-8-oct.md': '# Weekly meeting, 8 October\n\nThe sync bug is still open. The closed beta stays on 20 October.\n',
+    'research/competitors.md': '# Competitor research\n\nThree similar note apps; all of them are paid and closed.\n',
+    'research/users.md': '# User interviews\n\nFive users want syncing without an account.\n',
+    'tasks.md': '---\nkanban: true\n---\n\n## Plan\n\n- [ ] Prepare the release material #marketing @{2026-11-10}\n- [ ] Write the release notes #docs\n\n## In Progress\n\n- [ ] Fix the sync bug #bug #important @{2026-10-25}\n\n## Done\n\n- [x] Redesign the home page #design\n',
+    'ideas.md': '# Ideas\n\nA PDF export feature.\n',
 };
-const ASK_READ = 'Adakah keputusan rapat yang belum masuk ke rencana peluncuran?';
-const ANSWER = `Ada **satu keputusan yang belum masuk rencana**:
+const ASK_READ = 'Is there a meeting decision that has not made it into the launch plan yet?';
+const ANSWER = `There is **one decision that is not in the plan yet**:
 
-- Di *catatan/rapat-1-okt.md* › Keputusan: "Rilis publik diundur ke 22 November karena pengujian sinkronisasi belum selesai."
-- Di *rencana/peluncuran.md* › Jadwal: "Rilis publik: 15 November."
+- In *notes/meeting-1-oct.md* › Decisions: "The public release is postponed to 22 November because the sync testing is not finished."
+- In *plans/launch.md* › Schedule: "Public release: 15 November."
 
-Anggaran sudah konsisten (Rp 45.000.000) dan beta tertutup tetap 20 Oktober. Mau saya usulkan perubahan tanggalnya?`;
-const ASK_ACT = 'Ya, perbarui tanggal rilisnya dan pindahkan kartu materi rilis ke Dikerjakan.';
-const ANSWER_ACT = 'Selesai. Tanggal rilis di rencana sekarang **22 November**, dan kartu *Siapkan materi rilis* sudah ada di daftar *Dikerjakan*.';
+The budget is already consistent ($3,000) and the closed beta stays on 20 October. Shall I propose a change to the date?`;
+const ASK_ACT = 'Yes, update the release date and move the release material card to In Progress.';
+const ANSWER_ACT = 'Done. The release date in the plan is now **22 November**, and the card *Prepare the release material* is in the *In Progress* list.';
 
-// Papan pengembangan untuk adegan orkestrator: kartu @pi dikerjakan di repo proyek lain.
+// A development board for the orchestrator scene: @pi cards are worked on in another project repo.
 const PI_BOARD = `---
 kanban: true
-proyek: web-ecommerce
+project: web-ecommerce
 ---
 
-## Rencana
+## Plan
 
-- [ ] Checkout pakai QRIS @pi #fitur
-  Pakai SDK resmi.
-- [ ] Tes keranjang @pi #tes
-- [ ] Rapikan README #docs
+- [ ] Checkout with QRIS @pi #feature
+  Use the official SDK.
+- [ ] Test the cart @pi #test
+- [ ] Tidy up the README #docs
 
-## Dikerjakan
+## In Progress
 
 ## Review
 
-## Selesai
+## Done
 
-- [x] Halaman produk #fitur
+- [x] Product page #feature
 `;
 
-// Pi tiruan yang berbicara RPC lewat stdin/stdout (sama dengan tes GUI harness): MODE lambat menunggu berkas
-// "lepas", tanya mengakhiri giliran dengan pertanyaan. Tidak memanggil pi atau API sungguhan.
+// A fake pi that speaks RPC over stdin/stdout (the same as the harness GUI test): MODE slow waits for the file
+// "release", ask ends the turn with a question. It calls neither the real pi nor any API.
 const fakePi = (dir: string) => `#!/bin/sh
 mode=$(cat "${dir}/mode")
 read -r cmd
@@ -74,105 +74,105 @@ echo '{"id":"nyerat-state","type":"response","command":"get_state","success":tru
 read -r cmd
 echo '{"type":"response","command":"prompt","success":true,"data":{"disposition":"started"}}'
 echo '{"type":"turn_start"}'
-echo '{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","delta":"Lihat struktur proyek dulu, lalu cari modul pembayaran."}}'
+echo '{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","delta":"Look at the project structure first, then find the payment module."}}'
 echo '{"type":"tool_execution_start","toolCallId":"t1","toolName":"bash","args":{"command":"ls src/checkout"}}'
 printf '%s\\n' '{"type":"tool_execution_end","toolCallId":"t1","toolName":"bash","result":{"content":[{"type":"text","text":"cart.ts\\npayment.ts\\nindex.ts"}]},"isError":false}'
 echo '{"type":"tool_execution_start","toolCallId":"t2","toolName":"edit","args":{"path":"src/checkout/qris.ts"}}'
-if [ "$mode" = lambat ]; then while [ ! -e "${dir}/lepas" ]; do sleep 0.05; done; fi
+if [ "$mode" = slow ]; then while [ ! -e "${dir}/release" ]; do sleep 0.05; done; fi
 echo '{"type":"tool_execution_end","toolCallId":"t2","toolName":"edit","result":{"content":[{"type":"text","text":"ok"}]},"isError":false}'
-if [ "$mode" = tanya ]; then
-  printf '%s\\n' '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"README sudah saya baca.\\n\\nBagian instalasi memakai npm dan pnpm sekaligus. Mau saya seragamkan ke pnpm saja?"}],"stopReason":"stop"}}'
+if [ "$mode" = ask ]; then
+  printf '%s\\n' '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"I have read the README.\\n\\nThe installation section uses both npm and pnpm. Shall I standardize it on pnpm only?"}],"stopReason":"stop"}}'
   echo '{"type":"agent_settled"}'
   read -r ans || exit 0
 fi
-echo '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"QRIS ditambahkan di src/checkout/qris.ts beserta 3 tes"}],"stopReason":"stop","usage":{"input":5210,"output":640,"totalTokens":5850,"cost":{"total":0.0042}}}}'
+echo '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"QRIS added in src/checkout/qris.ts with 3 tests"}],"stopReason":"stop","usage":{"input":5210,"output":640,"totalTokens":5850,"cost":{"total":0.0042}}}}'
 echo '{"type":"agent_settled"}'
 while read -r x; do :; done
 `;
 
-const GIF_WIDTH = 900;   // PNG aslinya lebih besar
+const GIF_WIDTH = 900;   // the original PNG is larger
 const GIF_STEP = 140;    // ms per frame
 const GIF_COLORS = 128;
 const OUT = GLib.getenv('NYERAT_OUT') ?? 'docs/assets';
 
-const DOC = `# Catatan Rapat Produk
+const DOC = `# Product Meeting Notes
 
-Rapat mingguan, **Jumat pagi**. Hal yang *perlu* ditindaklanjuti ada di bawah, tulisan ini ==disorot== dan ~~yang ini dicoret~~.
+Weekly meeting, **Friday morning**. Things that *need* follow-up are below, this text is ==highlighted== and ~~this one is struck through~~.
 
-## Keputusan
+## Decisions
 
-- Rilis versi \`1.0\` ditunda satu minggu
-- [x] Perbaiki bug ekspor HTML
-- [ ] Tulis [dokumentasi](https://github.com/EkaPutCom/nyerat) fitur kanban
+- The \`1.0\` release is postponed by one week
+- [x] Fix the HTML export bug
+- [ ] Write the kanban feature [documentation](https://github.com/EkaPutCom/nyerat)
 
-> Kutipan dari pengguna: "Akhirnya editor yang tidak mengganggu."
+> A quote from a user: "At last, an editor that stays out of the way."
 
 \`\`\`ts
-function sisaAnggaran(total: number, terpakai: number): number {
-    return total - terpakai;
+function remainingBudget(total: number, spent: number): number {
+    return total - spent;
 }
 \`\`\`
 
-## Jadwal
+## Schedule
 
-| Tugas | Penanggung jawab | Tenggat |
+| Task | Owner | Deadline |
 | :---- | :--------------: | ------: |
-| Desain ulang | **Sari** | 10 Okt |
-| Uji coba | *Budi* | 17 Okt |
+| Redesign | **Sari** | 10 Oct |
+| Trial run | *Budi* | 17 Oct |
 `;
 
-const TABLE_DOC = `# Anggaran Proyek
+const TABLE_DOC = `# Project Budget
 
-Tabel dirender sebagai grid. Klik sebuah sel untuk menyuntingnya.
+Tables are rendered as a grid. Click a cell to edit it.
 
-| Pos | Penanggung jawab | Biaya (Rp) |
+| Item | Owner | Cost ($) |
 | :-- | :--------------: | ---------: |
-| **Desain** | Sari | 12.000.000 |
-| Pengembangan | *Budi* | 45.000.000 |
-| Pengujian | Dewi | 8.500.000 |
-| \`Server\` | Andi | 6.000.000 |
-| [Lisensi](https://example.com) | Rina | 3.250.000 |
+| **Design** | Sari | 750 |
+| Development | *Budi* | 2,800 |
+| Testing | Dewi | 530 |
+| \`Server\` | Andi | 375 |
+| [License](https://example.com) | Rina | 200 |
 
-Total biaya masih di bawah **anggaran**.
+The total cost is still below the **budget**.
 `;
 
-const DIAGRAM_DOC = `# Diagram dari Teks
+const DIAGRAM_DOC = `# Diagrams from Text
 
-Tulis diagram sebagai kode, lihat hasilnya langsung.
+Write a diagram as code and see the result right away.
 
 \`\`\`mermaid
 graph LR
-    A[Catat] --> B{Perlu tindak lanjut?}
-    B -->|ya| C[Buat tugas]
-    B -->|belum| A
-    C --> D[Tinjau bersama agent]
+    A[Note] --> B{Needs follow-up?}
+    B -->|yes| C[Create a task]
+    B -->|not yet| A
+    C --> D[Review together with the agent]
 \`\`\`
 
 \`\`\`mermaid
 sequenceDiagram
-    Anda->>Agent: Perbarui jadwal rilis
-    Agent-->>Anda: Usulan perubahan (selisih)
-    Anda->>Agent: Terapkan
+    You->>Agent: Update the release schedule
+    Agent-->>You: Change proposal (diff)
+    You->>Agent: Apply
 \`\`\`
 `;
 
-const DBML_DOC = `# Skema Basis Data
+const DBML_DOC = `# Database Schema
 
-Blok \`dbml\` (bahasa dbdiagram.io) digambar sebagai diagram ER.
+A \`dbml\` block (the dbdiagram.io language) is drawn as an ER diagram.
 
 \`\`\`dbml
-Table proyek {
+Table projects {
   id int [pk]
-  nama varchar
+  name varchar
 }
 
-Table tugas {
+Table tasks {
   id int [pk]
-  judul varchar
-  proyek_id int
+  title varchar
+  project_id int
 }
 
-Ref: tugas.proyek_id > proyek.id
+Ref: tasks.project_id > projects.id
 \`\`\`
 `;
 
@@ -180,47 +180,47 @@ const BOARD = `---
 kanban: true
 ---
 
-## Rencana
+## Plan
 
-- [ ] Riset pengguna #riset @{2026-10-10}
-  Wawancara lima pengguna aktif.
-- [ ] Rancang ulang halaman utama #desain
-- [ ] Tulis dokumentasi **API** #docs @{2026-10-25}
+- [ ] User research #research @{2026-10-10}
+  Interview five active users.
+- [ ] Redesign the home page #design
+- [ ] Write the **API** documentation #docs @{2026-10-25}
 
-## Dikerjakan
+## In Progress
 
-- [ ] Implementasi papan kanban #fitur #penting
-- [ ] Perbaiki bug \`ekspor HTML\` #bug @{2026-10-03}
+- [ ] Implement the kanban board #feature #important
+- [ ] Fix the \`HTML export\` bug #bug @{2026-10-03}
 
 ## Review
 
-- [ ] Uji coba di Ubuntu 24.04 #qa
+- [ ] Trial on Ubuntu 24.04 #qa
 
-## Selesai
+## Done
 
-- [x] Pilih nama proyek: Nyerat
-- [x] Siapkan repositori GitHub #infra
+- [x] Choose the project name: Nyerat
+- [x] Set up the GitHub repository #infra
 `;
 
-const CODE_DOC = `# Blok Kode Berwarna
+const CODE_DOC = `# Colored Code Blocks
 
 \`\`\`python
 from datetime import date
 
-def sisa_hari(rilis, hari_ini):
-    return (rilis - hari_ini).days
+def days_left(release, today):
+    return (release - today).days
 
-print(sisa_hari(date(2026, 11, 22), date(2026, 10, 5)))
+print(days_left(date(2026, 11, 22), date(2026, 10, 5)))
 \`\`\`
 
 \`\`\`rust
-fn total_anggaran(biaya: &[u64]) -> u64 {
-    biaya.iter().sum()
+fn total_budget(costs: &[u64]) -> u64 {
+    costs.iter().sum()
 }
 \`\`\`
 
 \`\`\`bash
-git add rencana/ && git commit -m "Perbarui jadwal rilis"
+git add plans/ && git commit -m "Update the release schedule"
 \`\`\`
 `;
 
@@ -232,7 +232,7 @@ function main(app: Adw.Application): void {
     const ctx = GLib.MainContext.default();
     const pump = () => { for (let i = 0; i < 200 && ctx.pending(); i++) ctx.iteration(false); };
     const settle = (n = 12) => { for (let i = 0; i < n; i++) { pump(); GLib.usleep(15000); } };
-    // Dialog menjawab lewat Promise; tangkapan dijadwalkan timer lalu dialog ditutup, jadi tunggu jawabannya.
+    // Dialogs answer through a Promise; the capture is scheduled by a timer and then the dialog is closed, so wait for its answer.
     const waitPromise = (promise: Promise<unknown>) => {
         let done = false;
         void promise.finally(() => { done = true; });
@@ -242,29 +242,29 @@ function main(app: Adw.Application): void {
         for (let i = 0; i < 3000 && ed.mermaid.blocks.some(b => b.busy || b.timer); i++) { pump(); GLib.usleep(10000); }
         settle();
     };
-    // Di tengah tata letak (mis. saat jawaban mengalir) ukuran jendela sesaat bisa 0 dan tangkapan kosong; ulangi.
+    // In the middle of layout (e.g. while an answer streams) the window size can briefly be 0 and the capture empty; retry.
     const grab = () => {
         for (let i = 0; i < 50; i++) {
             settle();
             const px = widgetPixbuf(w.win);
             if (px) return px;
         }
-        throw new Error('jendela tidak bisa dipotret');
+        throw new Error('the window cannot be captured');
     };
     const shot = (name: string) => grab().savev(`${OUT}/${name}.png`, 'png', [], []);
 
-    // GIF: frame() mengumpulkan frame; finishGifs() membuat satu palet per GIF, menandai piksel yang tidak
-    // berubah dari frame sebelumnya sebagai transparan (jauh lebih kecil), lalu menulis berkasnya.
+    // GIF: frame() collects frames; finishGifs() builds one palette per GIF, marks the pixels that did not
+    // change from the previous frame as transparent (much smaller), and then writes the file.
     const pending = new Map<string, { px: GdkPixbuf.Pixbuf; delay: number }[]>();
-    // `hold` = berapa langkah (GIF_STEP ms) frame ini ditahan sebelum berganti.
-    // Yang disimpan hanya pixbuf (memori native): array besar di heap JS memicu GC di tengah pemotretan.
+    // `hold` = how many steps (GIF_STEP ms) this frame is held before it changes.
+    // Only the pixbuf is stored (native memory): a large array on the JS heap triggers GC in the middle of capturing.
     const frame = (gif: string, hold = 0) => {
         const src = grab();
         const px = src.scale_simple(GIF_WIDTH, Math.round(src.get_height() * GIF_WIDTH / src.get_width()), GdkPixbuf.InterpType.HYPER)!;
         if (!pending.has(gif)) pending.set(gif, []);
         pending.get(gif)!.push({ px, delay: GIF_STEP * (1 + hold) });
     };
-    // Pixbuf bisa RGB atau RGBA dan barisnya bisa berisi padding; gifenc butuh RGBA rapat.
+    // A pixbuf can be RGB or RGBA and its rows can contain padding; gifenc needs packed RGBA.
     const toRgba = (px: GdkPixbuf.Pixbuf) => {
         const width = px.get_width(), height = px.get_height();
         const raw = px.get_pixels(), stride = px.get_rowstride(), n = px.get_n_channels();
@@ -282,7 +282,7 @@ function main(app: Adw.Application): void {
         for (const [name, frames] of pending) {
             const height = frames[0].px.get_height();
             const list = frames.map(f => ({ rgba: toRgba(f.px), delay: f.delay }));
-            // Palet dari semua frame sekaligus (contoh setiap 4 piksel), sisakan satu indeks untuk "transparan".
+            // One palette from all the frames at once (sampled every 4 pixels), leaving one index for "transparent".
             const sample = new Uint8Array(list.reduce((sum, f) => sum + Math.ceil(f.rgba.length / 16) * 4, 0));
             let at = 0;
             for (const f of list) for (let i = 0; i < f.rgba.length; i += 16) { sample.set(f.rgba.subarray(i, i + 4), at); at += 4; }
@@ -305,7 +305,7 @@ function main(app: Adw.Application): void {
             enc.finish();
             const bytes = enc.bytes();
             GLib.file_set_contents(`${OUT}/${name}.gif`, bytes);
-            print(`${name}.gif: ${list.length} frame, ${Math.round(bytes.length / 1024)} KB`);
+            print(`${name}.gif: ${list.length} frames,  ${Math.round(bytes.length / 1024)} KB`);
         }
     };
     const load = (text: string, dark = false, line = 0, sidebar = true) => {
@@ -328,23 +328,23 @@ function main(app: Adw.Application): void {
 
     settle(30);
 
-    // ───────── Tangkapan layar ─────────
+    // ───────── Screenshots ─────────
     load(DOC, false, 0);
     cursorTo(2, 5);
-    shot('editor-terang');
+    shot('editor-light');
 
     load(DOC, true, 0);
     cursorTo(2, 5);
-    shot('editor-gelap');
+    shot('editor-dark');
     load(DOC, false, 0);
 
     load(TABLE_DOC);
     cursorTo(0);
-    shot('tabel');
+    shot('table');
 
     load(CODE_DOC);
     cursorTo(0);
-    shot('kode');
+    shot('code');
 
     load(DIAGRAM_DOC, false, 0, false);
     cursorTo(0);
@@ -358,36 +358,36 @@ function main(app: Adw.Application): void {
     load(BOARD, false, 0, false);
     shot('kanban');
     load(BOARD, true, 0, false);
-    shot('kanban-gelap');
+    shot('kanban-dark');
     load(BOARD, false, 0, false);
 
-    // ───────── GIF 1: sintaks muncul dan hilang ─────────
+    // ───────── GIF 1: syntax appears and disappears ─────────
     load(DOC, false, 0);
     for (const [line, col] of [[0, 8], [2, 20], [2, 55], [5, 12], [6, 8], [7, 20], [0, 0]] as const) {
         cursorTo(line, col);
-        frame('sintaks', 2);
+        frame('syntax', 2);
     }
 
-    // ───────── GIF 2: mengetik Markdown ─────────
+    // ───────── GIF 2: typing Markdown ─────────
     load('', false, 0);
-    const typed = '# Catatan Rapat\n\nKeputusan: rilis **22 November**, anggaran *tidak berubah*, dan bug di `sinkronisasi`.\n\n- [ ] Budi: perbaiki bug\n- [x] Sari: siapkan materi\n- [ ] Dewi: jadwalkan beta\n';
+    const typed = '# Meeting Notes\n\nDecision: release on **22 November**, the budget is *unchanged*, and the bug is in `syncing`.\n\n- [ ] Budi: fix the bug\n- [x] Sari: prepare the material\n- [ ] Dewi: schedule the beta\n';
     let acc = '';
-    frame('mengetik', 2);
+    frame('typing', 2);
     for (const ch of typed) {
         buf.insert_at_cursor(ch, -1);
         acc += ch;
-        if (ch === ' ' || ch === '\n' || ch === '*' || ch === '`' || ch === '#' || /[a-z]/i.test(ch) && acc.length % 3 === 0) frame('mengetik');
+        if (ch === ' ' || ch === '\n' || ch === '*' || ch === '`' || ch === '#' || /[a-z]/i.test(ch) && acc.length % 3 === 0) frame('typing');
     }
-    frame('mengetik', 6);
+    frame('typing', 6);
 
-    // ───────── GIF 3: diagram hidup ─────────
-    load('# Alur Kerja\n\n```mermaid\ngraph LR\n    A[Catat] --> B[Rencanakan]\n```\n', false, 0, false);
+    // ───────── GIF 3: a live diagram ─────────
+    load('# Workflow\n\n```mermaid\ngraph LR\n    A[Note] --> B[Plan]\n```\n', false, 0, false);
     waitMermaid();
     frame('diagram', 3);
     cursorTo(4, 20);
     waitMermaid();
     frame('diagram', 3);
-    for (const add of ['\n    B --> C[Kerjakan]', '\n    C --> D[Tinjau]', '\n    D --> A']) {
+    for (const add of ['\n    B --> C[Do it]', '\n    C --> D[Review]', '\n    D --> A']) {
         const it = iterAtLine(buf, 4);
         it.forward_to_line_end();
         buf.insert(it, add, -1);
@@ -398,11 +398,11 @@ function main(app: Adw.Application): void {
     waitMermaid();
     frame('diagram', 8);
 
-    // ───────── GIF 4: papan kanban ─────────
+    // ───────── GIF 4: the kanban board ─────────
     load(BOARD, false, 0, false);
     frame('kanban', 5);
     let board = parseBoard(w.editor.getText());
-    // Pindahkan kartu lewat model papan yang sama dengan yang dipakai seret-dan-lepas.
+    // Move cards through the same board model that drag-and-drop uses.
     const moves: [[number, number], [number, number]][] = [
         [[0, 0], [1, 0]],
         [[1, 1], [2, 0]],
@@ -416,17 +416,17 @@ function main(app: Adw.Application): void {
     }
     frame('kanban', 5);
 
-    // ───────── GIF 5: mode terang ↔ gelap ─────────
+    // ───────── GIF 5: light ↔ dark mode ─────────
     load(DOC, false, 0);
     cursorTo(0);
-    frame('tema', 8);
+    frame('theme', 8);
     load(DOC, true, 0);
     cursorTo(0);
-    frame('tema', 8);
+    frame('theme', 8);
 
-    // ───────── Panel Asisten ─────────
-    // Nama folder tampil di tab Berkas dan judul jendela, jadi beri nama yang wajar (bukan nama sementara).
-    const proj = GLib.build_filenamev([GLib.dir_make_tmp('nyerat-kerja-XXXXXX'), 'peluncuran-catat']);
+    // ───────── The Assistant panel ─────────
+    // The folder name is shown in the Files tab and the window title, so give it a sensible name (not a temporary one).
+    const proj = GLib.build_filenamev([GLib.dir_make_tmp('nyerat-work-XXXXXX'), 'catat-launch']);
     GLib.mkdir_with_parents(proj, 0o755);
     const put = (rel: string, text: string) => {
         const path = GLib.build_filenamev([proj, ...rel.split('/')]);
@@ -435,14 +435,14 @@ function main(app: Adw.Application): void {
         return path;
     };
     for (const [rel, text] of Object.entries(WORK)) put(rel, text);
-    const rencana = GLib.build_filenamev([proj, 'rencana', 'peluncuran.md']);
+    const plan = GLib.build_filenamev([proj, 'plans', 'launch.md']);
     w.openFolder(proj, false);
-    w.load(rencana);
+    w.load(plan);
 
-    // Penyedia model palsu yang memainkan skrip: tiap putaran berisi panggilan alat atau jawaban akhir.
+    // A fake model provider that plays a script: every round contains a tool call or the final answer.
     type Call = { id: string; name: string; arguments: string };
     let streamFrames = false;
-    const scripted = (rounds: (Call[] | string)[], gif = 'asisten'): Provider => {
+    const scripted = (rounds: (Call[] | string)[], gif = 'assistant'): Provider => {
         let at = 0;
         return {
             async chat(req) {
@@ -459,10 +459,10 @@ function main(app: Adw.Application): void {
             },
         };
     };
-    w.chat.keyStore = { get: async () => ({ key: 'contoh', source: 'env' }), set: async () => 'env', clear: async () => {} };
+    w.chat.keyStore = { get: async () => ({ key: 'example', source: 'env' }), set: async () => 'env', clear: async () => {} };
     for (const dark of [false, true]) {
         w.chat.makeProvider = () => scripted([
-            [{ id: 'a', name: 'search_text', arguments: '{"teks":"Rilis publik"}' }, { id: 'b', name: 'read_file', arguments: '{"nama":"rapat-1-okt"}' }],
+            [{ id: 'a', name: 'search_text', arguments: '{"text":"Public release"}' }, { id: 'b', name: 'read_file', arguments: '{"name":"meeting-1-oct"}' }],
             ANSWER,
         ]);
         w.setDark(dark);
@@ -471,26 +471,26 @@ function main(app: Adw.Application): void {
         w.sidebar.setPage('files');
         let done = false;
         streamFrames = !dark;
-        if (streamFrames) frame('asisten', 4);
+        if (streamFrames) frame('assistant', 4);
         void w.chat.ask(ASK_READ).then(() => { done = true; });
         while (!done) { pump(); GLib.usleep(5000); }
         settle(20);
-        if (streamFrames) frame('asisten', 10);
-        shot(dark ? 'asisten-gelap' : 'asisten-terang');
+        if (streamFrames) frame('assistant', 10);
+        shot(dark ? 'assistant-dark' : 'assistant-light');
     }
     w.setDark(false);
 
-    // ───────── Agent mengusulkan perubahan (jendela tinjau, lalu diterapkan) ─────────
+    // ───────── The agent proposes changes (review window, then applied) ─────────
     const idle = (ms: number) => { for (let i = 0; i < ms / 10; i++) { pump(); GLib.usleep(10000); } };
     w.chat.makeProvider = () => scripted([
-        [{ id: 'u1', name: 'edit_file', arguments: JSON.stringify({ nama: 'rencana/peluncuran.md', old_text: '- Rilis publik: 15 November', new_text: '- Rilis publik: 22 November', alasan: 'Rapat 1 Oktober mengundur rilis publik ke 22 November.' }) }],
-        [{ id: 'u2', name: 'edit_kanban', arguments: JSON.stringify({ nama: 'tugas.md', aksi: 'pindah', kartu: 'Siapkan materi rilis', daftar: 'Dikerjakan', alasan: 'Sari mulai menyiapkan materi rilis.' }) }],
+        [{ id: 'u1', name: 'edit_file', arguments: JSON.stringify({ name: 'plans/launch.md', old_text: '- Public release: 15 November', new_text: '- Public release: 22 November', reason: 'The 1 October meeting postponed the public release to 22 November.' }) }],
+        [{ id: 'u2', name: 'edit_kanban', arguments: JSON.stringify({ name: 'tasks.md', action: 'move', card: 'Prepare the release material', list: 'In Progress', reason: 'Sari started preparing the release material.' }) }],
         ANSWER_ACT,
     ], 'agent');
     const nextViewer = () => {
         for (let i = 0; i < 800 && !w.chat.viewer; i++) { pump(); GLib.usleep(10000); }
         const viewer = w.chat.viewer;
-        if (!viewer) throw new Error('jendela tinjau tidak muncul');
+        if (!viewer) throw new Error('the review window did not appear');
         idle(400);
         return viewer;
     };
@@ -500,128 +500,128 @@ function main(app: Adw.Application): void {
     void w.chat.ask(ASK_ACT).then(() => { acted = true; });
     const first = nextViewer();
     frame('agent', 8);
-    widgetPixbuf(first.window)!.savev(`${OUT}/usulan-diff.png`, 'png', [], []);
+    widgetPixbuf(first.window)!.savev(`${OUT}/proposal-diff.png`, 'png', [], []);
     first.applyButton.emit('clicked');
     idle(400);
     frame('agent', 6);
     const second = nextViewer();
     frame('agent', 8);
-    widgetPixbuf(second.window)!.savev(`${OUT}/usulan-kanban.png`, 'png', [], []);
+    widgetPixbuf(second.window)!.savev(`${OUT}/proposal-kanban.png`, 'png', [], []);
     second.applyButton.emit('clicked');
     while (!acted) { pump(); GLib.usleep(5000); }
     idle(600);
     frame('agent', 14);
     const agentShot = grab();
-    agentShot.savev(`${OUT}/agent-selesai.png`, 'png', [], []);
-    // Gambar share sosial (1200x631): seluruh jendela diperkecil, lalu bagian bawahnya yang kosong dipotong.
+    agentShot.savev(`${OUT}/agent-done.png`, 'png', [], []);
+    // The social share image (1200x631): the whole window is scaled down, and then its empty bottom part is cropped.
     agentShot.scale_simple(1200, Math.round(agentShot.get_height() * 1200 / agentShot.get_width()), GdkPixbuf.InterpType.HYPER)!
         .new_subpixbuf(0, 0, 1200, 631).savev(`${OUT}/og-image.png`, 'png', [], []);
     streamFrames = false;
     w.setOption('chat', false);
     w.editor.buffer.set_modified(false);
 
-    // ───────── Berkas: pohon folder ─────────
-    // Kembalikan isi contoh (usulan tadi sudah mengubah rencana dan papan), supaya tangkapan berikutnya konsisten dengan jawaban Asisten.
+    // ───────── Files: the folder tree ─────────
+    // Restore the sample contents (the proposals above changed the plan and the board), so the next screenshots are consistent with the Assistant answers.
     for (const [rel, text] of Object.entries(WORK)) put(rel, text);
     w.openFolder(proj, false);
-    w.load(rencana);
+    w.load(plan);
     w.setOption('sidebar', true);
     w.sidebar.setPage('files');
-    w.fileTree.reveal(GLib.build_filenamev([proj, 'riset', 'pesaing.md']));
-    w.fileTree.reveal(rencana);
+    w.fileTree.reveal(GLib.build_filenamev([proj, 'research', 'competitors.md']));
+    w.fileTree.reveal(plan);
     settle(20);
-    shot('berkas');
+    shot('files');
 
-    // ───────── Riwayat git ─────────
-    const repo = GLib.dir_make_tmp('nyerat-riwayat-XXXXXX');
+    // ───────── Git history ─────────
+    const repo = GLib.dir_make_tmp('nyerat-history-XXXXXX');
     const env = [...GLib.get_environ(), 'GIT_CONFIG_GLOBAL=/dev/null', 'GIT_CONFIG_SYSTEM=/dev/null'];
     const git = (...args: string[]) => {
         const [, , err, status] = GLib.spawn_sync(repo, ['git', '-c', 'user.name=Eka Putra', '-c', 'user.email=eka@example.com', ...args], env, GLib.SpawnFlags.SEARCH_PATH, null);
         if (status !== 0) throw new Error(`git ${args.join(' ')}: ${new TextDecoder().decode(err ?? undefined)}`);
     };
-    const note = GLib.build_filenamev([repo, 'rencana.md']);
+    const note = GLib.build_filenamev([repo, 'plan.md']);
     const versions = [
-        ['Buat kerangka rencana', '# Rencana Peluncuran\n\n## Tujuan\n\nMerilis Catat 1.0.\n'],
-        ['Tambah bagian jadwal', '# Rencana Peluncuran\n\n## Tujuan\n\nMerilis Catat 1.0.\n\n## Jadwal\n\n- Beta tertutup: Oktober\n'],
-        ['Perjelas tujuan dan tanggal', '# Rencana Peluncuran\n\n## Tujuan\n\nMerilis Catat 1.0 untuk pengguna Linux, lengkap dengan sinkronisasi folder.\n\n## Jadwal\n\n- Beta tertutup: 20 Oktober\n- Rilis publik: 15 November\n'],
+        ['Create the plan outline', '# Launch Plan\n\n## Goal\n\nRelease Catat 1.0.\n'],
+        ['Add a schedule section', '# Launch Plan\n\n## Goal\n\nRelease Catat 1.0.\n\n## Schedule\n\n- Closed beta: October\n'],
+        ['Clarify the goal and the dates', '# Launch Plan\n\n## Goal\n\nRelease Catat 1.0 for Linux users, complete with folder syncing.\n\n## Schedule\n\n- Closed beta: 20 October\n- Public release: 15 November\n'],
     ];
     git('init', '-q');
     for (const [msg, text] of versions) {
         GLib.file_set_contents(note, text);
-        git('add', 'rencana.md');
+        git('add', 'plan.md');
         git('commit', '-q', '-m', msg);
     }
-    GLib.file_set_contents(note, versions[2][1] + '- Evaluasi: 30 November\n');
-    GLib.file_set_contents(GLib.build_filenamev([repo, 'ide.md']), '# Ide\n\nFitur ekspor ke PDF (belum masuk git).\n');
+    GLib.file_set_contents(note, versions[2][1] + '- Evaluation: 30 November\n');
+    GLib.file_set_contents(GLib.build_filenamev([repo, 'ideas.md']), '# Ideas\n\nA PDF export feature (not in git yet).\n');
     w.openFolder(repo, false);
     w.load(note);
     w.setOption('sidebar', true);
     w.sidebar.setPage('history');
     idle(3000);
-    shot('riwayat');
+    shot('history');
     w.setDark(true);
     idle(300);
-    shot('riwayat-gelap');
+    shot('history-dark');
     w.setDark(false);
     idle(300);
 
-    // Jendela baca commit: ambil dari daftar riwayat seperti klik pengguna.
+    // The commit reading window: taken from the history list like a user click.
     const toplevels = () => Gtk.Window.list_toplevels();
-    // Jendela anak (penampil) saja; jendela WebKit tak terlihat milik Mermaid ikut menjadi toplevel.
+    // Only the child window (the viewer); the invisible WebKit window of Mermaid is a toplevel too.
     const child = () => toplevels().find(t => t.get_visible() && (t as unknown as Gtk.Window).get_transient_for() === (w.win as unknown as Gtk.Window));
     w.history.list.emit('activate', 0);
     idle(1500);
     const viewer = child();
     if (viewer) {
         idle(500);
-        widgetPixbuf(viewer)!.savev(`${OUT}/riwayat-diff.png`, 'png', [], []);
+        widgetPixbuf(viewer)!.savev(`${OUT}/history-diff.png`, 'png', [], []);
         (viewer as Gtk.Window).destroy();
     }
 
-    // ───────── Zoom gambar ─────────
+    // ───────── Image zoom ─────────
     const picture = GLib.build_filenamev([GLib.get_current_dir(), 'tests/samples/images/example.png']);
-    load(`# Gambar\n\nKlik ganda gambar untuk memperbesarnya.\n\n![Contoh gambar](${picture})\n`, false, 4, false);
+    load(`# Image\n\nDouble-click the image to enlarge it.\n\n![Example image](${picture})\n`, false, 4, false);
     idle(1200);
     cursorTo(4);
     ed.zoomImage();
     idle(800);
     const zoomWin = child();
     if (zoomWin) {
-        widgetPixbuf(zoomWin)!.savev(`${OUT}/zoom-gambar.png`, 'png', [], []);
+        widgetPixbuf(zoomWin)!.savev(`${OUT}/image-zoom.png`, 'png', [], []);
         (zoomWin as Gtk.Window).destroy();
     }
 
-    // ───────── Tab dokumen ─────────
+    // ───────── Document tabs ─────────
     w.setOption('sidebar', true);
     w.sidebar.setPage('files');
     w.openFolder(proj, false);
     w.file = null;
     ed.setText('');
-    w.setOption('autosave', false);   // supaya tanda • (belum disimpan) tampil di tab
-    for (const rel of ['catatan/rapat-1-okt.md', 'rencana/peluncuran.md', 'riset/pesaing.md', 'riset/pengguna.md']) w.openFile(GLib.build_filenamev([proj, ...rel.split('/')]));
-    w.switchTab(-2);   // rencana aktif
+    w.setOption('autosave', false);   // so the • mark (unsaved) is shown on the tab
+    for (const rel of ['notes/meeting-1-oct.md', 'plans/launch.md', 'research/competitors.md', 'research/users.md']) w.openFile(GLib.build_filenamev([proj, ...rel.split('/')]));
+    w.switchTab(-2);   // the plan is active
     w.editor.buffer.place_cursor(w.editor.buffer.get_end_iter());
-    w.editor.buffer.insert_at_cursor('\n## Risiko\n\nBug sinkronisasi bisa menggeser rilis publik.\n', -1);
+    w.editor.buffer.insert_at_cursor('\n## Risks\n\nThe sync bug could push back the public release.\n', -1);
     w.editor.view.scroll_to_iter(w.editor.buffer.get_start_iter(), 0, false, 0, 0);
     idle(600);
     shot('tab');
-    // Bersihkan: simpan perubahan lalu tutup tab, kembali ke satu dokumen.
+    // Clean up: save the changes and then close the tabs, back to one document.
     w.editor.buffer.set_modified(false);
     w.setOption('autosave', true);
     while (w.documentCount > 1) w.closeTab();
     w.file = null;
     ed.setText('');
 
-    // ───────── Riwayat percakapan ─────────
+    // ───────── Conversation history ─────────
     const earlier: [string, string, string, string][] = [
-        ['2026-10-02T21:05:00', 'Ringkas catatan rapat minggu ini', 'Ringkas catatan rapat minggu ini', 'Rilis publik diundur ke 22 November, Sari menyiapkan materi rilis, dan Budi memperbaiki bug sinkronisasi.'],
-        ['2026-10-03T08:40:00', 'Buat daftar risiko peluncuran', 'Buat daftar risiko peluncuran', 'Risiko utama: bug sinkronisasi, beta tertutup yang mundur, dan anggaran server uji yang terbatas.'],
+        ['2026-10-02T21:05:00', 'Summarize this week\'s meeting notes', 'Summarize this week\'s meeting notes', 'The public release is postponed to 22 November, Sari prepares the release material, and Budi fixes the sync bug.'],
+        ['2026-10-03T08:40:00', 'List the launch risks', 'List the launch risks', 'Main risks: the sync bug, a closed beta that slips, and a limited test server budget.'],
     ];
-    // Buang percakapan hasil adegan Asisten di atas supaya daftarnya hanya berisi contoh ini.
+    // Remove the conversations from the Assistant scene above so the list only contains these examples.
     for (const old of listChats(proj)) GLib.unlink(old.path);
     for (const [created, title, q, a] of earlier) saveChat(proj, { title, model: 'deepseek-flash', created, turns: [{ role: 'user', content: q }, { role: 'assistant', content: a }] }, null);
     w.openFolder(proj, false);
-    w.load(rencana);
+    w.load(plan);
     w.setOption('sidebar', true);
     w.sidebar.setPage('files');
     w.setOption('chat', true);
@@ -629,8 +629,8 @@ function main(app: Adw.Application): void {
     w.chat.makeProvider = () => scripted([ANSWER]);
     void w.chat.ask(ASK_READ);
     idle(1500);
-    // Popover GTK 4 punya permukaan sendiri dan posisinya tidak bisa dibaca; letakkan seperti GTK menaruhnya:
-    // di bawah (atau di atas) tombolnya, di tengah, dan tidak keluar dari jendela.
+    // A GTK 4 popover has its own surface and its position cannot be read; place it the way GTK places it:
+    // below (or above) its button, centered, and not outside the window.
     const grabWithPopover = (button: Gtk.MenuButton, above = false) => {
         const popover = button.get_popover()!;
         popover.popup();
@@ -638,7 +638,7 @@ function main(app: Adw.Application): void {
         const main = grab();
         const pop = widgetPixbuf(popover);
         const [, tx, ty] = button.translate_coordinates(w.win, 0, 0);
-        // Tangkapan jendela mencakup bingkai CSD; koordinat widget dimulai di dalamnya.
+        // The window capture includes the CSD frame; the widget coordinates start inside it.
         const [sx, sy] = w.win.get_surface_transform();
         const bx = tx + sx, by = ty + sy;
         if (pop) {
@@ -653,112 +653,112 @@ function main(app: Adw.Application): void {
     };
     for (const dark of [false, true]) {
         w.setDark(dark);
-        grabWithPopover(w.chat.historyButton).savev(`${OUT}/riwayat-percakapan${dark ? '-gelap' : ''}.png`, 'png', [], []);
+        grabWithPopover(w.chat.historyButton).savev(`${OUT}/chat-history${dark ? '-dark' : ''}.png`, 'png', [], []);
     }
     w.setDark(false);
 
-    // ───────── Konteks: rincian yang dikirim ke model, dengan saklar ─────────
+    // ───────── Context: the breakdown sent to the model, with switches ─────────
     w.chat.reset();
     const sel = (from: string, to: string) => {
         const text = w.editor.getText();
         const a = text.indexOf(from), b = text.indexOf(to) + to.length;
         w.editor.buffer.select_range(w.editor.buffer.get_iter_at_offset(a), w.editor.buffer.get_iter_at_offset(b));
     };
-    sel('- Rilis publik', '15 November');
+    sel('- Public release', '15 November');
     w.chat.updateContextSummary();
     idle(300);
-    grabWithPopover(w.chat.contextButton, true).savev(`${OUT}/konteks.png`, 'png', [], []);
+    grabWithPopover(w.chat.contextButton, true).savev(`${OUT}/context.png`, 'png', [], []);
     w.editor.buffer.place_cursor(w.editor.buffer.get_start_iter());
 
-    // ───────── Rencana, paket sebagian, verifikasi (GIF + tangkapan) ─────────
+    // ───────── Plan, partial batch, verification (GIF + screenshot) ─────────
     for (const [rel, text] of Object.entries(WORK)) put(rel, text);
     w.openFolder(proj, false);
-    w.load(rencana);
+    w.load(plan);
     w.setOption('sidebar', false);
     const tool = (id: string, name: string, args: object): Call => ({ id, name, arguments: JSON.stringify(args) });
-    const steps = (...status: string[]) => ['Cari keputusan rapat yang belum masuk rencana', 'Perbarui rencana, papan, dan catatan rapat', 'Periksa hasilnya'].map((teks, i) => ({ teks, status: status[i] }));
-    const goal = 'Sinkronkan jadwal rilis dengan keputusan rapat 1 Oktober';
+    const steps = (...status: string[]) => ['Find meeting decisions that are not in the plan yet', 'Update the plan, the board, and the meeting notes', 'Check the result'].map((text, i) => ({ text, status: status[i] }));
+    const goal = 'Sync the release schedule with the 1 October meeting decisions';
     w.chat.makeProvider = () => scripted([
-        [tool('p1', 'set_work', { tujuan: goal, langkah: steps('done', 'pending', 'pending'), catatan: 'Rilis publik diundur ke 22 November.' })],
-        [tool('p2', 'propose_batch', { tindakan: [
-            { alat: 'edit_file', argumen: JSON.stringify({ nama: 'rencana/peluncuran.md', old_text: '- Rilis publik: 15 November', new_text: '- Rilis publik: 22 November', alasan: 'Rapat 1 Oktober mengundur rilis publik.' }) },
-            { alat: 'edit_kanban', argumen: JSON.stringify({ nama: 'tugas.md', aksi: 'pindah', kartu: 'Siapkan materi rilis', daftar: 'Dikerjakan', alasan: 'Sari mulai menyiapkan materi rilis.' }) },
-            { alat: 'insert_text', argumen: JSON.stringify({ nama: 'catatan/rapat-8-okt.md', posisi: 'akhir', teks: '\nRencana peluncuran sudah diperbarui ke 22 November.\n', alasan: 'Catat bahwa rencana sudah disinkronkan.' }) },
+        [tool('p1', 'set_work', { goal, steps: steps('done', 'pending', 'pending'), note: 'The public release is postponed to 22 November.' })],
+        [tool('p2', 'propose_batch', { actions: [
+            { tool: 'edit_file', arguments: JSON.stringify({ name: 'plans/launch.md', old_text: '- Public release: 15 November', new_text: '- Public release: 22 November', reason: 'The 1 October meeting postponed the public release.' }) },
+            { tool: 'edit_kanban', arguments: JSON.stringify({ name: 'tasks.md', action: 'move', card: 'Prepare the release material', list: 'In Progress', reason: 'Sari started preparing the release material.' }) },
+            { tool: 'insert_text', arguments: JSON.stringify({ name: 'notes/meeting-8-oct.md', position: 'end', text: '\nThe launch plan has been updated to 22 November.\n', reason: 'Record that the plan has been synced.' }) },
         ] })],
-        [tool('p3', 'set_work', { tujuan: goal, langkah: steps('done', 'done', 'pending'), catatan: 'Paket diterapkan.' })],
-        [tool('p4', 'verify_work', { pemeriksaan: [
-            { berkas: 'rencana/peluncuran.md', jenis: 'ada', teks: 'Rilis publik: 22 November' },
-            { berkas: '*', jenis: 'absent', teks: '15 November' },
-            { berkas: 'tugas.md', jenis: 'kanban', teks: 'Siapkan materi rilis #pemasaran @{2026-11-10}', daftar: 'Dikerjakan', selesai: false },
-            { berkas: 'catatan/rapat-8-okt.md', jenis: 'ada', teks: 'sudah diperbarui ke 22 November' },
+        [tool('p3', 'set_work', { goal, steps: steps('done', 'done', 'pending'), note: 'The batch was applied.' })],
+        [tool('p4', 'verify_work', { checks: [
+            { file: 'plans/launch.md', kind: 'present', text: 'Public release: 22 November' },
+            { file: '*', kind: 'absent', text: '15 November' },
+            { file: 'tasks.md', kind: 'kanban', text: 'Prepare the release material #marketing @{2026-11-10}', list: 'In Progress', done: false },
+            { file: 'notes/meeting-8-oct.md', kind: 'present', text: 'has been updated to 22 November' },
         ] })],
-        [tool('p5', 'set_work', { tujuan: goal, langkah: steps('done', 'done', 'done'), catatan: 'Semua pemeriksaan lulus.' })],
-        'Selesai dan terverifikasi. Rencana memakai **22 November**, tanggal lama tidak tersisa di berkas mana pun, kartu *Siapkan materi rilis* ada di *Dikerjakan*, dan catatan rapat 8 Oktober mencatat pembaruannya.',
-    ], 'pekerjaan');
+        [tool('p5', 'set_work', { goal, steps: steps('done', 'done', 'done'), note: 'All the checks passed.' })],
+        'Done and verified. The plan uses **22 November**, the old date is left in no file, the card *Prepare the release material* is in *In Progress*, and the 8 October meeting notes record the update.',
+    ], 'work');
     streamFrames = true;
     w.chat.reset();
     w.setOption('chat', true);
-    frame('pekerjaan', 4);
+    frame('work', 4);
     let worked = false;
-    void w.chat.ask('Sinkronkan jadwal rilis dengan keputusan rapat, lalu pastikan tidak ada yang tertinggal.').then(() => { worked = true; });
+    void w.chat.ask('Sync the release schedule with the meeting decisions, and then make sure nothing is left behind.').then(() => { worked = true; });
     const pack = nextViewer();
-    frame('pekerjaan', 8);
-    // Persetujuan sebagian: hapus centang satu berkas dan tulis catatan, tangkap, lalu kembalikan dan terapkan semua.
+    frame('work', 8);
+    // Partial approval: uncheck one file and write a note, capture, then restore and apply everything.
     pack.checks[2].set_active(false);
-    pack.noteEntry.set_text('Catatan rapat 8 Oktober biar saya tulis sendiri');
+    pack.noteEntry.set_text('I will write the 8 October meeting notes myself');
     idle(300);
-    widgetPixbuf(pack.window)!.savev(`${OUT}/usulan-paket.png`, 'png', [], []);
+    widgetPixbuf(pack.window)!.savev(`${OUT}/proposal-batch.png`, 'png', [], []);
     pack.checks[2].set_active(true);
     pack.noteEntry.set_text('');
     pack.applyButton.emit('clicked');
     while (!worked) { pump(); GLib.usleep(5000); }
     idle(600);
-    frame('pekerjaan', 16);
-    shot('pekerjaan');
+    frame('work', 16);
+    shot('work');
     streamFrames = false;
-    // Daftar centang rencana di awal jawaban: gulir panel ke atas lalu tangkap panelnya saja.
+    // The plan checklist at the start of the answer: scroll the panel to the top and then capture just the panel.
     w.chat.scroller.get_vadjustment().set_value(0);
     idle(300);
-    widgetPixbuf(w.chat.widget)!.savev(`${OUT}/rencana.png`, 'png', [], []);
+    widgetPixbuf(w.chat.widget)!.savev(`${OUT}/plan.png`, 'png', [], []);
 
-    // ───────── Log agent dari pekerjaan di atas ─────────
+    // ───────── The agent log of the work above ─────────
     w.chat.showLog();
     idle(600);
     const logWin = w.chat.logViewer?.window;
     if (logWin) {
-        widgetPixbuf(logWin)!.savev(`${OUT}/log-agent.png`, 'png', [], []);
+        widgetPixbuf(logWin)!.savev(`${OUT}/agent-log.png`, 'png', [], []);
         logWin.close();
         idle(300);
     }
 
-    // ───────── Agent membaca riwayat Git ─────────
+    // ───────── The agent reads the Git history ─────────
     w.openFolder(repo, false);
     w.load(note);
     w.setOption('sidebar', true);
     w.sidebar.setPage('history');
     w.chat.makeProvider = () => scripted([
-        [tool('g1', 'git_log', { berkas: 'rencana.md' })],
-        [tool('g2', 'show_commit', { commit: 'HEAD', berkas: 'rencana.md' })],
-        'Tanggal **15 November** pertama kali masuk di commit *Perjelas tujuan dan tanggal* oleh Eka Putra; commit sebelumnya hanya menulis "Beta tertutup: Oktober". Baris *Evaluasi: 30 November* belum di-commit.',
+        [tool('g1', 'git_log', { file: 'plan.md' })],
+        [tool('g2', 'show_commit', { commit: 'HEAD', file: 'plan.md' })],
+        'The date **15 November** first entered in the commit *Clarify the goal and the dates* by Eka Putra; the earlier commit only wrote "Closed beta: October". The line *Evaluation: 30 November* is not committed yet.',
     ]);
     w.chat.reset();
     let gitDone = false;
-    void w.chat.ask('Kapan tanggal rilis publik ditulis di rencana, dan oleh siapa?').then(() => { gitDone = true; });
+    void w.chat.ask('When was the public release date written in the plan, and by whom?').then(() => { gitDone = true; });
     while (!gitDone) { pump(); GLib.usleep(5000); }
     idle(1500);
     shot('agent-git');
     w.setOption('chat', false);
 
-    // ───────── Dialog kartu kanban (tenggat dengan kalender) ─────────
+    // ───────── The kanban card dialog (a due date with a calendar) ─────────
     load(BOARD, false, 0, false);
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
-        const dialog = findDialog('Sunting Kartu');
-        if (dialog) { widgetPixbuf(dialog)?.savev(`${OUT}/kanban-kartu.png`, 'png', [], []); dialog.close(); }
+        const dialog = findDialog('Edit Card');
+        if (dialog) { widgetPixbuf(dialog)?.savev(`${OUT}/kanban-card.png`, 'png', [], []); dialog.close(); }
         return GLib.SOURCE_REMOVE;
     });
-    waitPromise(editCardDialog(w.win, { text: 'Riset pengguna #riset @{2026-10-10 09:00}', notes: ['Wawancara lima pengguna aktif.'] }));
+    waitPromise(editCardDialog(w.win, { text: 'User research #research @{2026-10-10 09:00}', notes: ['Interview five active users.'] }));
 
-    // ───────── Orkestrator: kartu dikerjakan pi (tiruan RPC, tanpa API) ─────────
+    // ───────── The orchestrator: cards worked on by pi (a fake RPC, no API) ─────────
     const piDir = GLib.dir_make_tmp('nyerat-pi-XXXXXX');
     const shop = GLib.build_filenamev([GLib.dir_make_tmp('nyerat-repo-XXXXXX'), 'web-ecommerce']);
     GLib.mkdir_with_parents(shop, 0o755);
@@ -770,7 +770,7 @@ function main(app: Adw.Application): void {
     w.orchestrator.program = () => piScript;
     w.harnessDialogs = { ...savedDialogs, answer: () => null };
     w.settings.projects = { 'web-ecommerce': shop };
-    const piBoard = put('pengembangan.md', PI_BOARD);
+    const piBoard = put('development.md', PI_BOARD);
     w.load(piBoard);
     w.setOption('sidebar', false);
     settle(20);
@@ -781,36 +781,36 @@ function main(app: Adw.Application): void {
             const index = b.columns[column].cards.findIndex(c => c.text.startsWith(text));
             if (index >= 0) return { column, index, text: b.columns[column].cards[index].text };
         }
-        throw new Error(`kartu "${text}" tidak ada`);
+        throw new Error(`card "${text}" does not exist`);
     };
     const cardMenu = (text: string, label: string) => {
         const { column, index } = cardAt(text);
         const entry = findEntry(w.board.cardMenu(column, index), label);
-        if (!entry?.run) throw new Error(`menu "${label}" tidak ada untuk "${text}"`);
+        if (!entry?.run) throw new Error(`menu "${label}" does not exist for "${text}"`);
         entry.run();
     };
     const runOf = (text: string) => w.orchestrator.queue.find(piBoard, cardAt(text).text);
     frame('pi', 8);
-    piMode('lambat');
-    cardMenu('Checkout', 'Kerjakan dengan pi');
-    cardMenu('Tes keranjang', 'Kerjakan dengan pi');
+    piMode('slow');
+    cardMenu('Checkout', 'Work on it with pi');
+    cardMenu('Test the cart',  'Work on it with pi');
     waitFor(() => runOf('Checkout')?.status === 'working');
     frame('pi', 10);
-    shot('pi-papan');
-    GLib.file_set_contents(GLib.build_filenamev([piDir, 'lepas']), '');
+    shot('pi-board');
+    GLib.file_set_contents(GLib.build_filenamev([piDir, 'release']), '');
     waitFor(() => runOf('Checkout')?.status === 'done');
-    waitFor(() => runOf('Tes keranjang')?.status === 'done');
+    waitFor(() => runOf('Test the cart')?.status === 'done');
     frame('pi', 8);
-    piMode('tanya');
-    cardMenu('Rapikan README', 'Kerjakan dengan pi');
-    waitFor(() => runOf('Rapikan README')?.status === 'waiting');
+    piMode('ask');
+    cardMenu('Tidy up the README', 'Work on it with pi');
+    waitFor(() => runOf('Tidy up the README')?.status === 'waiting');
     frame('pi', 14);
-    shot('pi-menunggu');
-    const ask = runOf('Rapikan README')?.ask;
+    shot('pi-waiting');
+    const ask = runOf('Tidy up the README')?.ask;
     if (ask) {
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-            const dialog = findDialog('Jawab pi');
-            if (dialog) { widgetPixbuf(dialog)?.savev(`${OUT}/pi-jawab.png`, 'png', [], []); dialog.close(); }
+            const dialog = findDialog('Answer pi');
+            if (dialog) { widgetPixbuf(dialog)?.savev(`${OUT}/pi-answer.png`, 'png', [], []); dialog.close(); }
             return GLib.SOURCE_REMOVE;
         });
         waitPromise(harnessAskDialog(w.win, ask, 'pi'));
@@ -822,7 +822,7 @@ function main(app: Adw.Application): void {
         widgetPixbuf(log.window)!.savev(`${OUT}/pi-log.png`, 'png', [], []);
         log.window.destroy();
     }
-    const waiting = runOf('Rapikan README');
+    const waiting = runOf('Tidy up the README');
     if (waiting) w.orchestrator.stop(waiting);
     waitFor(() => !w.orchestrator.queue.runs.some(r => r.status === 'working' || r.status === 'waiting'));
     w.orchestrator.program = savedProgram;
@@ -830,7 +830,7 @@ function main(app: Adw.Application): void {
     w.editor.buffer.set_modified(false);
 
     finishGifs();
-    print(`Selesai: ${OUT}`);
+    print(`Done: ${OUT}`);
     buf.set_modified(false);
     w.win.destroy();
 }
