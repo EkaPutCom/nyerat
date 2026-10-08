@@ -50,7 +50,7 @@ export function homeTests(c: GuiContext): void {
         ok(win.homeMode, 'Home is not shown');
         eq(win.documentName, 'Home', 'tab name');
         ok(!win.statusBar.get_visible(), 'the status bar is still shown');
-        ok(!actionEnabled('save') && !actionEnabled('bold') && !actionEnabled('undo'), 'aksi dokumen masih aktif');
+        ok(!actionEnabled('save') && !actionEnabled('bold') && !actionEnabled('undo'), 'document actions are still enabled');
         ok(win.save() === true && win.file === null, 'Save on Home must not open a dialog');
         close(win);
     });

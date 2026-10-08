@@ -35,7 +35,7 @@ export function codeBlockTests(c: GuiContext): void {
     });
     test('cursor enters the block: raw text is shown', () => {
         cursorTo(3); settle();
-        ok(!block().collapsed && !block().widget?.get_visible(), 'kotak masih tampil');
+        ok(!block().collapsed && !block().widget?.get_visible(), 'the box is still shown');
         ok(![2, 3, 4, 5].some(hidden), 'the block lines are still shrunk');
     });
     test('clicking the box opens the block', () => {
@@ -47,11 +47,11 @@ export function codeBlockTests(c: GuiContext): void {
     // setCursor() and line shifts only touch the tags of the changed block; the result must be
     // the same as a full sync.
     test('cursor moving in and out and lines shifting: tags stay exactly on the block lines', () => {
-        //  0 atas | 2-4 blok A | 6-8 blok B | 10 bawah
+        //  0 top | 2-4 block A | 6-8 block B | 10 bottom
         const TWO = 'top\n\n```js\nconst a = 1;\n```\n\n```py\nb = 2\n```\n\nbottom';
         const exactly = (lines: number[]) => {
             const count = buf.get_line_count();
-            for (let l = 0; l < count; l++) eq(hidden(l), lines.includes(l), `tag codehide baris ${l}`);
+            for (let l = 0; l < count; l++) eq(hidden(l), lines.includes(l), `codehide tag line ${l}`);
         };
         setText(TWO); cursorTo(0); settle();
         exactly([2, 3, 4, 6, 7, 8]);
@@ -66,7 +66,7 @@ export function codeBlockTests(c: GuiContext): void {
         buf.insert(iterAtLine(buf, 1), 'new\nnew\n', -1);
         cursorTo(0); settle();
         exactly([4, 5, 6, 8, 9, 10]);
-        eq([b.start, b.end], [8, 10], 'baris blok B');
+        eq([b.start, b.end], [8, 10], 'lines of block B');
         ok(b.y > before, `box B did not move down (${before} → ${b.y})`);
         const [lineY, lineH] = ed.view.get_line_yrange(iterAtLine(buf, 10));
         ok(b.y + b.height <= lineY + lineH, 'box B is not below its last line');

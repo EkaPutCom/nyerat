@@ -390,7 +390,7 @@ export class MarkdownView {
         });
     }
 
-    // ---------- Siklus penyorotan ----------
+    // ---------- Highlighting cycle ----------
     //
     // Text changed    → queueHighlight()    → highlight()  → updateCursor(true)
     // Cursor moved    → queueCursorUpdate() → updateCursor()

@@ -16,7 +16,7 @@ export function chatTests(c: GuiContext): void {
     const { w, setText, cursorTo, pump } = c;
     const panel = w.chat;
 
-    section('Asisten (chat)');
+    section('Assistant (chat)');
 
     const seen: ChatRequest[] = [];
     let reply = 'Laras hid the **letter**.';
@@ -113,7 +113,7 @@ export function chatTests(c: GuiContext): void {
         contains(text, 'Laras hid the letter.');          // the ** marks are removed by the markup
         ok(!text.includes('**'), 'the markdown marks are shown raw');
         contains(text, 'Looking through the manuscript.');
-        contains(text, 'Konteks: ≈');
+        contains(text, 'Context: ≈');
         contains(text, 'snippets from chapter-1.md');
         contains(text, '1.5k in (1.2k from cache) · 12 out');
         ok(panel.contextButton.get_label()!.startsWith('Context · ≈'), `context button: ${panel.contextButton.get_label()}`);
@@ -128,7 +128,7 @@ export function chatTests(c: GuiContext): void {
         ok(viewer, 'the log window did not open');
         const text = () => { const out: string[] = []; const walk = (x: Gtk.Widget) => { if (x instanceof Gtk.Label) out.push(x.get_text()); if (x instanceof Gtk.Expander && x.get_child()) walk(x.get_child()!); childrenOf(x).forEach(walk); }; walk(viewer.list); return out.join('\n'); };
         for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
-        contains(text(), 'Memanggil model');
+        contains(text(), 'Calling the model');
         contains(text(), 'Model reasoning');
         contains(text(), 'Looking through the manuscript.');
         panel.session.trace.add('note', 'New event');
@@ -149,7 +149,7 @@ export function chatTests(c: GuiContext): void {
     test('@name attaches the whole file; an unknown name is reported in the context breakdown', () => {
         seen.length = 0;
         settle(panel.ask('Match the style to @chapter-1 and @missing'));
-        contains(seen[0].messages[seen[0].messages.length - 1].content, '<berkas name="chapter-1.md">');
+        contains(seen[0].messages[seen[0].messages.length - 1].content, '<file name="chapter-1.md">');
         contains(all(), 'not found: @missing');
     });
 
@@ -229,7 +229,7 @@ export function chatTests(c: GuiContext): void {
         const pending = panel.ask('Tell me at length');
         for (let i = 0; i < 200 && !all().includes('Half the answer'); i++) { pump(); GLib.usleep(5000); }
         ok(panel.busy, 'should be busy');
-        eq(panel.sendButton.get_tooltip_text(), 'Hentikan');
+        eq(panel.sendButton.get_tooltip_text(), 'Stop');
         ok(panel.sendButton.sensitive && !panel.sendButton.has_css_class('suggested-action'), 'the stop button must be active and not the primary button');
         panel.stop();
         settle(pending);
@@ -260,7 +260,7 @@ export function chatTests(c: GuiContext): void {
 
     test('Enter sends, Shift+Enter does not (new line)', () => {
         const press = (state: number) => panel.onInputKey(0xff0d, state);
-        panel.input.buffer.set_text('baris', -1);
+        panel.input.buffer.set_text('line', -1);
         eq(press(1), false);               // Shift
         seen.length = 0;
         eq(press(0), true);
@@ -302,7 +302,7 @@ export function chatTests(c: GuiContext): void {
         settle(panel.ask('In which chapter is there a storm?'));
         const text = all();
         contains(text, 'Searching text “storm” → 1 line');
-        contains(text, 'Membaca chapter-2 → baris 1–');
+        contains(text, 'Reading chapter-2 → lines 1–');
         contains(text, 'The storm is in chapter 2.');
         contains(text, '400 in (100 from cache) · 13 out · 2 lookups');
         contains(toolResult, 'The storm hit the ship.');
@@ -328,15 +328,15 @@ export function chatTests(c: GuiContext): void {
     test('the conversation is saved as Markdown in .nyerat/chats and that folder is not part of Git', () => {
         rmChats();
         panel.reset();
-        settle(panel.ask('Pertanyaan riwayat satu'));
+        settle(panel.ask('History question one'));
         const chats = savedFiles();
         eq(chats.length, 1, 'number of files');
-        eq(chats[0].title, 'Pertanyaan riwayat satu');
+        eq(chats[0].title, 'History question one');
         ok(chats[0].path.startsWith(chatsDir(book)), chats[0].path);
-        ok(chats[0].path.endsWith('-pertanyaan-riwayat-satu.md'), chats[0].path);
+        ok(chats[0].path.endsWith('-history-question-one.md'), chats[0].path);
         const text = readTextFile(chats[0].path);
-        contains(text, '## Anda\nPertanyaan riwayat satu');
-        contains(text, '## Asisten\n');
+        contains(text, '## You\nHistory question one');
+        contains(text, '## Assistant\n');
         contains(text, 'model: deepseek-flash');
         eq(readTextFile(GLib.build_filenamev([book, '.nyerat', '.gitignore'])), '*\n');
     });
@@ -354,10 +354,10 @@ export function chatTests(c: GuiContext): void {
 
     test('New conversation creates a new file; the list contains both, newest first', () => {
         panel.reset();
-        settle(panel.ask('Pertanyaan riwayat dua'));
+        settle(panel.ask('History question two'));
         const chats = savedFiles();
         eq(chats.length, 2, 'number of files');
-        eq(chats.map(c => c.title).sort(), ['Pertanyaan riwayat dua', 'Pertanyaan riwayat satu']);
+        eq(chats.map(c => c.title).sort(), ['History question two', 'History question one']);
     });
 
     test('the history popover shows the title of each conversation', () => {
@@ -372,18 +372,18 @@ export function chatTests(c: GuiContext): void {
         walk(popover);
         popover.popdown();
         pump();
-        contains(texts.join('\n'), 'Pertanyaan riwayat satu');
-        contains(texts.join('\n'), 'Pertanyaan riwayat dua');
+        contains(texts.join('\n'), 'History question one');
+        contains(texts.join('\n'), 'History question two');
     });
 
     test('opening an old conversation restores the messages and the history, then continues it in that file', () => {
-        const first = savedFiles().find(c => c.title === 'Pertanyaan riwayat satu')!;
+        const first = savedFiles().find(c => c.title === 'History question one')!;
         ok(panel.openChat(first.path), 'openChat() failed');
         eq(panel.session.history.length, 4);
-        contains(all(), 'Pertanyaan riwayat satu');
+        contains(all(), 'History question one');
         contains(all(), 'Follow-up one');
         contains(all(), 'Laras hid the letter.');
-        ok(!all().includes('Pertanyaan riwayat dua'), 'percakapan lain ikut tampil');
+        ok(!all().includes('History question two'), 'another conversation was shown too');
         seen.length = 0;
         settle(panel.ask('Follow-up two'));
         eq(seen[0].messages.map(m => m.role), ['system', 'user', 'assistant', 'user', 'assistant', 'user']);   // the old history was sent along
@@ -392,8 +392,8 @@ export function chatTests(c: GuiContext): void {
     });
 
     test('files that are not conversations are ignored and cannot be opened', () => {
-        const stray = GLib.build_filenamev([chatsDir(book), 'catatan.md']);
-        GLib.file_set_contents(stray, '# Catatan\n\nBukan percakapan.\n');
+        const stray = GLib.build_filenamev([chatsDir(book), 'notes.md']);
+        GLib.file_set_contents(stray, '# Notes\n\nNot a conversation.\n');
         eq(savedFiles().length, 2, 'a foreign file entered the list');
         ok(!panel.openChat(stray), 'openChat() should have failed');
         GLib.unlink(stray);
@@ -415,20 +415,20 @@ export function chatTests(c: GuiContext): void {
         const rootBefore = panel.host.root;
         panel.host.root = () => null;
         panel.reset();
-        settle(panel.ask('Tanpa folder'));
+        settle(panel.ask('Without a folder'));
         eq(savedFiles().length, 0, 'a file was written without a folder');
         panel.host.root = rootBefore;
         panel.reset();
     });
 
-    // ---------- Usulan perubahan agent ----------
+    // ---------- Agent change proposals ----------
     const proposalProvider = (name: string, args: object): Provider => {
         let round = 0;
         return {
             async chat(req) {
                 round++;
                 if (round === 1) return { usage: null, cancelled: false, reasoning: '', toolCalls: [{ id: 'u1', name, arguments: JSON.stringify(args) }] };
-                req.onText('Sudah saya usulkan.');
+                req.onText('I have proposed it.');
                 return { usage: { prompt: 50, cached: 0, completion: 5 }, cancelled: false, toolCalls: [], reasoning: '' };
             },
         };
@@ -450,7 +450,7 @@ export function chatTests(c: GuiContext): void {
             for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
             const n = shotCount++;
             widgetPixbuf(viewer.window)?.savev(`${prefix}-${n}-review.png`, 'png', [], []);
-            widgetPixbuf(w.win)?.savev(`${prefix}-${n}-utama.png`, 'png', [], []);
+            widgetPixbuf(w.win)?.savev(`${prefix}-${n}-main.png`, 'png', [], []);
         }
         const agenticShot = optVal('shot-agentic');
         if (agenticShot && Array.isArray(viewer.change)) {
@@ -483,7 +483,7 @@ export function chatTests(c: GuiContext): void {
         contains(lastDiff, '-The storm hit the ship.');
         contains(lastDiff, '+The storm hit the ship hard.');
         contains(text, 'Applied.');
-        contains(text, '1 perubahan diterapkan');
+        contains(text, '1 change applied');
         eq(w.editor.getText(), '# Chapter 2\n\nThe storm hit the ship hard.\n');
         eq(diskOf('chapter-2.md'), diskBefore);
         w.editor.buffer.undo();
@@ -526,17 +526,17 @@ export function chatTests(c: GuiContext): void {
 
     test('new file proposal: Apply writes it and opens it in a tab', () => {
         proposeAndPress(proposalProvider('create_file', { name: 'plans/october', content: '# October\n\n- Write chapter 3\n', reason: 'plan for this month' }), 'apply');
-        eq(diskOf('rencana/oktober.md'), '# October\n\n- Write chapter 3\n');
+        eq(diskOf('plans/october.md'), '# October\n\n- Write chapter 3\n');
         contains(all(), 'New file plans/october.md');
         contains(lastDiff, '@@ -0,0 +1,3 @@');
-        ok(w.file?.endsWith('/rencana/oktober.md'), `tab aktif: ${w.file}`);
+        ok(w.file?.endsWith('/plans/october.md'), `active tab:  ${w.file}`);
         ok(w.closeTab(), 'closeTab() failed');
         pump();
     });
 
     test('kanban board proposal: adding and moving a card appears on the open board', () => {
         const board =  GLib.build_filenamev([book, 'tasks.md']);
-        GLib.file_set_contents(board,  '---\nkanban: true\n---\n\n## Plan\n\n- [ ] Write report #important\n- [ ] Send invitations @{2026-10-20}\n\n## In Progress\n\n- [ ] Research the harbor\n\n## Done\n\n- [x] Book the venue\n');
+        GLib.file_set_contents(board, '---\nkanban: true\n---\n\n## Plan\n\n- [ ] Write report #important\n- [ ] Send invitations @{2026-10-20}\n\n## In Progress\n\n- [ ] Research the harbor\n\n## Done\n\n- [x] Book the venue\n');
         w.openFile(board);
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(8000); }
         ok(w.boardMode, 'the board did not open as a board');
@@ -553,7 +553,7 @@ export function chatTests(c: GuiContext): void {
         const prefix = optVal('shot-proposal');
         if (prefix) {
             for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
-            widgetPixbuf(w.win)?.savev(`${prefix}-papan.png`, 'png', [], []);
+            widgetPixbuf(w.win)?.savev(`${prefix}-board.png`, 'png', [], []);
         }
         } finally {
             w.editor.buffer.set_modified(false);   // do not show the save dialog when closing the tab
@@ -598,10 +598,10 @@ export function chatTests(c: GuiContext): void {
         eq(workRows().length, 2);
         ok(workRows()[0].get_first_child()?.has_css_class('work-done'), 'the finished step is not checked');
         ok(workRows()[1].get_first_child()?.has_css_class('work-pending'), 'the next step is not an empty circle');
-        contains(all(), '1/2 langkah');
+        contains(all(), '1/2 steps');
         ok(!all().includes('- [x]'), 'the plan is still shown as raw text');
         ok(!all().includes('Work plan →'), 'the plan is repeated in the step row');
-        const saved = listChats(book).find(chat => readTextFile(chat.path).includes('pekerjaan:'));
+        const saved = listChats(book).find(chat => readTextFile(chat.path).includes('work:'));
         ok(saved, 'the plan was not saved');
         ok(panel.openChat(saved.path), 'the plan did not open');
         eq(panel.session.work?.status, 'paused');
@@ -614,7 +614,7 @@ export function chatTests(c: GuiContext): void {
             for (const dark of [false, true]) {
                 w.setDark(dark);
                 for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
-                widgetPixbuf(w.win)?.savev(`${prefix}-rencana-${dark ? 'dark' : 'light'}.png`, 'png', [], []);
+                widgetPixbuf(w.win)?.savev(`${prefix}-plan-${dark ? 'dark' : 'light'}.png`, 'png', [], []);
             }
             w.setDark(oldDark);
         }
@@ -635,9 +635,9 @@ export function chatTests(c: GuiContext): void {
     };
 
     test('batch: uncheck one file → only the checked ones are applied; Undo restores them', () => {
-        GLib.file_set_contents(GLib.build_filenamev([book, 'schedule-a.md']), 'Rilis 15 November\n');
-        GLib.file_set_contents(GLib.build_filenamev([book, 'schedule-b.md']), 'Rilis 15 November\n');
-        const actions = ['jadwal-a', 'jadwal-b'].map(name => ({ tool: 'edit_file', arguments: JSON.stringify({ name, old_text: '15 November', new_text: '22 November', reason: 'keputusan rapat' }) }));
+        GLib.file_set_contents(GLib.build_filenamev([book, 'schedule-a.md']), 'Release 15 November\n');
+        GLib.file_set_contents(GLib.build_filenamev([book, 'schedule-b.md']), 'Release 15 November\n');
+        const actions = ['schedule-a', 'schedule-b'].map(name => ({ tool: 'edit_file', arguments: JSON.stringify({ name, old_text: '15 November', new_text: '22 November', reason: 'meeting decision' }) }));
         toolReplies.length = 0;
         proposeAndPress(recording('propose_batch', { actions }), 'apply', viewer => {
             eq(viewer.checks.length, 2);
@@ -647,7 +647,7 @@ export function chatTests(c: GuiContext): void {
             const prefix = optVal('shot-proposal');
             if (prefix) {
                 for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
-                widgetPixbuf(viewer.window)?.savev(`${prefix}-sebagian.png`, 'png', [], []);
+                widgetPixbuf(viewer.window)?.savev(`${prefix}-partial.png`, 'png', [], []);
             }
         });
         contains(diskOf('schedule-a.md'), '22 November');
@@ -662,13 +662,13 @@ export function chatTests(c: GuiContext): void {
             widgetPixbuf(w.win)?.savev(`${prefix}-undo.png`, 'png', [], []);
         }
         undo.emit('clicked');
-        eq(diskOf('schedule-a.md'), 'Rilis 15 November\n');
+        eq(diskOf('schedule-a.md'), 'Release 15 November\n');
         contains(all(), 'Undone.');
         eq(panel.session.events.map(e => e.status), ['reverted', 'rejected']);
     });
 
     test('Undo fails without overwriting if the file has been edited again', () => {
-        proposeAndPress(proposalProvider('edit_file', { name: 'jadwal-a', old_text: '15 November', new_text: '23 November', reason: 'x' }), 'apply');
+        proposeAndPress(proposalProvider('edit_file', { name: 'schedule-a', old_text: '15 November', new_text: '23 November', reason: 'x' }), 'apply');
         GLib.file_set_contents(GLib.build_filenamev([book, 'schedule-a.md']), 'Edited by the user\n');
         buttons().find(b => b.get_label() === 'Undo')!.emit('clicked');
         eq(diskOf('schedule-a.md'), 'Edited by the user\n');
@@ -743,7 +743,7 @@ export function chatTests(c: GuiContext): void {
         // inside the visible area.
         let footer: Gtk.Label | null = null;
         const walk = (widget: Gtk.Widget) => {
-            if (widget instanceof Gtk.Label && widget.get_text().startsWith('3,6 rb masuk')) footer = widget;
+            if (widget instanceof Gtk.Label && widget.get_text().startsWith('3.6k in')) footer = widget;
             childrenOf(widget).forEach(walk);
         };
         walk(panel.messages);

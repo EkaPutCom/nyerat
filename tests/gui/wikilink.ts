@@ -73,10 +73,10 @@ export function wikiLinkGuiTests(c: GuiContext): void {
         backToFirstTab();
     });
     test('Ctrl+click on a relative Markdown link to an .md file opens in Nyerat', () => {
-        const s = 'lihat [rencana](Rencana.md)\n\nx';
+        const s = 'see [plan](Plan.md)\n\nx';
         setText(s);
         placeAtEnd();
-        ok(ctrlClick(offsetIn(s, 'rencana]')), 'the click was not handled');
+        ok(ctrlClick(offsetIn(s, 'plan]')), 'the click was not handled');
         eq(w.file, abs('Journal', 'Plan.md'), 'the opened file');
         backToFirstTab();
     });

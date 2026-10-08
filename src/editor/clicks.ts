@@ -26,7 +26,7 @@ export function toggleTaskAt(buffer: Gtk.TextBuffer, iter: Gtk.TextIter, tags: T
 const LINK_PATTERNS = [
     /!?\[[^\]]*\]\(([^)\s]*)[^)]*\)/g,          // [text](url) and ![alt](url)
     /<((?:https?|mailto|ftp):[^\s>]+)>/g,          // <https://...>
-    /\bhttps?:\/\/[^\s<>]*[^\s<>.,;:!?)\]'"]/g,  // URL polos
+    /\bhttps?:\/\/[^\s<>]*[^\s<>.,;:!?)\]'"]/g,  // bare URL
 ];
 
 // URL of the link at the iter position, or null.

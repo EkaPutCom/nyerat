@@ -30,7 +30,7 @@ import { escapeMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from './theme.js';
 import { childrenOf, onKeyPress, pack, uiTemplate } from '../gtkutil.js';
 import template from './chat.ui?raw';
-import { _, fmt } from '../i18n.js';
+import { _, fmt, ngettext } from '../i18n.js';
 
 // What the panel needs to know from the window.
 export interface ChatHost {
@@ -65,7 +65,7 @@ const usageText = (u: Usage, toolCalls: number, applied = 0): string => [
     fmt(u.cached ? _('{prompt} in ({cached} from cache)') : _('{prompt} in'), { prompt: fmtTokens(u.prompt), cached: fmtTokens(u.cached) }),
     fmt(_('{completion} out'), { completion: fmtTokens(u.completion) }),
     ...toolCalls ? [fmt(_('{count} lookups'), { count: toolCalls })] : [],
-    ...applied ? [fmt(_('{count} changes applied'), { count: applied })] : [],
+    ...applied ? [fmt(ngettext('{count} change applied', '{count} changes applied', applied), { count: applied })] : [],
 ].join(' · ');
 
 interface Bubble {

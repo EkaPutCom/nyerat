@@ -64,7 +64,7 @@ export interface Block {
     line: number;
     key: string;           // list of URI + alt, to match the same block
     items: BlockItem[];
-    box: Gtk.Box;          // slot overlay (lihat overlays.ts)
+    box: Gtk.Box;          // overlay slot (see overlays.ts)
     content: Gtk.Box;
     height: number;
     x: number;
@@ -114,7 +114,7 @@ export class ImageLayer {
     onActivate: (line: number) => void = () => {};  // image clicked once
     onZoom: (line: number, index: number) => void = () => {};  // image double-clicked
 
-    private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
+    private gapTags = new Map<number, Gtk.TextTag>();   // height → tag
     private relayoutQueued = false;
     private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
@@ -131,7 +131,7 @@ export class ImageLayer {
         this.watchAdjustment();
     }
 
-    // Editor ditutup: hentikan pekerjaan tertunda (lihat MarkdownView.destroy()).
+    // Editor closed: stop the pending work (see MarkdownView.destroy()).
     destroy(): void {
         this.destroyed = true;
         this.slots.destroy();
@@ -311,7 +311,7 @@ export class ImageLayer {
         setTagGroup(this.buffer, this.gapTags.values(), gaps);
     }
 
-    // ---------- Posisi widget ----------
+    // ---------- Widget position ----------
 
     queueRelayout(): void {
         if (this.destroyed || this.relayoutQueued) return;

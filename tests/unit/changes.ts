@@ -34,7 +34,7 @@ export function changeTests(): void {
 
     test('edit_file: text does not match, is not unique, is the same, or the file does not exist → message for the model', () => {
         const bad = (args: object) => { const r = plan('edit_file', { reason: 'x', new_text: 'y', ...args }); ok(!r.ok, 'should have failed'); return r.ok ? '' : r.message; };
-        contains(bad({ name: 'plan.md', old_text: 'tidak ada di berkas' }), 'not found');
+        contains(bad({ name: 'plan.md', old_text: 'not in the file' }), 'not found');
         contains(bad({ name: 'plan.md', old_text: 'a' }), 'times');
         contains(bad({ name: 'plan.md', old_text: 'October', new_text: 'October' }), 'same');
         contains(bad({ name: 'chapter-9.md', old_text: 'x' }), 'not found');
@@ -45,7 +45,7 @@ export function changeTests(): void {
     test('edit_file: an empty new_text deletes the piece', () => {
         const r = plan('edit_file', { name: 'plan.md', old_text: '\n## Notes\n\nNone yet.\n', new_text: '', reason: 'clean' });
         ok(r.ok, "proposal rejected");
-        if (r.ok) eq(r.change.after, '# Rencana\n\n- First draft: October\n- Revision: November\n');
+        if (r.ok) eq(r.change.after, '# Plan\n\n- First draft: October\n- Revision: November\n');
     });
 
     test('create_file: a new file with .md and a trailing newline; a taken or unsafe name is rejected', () => {
@@ -114,7 +114,7 @@ export function changeTests(): void {
 
     test('edit_kanban: clear errors for the model (not a board, list/card does not match, no change)', () => {
         const bad = (args: object, base = kanban): string => { const r = base(args); ok(!r.ok, 'should have failed'); return r.ok ? '' : r.message; };
-        contains(bad({ aksi: 'tambah', kartu: 'x', daftar: 'Rencana', name: 'plan.md' }), 'not a kanban board');
+        contains(bad({ action: 'add', card: 'x', list: 'Plan', name: 'plan.md' }), 'not a kanban board');
         contains(bad({ action: 'add', card: 'x', list: 'Postponed' }), 'Lists on the board: Plan, In Progress, Done');
         contains(bad({ action: 'add', card: 'x', list: '' }), '"list" argument is required');
         contains(bad({ action: 'move', card: 'nonexistent', list: 'Done' }), 'No card contains');

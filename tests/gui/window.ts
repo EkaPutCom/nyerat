@@ -1,4 +1,4 @@
-// Tes GUI: Ukuran jendela.
+// GUI tests: Window size.
 
 import GLib from 'gi://GLib';
 import { section, test, eq, ok, ROOT } from '../framework.js';
@@ -7,7 +7,7 @@ import type { GuiContext } from './context.js';
 export function windowSizeTests(c: GuiContext): void {
     const { w, ed, buf, pump, samplePath, images, waitImages } = c;
 
-    section('Ukuran jendela');
+    section('Window size');
     const settle = () => { for (let i = 0; i < 40; i++) { pump(); GLib.usleep(15000); } };
     const winWidth = () => w.win.get_width();
     test('opening a second file does not enlarge the window', () => {
@@ -16,7 +16,7 @@ export function windowSizeTests(c: GuiContext): void {
         ok(w.load(samplePath), 'load() of the first file failed'); waitImages(); settle();
         ok(w.load(GLib.build_filenamev([ROOT, 'README.md'])), 'load() of the second file failed');
         settle();
-        eq(winWidth(), before, 'lebar jendela');
+        eq(winWidth(), before, 'window width');
     });
     test('the window can be enlarged and then shrunk again', () => {
         // Smaller than the Xvfb screen (1280): GTK 4 does not enlarge a window past the monitor.
@@ -24,7 +24,7 @@ export function windowSizeTests(c: GuiContext): void {
         w.win.set_default_size(1240, 700); settle();
         ok(Math.abs(winWidth() - 1240) <= 16, `after enlarging: ${winWidth()}`);
         w.win.set_default_size(800, 700); settle();
-        ok(Math.abs(winWidth() - 800) <= 16, `setelah diperkecil: ${winWidth()}`);
+        ok(Math.abs(winWidth() - 800) <= 16, `after shrinking:  ${winWidth()}`);
         ok(ed.view.get_left_margin() < 100, `the margin did not shrink along (${ed.view.get_left_margin()})`);
     });
     test('an image is not wider than the text column', () => {

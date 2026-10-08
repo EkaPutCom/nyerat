@@ -52,7 +52,7 @@ export function historyTests(c: GuiContext): void {
         w.win.set_default_size(1600, 700);
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(15000); }
         const a = w.sidebar.panel.get_allocation();
-        ok(a.width <= 260, `lebar sidebar ${a.width}`);
+        ok(a.width <= 260, `sidebar width  ${a.width}`);
         // Relative to the window contents: on a desktop, the window manager's decorations/shadow shift the toplevel allocation.
         const x = w.sidebar.panel.translate_coordinates(w.win.get_child()!, 0, 0)[1];
         // Restore the size: a window wider than the Xvfb screen puts buttons outside
@@ -94,7 +94,7 @@ export function historyTests(c: GuiContext): void {
         w.sidebar.setPage('outline');
         w.load(a);
         pump();
-        eq(rows(), 0, 'baris riwayat');
+        eq(rows(), 0, 'history rows');
         w.sidebar.setPage('history');
         ok(waitFor(() => rows() === 2), 'the history is loaded when the tab is opened');
     });
@@ -142,7 +142,7 @@ export function historyTests(c: GuiContext): void {
             const content = () => viewer.contentView.buffer.get_text(viewer.contentView.buffer.get_start_iter(), viewer.contentView.buffer.get_end_iter(), false);
             ok(waitFor(() => content() === V1), `contents of the initial version: ${JSON.stringify(content())}`);
             const diff = () => viewer.diffView.buffer.get_text(viewer.diffView.buffer.get_start_iter(), viewer.diffView.buffer.get_end_iter(), false);
-            ok(waitFor(() => diff().includes('+# Judul')), `diff commit awal: ${diff()}`);
+            ok(waitFor(() => diff().includes('+# Title')), `diff of the initial commit:  ${diff()}`);
         } finally {
             viewer.window.destroy();
         }

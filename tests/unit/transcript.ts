@@ -68,7 +68,7 @@ export function transcriptTests(): void {
     test('file name: date and simplified title', () => {
         eq(chatFileName('2026-10-04T14:20:00', 'Raka age contradiction?'), '2026-10-04-raka-age-contradiction.md');
         eq(chatFileName('2026-10-04T14:20:00', 'Éclair — “exam”!'), '2026-10-04-eclair-exam.md');
-        eq(chatFileName('2026-10-04T14:20:00', '???'), '2026-10-04-percakapan.md');
+        eq(chatFileName('2026-10-04T14:20:00', '???'), '2026-10-04-conversation.md');
         ok(chatFileName('2026-10-04T14:20:00', 'x'.repeat(100)).length <= 10 + 1 + 40 + 3, 'too long');
     });
 }

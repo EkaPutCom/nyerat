@@ -117,7 +117,7 @@ export function harnessTests(): void {
         contains(p, '(skipped: the related notes context limit has been reached)');
     });
 
-    test('stageColumn dan locateCard', () => {
+    test('stageColumn and locateCard', () => {
         const b = parseBoard(BOARD);
         eq([stageColumn(b, 'doing'), stageColumn(b, 'review')], [1, 2]);
         eq(stageColumn(parseBoard('---\nkanban: true\n---\n\n## A\n\n## B\n'), 'review'), -1);

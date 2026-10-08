@@ -26,7 +26,7 @@ export function kanbanMouseTests(c: GuiContext): void {
     };
     const move = (x: number, y: number) => { input.move(x, y); settle(); };
     const point = (widget: Gtk.Widget, y: number): readonly [number, number] => {
-        ok(widget.get_mapped(), 'Widget tujuan belum tampil.');
+        ok(widget.get_mapped(), 'The target widget is not shown yet.');
         return screenPoint(widget, widget.get_allocated_width() / 2, y, (xid, x, wy) => input.toRoot(xid, x, wy));
     };
     const path = GLib.build_filenamev([tmp, 'mouse-kanban.md']);
@@ -94,7 +94,7 @@ export function kanbanMouseTests(c: GuiContext): void {
             action('undo'); settle(); eq(text(), BOARD, 'one undo restored the document');
             action('redo'); settle(); eq(text(), moved, 'redo restored the move');
             ok(w.save(), 'Save failed.');
-            eq(readTextFile(path), moved, 'hasil simpan');
+            eq(readTextFile(path), moved, 'saved result');
         });
         test('the mouse reorders cards within the same list', () => {
             reset();

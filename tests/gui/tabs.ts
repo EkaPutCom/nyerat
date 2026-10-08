@@ -33,7 +33,7 @@ export function tabTests(c: GuiContext): void {
     test('opening a file in an empty document reuses that tab', () => {
         w.openFile(ch1); settle();
         eq(w.documentCount, 1, 'number of documents');
-        ok(w.editor === ed, 'editor berganti');
+        ok(w.editor === ed, 'the editor changed');
         eq(w.file, ch1, 'file');
     });
     test('opening a second file opens a new tab and the first document stays intact', () => {
@@ -60,7 +60,7 @@ export function tabTests(c: GuiContext): void {
         w.openFile(long); settle();
         const vadj = w.editor.view.get_vadjustment()!;
         ok(vadj.get_upper() > vadj.get_page_size() * 2, 'the document is not long enough to scroll');
-        eq(vadj.get_value(), 0, 'posisi gulir');
+        eq(vadj.get_value(), 0, 'scroll position');
         w.closeTab(); settle();
     });
     test('opening a file that is already open only switches tabs', () => {

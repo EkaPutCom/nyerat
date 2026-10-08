@@ -86,7 +86,7 @@ function appendToSection(text: string, heading: string, added: string[]): string
     const lines = text.split('\n');
     const span = findSection(lines, heading);
     if (!span) {
-        const before = heading === ACTIVITY ? findSection(lines, 'Ringkasan') : null;
+        const before = heading === ACTIVITY ? findSection(lines, 'Summary') : null;
         const block = [`## ${heading}`, '', ...added, ''];
         if (before) {
             lines.splice(before.head, 0, ...block);
@@ -157,7 +157,7 @@ export function parseActivity(text: string): Activity[] {
             if (typeof v.time === 'number' && typeof v.text === 'string' && v.text && typeof v.kind === 'string' && KINDS.has(v.kind))
                 out.push({ time: v.time, kind: v.kind, text: v.text.replace(/\n/g, ' ') });
         } catch {
-            // lewati
+            // skip
         }
     }
     return out;

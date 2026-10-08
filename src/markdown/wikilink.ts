@@ -58,7 +58,7 @@ export function resolveWikiLink(target: string, files: string[], from: string | 
     const score = (f: string) => {
         const d = dirName(f);
         if (here !== null && d === here) return 0;
-        if (here !== null && here.startsWith(d ? `${d}/` : '')) return 1;   // folder induk dokumen
+        if (here !== null && here.startsWith(d ? `${d}/` : '')) return 1;   // the parent folder of the document
         return 2;
     };
     return matches.sort((a, b) => score(a) - score(b) || a.split('/').length - b.split('/').length || a.localeCompare(b))[0];

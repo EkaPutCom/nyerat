@@ -15,7 +15,7 @@ export function tableTests(): void {
         eq(spans('| a \\| b | c |').map(c => c[0]), ['a \\| b', 'c'], 'an escaped pipe is not a separator');
         eq(splitRow('| one |').length, 1, 'one cell');
     });
-    test('cellIndexAt dan cellStart', () => {
+    test('cellIndexAt and cellStart', () => {
         const line = '| aa | bb | cc |';
         eq([cellIndexAt(line, 2), cellIndexAt(line, 7), cellIndexAt(line, 12)], [0, 1, 2], 'column at position');
         eq([cellStart(line, 0), cellStart(line, 2), cellStart(line, 9)], [2, 12, line.length], 'cell start; out of range = end of line');
@@ -76,7 +76,7 @@ export function tableTests(): void {
         eq(cellMarkup('[link](http://x.y)', colors), '<span foreground="#00c" underline="single">link</span>');
         eq(cellMarkup('`k`', colors), '<span font_family="monospace" foreground="#c00" background="#eee">k</span>');
         eq(cellMarkup('a \\| b', colors), 'a | b');
-        eq(cellMarkup('***dua***', colors), '<span font_weight="bold" font_style="italic">dua</span>');
+        eq(cellMarkup('***two***', colors), '<span font_weight="bold" font_style="italic">two</span>');
     });
     test('fitColumns: left alone if it fits, only wide columns are narrowed', () => {
         eq(fitColumns([100, 80], 300), [100, 80], 'fits');

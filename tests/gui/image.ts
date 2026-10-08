@@ -1,4 +1,4 @@
-// Tes GUI: Gambar.
+// GUI tests: Images.
 
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -39,7 +39,7 @@ export function imageTests(c: GuiContext): void {
             for (let i = 0; i < 30; i++) { pump(); GLib.usleep(10000); }
             ok(ed.view.get_vadjustment()!.get_value() > 500, 'the document did not scroll');
             const [, gx, gy] = block.box.translate_coordinates(ed.view, 0, 0);
-            eq([gx, gy], ed.view.buffer_to_window_coords(Gtk.TextWindowType.WIDGET, block.x, block.y), 'letak gambar');
+            eq([gx, gy], ed.view.buffer_to_window_coords(Gtk.TextWindowType.WIDGET, block.x, block.y), 'image position');
             ok(gy >= 0 && gy < ed.view.get_height(), `the image is off screen (y=${gy})`);
         } finally {
             // The next tests use this short document.
@@ -61,8 +61,8 @@ export function imageTests(c: GuiContext): void {
         buf.insert(buf.get_start_iter(), 'new line\n', -1);
         pump();
         eq(images().length, 1, 'number of image blocks');
-        ok(images()[0] === before, 'widget dibuat ulang');
-        eq(images()[0].line, 3, 'baris gambar');
+        ok(images()[0] === before, 'the widget was recreated');
+        eq(images()[0].line, 3, 'image line');
         ok(hasGap(3) && !hasGap(2), 'the empty space did not move along');
     });
     test('a missing image shows a message', () => {
@@ -91,7 +91,7 @@ export function imageTests(c: GuiContext): void {
         eq(buf.get_iter_at_mark(buf.get_insert()).get_line(), 0, 'cursor line');
     });
     test('deleting the image syntax deletes its widget', () => {
-        setText('teks saja');
+        setText('text only');
         eq(images().length, 0, 'number of image blocks');
     });
 }

@@ -32,7 +32,7 @@ export function mermaidTests(c: GuiContext): void {
         const b = diagrams()[0];
         eq(b.status, 'ok', `status (${b.error})`);
         ok(b.pixbuf!.get_width() > 40 && b.pixbuf!.get_height() > 40, 'the image is too small');
-        eq([b.start, b.end], [2, 5], 'baris blok');
+        eq([b.start, b.end], [2, 5], 'block lines');
         ok(b.widget.get_visible(), 'the widget is not visible');
     });
     test('the document contents do not change because of the diagram', () => eq(text(), `title\n\n${GRAPH}\n\nend`));
@@ -131,7 +131,7 @@ export function mermaidTests(c: GuiContext): void {
         eq(pixel(diagrams()[0], 0, 0), [255, 255, 255], 'corner pixel (light again)');
     });
     test('deleting the block deletes its widget', () => {
-        setText('teks saja');
+        setText('text only');
         eq(diagrams().length, 0, 'number of diagrams');
         ok(!hasGap(0), 'empty space was left behind');
     });

@@ -14,7 +14,7 @@ const TAB_WIDTH = 4;
 
 export class ListIndent {
     private readonly tags = new Map<number, Gtk.TextTag>();
-    private readonly widths = new Map<string, number>();   // awalan → lebar piksel
+    private readonly widths = new Map<string, number>();   // prefix → width in pixels
     private margin = 0;
 
     constructor(private readonly view: Gtk.TextView, private readonly buffer: Gtk.TextBuffer, private readonly onCreate: (tag: Gtk.TextTag) => void) {}

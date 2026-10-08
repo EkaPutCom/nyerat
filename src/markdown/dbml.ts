@@ -93,7 +93,7 @@ class Parser {
 
     private word(what: string): string {
         const c = this.cur;
-        if (!c || c.kind === 'punct' || c.kind === 'str') throw new DbmlError(`Seharusnya ${what}`, this.line);
+        if (!c || c.kind === 'punct' || c.kind === 'str') throw new DbmlError(`Expected ${what}`, this.line);
         this.p++;
         return c.text;
     }
@@ -110,7 +110,7 @@ class Parser {
         return this.schema;
     }
 
-    // Lewati sampai "{" lalu seluruh isinya (kurung kurawal bersarang).
+    // Skip to "{" and then its whole contents (nested curly braces).
     private skipBlock(): void {
         while (this.cur && !this.punct('{')) this.p++;
         this.expect('{');

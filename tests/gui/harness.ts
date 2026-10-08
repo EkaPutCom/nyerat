@@ -12,7 +12,7 @@ import { section, test, eq, ok, contains, tmp, optVal, settle } from '../framewo
 import type { HarnessAsk, HarnessReply } from '../../src/agent/harness.js';
 import type { GuiContext } from './context.js';
 
-const BOARD =  `---
+const BOARD = `---
 kanban: true
 project: shop
 ---
@@ -127,7 +127,7 @@ export function harnessTests(c: GuiContext): void {
         const label = descendants(kb.columns[column].cards[index]).find(x => x.has_css_class('kanban-agent')) as Gtk.Label | undefined;
         return label?.label ?? '';
     };
-    const runOf = (text: string) => w.orchestrator.queue.find(board,  kb.getBoard().columns[at(text).column].cards[at(text).index].text);
+    const runOf = (text: string) => w.orchestrator.queue.find(board, kb.getBoard().columns[at(text).column].cards[at(text).index].text);
 
     test('an @pi card runs in the project folder, moves to In Progress and then Review with a result note', () => {
         w.settings.projects = { shop: project };
@@ -221,7 +221,7 @@ export function harnessTests(c: GuiContext): void {
         w.settings.projects = {};
         const other = GLib.dir_make_tmp('nyerat-other-XXXXXX');
         // A board without project frontmatter.
-        GLib.file_set_contents(board,  BOARD.replace('project: shop\n', ''));
+        GLib.file_set_contents(board, BOARD.replace('project: shop\n', ''));
         w.load(board);
         pump();
         pick = null;
@@ -357,7 +357,7 @@ export function harnessTests(c: GuiContext): void {
         GLib.file_set_contents(GLib.build_filenamev([folder, 'Meeting Notes.md']), 'The client asked for dynamic QRIS.\n');
         const board = GLib.build_filenamev([folder, 'board.md']);
         GLib.file_set_contents(board, BOARD.replace('- [ ] Checkout with QRIS @pi #feature\n  Use the official SDK.',
-            '- [ ] Checkout pakai QRIS [[Spec#Colors]] @pi #fitur\n  Use the official SDK, see [[meeting notes]] and [[Missing]].'));
+            '- [ ] Checkout with QRIS [[Spec#Colors]] @pi #feature\n  Use the official SDK, see [[meeting notes]] and [[Missing]].'));
         for (const f of ['cwd', 'order', 'prompt', 'release', 'args', 'answer', 'rest']) GLib.unlink(GLib.build_filenamev([dir, f]));
         mode('ok');
         ok(w.load(board), 'load board');

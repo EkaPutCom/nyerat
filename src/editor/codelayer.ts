@@ -50,10 +50,10 @@ export class CodeLayer {
     maxWidth = 700;
     blocks: Block[] = [];
 
-    onActivate: (line: number) => void = () => {};  // kotak diklik
+    onActivate: (line: number) => void = () => {};  // box clicked
 
     private cursor: [number, number] = [-1, -1];
-    private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
+    private gapTags = new Map<number, Gtk.TextTag>();   // height → tag
     private relayoutQueued = false;
     private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
@@ -255,7 +255,7 @@ export class CodeLayer {
         block.x = block.y = -1;
     }
 
-    // ---------- Posisi widget ----------
+    // ---------- Widget position ----------
 
     queueRelayout(): void {
         if (this.destroyed || this.relayoutQueued) return;

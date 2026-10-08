@@ -79,11 +79,11 @@ export class TableLayer {
     maxWidth = 700;
     blocks: Block[] = [];
 
-    onActivate: (line: number, col: number) => void = () => {};  // sel diklik
+    onActivate: (line: number, col: number) => void = () => {};  // cell clicked
 
     private cursor: [number, number] = [-1, -1];
     private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#1c71d8', mark: '#fff3a3' };
-    private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
+    private gapTags = new Map<number, Gtk.TextTag>();   // height → tag
     private relayoutQueued = false;
     private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
@@ -104,7 +104,7 @@ export class TableLayer {
         this.watchAdjustment();
     }
 
-    // Editor ditutup: hentikan pekerjaan tertunda (lihat MarkdownView.destroy()).
+    // Editor closed: stop the pending work (see MarkdownView.destroy()).
     destroy(): void {
         this.destroyed = true;
         this.slots.destroy();
@@ -209,7 +209,7 @@ export class TableLayer {
         if (changed) this.queueRelayout();
     }
 
-    // ---------- Keadaan ----------
+    // ---------- State ----------
 
     private isCollapsed(block: Block): boolean {
         const [first, last] = this.cursor;
@@ -416,7 +416,7 @@ export class TableLayer {
         block.x = block.y = -1;
     }
 
-    // ---------- Posisi widget ----------
+    // ---------- Widget position ----------
 
     queueRelayout(): void {
         if (this.destroyed || this.relayoutQueued) return;

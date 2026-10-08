@@ -89,7 +89,7 @@ export function agentActionTests(): void {
         eq(planned('insert_text', { name: 'a', position: 'end', text: 'content' }, [{ name: 'a.md', text: '' }]).after, 'content\n');
     });
 
-    test('delete_file dan move_file: the proposal shape, a safe destination name, a taken destination is rejected', () => {
+    test('delete_file and move_file: the proposal shape, a safe destination name, a taken destination is rejected', () => {
         const del = planned('delete_file', { name: 'archive/old' });
         eq([del.kind, del.file, del.before, del.after], ['delete', 'archive/old.md', '# Old\n', '']);
         const move = planned('move_file', { name: 'meeting', destination: 'archive/meeting-oct' });

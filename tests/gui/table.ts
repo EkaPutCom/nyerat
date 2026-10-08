@@ -36,7 +36,7 @@ export function tableGridTests(c: GuiContext): void {
         const [prevY, prevH] = ed.view.get_line_yrange(iterAtLine(buf, 1));
         const [nextY] = ed.view.get_line_yrange(iterAtLine(buf, 6));
         const b = tBlock();
-        ok(b.height > 0, 'tinggi grid 0');
+        ok(b.height > 0, 'the grid height is 0');
         ok(b.y >= prevY + prevH, `the grid (y=${b.y}) overlaps the paragraph above it (bottom=${prevY + prevH})`);
         ok(b.y + b.height <= nextY, `the grid (bottom=${b.y + b.height}) overlaps the paragraph below it (top=${nextY})`);
     });
@@ -132,7 +132,7 @@ export function tableGridTests(c: GuiContext): void {
         ed.view.scroll_to_iter(iterAtLine(buf, last.end), 0, true, 0, 0.5); settleT();
         ok(last.widget?.get_visible(), 'the last grid did not appear');
         eq(last.widget!.measure(Gtk.Orientation.VERTICAL, -1)[1], last.height, 'the measured height is wrong');
-        eq(ed.view.get_vadjustment()!.upper, height, 'membuat grid menggeser tinggi dokumen');
+        eq(ed.view.get_vadjustment()!.upper, height, 'creating the grid shifted the document height');
         w.setDark(true); settleT();
         ok(last.widget?.get_visible(), 'the grid vanished when the theme changed');
         eq(last.widget!.measure(Gtk.Orientation.VERTICAL, -1)[1], last.height, 'the dark theme height is wrong');
@@ -141,7 +141,7 @@ export function tableGridTests(c: GuiContext): void {
     test('Tab moves to the next cell, then to the next row', () => {
         setText(DOC); cursorTo(4, 2);
         key(Gdk.KEY_Tab); eq([curLine(), curCol()], [4, 1], 'second cell');
-        key(Gdk.KEY_Tab); eq([curLine(), curCol()], [5, 0], 'baris berikutnya');
+        key(Gdk.KEY_Tab); eq([curLine(), curCol()], [5, 0], 'next row');
     });
     test('Tab in the last cell adds a new row', () => {
         cursorTo(5, 9);

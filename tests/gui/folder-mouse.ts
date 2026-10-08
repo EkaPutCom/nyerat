@@ -14,7 +14,7 @@ export function folderMouseTests(c: GuiContext): void {
     const input = new MouseInput();
     const settle = () => { for (let i = 0; i < 12; i++) { pump(); GLib.usleep(10000); } };
     const move = (x: number, y: number) => { input.move(x, y); settle(); };
-    const proj = GLib.build_filenamev([tmp, 'seret']);
+    const proj = GLib.build_filenamev([tmp, 'drag']);
     const abs = (...p: string[]) => GLib.build_filenamev([proj, ...p]);
     const exists = (path: string) => GLib.file_test(path, GLib.FileTest.EXISTS);
     const mk = (rel: string) => {
@@ -32,7 +32,7 @@ export function folderMouseTests(c: GuiContext): void {
         // A point on the widget in screen coordinates.
         const onScreen = (widget: Gtk.Widget, x: number, y: number) => screenPoint(widget, x, y, (xid, sx, sy) => input.toRoot(xid, sx, sy));
         const rowPoint = (name: string): [number, number] => {
-            ok(ft.list.get_mapped(), 'pohon belum tampil');
+            ok(ft.list.get_mapped(), 'the tree is not shown yet');
             const point = ft.rowPoint(abs(name));
             ok(point, `row ${name} does not exist`);
             return onScreen(ft.list, point![0], point![1]);

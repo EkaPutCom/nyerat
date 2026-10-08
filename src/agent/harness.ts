@@ -379,7 +379,7 @@ export function resultNote(agent: string, result: HarnessResult, stamp: string):
     return `↳ ${agent} done ${stamp}: ${clipped}`;
 }
 
-// ---------- Antrean ----------
+// ---------- Queue ----------
 
 export type RunStatus = 'queued' | 'working' | 'waiting' | 'done' | 'failed' | 'stopped';
 

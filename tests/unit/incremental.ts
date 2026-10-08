@@ -45,9 +45,9 @@ export function incrementalTests(): void {
         reference.set_text(text(), -1);
         const fresh = highlight(reference, refTags, new LineTagger(reference, SYNTAX_TAGS.map(n => refTags[n])));
         for (const field of ['text', 'lines', 'starts', 'markers', 'headings', 'tables', 'codeBlocks', 'words', 'characters'] as const)
-            eq(result[field], fresh[field], `hasil ${field}`);
+            eq(result[field], fresh[field], `result ${field}`);
         const imageFields = (r: HighlightResult) => r.images.map(img => [img.line, img.url, img.alt]);
-        eq(imageFields(result), imageFields(fresh), 'hasil images');
+        eq(imageFields(result), imageFields(fresh), 'result of images');
         for (const name of SYNTAX_TAGS)
             eq(tagRanges(buffer, tags[name]), tagRanges(reference, refTags[name]), `tag ${name}`);
     };
@@ -59,7 +59,7 @@ export function incrementalTests(): void {
         insert(0, '🎉\n');
         buffer.delete(iterAtLine(buffer, 1), iterAtLine(buffer, 4)); check(flush());
         buffer.insert(buffer.get_start_iter(), 'new\n', -1);
-        buffer.insert(buffer.get_end_iter(), '\n![gambar](a.png)', -1); check(flush());
+        buffer.insert(buffer.get_end_iter(), '\n![image](a.png)', -1); check(flush());
         reset('A | B\nx | y\nakhir');
         insert(1, '-- | --\n');  // a new separator turns the previous line into a table header
         reset('text\n```\na\n\nb\n\nc\n```\nend');

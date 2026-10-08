@@ -84,7 +84,7 @@ export function wikiLinkTests(): void {
     test('noteSection takes the part up to the next heading of the same level, skipping code blocks', () => {
         const doc = '# Title\n\n## Color\n\nblue\n\n```\n# not a heading\n```\n\n### Sub\n\ncontent\n\n## Other\n\nx';
         eq(noteSection(doc, 'color'), '## Color\n\nblue\n\n```\n# not a heading\n```\n\n### Sub\n\ncontent');
-        eq(noteSection(doc, 'Lain'), '## Lain\n\nx');
+        eq(noteSection(doc, 'Other'), '## Other\n\nx');
         eq(noteSection(doc, 'nonexistent'), null);
     });
     test('card markup: [[note]] becomes a clickable <a>, other content stays', () => {
@@ -93,6 +93,6 @@ export function wikiLinkTests(): void {
         contains(m, `<a href="${NOTE_URI}Spec%23Color%7Ccolor"><span foreground="#l" underline="single">color</span></a>`);
         contains(m, '<span font_weight="bold">fast</span>');
         ok(!cellMarkup('[[Spec]]', colors).includes('<a '), 'without the link option it does not become <a>');
-        ok(!cellMarkup('`[[Spec]]`', colors, true).includes('<a '), 'kode inline');
+        ok(!cellMarkup('`[[Spec]]`', colors, true).includes('<a '), 'inline code');
     });
 }

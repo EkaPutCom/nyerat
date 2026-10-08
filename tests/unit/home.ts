@@ -27,7 +27,7 @@ inbox: true
 
 - one
 - [x] already processed
-- [ ] dua
+- [ ] two
 `;
 
 export function homeModelTests(): void {
@@ -63,10 +63,10 @@ export function homeModelTests(): void {
     });
     test('splitRecent: one card per folder, the rest go to the list', () => {
         const at = (path: string, time: number) => ({ path, time });
-        const list = [at('/k/muara/a.md', 9), at('/k/muara/b.md', 8), at('/k/nyerat/c.md', 7), at('/k/d.md', 6), at('/k/nyerat/e.md', 5)];
+        const list = [at('/k/delta/a.md', 9), at('/k/delta/b.md', 8), at('/k/nyerat/c.md', 7), at('/k/d.md', 6), at('/k/nyerat/e.md', 5)];
         const { resume, others } = splitRecent(list, 2, 2);
-        eq(resume.map(r => r.path), ['/k/muara/a.md', '/k/nyerat/c.md']);
-        eq(others.map(r => r.path), ['/k/muara/b.md', '/k/d.md']);
+        eq(resume.map(r => r.path), ['/k/delta/a.md', '/k/nyerat/c.md']);
+        eq(others.map(r => r.path), ['/k/delta/b.md', '/k/d.md']);
     });
     test('dayPart and localDate', () => {
         eq([3, 4, 10, 11, 14, 15, 17, 18, 23].map(dayPart), ['evening', 'morning', 'morning', 'midday', 'midday', 'afternoon', 'afternoon', 'evening', 'evening']);

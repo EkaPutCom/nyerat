@@ -65,7 +65,7 @@ export class MarkerConcealer {
         this.active = [...new Set(active)].sort((a, b) => a - b);
     }
 
-    // Penyorotan bertahap: lihat LineTagger.defer()/fill().
+    // Incremental highlighting: see LineTagger.defer()/fill().
     defer(line: number): void {
         this.tagger.defer(line);
     }

@@ -194,7 +194,7 @@ export function renderTable(table: Table): string[] {
 // One line only, without tidying the columns (for new rows inserted while typing).
 export const renderRow = (cells: string[]): string => `| ${cells.join(' | ')} |`;
 
-// ---------- Operasi ----------
+// ---------- Operations ----------
 // All operations return a new table; the original table is not changed.
 
 // Insert a blank row before rows[at] (at = rows.length: at the end).

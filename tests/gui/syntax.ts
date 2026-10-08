@@ -15,7 +15,7 @@ export function syntaxHidingTests(c: GuiContext): void {
     });
     test('the marker appears when the cursor moves to its line', () => {
         cursorTo(0);
-        ok(!hidden(0), '"#" seharusnya terlihat');
+        ok(!hidden(0), '"#" should be visible');
         ok(hidden(14), '"**" on another line should be hidden');
         ok(tagAt(16, 'bold'), 'the bold text was not tagged bold');
     });
@@ -40,13 +40,13 @@ export function syntaxHidingTests(c: GuiContext): void {
         cursorTo(2);
         ok(hidden(0), 'start: "#" hidden');
         action('source');
-        ok(!hidden(0), 'mode source: "#" seharusnya terlihat');
+        ok(!hidden(0), 'source mode: "#" should be visible');
         action('source');
         ok(hidden(0), 'after source mode is turned off: "#" hidden again');
     });
-    test('outline berisi heading', () => {
+    test('the outline contains the headings', () => {
         setText('# One\n## Two\ntext\n### Three');
-        eq(ed.headings.map(h => [h.level, h.text, h.line]), [[1, 'Satu', 0], [2, 'Dua', 1], [3, 'Tiga', 3]]);
+        eq(ed.headings.map(h => [h.level, h.text, h.line]), [[1, 'One', 0], [2, 'Two', 1], [3, 'Three', 3]]);
         eq(w.outline.count, 3, 'number of outline rows');
     });
 }

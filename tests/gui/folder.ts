@@ -14,7 +14,7 @@ export function folderTests(c: GuiContext): void {
     const { app, w, ed, buf, pump } = c;
 
     section('Folder');
-    // Struktur uji:
+    // Test structure:
     //   project/a.md  b.txt  Notes.markdown  sub/c.md  sub/inner/d.md
     //   project/.hidden/x.md  node_modules/y.md  z-empty/
     const proj = GLib.build_filenamev([tmp, 'project']);
@@ -60,7 +60,7 @@ export function folderTests(c: GuiContext): void {
         ft.expand(sub);
         pump();
         ok(ft.isExpanded(sub), 'sub did not open');
-        eq(childNames(sub), ['dalam', 'c.md'], 'setelah dibuka');
+        eq(childNames(sub), ['inner', 'c.md'], 'after opening');
     });
     test('clicking a file in the tree opens it in the editor (a new tab if the active document is in use)', () => {
         ft.activate(abs0('a.md'));
@@ -81,7 +81,7 @@ export function folderTests(c: GuiContext): void {
         write('b-new.md', '# New');
         ok(waitFor(() => childNames().includes('b-new.md')), 'the new file did not appear');
         eq(childNames(), ['sub', 'z-empty', 'a.md', 'b-new.md', 'Notes.markdown'], 'order');
-        ok(ft.isExpanded(abs0('sub')), 'subfolder ikut tertutup');
+        ok(ft.isExpanded(abs0('sub')), 'the subfolder was closed too');
     });
     test('a file deleted on disk disappears from the tree', () => {
         GLib.unlink(GLib.build_filenamev([proj, 'b-new.md']));
@@ -100,7 +100,7 @@ export function folderTests(c: GuiContext): void {
         pump();
         eq(ft.root, proj, 'root');
         eq(w.sidebar.page, 'files', 'sidebar tab');
-        eq(w.file, GLib.build_filenamev([proj, 'sub', 'dalam', 'd.md']), 'the open file did not change');
+        eq(w.file, GLib.build_filenamev([proj, 'sub', 'inner', 'd.md']), 'the open file did not change');
     });
     test('a folder as an argument opens that folder', () => {
         const w2 = new MainWindow(app, AppSettings.inMemory({ welcomed: true, home: false, dark: false }), proj);
@@ -307,7 +307,7 @@ export function folderTests(c: GuiContext): void {
         errors.length = 0;
         ok(!ft.moveTo(abs('sub'), abs('sub', 'inner')), 'moving into a descendant should fail');
         eq(errors.length, 1, 'error');
-        ok(GLib.file_test(abs('sub', 'inner'), GLib.FileTest.IS_DIR), 'folder hilang');
+        ok(GLib.file_test(abs('sub', 'inner'), GLib.FileTest.IS_DIR), 'the folder vanished');
         write('z-empty/a.md');
         ok(!ft.moveTo(abs('a.md'), abs('z-empty')), 'a conflict should fail');
         ok(GLib.file_test(abs('a.md'), GLib.FileTest.EXISTS), 'the source vanished');
@@ -318,9 +318,9 @@ export function folderTests(c: GuiContext): void {
         eq(w.file, abs('c.md'), 'document path');
         ok(!buf.get_modified(), 'the document must not change');
         ok(ft.moveTo(abs('sub'), abs('z-empty')), 'move the parent folder');
-        ok(w.load(abs('z-empty', 'sub', 'dalam', 'd.md')), 'load d.md');
+        ok(w.load(abs('z-empty', 'sub', 'inner', 'd.md')), 'load d.md');
         ok(ft.moveTo(abs('z-empty', 'sub'), proj), 'move it back');
-        eq(w.file, abs('sub', 'dalam', 'd.md'), 'document path after the parent folder moved');
+        eq(w.file, abs('sub', 'inner', 'd.md'), 'document path after the parent folder moved');
     });
     buf.set_modified(false);
     w.file = null;

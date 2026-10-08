@@ -89,8 +89,8 @@ export function imageZoomTests(c: GuiContext): void {
     });
     test('zooming in/out multiplies by 1.25 and is limited to 5%–800%', () => {
         const v = openViewer(makePixbuf(100, 80));
-        v.zoomIn(); eq(Math.round(v.zoom * 1000) / 1000, 1.25, 'zoom masuk');
-        v.zoomOut(); v.zoomOut(); eq(Math.round(v.zoom * 1000) / 1000, 0.8, 'zoom keluar');
+        v.zoomIn(); eq(Math.round(v.zoom * 1000) / 1000, 1.25, 'zoom in');
+        v.zoomOut(); v.zoomOut(); eq(Math.round(v.zoom * 1000) / 1000, 0.8, 'zoom out');
         for (let i = 0; i < 40; i++) v.zoomIn();
         eq(v.zoom, MAX_ZOOM, 'upper limit');
         for (let i = 0; i < 80; i++) v.zoomOut();
@@ -129,17 +129,17 @@ export function imageZoomTests(c: GuiContext): void {
         v.scrollZoom(-1, true, [400, 300]); settleV();
         // The image point (400, 300) is now at 500 × 375; to stay at (400, 300) on screen, scroll (100, 75).
         const [h, vv] = [scroller.get_hadjustment().get_value(), scroller.get_vadjustment().get_value()];
-        ok(Math.abs(h - 100) < 1.5 && Math.abs(vv - 75) < 1.5, `gulir (${h}, ${vv}), seharusnya (100, 75)`);
+        ok(Math.abs(h - 100) < 1.5 && Math.abs(vv - 75) < 1.5, `scroll (${h}, ${vv}), should be (100, 75)`);
         v.close();
     });
-    test('drag menggeser gambar', () => {
+    test('dragging shifts the image', () => {
         const v = openViewer(makePixbuf(2000, 1500));
         v.actual(); settleV();
         const scroller = v['scroller'];
         scroller.get_hadjustment().set_value(0); scroller.get_vadjustment().set_value(0);
         v.beginDrag();
         v.dragBy(-50, -30);   // moved to the top-left = seeing the bottom-right part
-        eq([scroller.get_hadjustment().get_value(), scroller.get_vadjustment().get_value()], [50, 30], 'gulir');
+        eq([scroller.get_hadjustment().get_value(), scroller.get_vadjustment().get_value()], [50, 30], 'scroll');
         v.endDrag(); ok(!v.dragBy(-500, -500), 'after the button is released, movement does not shift');
         v.close();
     });

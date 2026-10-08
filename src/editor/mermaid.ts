@@ -52,7 +52,7 @@ export interface Block {
     busy: boolean;           // a render request is still pending
     pixbuf: GdkPixbuf.Pixbuf | null;   // the last successful diagram (stays visible while re-rendering)
     error: string | null;
-    widget: Gtk.Box;         // slot overlay (lihat overlays.ts)
+    widget: Gtk.Box;         // overlay slot (see overlays.ts)
     content: Gtk.Box;
     height: number;
     collapsed: boolean;
@@ -74,7 +74,7 @@ export class MermaidLayer {
     private theme: DiagramTheme = { dark: false, bg: '#ffffff', fg: '#333333', accent: '#1c71d8', node: '#f3f4f4' };
     private cursor: [number, number] = [-1, -1];
     private signature = '';
-    private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
+    private gapTags = new Map<number, Gtk.TextTag>();   // height → tag
     private relayoutQueued = false;
     private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
@@ -88,7 +88,7 @@ export class MermaidLayer {
         this.watchAdjustment();
     }
 
-    // Editor ditutup: hentikan pekerjaan tertunda (lihat MarkdownView.destroy()).
+    // Editor closed: stop the pending work (see MarkdownView.destroy()).
     destroy(): void {
         this.destroyed = true;
         this.slots.destroy();
@@ -220,7 +220,7 @@ export class MermaidLayer {
         block.timer = 0;
     }
 
-    // ---------- Keadaan ----------
+    // ---------- State ----------
 
     // A successfully rendered diagram replaces its code when the cursor is outside the block.
     private isCollapsed(block: Block): boolean {
@@ -331,7 +331,7 @@ export class MermaidLayer {
         }
     }
 
-    // ---------- Posisi widget ----------
+    // ---------- Widget position ----------
 
     queueRelayout(): void {
         if (this.destroyed || this.relayoutQueued) return;

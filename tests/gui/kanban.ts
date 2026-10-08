@@ -18,7 +18,7 @@ export function kanbanBoardTests(c: GuiContext): void {
 
     section('Kanban (board)');
     const board = GLib.build_filenamev([tmp, 'board.md']);
-    GLib.file_set_contents(board,  BOARD);
+    GLib.file_set_contents(board, BOARD);
     const kb = w.board;
     const settleK = () => { for (let i = 0; i < 25; i++) { pump(); GLib.usleep(8000); } };
     const kbDescendants = descendants;
@@ -45,16 +45,16 @@ export function kanbanBoardTests(c: GuiContext): void {
         };
         return calls;
     };
-    const openBoard = () => { GLib.file_set_contents(board,  BOARD); w.load(board); settleK(); };
+    const openBoard = () => { GLib.file_set_contents(board, BOARD); w.load(board); settleK(); };
 
     test('a kanban document opens as a board, a plain document as text', () => {
         openBoard();
         ok(w.boardMode, 'the board is not shown');
         eq(kbTitles(), ['Plan', 'In Progress', 'Done']);
         eq(kb.columns.map(c => c.cards.length), [2, 1, 2], 'number of cards');
-        ok(w.statusBar.right.label.includes('3 daftar · 5 kartu'), `status: ${w.statusBar.right.label}`);
+        ok(w.statusBar.right.label.includes('3 lists · 5 cards'), `status: ${w.statusBar.right.label}`);
         eq(text(), BOARD, 'the document text did not change because it was opened');
-        GLib.file_set_contents(board,  '# Plain\n\ntext');
+        GLib.file_set_contents(board, '# Plain\n\ntext');
         w.load(board); settleK();
         ok(!w.boardMode, 'a plain document was shown as a board');
         openBoard();
@@ -100,12 +100,12 @@ export function kanbanBoardTests(c: GuiContext): void {
         eq(kb.cardTexts(0), ['Send invitations', 'Write report #important @{2026-10-20}'], 'down');
         const submenu = kbMenu(kb.cardMenu(0, 0), 'Move to').item.submenu!;
         eq(submenu.map(e => e.label), ['In Progress', 'Done'], 'the destinations do not include the source list');
-        submenu.find(e => e.label === 'Selesai')!.run!(); settleK();
+        submenu.find(e => e.label === 'Done')!.run!(); settleK();
         eq([kb.cardTexts(0).length, kb.cardTexts(2).at(-1)], [1, 'Send invitations'], 'moved to the end of the target list');
         kbMenu(kb.cardMenu(2, 2), 'Mark Done').activate(); settleK();
         eq(kb.getBoard().columns[2].cards[2].done, true, 'mark done');
-        kbMenu(kb.cardMenu(2, 2), 'Hapus').activate(); settleK();
-        eq(kb.cardTexts(2).length, 2, 'hapus');
+        kbMenu(kb.cardMenu(2, 2), 'Delete').activate(); settleK();
+        eq(kb.cardTexts(2).length, 2, 'delete');
     });
     test('list menu: rename, move, delete with confirmation', () => {
         openBoard();
@@ -234,7 +234,7 @@ export function kanbanBoardTests(c: GuiContext): void {
         eq(kb.cardTexts(0), ['Write report #important @{2026-10-20}', 'Send invitations', 'From text']);
     });
     test('the board view for a plain document is refused with a message', () => {
-        GLib.file_set_contents(board,  '# Plain');
+        GLib.file_set_contents(board, '# Plain');
         w.load(board); settleK();
         w.toggleBoardView(true);
         ok(!w.boardMode, 'a plain document was shown as a board');
@@ -317,7 +317,7 @@ export function kanbanBoardTests(c: GuiContext): void {
         }
         eq(warnings, [], 'warnings');
     });
-    GLib.file_set_contents(board,  '# done');
+    GLib.file_set_contents(board, '# done');
     w.load(board); settleK();
     stubDialogs();
     w.file = null;
@@ -337,7 +337,7 @@ export function kanbanBoardTests(c: GuiContext): void {
         const shot = optVal('shot-due');
         if (shot) {
             for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
-            widgetPixbuf(popover)?.savev(`${shot}-kalender.png`, 'png', [], []);
+            widgetPixbuf(popover)?.savev(`${shot}-calendar.png`, 'png', [], []);
         }
         // Clicking a day = select_day then day-selected (select_day itself does not emit it).
         field.calendar.select_day(GLib.DateTime.new_local(2026, 10, 20, 0, 0, 0));

@@ -28,7 +28,7 @@ export function deepseekTests(): void {
         }
         if (mode === 'truncated') {
             msg.set_status(200, null);
-            msg.get_response_body().append(enc.encode('data: {"choices":[{"delta":{"content":"sebagian"}}]}\n\n'));
+            msg.get_response_body().append(enc.encode('data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'));
             return;
         }
         auth = msg.get_request_headers().get_one('Authorization') ?? '';
@@ -98,9 +98,9 @@ export function deepseekTests(): void {
             tools: [{ name: 'search_text', description: 'cari', parameters: { type: 'object', properties: {} } }],
             messages: [
                 { role: 'system', content: 'system' },
-                { role: 'user', content: 'tanya' },
+                { role: 'user', content: 'question' },
                 { role: 'assistant', content: '', reasoning: 'think', toolCalls: [{ id: 'x', name: 'list_files', arguments: '{}' }] },
-                { role: 'tool', toolCallId: 'x', content: 'hasil' },
+                { role: 'tool', toolCallId: 'x', content: 'result' },
             ],
         }));
         eq(text, '');
@@ -110,7 +110,7 @@ export function deepseekTests(): void {
         eq(body.thinking, { type: 'enabled' });
         eq(body.tools, [{ type: 'function', function: { name: 'search_text', description: 'cari', parameters: { type: 'object', properties: {} } } }]);
         eq(body.messages[2], { role: 'assistant', content: '', reasoning_content: 'think', tool_calls: [{ id: 'x', type: 'function', function: { name: 'list_files', arguments: '{}' } }] });
-        eq(body.messages[3], { role: 'tool', tool_call_id: 'x', content: 'hasil' });
+        eq(body.messages[3], { role: 'tool', tool_call_id: 'x', content: 'result' });
     });
 
     test('a 503 before output is retried; a stream cut off after text is not repeated', () => {
@@ -121,7 +121,7 @@ export function deepseekTests(): void {
         mode = 'truncated'; requests = 0; text = '';
         let failed = false;
         try { settle(client('sk-test').chat({ ...request, onText: d => { text += d; } })); } catch (e) { failed = true; contains(String(e), 'completion marker'); }
-        eq(failed, true); eq(requests, 1); eq(text, 'sebagian');
+        eq(failed, true); eq(requests, 1); eq(text, 'partial');
     });
 
     test('cancellation during the retry pause finishes without sending a second request', () => {
@@ -151,7 +151,7 @@ export function deepseekTests(): void {
         const cancellable = new Gio.Cancellable();
         cancellable.cancel();
         const result = settle(client('sk-test').chat({ ...request, onText: () => {}, cancellable }));
-        ok(result.cancelled, 'seharusnya cancelled');
+        ok(result.cancelled, 'should have been cancelled');
     });
 
     test('an unreachable server produces a clear error', () => {

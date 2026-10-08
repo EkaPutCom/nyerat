@@ -27,7 +27,7 @@ export function inboxTests(c: GuiContext): void {
         ok(w.inboxMode && !w.boardMode, 'the inbox is not shown');
         eq(rows().length, 3, 'number of rows');
         ok(labels().includes('Inbox') && labels().includes('A place to capture ideas.'), `title: ${labels().join('|')}`);
-        ok(w.statusBar.right.label.includes('3 catatan'), `status: ${w.statusBar.right.label}`);
+        ok(w.statusBar.right.label.includes('3 notes'), `status: ${w.statusBar.right.label}`);
         eq(text(), INBOX, 'the document text did not change because it was opened');
         GLib.file_set_contents(file,  BOARD);
         w.load(file); settle();

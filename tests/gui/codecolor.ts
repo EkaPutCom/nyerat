@@ -13,7 +13,7 @@ export function codeColorTests(c: GuiContext): void {
         setText('text\n\n```js\nconst s = "hello"; // note\n```\n');
         const at = (needle: string) => offsetIn(text(), needle);
         ok(syntaxTags(at('const')).length > 0, 'the keyword is not colored');
-        const str = colorAt(at('"halo"') + 1), comment = colorAt(at('// catatan') + 3);
+        const str = colorAt(at('"hello"') + 1), comment = colorAt(at('// note') + 3);
         ok(str && comment && str !== comment, `the string color (${str}) and the comment color (${comment}) must differ`);
         ok(syntaxTags(at('text')).length === 0, 'text outside the block was colored too');
     });

@@ -9,12 +9,12 @@ export function listTests(c: GuiContext): void {
 
     section('Enter and Tab in lists');
     test('Enter continues a plain list', () => {
-        setText('- satu'); cursorTo(0, -1); key(Gdk.KEY_Return);
-        eq(text(), '- satu\n- ');
+        setText('- one'); cursorTo(0, -1); key(Gdk.KEY_Return);
+        eq(text(), '- one\n- ');
     });
     test('Enter on an empty item ends the list', () => {
         key(Gdk.KEY_Return);
-        eq(text(), '- satu\n');
+        eq(text(), '- one\n');
     });
     test('Enter increments the list number', () => {
         setText('9. a'); cursorTo(0, -1); key(Gdk.KEY_Return);
@@ -53,7 +53,7 @@ export function listIndentTests(c: GuiContext): void {
         eq(indentAt(buf.get_char_count() - 2), 0);
     });
     test('turning an item into a plain paragraph removes the indentation', () => {
-        setText('- satu\nb');
+        setText('- one\nb');
         buf.delete(buf.get_iter_at_offset(0), buf.get_iter_at_offset(2));
         c.ed.highlight();
         eq(indentAt(0), 0);

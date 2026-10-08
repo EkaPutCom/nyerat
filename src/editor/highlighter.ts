@@ -312,7 +312,7 @@ function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed 
         const parseLine = () => {
             if ((m = RE.heading.exec(line))) {
                 const lvl = m[1].length, pl = m[0].length;
-                apply(`h${lvl}` as TagName, off, lineEnd);  // lvl selalu 1–6
+                apply(`h${lvl}` as TagName, off, lineEnd);  // lvl is always 1–6
                 apply('marker', off, off + pl);
                 hide(off, off + pl, i, i);
                 inline(off + pl, line.slice(pl), i);

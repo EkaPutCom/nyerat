@@ -38,7 +38,7 @@ export interface DiagramTheme {
     dark: boolean;
     bg: string;   // image background color; must match the editor background
     fg: string;   // text and lines
-    accent: string;   // garis tepi simpul
+    accent: string;   // node border line
     node: string;     // node fill
 }
 
@@ -109,7 +109,7 @@ export class MermaidRenderer {
         return `${theme.dark ? 'd' : 'l'}${theme.bg}${theme.fg}${theme.accent}${theme.node}\n${code}`;
     }
 
-    // ---------- Antrean ----------
+    // ---------- Queue ----------
 
     private next(): void {
         if (this.current || !this.queue.length) return;
@@ -123,7 +123,7 @@ export class MermaidRenderer {
         this.current = this.queue.shift()!;
         this.timeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, TIMEOUT_SECONDS, () => {
             this.timeout = 0;
-            if (this.current) this.finish(this.current, { ok: false, error: _('Waktu merender habis') }, false);
+            if (this.current) this.finish(this.current, { ok: false, error: _('Rendering timed out') }, false);
             return GLib.SOURCE_REMOVE;
         });
         this.run(this.current);

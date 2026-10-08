@@ -228,7 +228,7 @@ export function robustnessTests(c: GuiContext): void {
         } finally { ed.onHighlighted = original; }
     });
     test('editing one heading keeps the other outline rows', () => {
-        setText('# Satu\n\n## Dua\n\n# Tiga');
+        setText('# One\n\n## Two\n\n# Three');
         const first = w.outline.store.get_item(0)!;
         const last = w.outline.store.get_item(2)!;
         cursorTo(2, -1);
@@ -245,7 +245,7 @@ export function robustnessTests(c: GuiContext): void {
         eq(w.outline.count, 3, 'undo restored the heading');
     });
     test('the outline reuses labels when a heading only shifts lines', () => {
-        setText('awal\n\n# Judul');
+        setText('start\n\n# Title');
         const item = w.outline.store.get_item(0)!;
         buf.insert(buf.get_start_iter(), 'new line\n', -1); pump();
         ok(w.outline.store.get_item(0) === item, 'the outline item was not reused');
