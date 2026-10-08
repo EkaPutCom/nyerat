@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Belajar Agent Nyerat</title>
-<meta name="description" content="Catatan belajar perkembangan agent Nyerat: dari chat baca-saja sampai rencana, paket perubahan yang disetujui, verifikasi, dan pemulihan, beserta struktur data dan simulasinya.">
+<title>Learning Agents with Nyerat</title>
+<meta name="description" content="Learning notes on how the Nyerat agent evolved: from a read-only chat to plans, approved batches of changes, verification, and recovery, with the data structures and small simulations.">
 <style>
 :root {
   color-scheme: light;
@@ -112,7 +112,7 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
 details { margin: 10px 0; }
 details summary { cursor: pointer; color: var(--text-2); font-size: .88rem; }
 
-/* bar perbandingan */
+/* comparison bars */
 .cmp { display: grid; grid-template-columns: minmax(130px, 210px) 1fr; gap: 4px 14px; align-items: center; font-size: .86rem; }
 .cmp .lbl { color: var(--text-2); line-height: 1.25; }
 .cmp .bars { display: grid; gap: 3px; position: relative; }
@@ -135,7 +135,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: .88rem; }
 .chart .valtxt { fill: var(--text); font-weight: 600; }
 #tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: .8rem; box-shadow: 0 6px 20px rgba(0,0,0,.15); max-width: 300px; opacity: 0; transition: opacity .08s; }
 
-/* diagram struktur data */
+/* data structure diagram */
 .arr { display: flex; flex-wrap: wrap; gap: 3px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .75rem; }
 .cell { border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; background: var(--surface-2); min-width: 28px; text-align: center; }
 .cell.hot { background: var(--before-soft); border-color: var(--before); }
@@ -156,7 +156,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: .88rem; }
 .kv dt { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--text-2); }
 .kv dd { margin: 0; }
 
-/* simulasi */
+/* simulation */
 .sim { border: 1px solid var(--after); border-radius: 12px; padding: 16px; margin: 20px 0 6px; background: linear-gradient(var(--after-soft), var(--surface) 90px); }
 .sim > h3 { margin-top: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .sim .kind { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--text-2); background: var(--surface); }
@@ -202,7 +202,7 @@ footer { color: var(--text-3); font-size: .82rem; padding: 30px 0 60px; }
 .kpi .big { font-size: 1.9rem; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .kpi .from { color: var(--text-3); font-size: .85rem; }
 .kpi .what { font-size: .85rem; color: var(--text-2); }
-/* tambahan khusus halaman agent */
+/* extras specific to the agent page */
 :root { --third: #1f8f6b; --third-soft: #d7efe6; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --third: #34b38a; --third-soft: #16302a; } }
 :root[data-theme="dark"] { --third: #34b38a; --third-soft: #16302a; }
@@ -304,546 +304,546 @@ input[type=text] { width: 100%; }
 
 <div class="wrap">
 <header class="hero">
-  <div class="eyebrow"><a href="index.html">← Nyerat</a> · Catatan belajar · 4–5 Oktober 2026</div>
-  <h1>Belajar membangun agent dari Nyerat</h1>
-  <p class="lede">Dalam dua hari, asisten Nyerat berkembang dari panel chat dengan <b>4 alat baca</b> menjadi agent dengan <b>16 alat</b>. Kini ia bisa merencanakan pekerjaan, mengusulkan paket perubahan, memeriksa hasilnya, dan melanjutkan pekerjaan setelah terputus. Satu prinsip dipegang sejak commit pertama: <b>agent boleh membaca dengan bebas, tetapi setiap perubahan berkas harus disetujui pengguna dulu</b>. Bab terakhir menunjukkan langkah berikutnya: Nyerat menugaskan kartu kanban ke agent lain (pi) yang bekerja di folder proyek terpisah, sementara Nyerat hanya memegang papannya. Halaman ini menjelaskan cara prinsip itu dijaga di setiap tahap. Isinya mencakup struktur data, alur loop, batas keamanan, biaya, dan simulasi kecil yang bisa Anda coba sendiri.</p>
+  <div class="eyebrow"><a href="index.html">← Nyerat</a> · Learning notes · October 4–5, 2026</div>
+  <h1>Learning to build an agent from Nyerat</h1>
+  <p class="lede">In two days, the Nyerat assistant grew from a chat panel with <b>4 read tools</b> into an agent with <b>16 tools</b>. It can now plan work, propose batches of changes, check the result, and pick the work back up after an interruption. One principle has been held since the first commit: <b>the agent may read freely, but every file change must be approved by the user first</b>. The last chapter shows the next step: Nyerat assigns kanban cards to another agent (pi) that works in a separate project folder, while Nyerat only holds the board. This page explains how that principle is kept at every stage. It covers data structures, the loop flow, safety limits, costs, and small simulations you can try yourself.</p>
   <div class="kpis">
-    <div class="kpi"><div class="what">Alat yang ditawarkan ke model</div><div class="big">16</div><div class="from">dari 4 · f6a4cc7 → 8d0cdec</div></div>
-    <div class="kpi"><div class="what">Tes asisten (unit + GUI)</div><div class="big">191</div><div class="from">dari 65 · semuanya tanpa API berbayar</div></div>
-    <div class="kpi"><div class="what">Kode <code>src/agent/</code></div><div class="big">3.078 baris</div><div class="from">dari 1.099 baris di 8 berkas → 20 berkas</div></div>
-    <div class="kpi"><div class="what">Penulisan folder kerja tanpa persetujuan</div><div class="big">0</div><div class="from">semua lewat <code>Change</code> + preflight; harness eksternal hanya di folder proyek lain (Bab 9)</div></div>
+    <div class="kpi"><div class="what">Tools offered to the model</div><div class="big">16</div><div class="from">from 4 · f6a4cc7 → 8d0cdec</div></div>
+    <div class="kpi"><div class="what">Assistant tests (unit + GUI)</div><div class="big">191</div><div class="from">from 65 · all without a paid API</div></div>
+    <div class="kpi"><div class="what">Code in <code>src/agent/</code></div><div class="big">3,078 lines</div><div class="from">from 1,099 lines in 8 files → 20 files</div></div>
+    <div class="kpi"><div class="what">Work folder writes without approval</div><div class="big">0</div><div class="from">all through <code>Change</code> + preflight; the external harness only in another project folder (Chapter 9)</div></div>
   </div>
-  <nav class="toc" aria-label="Daftar isi">
-    <a href="#perjalanan">Perjalanan</a>
-    <a href="#prinsip">Prinsip</a>
-    <a href="#bab1">1 · Konteks</a>
-    <a href="#bab2">2 · Loop alat</a>
-    <a href="#bab3">3 · Ingatan &amp; nama</a>
-    <a href="#bab4">4 · Usulan</a>
-    <a href="#bab5">5 · Rencana &amp; verifikasi</a>
-    <a href="#bab6">6 · Journal &amp; pemulihan</a>
-    <a href="#bab7">7 · Log agent</a>
-    <a href="#bab8">8 · Tindakan lebih luas</a>
-    <a href="#bab9">9 · Orkestrator</a>
-    <a href="#biaya">Biaya</a>
-    <a href="#pelajaran">Pelajaran</a>
+  <nav class="toc" aria-label="Table of contents">
+    <a href="#journey">Journey</a>
+    <a href="#principles">Principles</a>
+    <a href="#ch1">1 · Context</a>
+    <a href="#ch2">2 · Tool loop</a>
+    <a href="#ch3">3 · Memory &amp; names</a>
+    <a href="#ch4">4 · Proposals</a>
+    <a href="#ch5">5 · Plan &amp; verification</a>
+    <a href="#ch6">6 · Journal &amp; recovery</a>
+    <a href="#ch7">7 · Agent log</a>
+    <a href="#ch8">8 · Broader actions</a>
+    <a href="#ch9">9 · Orchestrator</a>
+    <a href="#cost">Cost</a>
+    <a href="#lessons">Lessons</a>
   </nav>
 </header>
 
 <!-- ============================================================ -->
-<section class="chapter" id="perjalanan">
-  <div class="chapnum">Gambaran besar</div>
-  <h2>Perjalanan: dari menjawab ke menuntaskan pekerjaan</h2>
-  <p>Setiap batang adalah satu commit yang mengubah agent. Warnanya membedakan tiga jenis alat: <b>baca</b> (menelusuri berkas dan riwayat Git), <b>usulan</b> (menghasilkan perubahan yang menunggu persetujuan), dan <b>kendali</b> (rencana dan verifikasi, yang tidak menyentuh berkas). Arahkan kursor ke batang untuk melihat jumlah tes dan baris kode di titik itu.</p>
-  <div class="legend"><span style="--c:var(--after)">Baca</span><span style="--c:var(--before)">Usulan perubahan</span><span style="--c:var(--third)">Kendali pekerjaan</span></div>
-  <svg class="chart" id="chart-tools" viewBox="0 0 900 300" role="img" aria-label="Jumlah alat agent per commit"></svg>
+<section class="chapter" id="journey">
+  <div class="chapnum">The big picture</div>
+  <h2>The journey: from answering to finishing the work</h2>
+  <p>Each bar is one commit that changed the agent. The colors tell three kinds of tools apart: <b>read</b> (browsing files and Git history), <b>proposal</b> (producing changes that wait for approval), and <b>control</b> (the plan and verification, which do not touch files). Hover over a bar to see the number of tests and lines of code at that point.</p>
+  <div class="legend"><span style="--c:var(--after)">Read</span><span style="--c:var(--before)">Change proposals</span><span style="--c:var(--third)">Work control</span></div>
+  <svg class="chart" id="chart-tools" viewBox="0 0 900 300" role="img" aria-label="Number of agent tools per commit"></svg>
   <ol class="timeline-steps">
-    <li><span class="h">f6a4cc7</span><span><b>Bab 1, 2</b> · Panel Asisten DeepSeek: konteks dalam anggaran token, prefiks stabil untuk cache, BM25, loop agen dengan 4 alat baca-saja.</span></li>
-    <li><span class="h">2d0150f</span><span><b>Bab 3</b> · Riwayat percakapan disimpan sebagai Markdown di <code>.nyerat/chats</code> dan bisa dilanjutkan.</span></li>
-    <li><span class="h">49021f3</span><span><b>Bab 3</b> · Prompt dan identitas diselaraskan dengan visi personal workbench, tidak lagi khusus naskah buku.</span></li>
-    <li><span class="h">3f387e6</span><span><b>Bab 3</b> · <code>cari_naskah</code> → <code>cari_dokumen</code>; deskripsi alat dinetralkan.</span></li>
-    <li><span class="h">5a64789</span><span><b>Bab 4</b> · Alat tulis pertama (<code>buat_berkas</code>, <code>ubah_berkas</code>) yang hanya menghasilkan usulan dan menunggu Terapkan/Tolak.</span></li>
-    <li><span class="h">c6f71da</span><span><b>Bab 4</b> · Usulan ditinjau di jendela diff yang sama dengan riwayat Git.</span></li>
-    <li><span class="h">8db7c55</span><span><b>Bab 4</b> · Perbaikan panel yang terpotong setelah jawaban panjang (gulir lewat idle).</span></li>
-    <li><span class="h">deb8aa5</span><span><b>Bab 4</b> · <code>ubah_kanban</code> dan diff multi-hunk.</span></li>
-    <li><span class="h">6c47266</span><span><b>Bab 5, 6</b> · Rencana (<code>atur_pekerjaan</code>), paket (<code>usulkan_paket</code>), verifikasi, journal tindakan, retry, dan ringkasan riwayat.</span></li>
-    <li><span class="h">1c90735</span><span><b>Bab 7</b> · Jendela Log agent untuk memantau putaran, penalaran, alat, dan hasilnya.</span></li>
-    <li><span class="h">90c28bb</span><span><b>Bab 8</b> · Sisip, hapus, pindah, ganti semua, persetujuan sebagian, Urungkan, alat riwayat Git, dan verifikasi struktur.</span></li>
-    <li><span class="h">b1ab712</span><span><b>Bab 9</b> · Orkestrator harness: kartu <code>@pi</code> dikerjakan pi di folder proyek lain, antrean per folder, Log pi, kartu pindah ke Dikerjakan/Review.</span></li>
-    <li><span class="h">0db63d2</span><span><b>Bab 9d</b> · pi lewat mode RPC: status ⏸ menunggu saat pi bertanya atau extension meminta izin, dijawab dari Nyerat; arahan saat bekerja dan balasan yang melanjutkan sesi.</span></li>
-    <li><span class="h">8d0cdec</span><span><b>Bab 9f</b> · <code>[[catatan]]</code> di kartu menjadi konteks prompt pi: isi catatan dari folder kerja disalin ke prompt, dibatasi per catatan dan total.</span></li>
-    <li><span class="h">b31556d</span><span><b>Bab 5d</b> · Rencana <code>atur_pekerjaan</code> tampil sebagai daftar centang (<code>WorkList</code>): progres, spinner di langkah yang sedang dikerjakan, durasi giliran; dirapikan ke idiom GNOME di 4a35bc8 (<code>Adw.Spinner</code>, label aksesibel).</span></li>
-    <li><span class="h">a8dd69a</span><span><b>Bab 5d</b> · Kotak pesan Asisten: tombol kirim di dalam bingkai pesan (6037ab4), ringkasan konteks langsung muncul saat panel terbuka sejak awal.</span></li>
+    <li><span class="h">f6a4cc7</span><span><b>Chapters 1, 2</b> · The DeepSeek Assistant panel: context within a token budget, a stable prefix for the cache, BM25, an agent loop with 4 read-only tools.</span></li>
+    <li><span class="h">2d0150f</span><span><b>Chapter 3</b> · Conversation history is saved as Markdown in <code>.nyerat/chats</code> and can be resumed.</span></li>
+    <li><span class="h">49021f3</span><span><b>Chapter 3</b> · The prompt and identity are aligned with the personal workbench vision, no longer specific to book manuscripts.</span></li>
+    <li><span class="h">3f387e6</span><span><b>Chapter 3</b> · <code>search_manuscript</code> → <code>search_documents</code>; the tool descriptions are neutralized.</span></li>
+    <li><span class="h">5a64789</span><span><b>Chapter 4</b> · The first write tools (<code>create_file</code>, <code>edit_file</code>), which only produce proposals and wait for Apply/Reject.</span></li>
+    <li><span class="h">c6f71da</span><span><b>Chapter 4</b> · Proposals are reviewed in the same diff window as Git history.</span></li>
+    <li><span class="h">8db7c55</span><span><b>Chapter 4</b> · Fix for the panel being cut off after a long answer (scrolling through an idle).</span></li>
+    <li><span class="h">deb8aa5</span><span><b>Chapter 4</b> · <code>edit_kanban</code> and multi-hunk diffs.</span></li>
+    <li><span class="h">6c47266</span><span><b>Chapters 5, 6</b> · The plan (<code>set_work</code>), batches (<code>propose_batch</code>), verification, the action journal, retry, and the history summary.</span></li>
+    <li><span class="h">1c90735</span><span><b>Chapter 7</b> · The Agent log window for monitoring rounds, reasoning, tools, and their results.</span></li>
+    <li><span class="h">90c28bb</span><span><b>Chapter 8</b> · Insert, delete, move, replace all, partial approval, Undo, Git history tools, and structure verification.</span></li>
+    <li><span class="h">b1ab712</span><span><b>Chapter 9</b> · The harness orchestrator: <code>@pi</code> cards are worked on by pi in another project folder, a queue per folder, the pi log, cards move to In Progress/Review.</span></li>
+    <li><span class="h">0db63d2</span><span><b>Chapter 9d</b> · pi through RPC mode: a ⏸ waiting status when pi asks or an extension requests permission, answered from Nyerat; steering while working and replies that continue the session.</span></li>
+    <li><span class="h">8d0cdec</span><span><b>Chapter 9f</b> · A <code>[[note]]</code> on a card becomes pi prompt context: the note contents from the work folder are copied into the prompt, limited per note and in total.</span></li>
+    <li><span class="h">b31556d</span><span><b>Chapter 5d</b> · The <code>set_work</code> plan is shown as a checklist (<code>WorkList</code>): progress, a spinner on the step being worked on, turn duration; tidied to GNOME idioms in 4a35bc8 (<code>Adw.Spinner</code>, accessible labels).</span></li>
+    <li><span class="h">a8dd69a</span><span><b>Chapter 5d</b> · The Assistant message box: the send button inside the message frame (6037ab4), the context summary appears immediately when the panel is open from the start.</span></li>
   </ol>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="prinsip">
-  <div class="chapnum">Sebelum menambah kemampuan</div>
-  <h2>Empat aturan yang dipertahankan di setiap commit</h2>
-  <p>Kemampuan agent bertambah empat kali lipat, tetapi bentuk dasarnya tetap sama. Setiap fitur baru harus memenuhi empat aturan ini. Karena itu, setiap bab di bawah juga bisa dibaca sebagai cara memenuhi aturan-aturan tersebut.</p>
+<section class="chapter" id="principles">
+  <div class="chapnum">Before adding capabilities</div>
+  <h2>Four rules kept in every commit</h2>
+  <p>The agent's capabilities quadrupled, but its basic shape stayed the same. Every new feature has to satisfy these four rules. That is why each chapter below can also be read as a way of satisfying them.</p>
   <div class="principle">
-    <div class="panel"><h4><span class="tag new">Murni</span></h4><p>Logika agent di <code>src/agent/</code> tidak meng-import GTK. Alat bekerja di atas <code>SourceFile[]</code>, mengembalikan nilai, dan tidak melempar. Karena itu, semuanya bisa diuji tanpa jendela dan tanpa jaringan.</p></div>
-    <div class="panel"><h4><span class="tag old">Usulan, bukan tulisan</span></h4><p>Alat pengubah hanya menghasilkan <code>Change { before, after }</code>. Yang menulis ke disk adalah jendela, dan itu terjadi setelah pengguna menekan Terapkan dan isi berkas diperiksa ulang.</p></div>
-    <div class="panel"><h4><span class="tag ctl">Transparan</span></h4><p>Pengguna dapat melihat konteks yang dikirim beserta jumlah tokennya, langkah penelusuran, diff, journal, dan sekarang juga Log agent. Tidak ada keputusan yang tersembunyi.</p></div>
-    <div class="panel"><h4><span class="tag new">Berbatas</span></h4><p>Setiap sumber daya punya batas: token konteks, putaran model, anggaran bacaan, ukuran hasil alat, jumlah tindakan per paket, dan path di dalam folder kerja.</p></div>
+    <div class="panel"><h4><span class="tag new">Pure</span></h4><p>The agent logic in <code>src/agent/</code> does not import GTK. Tools work on a <code>SourceFile[]</code>, return values, and do not throw. That is why everything can be tested without a window and without a network.</p></div>
+    <div class="panel"><h4><span class="tag old">Proposals, not writes</span></h4><p>Tools that change things only produce a <code>Change { before, after }</code>. The window is what writes to disk, and that happens after the user presses Apply and the file contents are checked again.</p></div>
+    <div class="panel"><h4><span class="tag ctl">Transparent</span></h4><p>The user can see the context that was sent together with its token count, the browsing steps, the diff, the journal, and now the Agent log too. No decision is hidden.</p></div>
+    <div class="panel"><h4><span class="tag new">Bounded</span></h4><p>Every resource has a limit: context tokens, model rounds, the read budget, the size of tool results, the number of actions per batch, and paths inside the work folder.</p></div>
   </div>
-  <div class="flow" aria-label="Arah ketergantungan">
-    <span class="node pure">agent/* (murni)</span><span class="to">→ dipakai</span>
-    <span class="node">ui/chat.ts</span><span class="to">→ minta keputusan</span>
-    <span class="node user">pengguna</span><span class="to">→ Terapkan</span>
-    <span class="node ctl">window.ts: preflight + tulis</span>
+  <div class="flow" aria-label="Direction of dependencies">
+    <span class="node pure">agent/* (pure)</span><span class="to">→ used by</span>
+    <span class="node">ui/chat.ts</span><span class="to">→ asks for a decision</span>
+    <span class="node user">the user</span><span class="to">→ Apply</span>
+    <span class="node ctl">window.ts: preflight + write</span>
   </div>
-  <p class="note">Arah panggilan tidak pernah terbalik. <code>agent/</code> tidak tahu apa pun tentang editor atau widget. Jendela hanya memberinya cara membaca berkas (<code>ChatHost</code>) dan cara meminta keputusan pengguna (<code>onProposal</code>, <code>onBatchProposal</code>).</p>
+  <p class="note">The direction of calls is never reversed. <code>agent/</code> knows nothing about the editor or widgets. The window only gives it a way to read files (<code>ChatHost</code>) and a way to ask for the user's decision (<code>onProposal</code>, <code>onBatchProposal</code>).</p>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab1">
-  <div class="chapnum">Bab 1 · commit f6a4cc7 · <code>src/agent/context.ts</code></div>
-  <h2>Model hanya tahu apa yang dikirim: menyusun konteks dalam anggaran</h2>
-  <p><b>Masalah.</b> Model tidak bisa melihat editor. Jika folder kerja berisi ratusan KB catatan, semuanya tidak mungkin dikirim, dan mengirim terlalu banyak juga mahal dan lambat. Jadi mutu jawaban sangat ditentukan oleh satu fungsi: <code>buildContext()</code>.</p>
-  <p><b>Desain.</b> Konteks dibagi dua bagian dengan sifat berbeda, lalu diurutkan supaya bagian yang jarang berubah berada di depan:</p>
+<section class="chapter" id="ch1">
+  <div class="chapnum">Chapter 1 · commit f6a4cc7 · <code>src/agent/context.ts</code></div>
+  <h2>The model only knows what is sent: building context within a budget</h2>
+  <p><b>The problem.</b> The model cannot see the editor. If the work folder holds hundreds of KB of notes, it is impossible to send everything, and sending too much is also expensive and slow. So the quality of the answers is largely determined by a single function: <code>buildContext()</code>.</p>
+  <p><b>The design.</b> The context is split into two parts with different properties, and then ordered so that the part that rarely changes comes first:</p>
   <div class="ctx">
-    <div class="sys"><b>system (stabil)</b> · instruksi + peta proyek + dokumen aktif bernomor baris. Bagian ini sama selama naskah tidak berubah, sehingga prefiksnya bisa dilayani dari cache DeepSeek.</div>
-    <div class="hist"><b>riwayat</b> · tanya-jawab sebelumnya, maksimal 25% anggaran (<code>HISTORY_SHARE</code>).</div>
-    <div class="note"><b>note (berubah)</b> · pilihan, posisi kursor, berkas yang di-<code>@mention</code>, dan potongan relevan dari berkas lain. Bagian ini ditempel di depan pertanyaan terbaru saja.</div>
+    <div class="sys"><b>system (stable)</b> · instructions + the project map + the active document with line numbers. This part stays the same as long as the manuscript does not change, so its prefix can be served from the DeepSeek cache.</div>
+    <div class="hist"><b>history</b> · earlier questions and answers, at most 25% of the budget (<code>HISTORY_SHARE</code>).</div>
+    <div class="note"><b>note (changes)</b> · the selection, the cursor position, files that were <code>@mention</code>ed, and relevant excerpts from other files. This part is attached only in front of the latest question.</div>
   </div>
   <div class="grid2">
     <div class="panel">
-      <h4>Anggaran dan prioritas</h4>
-<pre><code>DEFAULT_BUDGET = 48_000            // token
+      <h4>Budget and priorities</h4>
+<pre><code>DEFAULT_BUDGET = 48_000            // tokens
 estimateTokens = s =&gt; ceil(s.length / 3)
-// sengaja boros untuk teks Indonesia
-// urutan: pilihan → dokumen aktif → @mention
-//         → peta proyek → potongan BM25</code></pre>
+// deliberately wasteful for Indonesian text
+// order: selection → active document → @mention
+//        → project map → BM25 excerpts</code></pre>
     </div>
     <div class="panel">
-      <h4>Potongan dan pencarian</h4>
+      <h4>Excerpts and search</h4>
 <pre><code>splitChunks(file, text)   // per heading,
-  // bagian &gt;1.800 karakter dipecah di baris kosong
-rankChunks(chunks, query) // BM25, k1 = 1,5, b = 0,75
-  // heading dihitung dua kali
-buildQuery: pertanyaan ×1, pilihan ×0,5,
-            2 pertanyaan terakhir ×0,4</code></pre>
+  // sections &gt;1,800 characters are split at blank lines
+rankChunks(chunks, query) // BM25, k1 = 1.5, b = 0.75
+  // headings count twice
+buildQuery: question ×1, selection ×0.5,
+            last 2 questions ×0.4</code></pre>
     </div>
   </div>
-  <p>Pertanyaan sebelumnya ikut masuk ke kueri dengan bobot kecil. Dengan begitu, pertanyaan lanjutan seperti "lalu siapa yang menanganinya?" tetap menemukan potongan yang tepat. Imbuhan dipangkas seadanya (<code>-nya</code>, <code>-kan</code>, <code>-an</code>, …) sehingga "rapatnya" cocok dengan "rapat".</p>
+  <p>Earlier questions also go into the query with a small weight. That way, a follow-up question such as "then who handles it?" still finds the right excerpts. Suffixes are stripped roughly (the Indonesian <code>-nya</code>, <code>-kan</code>, <code>-an</code>, …) so that "rapatnya" matches "rapat".</p>
 
   <div class="sim" id="sim1">
-    <h3>Simulasi 1: potongan mana yang masuk ke <code>note</code>? <span class="kind">Interaktif · perhitungan nyata</span></h3>
-    <p>Ini adalah folder kerja tiruan dengan catatan rapat, rencana, riset, dan papan tugas. Pemecah heading, tokenizer, dan BM25 di bawah adalah salinan logika <code>context.ts</code>. Ubah pertanyaan atau anggaran untuk melihat potongan yang terpilih. Potongan yang tidak muat dalam anggaran tidak dikirim. Model masih bisa membacanya nanti dengan alat.</p>
-    <label class="field">Pertanyaan sebelumnya (bobot 0,4)<input type="text" id="s1-prev" value="Kapan rilis versi 2 dijadwalkan?"></label>
-    <label class="field">Pertanyaan sekarang (bobot 1)<input type="text" id="s1-q" value="Siapa yang menangani migrasi datanya?"></label>
+    <h3>Simulation 1: which excerpts go into the <code>note</code>? <span class="kind">Interactive · real computation</span></h3>
+    <p>This is a mock work folder with meeting notes, plans, research, and a task board. The heading splitter, tokenizer, and BM25 below are copies of the <code>context.ts</code> logic. Change the question or the budget to see which excerpts get selected. Excerpts that do not fit in the budget are not sent. The model can still read them later with a tool.</p>
+    <label class="field">Previous question (weight 0.4)<input type="text" id="s1-prev" value="When is the version 2 release scheduled?"></label>
+    <label class="field">Current question (weight 1)<input type="text" id="s1-q" value="Who is handling the data migration?"></label>
     <div class="controls">
-      <label>Anggaran potongan <input type="range" id="s1-b" min="60" max="900" step="20" value="260"><output id="s1-b-out"></output></label>
+      <label>Excerpt budget <input type="range" id="s1-b" min="60" max="900" step="20" value="260"><output id="s1-b-out"></output></label>
     </div>
     <div class="rank" id="s1-rank"></div>
-    <p class="note">Anggaran dihitung dengan perkiraan yang sama (3 karakter ≈ 1 token). Di Nyerat, potongan bersaing dengan pilihan, dokumen aktif, dan peta proyek di dalam anggaran 48.000 token. Di sini anggarannya sengaja dibuat kecil supaya efeknya terlihat.</p>
+    <p class="note">The budget is counted with the same estimate (3 characters ≈ 1 token). In Nyerat, excerpts compete with the selection, the active document, and the project map within a 48,000-token budget. Here the budget is deliberately small so that the effect is visible.</p>
   </div>
 
-  <h3>Mengapa urutan itu penting: cache prefiks</h3>
-  <p>Penyedia seperti DeepSeek menyimpan cache untuk awalan pesan yang sama persis dengan permintaan sebelumnya. Satu karakter berbeda di awal sudah cukup untuk memutus cache seluruh pesan sesudahnya. Karena itu, posisi kursor dan pilihan (yang berubah setiap pertanyaan) <b>tidak boleh</b> diletakkan di <code>system</code>.</p>
+  <h3>Why the order matters: the prefix cache</h3>
+  <p>Providers such as DeepSeek keep a cache for a message prefix that is exactly the same as in the previous request. A single different character at the start is enough to break the cache for the whole message after it. That is why the cursor position and the selection (which change with every question) <b>must not</b> be placed in <code>system</code>.</p>
   <div class="sim" id="sim2">
-    <h3>Simulasi 2: token dari cache selama satu sesi <span class="kind">Interaktif · model</span></h3>
-    <p>Bandingkan dua susunan. Kiri: posisi kursor diselipkan ke <code>system</code>. Kanan: susunan Nyerat, dengan semua bagian yang berubah masuk ke <code>note</code> di akhir. Batang menunjukkan token masuk per pertanyaan. Warna biru menandai token yang bisa dilayani dari cache.</p>
+    <h3>Simulation 2: tokens from the cache over one session <span class="kind">Interactive · model</span></h3>
+    <p>Compare two arrangements. Left: the cursor position is slipped into <code>system</code>. Right: Nyerat's arrangement, with every part that changes going into the <code>note</code> at the end. A bar shows the input tokens per question. Blue marks tokens that can be served from the cache.</p>
     <div class="controls">
-      <label>Jumlah pertanyaan <input type="range" id="s2-n" min="2" max="16" step="1" value="8"><output id="s2-n-out"></output></label>
-      <label>Ukuran system <input type="range" id="s2-s" min="4000" max="40000" step="1000" value="24000"><output id="s2-s-out"></output></label>
+      <label>Number of questions <input type="range" id="s2-n" min="2" max="16" step="1" value="8"><output id="s2-n-out"></output></label>
+      <label>System size <input type="range" id="s2-s" min="4000" max="40000" step="1000" value="24000"><output id="s2-s-out"></output></label>
     </div>
-    <div class="legend"><span style="--c:var(--after)">Dari cache</span><span style="--c:var(--before)">Diproses ulang</span></div>
+    <div class="legend"><span style="--c:var(--after)">From cache</span><span style="--c:var(--before)">Reprocessed</span></div>
     <div class="grid2">
-      <div><div class="track-label"><span class="tag old">Kursor di system</span></div><svg class="chart" id="s2-bad" viewBox="0 0 440 160" aria-label="Token per pertanyaan, susunan buruk"></svg></div>
-      <div><div class="track-label"><span class="tag new">Kursor di note (Nyerat)</span></div><svg class="chart" id="s2-good" viewBox="0 0 440 160" aria-label="Token per pertanyaan, susunan Nyerat"></svg></div>
+      <div><div class="track-label"><span class="tag old">Cursor in system</span></div><svg class="chart" id="s2-bad" viewBox="0 0 440 160" aria-label="Tokens per question, the bad arrangement"></svg></div>
+      <div><div class="track-label"><span class="tag new">Cursor in note (Nyerat)</span></div><svg class="chart" id="s2-good" viewBox="0 0 440 160" aria-label="Tokens per question, Nyerat's arrangement"></svg></div>
     </div>
     <div class="stats">
-      <div class="stat old"><div class="k">Kursor di system: dari cache</div><div class="v" id="s2-bad-v">–</div><div class="s" id="s2-bad-s"></div></div>
-      <div class="stat new"><div class="k">Kursor di note: dari cache</div><div class="v" id="s2-good-v">–</div><div class="s" id="s2-good-s"></div></div>
+      <div class="stat old"><div class="k">Cursor in system: from cache</div><div class="v" id="s2-bad-v">–</div><div class="s" id="s2-bad-s"></div></div>
+      <div class="stat new"><div class="k">Cursor in note: from cache</div><div class="v" id="s2-good-v">–</div><div class="s" id="s2-good-s"></div></div>
     </div>
-    <p class="note">Model ini menganggap naskah tidak berubah, note ±2.500 token, dan setiap giliran menambah riwayat ±600 token. Pada susunan kiri, posisi kursor ditulis tepat setelah instruksi (±1.500 token), sehingga hanya instruksi yang tetap sama dari permintaan sebelumnya. Ini bukan hasil ukur DeepSeek. Angka sebenarnya per putaran (token masuk, dari cache, keluar) bisa dilihat di <a href="#bab7">Log agent</a>. Ketika naskah berubah, dokumen aktif di <code>system</code> ikut berubah dan cache memang harus dibangun ulang.</p>
+    <p class="note">This model assumes the manuscript does not change, the note is ±2,500 tokens, and each turn adds ±600 tokens of history. In the left arrangement, the cursor position is written right after the instructions (±1,500 tokens), so only the instructions stay the same as in the previous request. This is not a DeepSeek measurement. The real numbers per round (input tokens, from cache, output) can be seen in the <a href="#ch7">Agent log</a>. When the manuscript changes, the active document in <code>system</code> changes too and the cache really does have to be rebuilt.</p>
   </div>
-  <div class="lesson"><b>Pelajaran</b>Konteks adalah antarmuka utama dengan model. Bagi konteks menurut seberapa sering isinya berubah, beri setiap bagian anggaran, dan tampilkan rinciannya ke pengguna. Di Nyerat, tombol Konteks menampilkan setiap bagian beserta jumlah tokennya.</div>
+  <div class="lesson"><b>Lesson</b>Context is the main interface to the model. Split the context by how often its contents change, give each part a budget, and show the breakdown to the user. In Nyerat, the Context button shows each part along with its token count.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab2">
-  <div class="chapnum">Bab 2 · commit f6a4cc7 · <code>src/agent/session.ts</code>, <code>tools.ts</code></div>
-  <h2>Loop agen berbatas: model meminta, kode menjalankan</h2>
-  <p>Satu giliran dimulai dengan memanggil model. Jika model meminta alat, alat itu dijalankan, hasilnya dikirim kembali, lalu model dipanggil lagi. Loop berhenti ketika model memberi jawaban. Versi pertama hanya punya 4 alat baca: <code>daftar_berkas</code>, <code>cari_naskah</code> (BM25), <code>cari_teks</code> (teks persis), dan <code>baca_berkas</code>.</p>
+<section class="chapter" id="ch2">
+  <div class="chapnum">Chapter 2 · commit f6a4cc7 · <code>src/agent/session.ts</code>, <code>tools.ts</code></div>
+  <h2>A bounded agent loop: the model asks, the code runs</h2>
+  <p>A turn starts by calling the model. If the model asks for a tool, that tool is run, the result is sent back, and then the model is called again. The loop stops when the model gives an answer. The first version had only 4 read tools: <code>list_files</code>, <code>search_manuscript</code> (BM25), <code>search_text</code> (exact text), and <code>read_file</code>.</p>
   <div class="grid2">
     <div class="panel">
-      <h4><span class="tag new">Inti loop (diringkas dari f6a4cc7)</span></h4>
+      <h4><span class="tag new">The core of the loop (condensed from f6a4cc7)</span></h4>
 <pre><code>for (round = 0; round &lt; MAX_ROUNDS; round++) {   // 10
   useTools = round &lt; MAX_ROUNDS - 1
   result = await provider.chat({ messages,
              tools: useTools ? TOOLS : undefined })
-  if (!result.toolCalls.length) break  // jawaban
+  if (!result.toolCalls.length) break  // the answer
   for (call of result.toolCalls) {
     out = runTool(call.name, call.arguments, files)
-    if (cost(out) &gt; toolBudget) out = 'Anggaran habis…'
+    if (cost(out) &gt; toolBudget) out = 'Budget exhausted…'
     messages.push({ role: 'tool', content: out })
   }
 }</code></pre>
     </div>
     <div class="panel">
-      <h4>Tiga batas yang menjamin loop selesai</h4>
+      <h4>Three limits that guarantee the loop ends</h4>
       <ul style="margin:0;padding-left:18px;font-size:.9rem">
-        <li><b>Putaran:</b> maksimal 10. Putaran terakhir dipanggil <em>tanpa</em> alat, sehingga model terpaksa menjawab.</li>
-        <li><b>Anggaran bacaan:</b> total hasil alat per giliran ≤ 1× anggaran konteks (<code>TOOL_SHARE</code>). Jika terlewati, model diminta menjawab dengan informasi yang sudah ada dan menyebut apa yang belum diperiksa.</li>
-        <li><b>Hasil per alat:</b> ≤ 6.000 token (<code>MAX_RESULT_TOKENS</code>). Hasil yang lebih panjang dipotong dengan petunjuk untuk membaca rentang tertentu.</li>
+        <li><b>Rounds:</b> at most 10. The last round is called <em>without</em> tools, so the model is forced to answer.</li>
+        <li><b>Read budget:</b> the total of tool results per turn ≤ 1× the context budget (<code>TOOL_SHARE</code>). If it is exceeded, the model is asked to answer with the information it already has and to say what has not been checked.</li>
+        <li><b>Result per tool:</b> ≤ 6,000 tokens (<code>MAX_RESULT_TOKENS</code>). A longer result is cut off with a hint to read a specific range.</li>
       </ul>
     </div>
   </div>
-  <p>Ada beberapa keputusan kecil yang penting. Alat tidak pernah melempar: argumen JSON yang rusak menjadi pesan galat yang bisa dibaca model, supaya model bisa memperbaikinya sendiri. Hasil <code>baca_berkas</code> diberi nomor baris yang sama dengan konteks, sehingga rujukan "berkas:baris" konsisten. Alat hanya ditawarkan jika pengguna mengizinkan berkas lain dibaca (saklar konteks proyek). Selain itu, isi editor yang belum disimpan menggantikan versi di disk.</p>
+  <p>There are several small decisions that matter. Tools never throw: broken JSON arguments become an error message the model can read, so the model can fix it by itself. The result of <code>read_file</code> is given the same line numbers as the context, so "file:line" references are consistent. Tools are only offered if the user allows other files to be read (the project context switch). In addition, unsaved editor contents replace the version on disk.</p>
 
   <div class="sim" id="sim3">
-    <h3>Simulasi 3: satu giliran agent, langkah demi langkah <span class="kind">Interaktif · peragaan</span></h3>
-    <p>Permintaan pengguna: <i>"Rapat peluncuran pindah dari Rabu ke Kamis 9 Oktober, perbarui semua dokumen."</i> Ini peragaan alur loop versi sekarang (Bab 5 dan 8) dengan skenario yang sudah ditulis. Model sungguhan bisa memilih langkah lain. Saat paket diusulkan, Anda yang memutuskan.</p>
-    <div class="btnrow"><button id="s3-next">Langkah berikutnya</button><button class="ghost" id="s3-reset">Ulang</button></div>
+    <h3>Simulation 3: one agent turn, step by step <span class="kind">Interactive · walkthrough</span></h3>
+    <p>The user's request: <i>"The launch meeting moved from Wednesday to Thursday, October 9; update all the documents."</i> This is a walkthrough of the current loop flow (Chapters 5 and 8) with a scenario that has been written in advance. A real model may choose other steps. When the batch is proposed, you are the one who decides.</p>
+    <div class="btnrow"><button id="s3-next">Next step</button><button class="ghost" id="s3-reset">Reset</button></div>
     <div class="btnrow" id="s3-decide" hidden>
-      <button id="s3-all">Terapkan semua</button>
-      <button class="ghost" id="s3-part">Terapkan 1 dari 2 (hapus centang tugas.md)</button>
-      <button class="ghost" id="s3-no">Tolak paket</button>
+      <button id="s3-all">Apply all</button>
+      <button class="ghost" id="s3-part">Apply 1 of 2 (uncheck tasks.md)</button>
+      <button class="ghost" id="s3-no">Reject the batch</button>
     </div>
     <div class="stats">
-      <div class="stat"><div class="k">Putaran model</div><div class="v" id="s3-round">0 / 10</div><div class="s" id="s3-tools">alat ditawarkan: –</div></div>
-      <div class="stat"><div class="k">Anggaran bacaan tersisa</div><div class="v" id="s3-budget">48.000</div><div class="meter"><i id="s3-meter" style="width:100%"></i></div></div>
-      <div class="stat"><div class="k">Status pekerjaan</div><div class="v" id="s3-work">–</div><div class="s" id="s3-written">berkas ditulis: 0</div></div>
+      <div class="stat"><div class="k">Model rounds</div><div class="v" id="s3-round">0 / 10</div><div class="s" id="s3-tools">tools offered: –</div></div>
+      <div class="stat"><div class="k">Read budget remaining</div><div class="v" id="s3-budget">48,000</div><div class="meter"><i id="s3-meter" style="width:100%"></i></div></div>
+      <div class="stat"><div class="k">Work status</div><div class="v" id="s3-work">–</div><div class="s" id="s3-written">files written: 0</div></div>
     </div>
     <div class="log" id="s3-log" aria-live="polite"></div>
   </div>
-  <div class="lesson"><b>Pelajaran</b>Agent yang dapat diandalkan bukan agent yang "pintar berhenti sendiri", tetapi agent yang loop-nya punya batas keras di kode: jumlah putaran, anggaran bacaan, dan ukuran hasil. Pesan galat dan pesan "anggaran habis" ditulis untuk dibaca model, bukan untuk pengembang.</div>
+  <div class="lesson"><b>Lesson</b>A reliable agent is not one that is "smart enough to stop by itself", but one whose loop has hard limits in code: the number of rounds, the read budget, and the size of results. Error messages and "budget exhausted" messages are written to be read by the model, not by the developer.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab3">
-  <div class="chapnum">Bab 3 · commit 2d0150f, 49021f3, 3f387e6 · <code>chatstore.ts</code>, <code>transcript.ts</code>, <code>context.ts</code>, <code>tools.ts</code></div>
-  <h2>Ingatan yang bisa dibaca manusia, dan nama yang tidak menyesatkan</h2>
-  <h3>3a. Percakapan sebagai berkas Markdown</h3>
-  <p>Setiap percakapan disimpan sebagai satu berkas di <code>&lt;folder&gt;/.nyerat/chats/</code>, dengan frontmatter (<code>judul</code>, <code>model</code>, <code>dibuat</code>) lalu bagian <code>## Anda</code> / <code>## Asisten</code>. Formatnya sengaja dibuat bisa dibaca dan disunting manusia, bukan basis data tersembunyi.</p>
+<section class="chapter" id="ch3">
+  <div class="chapnum">Chapter 3 · commits 2d0150f, 49021f3, 3f387e6 · <code>chatstore.ts</code>, <code>transcript.ts</code>, <code>context.ts</code>, <code>tools.ts</code></div>
+  <h2>Memory a human can read, and names that do not mislead</h2>
+  <h3>3a. A conversation as a Markdown file</h3>
+  <p>Each conversation is saved as one file in <code>&lt;folder&gt;/.nyerat/chats/</code>, with frontmatter (<code>judul</code>, <code>model</code>, <code>dibuat</code>) and then <code>## Anda</code> / <code>## Asisten</code> sections. These key and heading names are legacy Indonesian spellings kept so that existing conversation files still open. The format is deliberately readable and editable by humans, not a hidden database.</p>
   <div class="grid2">
     <div class="panel">
-      <h4>Yang disimpan</h4>
-      <p style="margin:0;font-size:.88rem">Pertanyaan dan jawaban. Mulai Bab 5, juga <code>pekerjaan</code> (tujuan, langkah, verifikasi) dan <code>tindakan</code> (journal beserta snapshot sebelum/sesudah). Folder <code>.nyerat/</code> otomatis diberi <code>.gitignore</code> berisi <code>*</code>, karena isinya memuat kutipan dokumen.</p>
+      <h4>What is saved</h4>
+      <p style="margin:0;font-size:.88rem">Questions and answers. Starting in Chapter 5, also <code>pekerjaan</code> (the goal, steps, verification) and <code>tindakan</code> (the journal along with before/after snapshots), again legacy key names. The <code>.nyerat/</code> folder automatically gets a <code>.gitignore</code> containing <code>*</code>, because its contents include document excerpts.</p>
     </div>
     <div class="panel">
-      <h4>Yang sengaja tidak disimpan</h4>
-      <p style="margin:0;font-size:.88rem">Proses berpikir model, rincian konteks, hasil baca lengkap, dan pemakaian token. Konteks dokumen dibangun ulang setiap giliran (isi berkas bisa berubah), sehingga riwayat tetap kecil.</p>
+      <h4>What is deliberately not saved</h4>
+      <p style="margin:0;font-size:.88rem">The model's thinking process, the context breakdown, the full read results, and token usage. The document context is rebuilt every turn (file contents may change), so the history stays small.</p>
     </div>
   </div>
-  <div class="caveat"><b>Jebakan yang dihindari:</b> agent tidak boleh menelusuri riwayatnya sendiri sebagai dokumen. <code>readProject</code> tidak membaca folder bertitik, sehingga <code>.nyerat/</code> tidak pernah muncul di hasil <code>cari_dokumen</code>. Tanpa aturan ini, jawaban lama bisa terbaca sebagai "fakta" dari dokumen.</div>
-  <h3>3b. Nama alat adalah bagian dari prompt</h3>
-  <p>Nyerat awalnya dirancang untuk menulis buku, jadi prompt dan alatnya berbicara tentang "naskah". Setelah visinya diperluas menjadi personal workbench (catatan, rapat, riset, rencana), nama <code>cari_naskah</code> diganti menjadi <code>cari_dokumen</code> dan semua deskripsi alat dinetralkan. Model memilih alat berdasarkan nama dan deskripsinya. Nama yang terlalu sempit membuat model ragu memakai alat itu untuk notulen rapat.</p>
-  <div class="lesson"><b>Pelajaran</b>Perlakukan nama dan deskripsi alat seperti teks antarmuka untuk pengguna yang sangat harfiah. Saat cakupan produk berubah, periksa ulang prompt dan deskripsi alat, bukan hanya UI.</div>
+  <div class="caveat"><b>A trap that is avoided:</b> the agent must not browse its own history as a document. <code>readProject</code> does not read dot folders, so <code>.nyerat/</code> never shows up in <code>search_documents</code> results. Without this rule, an old answer could be read as a "fact" from a document.</div>
+  <h3>3b. Tool names are part of the prompt</h3>
+  <p>Nyerat was originally designed for writing books, so its prompt and tools talked about the "manuscript". After the vision was widened into a personal workbench (notes, meetings, research, plans), the name <code>search_manuscript</code> was changed to <code>search_documents</code> and all the tool descriptions were neutralized. The model picks tools by their names and descriptions. A name that is too narrow makes the model hesitate to use the tool for meeting minutes.</p>
+  <div class="lesson"><b>Lesson</b>Treat tool names and descriptions like interface text for a very literal user. When the scope of the product changes, re-check the prompt and the tool descriptions, not just the UI.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab4">
-  <div class="chapnum">Bab 4 · commit 5a64789, c6f71da, deb8aa5, 8db7c55 · <code>src/agent/changes.ts</code>, <code>ui/proposalviewer.ts</code></div>
-  <h2>Dari menjawab ke mengusulkan: perubahan sebagai data</h2>
-  <p><b>Kebutuhan.</b> Pengguna ingin agent tidak hanya berkata "ganti baris 12", tetapi juga melakukannya, tanpa kehilangan kendali atas berkasnya. <b>Desain.</b> Alat tulis tidak menulis apa pun. Ia hanya memvalidasi argumen, lalu menghitung hasilnya sebagai nilai:</p>
+<section class="chapter" id="ch4">
+  <div class="chapnum">Chapter 4 · commits 5a64789, c6f71da, deb8aa5, 8db7c55 · <code>src/agent/changes.ts</code>, <code>ui/proposalviewer.ts</code></div>
+  <h2>From answering to proposing: changes as data</h2>
+  <p><b>The need.</b> Users want the agent not just to say "replace line 12", but to do it, without losing control over their files. <b>The design.</b> A write tool writes nothing. It only validates the arguments, and then computes the result as a value:</p>
   <div class="grid2">
     <div class="panel">
-      <h4><span class="tag new">Struktur data</span></h4>
+      <h4><span class="tag new">Data structure</span></h4>
 <pre><code>interface Change {
   kind: 'create' | 'edit' | 'delete' | 'move'
-  file: string     // path relatif di folder kerja
-  before: string   // isi saat diusulkan
-  after: string    // isi bila diterapkan
-  reason: string   // alasan, tampil di jendela tinjau
-  to?: string      // move saja
+  file: string     // relative path in the work folder
+  before: string   // contents at the time of the proposal
+  after: string    // contents if applied
+  reason: string   // the reason, shown in the review window
+  to?: string      // move only
 }</code></pre>
-      <p class="meta"><code>kind</code> hapus/pindah baru ditambahkan di Bab 8. Versi pertama hanya punya buat dan ubah.</p>
+      <p class="meta">The <code>kind</code> values delete/move were only added in Chapter 8. The first version only had create and edit.</p>
     </div>
     <div class="panel">
-      <h4><span class="tag old">Pemisahan alat</span></h4>
-<pre><code>TOOLS          // baca-saja, dijalankan langsung
-CHANGE_TOOLS   // menghasilkan Change saja
-// sesi:
+      <h4><span class="tag old">Separating the tools</span></h4>
+<pre><code>TOOLS          // read-only, run directly
+CHANGE_TOOLS   // only produce a Change
+// session:
 change = planChange(name, args, files)
 answer = await handlers.onProposal(change)
-// ↑ Promise yang menunggu jendela tinjau
+// ↑ a Promise that waits for the review window
 if (answer.applied) applyToFiles(files, change)</code></pre>
-      <p class="meta">Tanpa handler <code>onProposal</code>, alat pengubah tidak ditawarkan sama sekali.</p>
+      <p class="meta">Without an <code>onProposal</code> handler, the tools that change things are not offered at all.</p>
     </div>
   </div>
-  <p><code>ubah_berkas</code> meminta <code>teks_lama</code> yang muncul <b>tepat satu kali</b>. Jika tidak cocok, model mendapat pesan agar membaca berkas dulu atau menambah baris di sekitarnya. Cara ini lebih kuat daripada nomor baris, karena model sering salah menghitung baris. <code>ubah_kanban</code> (deb8aa5) tidak menyunting teks secara langsung. Ia memakai model papan yang sama dengan UI kanban (<code>parseBoard</code> → operasi → <code>serializeBoard</code>), sehingga hasilnya selalu papan yang valid.</p>
-  <h3>Preflight: isi berkas harus masih sama seperti saat diusulkan</h3>
-  <p>Ada jeda antara saat usulan dibuat dan saat pengguna menekan Terapkan. Selama jeda itu pengguna bisa saja menyunting berkasnya. Karena itu, sebelum menulis, jendela memanggil <code>preflight()</code>. Usulan ditolak jika <code>before</code> tidak lagi sama dengan isi aktual, alih-alih menimpa suntingan pengguna.</p>
+  <p><code>edit_file</code> asks for an <code>old_text</code> that appears <b>exactly once</b>. If it does not match, the model gets a message telling it to read the file first or to add surrounding lines. This approach is stronger than line numbers, because models often miscount lines. <code>edit_kanban</code> (deb8aa5) does not edit text directly. It uses the same board model as the kanban UI (<code>parseBoard</code> → operation → <code>serializeBoard</code>), so the result is always a valid board.</p>
+  <h3>Preflight: the file contents must still be what they were at the proposal</h3>
+  <p>There is a gap between the moment a proposal is made and the moment the user presses Apply. During that gap the user may well edit the file. That is why, before writing, the window calls <code>preflight()</code>. A proposal is rejected if <code>before</code> is no longer the same as the actual contents, instead of overwriting the user's edit.</p>
 <pre><code>function preflight(c, read) {
-  const at = read(c.file)                  // null = tidak ada
-  if (c.kind === 'create') return at === null ? null : `${c.file} sudah ada`
-  if (at === null)        return `${c.file} tidak ada lagi`
-  if (at !== c.before)    return `${c.file} berubah sejak diusulkan; minta usulan baru`
-  if (c.kind === 'move' &amp;&amp; read(c.to) !== null) return `${c.to} sudah ada`
+  const at = read(c.file)                  // null = does not exist
+  if (c.kind === 'create') return at === null ? null : `${c.file} already exists`
+  if (at === null)        return `${c.file} no longer exists`
+  if (at !== c.before)    return `${c.file} changed since it was proposed; ask for a new proposal`
+  if (c.kind === 'move' &amp;&amp; read(c.to) !== null) return `${c.to} already exists`
   return null
 }</code></pre>
   <div class="sim" id="sim4">
-    <h3>Simulasi 4: Terapkan, sunting, Urungkan <span class="kind">Interaktif · logika nyata</span></h3>
-    <p>Agent mengusulkan perubahan di bawah. Coba <b>Terapkan</b>, lalu <b>Urungkan</b>. Setelah itu, ulangi tetapi sunting isi berkas di kotak teks sebelum menekan tombol. <code>preflight</code>, <code>changeState</code>, dan <code>invertChange</code> di sini adalah salinan dari <code>changes.ts</code>.</p>
+    <h3>Simulation 4: Apply, edit, Undo <span class="kind">Interactive · real logic</span></h3>
+    <p>The agent proposes the change below. Try <b>Apply</b>, and then <b>Undo</b>. After that, repeat but edit the file contents in the text box before pressing the button. <code>preflight</code>, <code>changeState</code>, and <code>invertChange</code> here are copies of those in <code>changes.ts</code>.</p>
     <div class="grid2">
       <div>
-        <div class="track-label">Isi aktual <code>rencana/oktober.md</code> (boleh Anda sunting)</div>
-        <textarea id="s4-file" spellcheck="false" aria-label="Isi berkas"></textarea>
+        <div class="track-label">Actual contents of <code>plans/october.md</code> (you may edit it)</div>
+        <textarea id="s4-file" spellcheck="false" aria-label="File contents"></textarea>
       </div>
       <div>
-        <div class="track-label">Usulan <code>ubah_berkas</code></div>
+        <div class="track-label">The <code>edit_file</code> proposal</div>
         <div class="diff" id="s4-diff"></div>
         <p class="meta" id="s4-reason"></p>
-        <div class="btnrow"><button id="s4-apply">Terapkan</button><button class="ghost" id="s4-undo" disabled>Urungkan</button><button class="ghost" id="s4-reset">Ulang</button></div>
+        <div class="btnrow"><button id="s4-apply">Apply</button><button class="ghost" id="s4-undo" disabled>Undo</button><button class="ghost" id="s4-reset">Reset</button></div>
       </div>
     </div>
     <div class="msg" id="s4-msg">changeState: –</div>
   </div>
   <figure>
-    <img src="assets/usulan-diff.png" alt="Jendela tinjau usulan agent dengan diff merah-hijau dan tombol Tolak/Terapkan" loading="lazy">
-    <figcaption>Jendela tinjau (c6f71da) memakai tampilan diff yang sama dengan riwayat Git, sehingga pengguna cukup mempelajari satu bahasa visual.</figcaption>
+    <img src="assets/proposal-diff.png" alt="The agent proposal review window with a red-green diff and Reject/Apply buttons" loading="lazy">
+    <figcaption>The review window (c6f71da) uses the same diff view as Git history, so users only need to learn one visual language.</figcaption>
   </figure>
-  <div class="caveat"><b>Bug UI di sepanjang jalan (8db7c55).</b> Setelah jawaban panjang, panel Asisten tampil terpotong dan footernya hilang. Penyebabnya: <code>set_value()</code> dipanggil di dalam sinyal <code>changed</code> adjustment. Nilainya berubah, tetapi viewport GTK tidak menerapkannya. Gulir sekarang dijadwalkan lewat idle. Tesnya memeriksa posisi footer di area terlihat, bukan hanya nilai adjustment. Tes yang hanya memeriksa angka internal bisa lulus walaupun tampilannya salah.</div>
-  <div class="lesson"><b>Pelajaran</b>Pisahkan "memutuskan perubahan" dari "menulis perubahan". Jika usulan berupa data murni dengan <code>before</code> dan <code>after</code>, Anda mendapat diff, validasi, pemeriksaan konflik, dan nantinya Urungkan, semuanya dari struktur yang sama.</div>
+  <div class="caveat"><b>A UI bug along the way (8db7c55).</b> After a long answer, the Assistant panel was shown cut off and its footer disappeared. The cause: <code>set_value()</code> was called inside the adjustment's <code>changed</code> signal. The value changed, but the GTK viewport did not apply it. Scrolling is now scheduled through an idle. The test checks the position of the footer in the visible area, not only the adjustment value. A test that only checks internal numbers can pass even though the display is wrong.</div>
+  <div class="lesson"><b>Lesson</b>Separate "deciding a change" from "writing a change". If a proposal is pure data with <code>before</code> and <code>after</code>, you get the diff, validation, conflict checking, and later Undo, all from the same structure.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab5">
-  <div class="chapnum">Bab 5 · commit 6c47266 · <code>work.ts</code>, <code>batch.ts</code>, <code>verification.ts</code></div>
-  <h2>Rencana, paket, dan verifikasi: "selesai" harus bisa diperiksa</h2>
-  <p><b>Gejala.</b> Untuk pekerjaan beberapa langkah, misalnya memindahkan jadwal di tiga dokumen dan papan tugas, model mengusulkan perubahan satu per satu, kadang lupa satu berkas, lalu menyatakan "sudah selesai". Pengguna harus menyetujui lima jendela terpisah tanpa melihat gambaran utuhnya.</p>
-  <h3>5a. Rencana yang tersimpan: <code>atur_pekerjaan</code></h3>
+<section class="chapter" id="ch5">
+  <div class="chapnum">Chapter 5 · commit 6c47266 · <code>work.ts</code>, <code>batch.ts</code>, <code>verification.ts</code></div>
+  <h2>Plan, batch, and verification: "done" must be checkable</h2>
+  <p><b>The symptom.</b> For multi-step work, such as moving a schedule across three documents and a task board, the model proposed changes one by one, sometimes forgot a file, and then declared "all done". The user had to approve five separate windows without seeing the whole picture.</p>
+  <h3>5a. A plan that is stored: <code>set_work</code></h3>
 <pre><code>interface WorkState {
   goal: string
   status: 'running' | 'paused' | 'failed' | 'complete'
   steps: { text: string; status: 'pending' | 'done' | 'blocked' }[]   // 1–20
   note: string
-  actionStart?: number          // indeks journal saat pekerjaan ini dimulai
-  verification?: Verification   // hasil pemeriksaan terakhir
+  actionStart?: number          // journal index when this work started
+  verification?: Verification   // the latest check result
 }</code></pre>
-  <div class="machine" aria-label="Status pekerjaan">
-    <span class="st">running</span><span class="to">→ giliran berakhir →</span><span class="st warn">paused</span>
-    <span class="to">· perubahan diterapkan →</span><span class="st">running</span><span class="to">(verifikasi dihapus)</span>
-    <span class="to">· verifikasi lulus + semua langkah done →</span><span class="st good">complete</span>
-    <span class="to">· galat →</span><span class="st bad">failed</span>
+  <div class="machine" aria-label="Work status">
+    <span class="st">running</span><span class="to">→ turn ends →</span><span class="st warn">paused</span>
+    <span class="to">· changes applied →</span><span class="st">running</span><span class="to">(verification cleared)</span>
+    <span class="to">· verification passes + all steps done →</span><span class="st good">complete</span>
+    <span class="to">· error →</span><span class="st bad">failed</span>
   </div>
-  <p>Satu aturan penting: <b>model tidak bisa menetapkan <code>complete</code> sendiri</b>. Status itu hanya bisa dicapai jika <code>verifikasi_pekerjaan</code> lulus <em>dan</em> semua langkah berstatus <code>done</code>. Setiap perubahan yang diterapkan sesudahnya menghapus hasil verifikasi, jadi pemeriksaan harus diulang. Jika pada giliran berikutnya isi berkas ternyata tidak lagi sesuai dengan perubahan yang diterapkan, status <code>complete</code> turun kembali ke <code>paused</code>.</p>
-  <h3>5b. Paket: banyak tindakan, satu tinjauan</h3>
+  <p>One important rule: <b>the model cannot set <code>complete</code> itself</b>. That status can only be reached if <code>verify_work</code> passes <em>and</em> all the steps have the status <code>done</code>. Every change applied afterwards clears the verification result, so the check has to be repeated. If, in the next turn, the file contents turn out no longer to match the changes that were applied, the <code>complete</code> status drops back to <code>paused</code>.</p>
+  <h3>5b. Batches: many actions, one review</h3>
   <div class="grid2">
     <div class="panel">
 <pre><code>planBatch(args, files) {
-  virtual = salinan(files)       // dunia percobaan
-  for (item of tindakan) {       // ≤ 20
-    c = planChange(item.alat, item.argumen, virtual)
-    // hapus/pindah mengunci berkas
-    gabungkan per berkas: before pertama, after terakhir
-    applyToFiles(virtual, c)     // tindakan berikut
-  }                              // melihat hasil ini
+  virtual = copy(files)          // a trial world
+  for (item of actions) {        // ≤ 20
+    c = planChange(item.tool, item.arguments, virtual)
+    // delete/move lock the file
+    merge per file: first before, last after
+    applyToFiles(virtual, c)     // the next action
+  }                              // sees this result
 }</code></pre>
     </div>
     <div class="panel">
 <pre><code>applyBatch(changes, host) {
-  // 1. preflight SEMUA dulu; satu gagal = batal semua
-  // 2. tulis berurutan
-  // 3. bila tulis gagal: rollback yang sudah ditulis,
-  //    kembalikan galat + kegagalan rollback
+  // 1. preflight ALL first; one failure = cancel everything
+  // 2. write in order
+  // 3. if a write fails: roll back what was written,
+  //    return the error + any rollback failures
 }
-// transaksi dalam proses, bukan jaminan atomik
-// terhadap mati listrik</code></pre>
+// an in-process transaction, no atomic guarantee
+// against power loss</code></pre>
     </div>
   </div>
-  <p>Tindakan dalam paket direncanakan di atas <b>salinan virtual</b>, sehingga tindakan kedua pada berkas yang sama melihat hasil tindakan pertama. Hasil akhirnya digabung menjadi <b>satu <code>Change</code> per berkas</b>. Keputusan ini nantinya memungkinkan persetujuan sebagian di Bab 8.</p>
-  <h3>5c. Verifikasi deterministik</h3>
-  <p><code>verifikasi_pekerjaan</code> tidak meminta pendapat model lain. Model menyatakan kriterianya, lalu kode memeriksanya pada isi aktual: <code>ada</code> / <code>tidak_ada</code> (teks persis), <code>kanban</code> (kartu ada di daftar tertentu dengan status tertentu), dan mulai Bab 8 juga <code>struktur</code>. Sesi juga <b>menambah pemeriksaan sendiri</b>: setiap berkas yang diubah tetapi tidak disebut dalam kriteria otomatis menghasilkan "Berkas yang diubah belum diperiksa: GAGAL". Dengan begitu, model tidak bisa lolos hanya karena memeriksa berkas yang mudah.</p>
+  <p>The actions in a batch are planned on a <b>virtual copy</b>, so a second action on the same file sees the result of the first. The final results are merged into <b>one <code>Change</code> per file</b>. This decision later makes the partial approval in Chapter 8 possible.</p>
+  <h3>5c. Deterministic verification</h3>
+  <p><code>verify_work</code> does not ask another model for an opinion. The model states its criteria, and then code checks them against the actual contents: <code>present</code> / <code>absent</code> (exact text), <code>kanban</code> (a card is in a given list with a given status), and since Chapter 8 also <code>structure</code>. The session also <b>adds checks of its own</b>: every file that was changed but is not mentioned in the criteria automatically produces "Changed files not yet checked: FAILED". That way, the model cannot get through just by checking the easy files.</p>
   <figure>
-    <img src="assets/agent-selesai.png" alt="Panel Asisten menampilkan rencana pekerjaan yang selesai dan terverifikasi setelah papan tugas diperbarui" loading="lazy">
-    <figcaption>Rencana, paket yang disetujui, dan verifikasi tampil di panel. Status "selesai dan terverifikasi" hanya muncul setelah pemeriksaan lulus.</figcaption>
+    <img src="assets/agent-done.png" alt="The Assistant panel showing a finished, verified work plan after the task board was updated" loading="lazy">
+    <figcaption>The plan, the approved batch, and the verification are shown in the panel. The status "done and verified" only appears after the checks pass.</figcaption>
   </figure>
-  <div class="lesson"><b>Pelajaran</b>Jangan percaya klaim "selesai" dari model. Jadikan selesai sebagai status yang hanya bisa dicapai lewat pemeriksaan deterministik atas hasil aktual, dan batalkan status itu begitu hasilnya berubah.</div>
+  <div class="lesson"><b>Lesson</b>Do not trust the model's claim of "done". Make done a status that can only be reached through a deterministic check of the actual result, and revoke that status as soon as the result changes.</div>
 
-  <h3>5d. Rencana yang terlihat: satu <code>WorkState</code>, dua pembaca · commit b31556d, 4a35bc8 · <code>ui/worklist.ts</code></h3>
-  <p><b>Gejala.</b> Rencana sudah tersimpan sejak 6c47266, tetapi panel menampilkannya sebagai teks <code>workText()</code> apa adanya: <code>- [x] Baca keputusan rapat</code>, persis seperti yang dikirim ke model. Selama agent bekerja, pengguna tidak bisa melihat sekilas langkah mana yang sedang dikerjakan, dan rencana yang sama muncul dua kali karena baris langkah alat "Rencana pekerjaan → …" juga mencetaknya.</p>
+  <h3>5d. A visible plan: one <code>WorkState</code>, two readers · commits b31556d, 4a35bc8 · <code>ui/worklist.ts</code></h3>
+  <p><b>The symptom.</b> The plan had been stored since 6c47266, but the panel showed it as the <code>workText()</code> text as it was: <code>- [x] Read the meeting decisions</code>, exactly as sent to the model. While the agent worked, the user could not see at a glance which step was in progress, and the same plan appeared twice because the tool step line "Work plan → …" printed it as well.</p>
   <div class="grid2">
     <div class="panel">
-<pre><code>// sebelum: satu teks untuk model dan manusia
+<pre><code>// before: one text for the model and for humans
 answer.work.set_text(workText(work))
-// - [x] Baca keputusan rapat
-// - [ ] Periksa rencana dan kartu tugas</code></pre>
+// - [x] Read the meeting decisions
+// - [ ] Check the plan and the task cards</code></pre>
     </div>
     <div class="panel">
-<pre><code>// sesudah: model tetap menerima workText(),
-// panel menggambar dari data yang sama
-answer.work.update(work, running, detik)
+<pre><code>// after: the model still receives workText(),
+// the panel draws from the same data
+answer.work.update(work, running, seconds)
 current = running &amp;&amp; work.status === 'running'
   ? steps.findIndex(s =&gt; s.status === 'pending') : -1</code></pre>
     </div>
   </div>
-  <p>Tidak ada status baru. <code>WorkList</code> hanya membaca <code>WorkState</code> yang sudah ada, jadi giliran yang sedang berjalan dan percakapan yang dibuka ulang dari <code>.nyerat/chats</code> tampil sama. Satu-satunya informasi yang bukan dari model adalah <b>langkah yang sedang dikerjakan</b>: langkah <code>pending</code> pertama, hanya selama giliran berjalan. Begitu giliran selesai, spinner hilang dan statusnya kembali menjadi status tersimpan (<code>tertunda</code>, <code>gagal</code>, atau <code>selesai dan terverifikasi</code>), sehingga tampilan tidak pernah mengklaim kemajuan yang tidak tercatat. Baris "Rencana pekerjaan" di daftar langkah alat disembunyikan bila rencananya valid; rencana yang ditolak <code>parseWork</code> tetap muncul sebagai baris galat.</p>
-  <p>Tampilannya mengikuti idiom GNOME (lihat AGENT.md, "UI wajib mengikuti standar GNOME"): ikon simbolik, pasangan warna <code>@success_bg_color</code>/<code>@success_fg_color</code>, <code>Adw.Spinner</code> bila libadwaita ≥ 1.6 dengan cadangan <code>Gtk.Spinner</code>, dan setiap baris berperan <i>list item</i> dengan label aksesibel "teks — status", supaya status tidak hanya disampaikan lewat warna.</p>
+  <p>There is no new status. <code>WorkList</code> only reads the existing <code>WorkState</code>, so a turn that is running and a conversation reopened from <code>.nyerat/chats</code> look the same. The only piece of information that does not come from the model is <b>the step in progress</b>: the first <code>pending</code> step, only while the turn is running. As soon as the turn finishes, the spinner disappears and the status goes back to the saved status (<code>paused</code>, <code>failed</code>, or <code>done and verified</code>), so the display never claims progress that was not recorded. The "Work plan" line in the tool step list is hidden when the plan is valid; a plan rejected by <code>parseWork</code> still appears as an error line.</p>
+  <p>The display follows GNOME idioms (see AGENT.md, "The UI must follow GNOME standards"): symbolic icons, the <code>@success_bg_color</code>/<code>@success_fg_color</code> color pair, <code>Adw.Spinner</code> when libadwaita ≥ 1.6 with a <code>Gtk.Spinner</code> fallback, and every row has the <i>list item</i> role with an accessible label "text — status", so that the status is not conveyed through color alone.</p>
   <figure>
-    <img src="assets/rencana.png" alt="Panel Asisten menampilkan rencana sebagai daftar centang: tiga langkah bercentang hijau, 3/3 langkah, selesai dan terverifikasi" loading="lazy" style="max-width:360px">
-    <figcaption>Rencana dari pekerjaan di 5b–5c setelah giliran selesai: progres, status tersimpan, dan durasi giliran di bawah tujuan; satu centang per langkah.</figcaption>
+    <img src="assets/plan.png" alt="The Assistant panel showing the plan as a checklist: three steps with green checks, 3/3 steps, done and verified" loading="lazy" style="max-width:360px">
+    <figcaption>The plan from the work in 5b–5c after the turn finished: progress, the saved status, and the turn duration under the goal; one check per step.</figcaption>
   </figure>
   <div class="sim" id="sim9">
-    <h3>Simulasi 9: dari <code>WorkState</code> ke daftar centang <span class="kind">Interaktif · logika nyata</span></h3>
-    <p>Ubah status tiap langkah dan apakah giliran masih berjalan. Aturan penanda dan baris meta adalah salinan logika <code>WorkList.update()</code> dan <code>stepRow()</code>. Di bawahnya tampil teks <code>workText()</code> yang diterima model untuk keadaan yang sama.</p>
+    <h3>Simulation 9: from <code>WorkState</code> to a checklist <span class="kind">Interactive · real logic</span></h3>
+    <p>Change the status of each step and whether the turn is still running. The marker rules and the meta row are copies of the logic in <code>WorkList.update()</code> and <code>stepRow()</code>. Below it is the <code>workText()</code> text that the model receives for the same state.</p>
     <div class="wl-steps" id="s9-steps"></div>
     <div class="controls">
-      <label><input type="checkbox" id="s9-running" checked> Giliran sedang berjalan</label>
-      <label>Status tersimpan <select id="s9-status"><option value="running">running</option><option value="paused">paused</option><option value="failed">failed</option><option value="complete">complete</option></select></label>
+      <label><input type="checkbox" id="s9-running" checked> The turn is running</label>
+      <label>Saved status <select id="s9-status"><option value="running">running</option><option value="paused">paused</option><option value="failed">failed</option><option value="complete">complete</option></select></label>
     </div>
     <div class="grid2">
       <div class="worklist" id="s9-view" role="list"></div>
       <pre><code id="s9-text"></code></pre>
     </div>
-    <p class="note">Spinner muncul hanya bila giliran berjalan <em>dan</em> status tersimpan <code>running</code>. Status <code>complete</code> di Nyerat hanya bisa dicapai lewat verifikasi (5c); di sini bisa dipilih langsung untuk melihat tampilannya.</p>
+    <p class="note">The spinner appears only when the turn is running <em>and</em> the saved status is <code>running</code>. In Nyerat the status <code>complete</code> can only be reached through verification (5c); here it can be chosen directly to see how it looks.</p>
   </div>
-  <div class="lesson"><b>Pelajaran</b>Status yang sama boleh punya dua tampilan: teks ringkas untuk model, widget untuk manusia. Gambar tampilan manusia dari data tersimpan, bukan dari teks model, dan batasi tambahan "langsung" (spinner, durasi) pada hal yang memang diketahui saat itu.</div>
+  <div class="lesson"><b>Lesson</b>The same state may have two views: a compact text for the model, a widget for humans. Draw the human view from the saved data, not from the model's text, and limit the "live" additions (spinner, duration) to what is really known at that moment.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab6">
-  <div class="chapnum">Bab 6 · commit 6c47266 · <code>journal.ts</code>, <code>recovery.ts</code>, <code>deepseek.ts</code></div>
-  <h2>Journal dan pemulihan: pekerjaan yang terputus tidak boleh diulang buta</h2>
-  <p><b>Gejala.</b> Aplikasi bisa ditutup, koneksi bisa putus, atau pengguna bisa membuka percakapan lama besok pagi. Tanpa catatan, agent bisa mengusulkan ulang perubahan yang sudah diterapkan, atau sebaliknya mengira perubahan yang sebenarnya gagal sudah berhasil.</p>
+<section class="chapter" id="ch6">
+  <div class="chapnum">Chapter 6 · commit 6c47266 · <code>journal.ts</code>, <code>recovery.ts</code>, <code>deepseek.ts</code></div>
+  <h2>The journal and recovery: interrupted work must not be repeated blindly</h2>
+  <p><b>The symptom.</b> The app can be closed, the connection can drop, or the user can open an old conversation tomorrow morning. Without a record, the agent might propose again a change that has already been applied, or conversely think a change that actually failed has succeeded.</p>
 <pre><code>interface ActionEvent {
   id, question, tool, time: string
   status: 'proposed' | 'applied' | 'rejected' | 'failed'
         | 'interrupted' | 'read' | 'reverted'
-  changes: Change[]       // snapshot before/after → diff bisa dibuka lagi
+  changes: Change[]       // before/after snapshots → the diff can be reopened
   summary: string
 }</code></pre>
-  <p>Setiap panggilan alat dicatat. Usulan dicatat sebagai <code>proposed</code> <em>sebelum</em> jendela tinjau dibuka, lalu statusnya diperbarui setelah keputusan. Jika proses mati di antara kedua titik itu, journal masih menyimpan <code>proposed</code>. Pada giliran berikutnya, <code>reconcileEvents()</code> membandingkannya dengan isi aktual:</p>
+  <p>Every tool call is recorded. A proposal is recorded as <code>proposed</code> <em>before</em> the review window opens, and its status is updated after the decision. If the process dies between the two points, the journal still holds <code>proposed</code>. On the next turn, <code>reconcileEvents()</code> compares it with the actual contents:</p>
   <div class="sim" id="sim5">
-    <h3>Simulasi 5: merekonsiliasi usulan yang terputus <span class="kind">Interaktif · logika nyata</span></h3>
-    <p>Sebuah paket berisi tiga perubahan berstatus <code>proposed</code> ketika aplikasi tertutup. Pilih keadaan setiap berkas yang ditemukan saat percakapan dibuka lagi.</p>
+    <h3>Simulation 5: reconciling an interrupted proposal <span class="kind">Interactive · real logic</span></h3>
+    <p>A batch of three changes had the status <code>proposed</code> when the app was closed. Choose the state of each file as found when the conversation is opened again.</p>
     <div class="states" id="s5-states"></div>
     <div class="msg" id="s5-out"></div>
-    <div class="track-label">Baris journal yang dikirim ke model (sebagai data, bukan instruksi)</div>
+    <div class="track-label">Journal lines sent to the model (as data, not instructions)</div>
 <pre><code id="s5-journal"></code></pre>
   </div>
-  <p>Journal dan status pekerjaan disisipkan sebagai pesan berlabel <i>"data, bukan instruksi"</i>, disertai perintah untuk tidak mengulang tindakan yang sudah diterapkan atau ditolak. Ketika dimuat dari disk, <code>parseEvents()</code> hanya menerima entri yang bentuknya valid (path bersih, jenis dikenal). Metadata itu bisa disunting pengguna, jadi isinya hanya dipulihkan sebagai data dan tidak pernah dieksekusi.</p>
-  <h3>Retry yang tidak menggandakan teks</h3>
-<pre><code>// recovery.ts: ulangi hanya bila belum ada keluaran yang tampil
+  <p>The journal and the work status are inserted as a message labeled <i>"data, not instructions"</i>, together with an order not to repeat actions that have been applied or rejected. When loaded from disk, <code>parseEvents()</code> only accepts entries with a valid shape (a clean path, a known kind). That metadata can be edited by the user, so its contents are only restored as data and never executed.</p>
+  <h3>A retry that does not duplicate text</h3>
+<pre><code>// recovery.ts: retry only if no output has been shown yet
 if (!(e instanceof TemporaryProviderError) || emitted || attempt &gt;= 2) throw e
 await wait(attempt === 0 ? 300 : 900)</code></pre>
-  <p>Galat sementara (429, 5xx, koneksi gagal, atau aliran terputus) diulang paling banyak dua kali, tetapi <b>hanya jika belum ada satu potongan teks atau penalaran pun yang tampil</b>. Mengulang setelah sebagian jawaban mengalir akan menggandakan teks di layar pengguna.</p>
-  <h3>Ringkasan riwayat yang tidak mengarang</h3>
-  <p>Ketika riwayat melebihi 25% anggaran, giliran tertua dipotong berpasangan. Bagian yang dipotong digantikan oleh <b>cuplikan ekstraktif</b> (≤400 karakter per giliran, ≤4.000 total), bukan ringkasan buatan model. Cuplikan tidak menambah fakta baru dan tidak memerlukan panggilan API tambahan. Riwayat lengkap tetap ada di disk.</p>
-  <div class="lesson"><b>Pelajaran</b>Catat niat sebelum bertindak dan catat hasil sesudahnya. Saat pulih, rekonsiliasikan dengan dunia nyata, jangan dengan ingatan. Ada tiga kemungkinan hasil: <i>sudah terjadi</i>, <i>belum terjadi</i>, atau <i>tidak jelas, periksa dulu</i>. Kemungkinan ketiga harus selalu ada.</div>
+  <p>Temporary errors (429, 5xx, a failed connection, or a cut-off stream) are retried at most twice, but <b>only if not a single piece of text or reasoning has been shown yet</b>. Retrying after part of an answer has streamed in would duplicate text on the user's screen.</p>
+  <h3>A history summary that does not make things up</h3>
+  <p>When the history exceeds 25% of the budget, the oldest turns are cut off in pairs. The cut-off part is replaced by an <b>extractive excerpt</b> (≤400 characters per turn, ≤4,000 in total), not a model-written summary. Excerpts add no new facts and need no extra API call. The full history stays on disk.</p>
+  <div class="lesson"><b>Lesson</b>Record the intent before acting and record the result afterwards. When recovering, reconcile with the real world, not with memory. There are three possible outcomes: <i>it already happened</i>, <i>it has not happened</i>, or <i>unclear, check first</i>. The third possibility must always exist.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab7">
-  <div class="chapnum">Bab 7 · commit 1c90735 · <code>src/agent/trace.ts</code>, <code>ui/logviewer.ts</code></div>
-  <h2>Log agent: melihat apa yang sebenarnya dilakukan agent</h2>
-  <p><b>Kebutuhan.</b> Ketika agent menjawab dengan aneh, pertanyaannya hampir selalu sama: apa yang dikirim, alat apa yang dipanggil dengan argumen apa, dan apa yang dikembalikan? Kartu langkah di panel hanya menampilkan ringkasan satu baris.</p>
+<section class="chapter" id="ch7">
+  <div class="chapnum">Chapter 7 · commit 1c90735 · <code>src/agent/trace.ts</code>, <code>ui/logviewer.ts</code></div>
+  <h2>The Agent log: seeing what the agent actually did</h2>
+  <p><b>The need.</b> When the agent answers strangely, the question is almost always the same: what was sent, which tools were called with which arguments, and what came back? The step cards in the panel only show a one-line summary.</p>
   <div class="grid2">
     <div class="panel">
 <pre><code>class AgentTrace {
-  events: TraceEvent[]        // ≤ 2.000, yang tertua dibuang
+  events: TraceEvent[]        // ≤ 2,000, the oldest dropped
   begin(kind, key, title)     // status 'running'
-  append(kind, round, delta)  // teks/penalaran mengalir
-  finish(kind, key, status, detail)  // + lama (ms)
+  append(kind, round, delta)  // text/reasoning streaming in
+  finish(kind, key, status, detail)  // + duration (ms)
 }
 TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
           | 'tool' | 'usage' | 'note' | 'error'</code></pre>
     </div>
     <div class="panel">
-      <p style="margin-top:0;font-size:.9rem">Setiap putaran model mencatat jumlah pesan, alat yang ditawarkan, dan token (masuk / dari cache / keluar). Setiap alat mencatat argumen JSON yang dirapikan dan <b>hasil persis yang dikembalikan ke model</b>. Detail dipotong pada 20.000 karakter.</p>
-      <p style="margin-bottom:0;font-size:.9rem">Log <b>hanya ada di memori</b>: tidak dikirim ke model, tidak ditulis ke berkas percakapan, dan dikosongkan oleh Percakapan baru.</p>
+      <p style="margin-top:0;font-size:.9rem">Every model round records the number of messages, the tools offered, and the tokens (input / from cache / output). Every tool records its tidied JSON arguments and <b>the exact result returned to the model</b>. Details are cut off at 20,000 characters.</p>
+      <p style="margin-bottom:0;font-size:.9rem">The log <b>exists only in memory</b>: it is not sent to the model, not written to the conversation file, and it is cleared by a New conversation.</p>
     </div>
   </div>
-  <div class="lesson"><b>Pelajaran</b>Observabilitas untuk pengembang dan konteks untuk model adalah dua saluran yang berbeda. Jika log ikut dikirim ke model, model akan "membaca dirinya sendiri" dan token membengkak. Pisahkan keduanya sejak awal, dan pastikan log berbatas.</div>
+  <div class="lesson"><b>Lesson</b>Observability for developers and context for the model are two different channels. If the log is sent to the model too, the model will "read itself" and the tokens will balloon. Separate the two from the start, and make sure the log is bounded.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab8">
-  <div class="chapnum">Bab 8 · commit 90c28bb · <code>changes.ts</code>, <code>batch.ts</code>, <code>gittools.ts</code>, <code>markdown/lint.ts</code></div>
-  <h2>Tindakan lebih luas, dengan batas yang sama ketatnya</h2>
-  <p>Dengan fondasi <code>Change</code>, preflight, journal, dan verifikasi, kemampuan baru bisa ditambahkan tanpa membuka jalan pintas. Setiap alat baru memakai jalur persetujuan yang sama.</p>
+<section class="chapter" id="ch8">
+  <div class="chapnum">Chapter 8 · commit 90c28bb · <code>changes.ts</code>, <code>batch.ts</code>, <code>gittools.ts</code>, <code>markdown/lint.ts</code></div>
+  <h2>Broader actions, with limits just as tight</h2>
+  <p>With the foundation of <code>Change</code>, preflight, the journal, and verification, new capabilities can be added without opening a shortcut. Every new tool uses the same approval path.</p>
   <div class="scroll-x">
   <table class="data cards">
-    <thead><tr><th>Kemampuan</th><th>Pengaman</th></tr></thead>
+    <thead><tr><th>Capability</th><th>Safeguard</th></tr></thead>
     <tbody>
-      <tr><td data-k="Kemampuan"><code>sisip_teks</code> di awal, akhir, atau setelah baris</td><td data-k="Pengaman">Untuk <code>setelah_baris</code>, model wajib menyertakan <code>isi_baris</code>. Jika nomor dan isinya tidak cocok, usulan ditolak.</td></tr>
-      <tr><td data-k="Kemampuan"><code>ubah_berkas</code> dengan <code>semua=true</code></td><td data-k="Pengaman">Harus dinyatakan secara eksplisit. Tanpa itu, <code>teks_lama</code> tetap harus unik.</td></tr>
-      <tr><td data-k="Kemampuan"><code>hapus_berkas</code></td><td data-k="Pengaman">Berkas dibuang ke Tempat Sampah, bukan dihapus permanen. Snapshot di journal memungkinkan Urungkan.</td></tr>
-      <tr><td data-k="Kemampuan"><code>pindah_berkas</code></td><td data-k="Pengaman">Tujuan tidak boleh sudah ada. Path diperiksa dari segi symlink dengan <code>projectPath()</code>.</td></tr>
-      <tr><td data-k="Kemampuan">Riwayat Git (<code>riwayat_git</code>, <code>lihat_commit</code>, <code>isi_versi</code>)</td><td data-k="Pengaman">Baca saja. Pathspec dibatasi ke berkas Markdown yang tidak tersembunyi. Commit hanya boleh berupa hash atau <code>HEAD~n</code>. Hasil ≤ 6.000 token.</td></tr>
+      <tr><td data-k="Capability"><code>insert_text</code> at the start, the end, or after a line</td><td data-k="Safeguard">For <code>after_line</code>, the model must include <code>line_text</code>. If the number and the contents do not match, the proposal is rejected.</td></tr>
+      <tr><td data-k="Capability"><code>edit_file</code> with <code>all=true</code></td><td data-k="Safeguard">Must be stated explicitly. Without it, <code>old_text</code> must still be unique.</td></tr>
+      <tr><td data-k="Capability"><code>delete_file</code></td><td data-k="Safeguard">The file is moved to the Trash, not deleted permanently. The snapshot in the journal makes Undo possible.</td></tr>
+      <tr><td data-k="Capability"><code>move_file</code></td><td data-k="Safeguard">The destination must not already exist. The path is checked for symlinks with <code>projectPath()</code>.</td></tr>
+      <tr><td data-k="Capability">Git history (<code>git_log</code>, <code>show_commit</code>, <code>file_at_commit</code>)</td><td data-k="Safeguard">Read-only. The pathspec is limited to Markdown files that are not hidden. A commit may only be a hash or <code>HEAD~n</code>. Results ≤ 6,000 tokens.</td></tr>
     </tbody>
   </table>
   </div>
-  <h3>8a. Persetujuan sebagian: mengapa satu <code>Change</code> per berkas itu penting</h3>
-  <p>Jendela tinjau paket kini punya kotak centang per berkas. Persetujuan sebagian hanya aman jika setiap <code>Change</code> berdiri sendiri. Itulah sebabnya <code>planBatch</code> (Bab 5) sudah menggabungkan tindakan per berkas, dan berkas yang dihapus atau dipindah <b>dikunci</b> sehingga tidak boleh disentuh tindakan lain di paket yang sama. Ketika pengguna hanya menerapkan sebagian, journal mencatat <b>dua kejadian</b>: satu <code>applied</code> dan satu <code>rejected</code>. Model diberi tahu bahwa bagian yang ditolak tidak boleh diulang tanpa ditanya. Kotak <i>Catatan untuk agent</i> diteruskan bersama keputusan (≤2.000 karakter), sehingga penolakan bisa disertai alasan.</p>
-  <h3>8b. Urungkan = kebalikan yang melewati preflight yang sama</h3>
-<pre><code>invertChange(c):  create → delete    delete → create (dari snapshot before)
-                  edit   → edit dengan before/after ditukar
-                  move   → move dari c.to kembali ke c.file
-// diterapkan sebagai paket terbalik: [...changes].reverse().map(invertChange)</code></pre>
-  <p>Karena kebalikannya juga sebuah <code>Change</code>, Urungkan otomatis gagal dengan aman jika berkas sudah disunting lagi. Anda sudah mencobanya di Simulasi 4. Journal menandainya <code>reverted</code> supaya agent tidak menganggap perubahan itu masih berlaku.</p>
-  <h3>8c. Verifikasi struktur: hanya masalah <em>baru</em> yang menggagalkan</h3>
-  <p>Pemeriksaan <code>struktur</code> (<code>markdown/lint.ts</code>) mencari tabel yang jumlah selnya tidak cocok, blok kode yang tidak ditutup, heading kosong atau melompat level, dan tautan ke berkas Markdown yang tidak ada. Dokumen nyata sering sudah punya masalah semacam itu, jadi pemeriksaan dibandingkan dengan <b>isi sebelum pekerjaan</b> (<code>baseline</code>, diambil dari <code>before</code> perubahan pertama per berkas). Setiap masalah punya kunci tanpa nomor baris, sehingga masalah lama yang hanya bergeser baris tidak dianggap baru. Hanya masalah yang muncul karena perubahan agent yang membuatnya gagal. Kriteria <code>berkas: "*"</code> memeriksa seluruh folder, misalnya untuk memastikan tanggal lama tidak tersisa di mana pun.</p>
+  <h3>8a. Partial approval: why one <code>Change</code> per file matters</h3>
+  <p>The batch review window now has a checkbox per file. Partial approval is only safe if each <code>Change</code> stands on its own. That is why <code>planBatch</code> (Chapter 5) already merged actions per file, and why files that are deleted or moved are <b>locked</b> so that no other action in the same batch may touch them. When the user applies only part of a batch, the journal records <b>two events</b>: one <code>applied</code> and one <code>rejected</code>. The model is told that the rejected part must not be repeated without asking. The <i>Note for the agent</i> box is passed along with the decision (≤2,000 characters), so a rejection can come with a reason.</p>
+  <h3>8b. Undo = the inverse, passing through the same preflight</h3>
+<pre><code>invertChange(c):  create → delete    delete → create (from the before snapshot)
+                  edit   → edit with before/after swapped
+                  move   → move from c.to back to c.file
+// applied as a reversed batch: [...changes].reverse().map(invertChange)</code></pre>
+  <p>Because the inverse is also a <code>Change</code>, Undo automatically fails safely if the file has been edited again. You already tried it in Simulation 4. The journal marks it <code>reverted</code> so that the agent does not think the change is still in effect.</p>
+  <h3>8c. Structure verification: only <em>new</em> problems cause a failure</h3>
+  <p>The <code>structure</code> check (<code>markdown/lint.ts</code>) looks for tables whose cell counts do not match, unclosed code blocks, empty headings or ones that skip a level, and links to Markdown files that do not exist. Real documents often already have such problems, so the check is compared with the <b>contents before the work</b> (the <code>baseline</code>, taken from the <code>before</code> of the first change per file). Every problem has a key without a line number, so an old problem that only shifted lines is not counted as new. Only problems that appear because of the agent's change make it fail. The criterion <code>file: "*"</code> checks the whole folder, for example to make sure an old date remains nowhere.</p>
   <figure>
-    <img src="assets/usulan-kanban.png" alt="Jendela tinjau usulan perubahan papan kanban" loading="lazy">
-    <figcaption>Perubahan papan kanban juga lewat jendela tinjau yang sama. Serialisasi papan bisa merapikan spasi di bagian lain, dan itu ditampilkan apa adanya di diff.</figcaption>
+    <img src="assets/proposal-kanban.png" alt="The review window for a kanban board change proposal" loading="lazy">
+    <figcaption>Kanban board changes also go through the same review window. Board serialization may tidy the spacing elsewhere, and that is shown as it is in the diff.</figcaption>
   </figure>
-  <div class="lesson"><b>Pelajaran</b>Investasi pada struktur yang benar di awal (perubahan sebagai data, satu perubahan per berkas, preflight) membuat fitur lanjutan seperti persetujuan sebagian dan Urungkan menjadi kecil dan aman. Fitur baru tidak perlu membuat jalur tulis sendiri.</div>
+  <div class="lesson"><b>Lesson</b>Investing in the right structure early (changes as data, one change per file, preflight) makes later features such as partial approval and Undo small and safe. A new feature does not need to make its own write path.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="bab9">
-  <div class="chapnum">Bab 9 · commit b1ab712 · <code>agent/harness.ts</code>, <code>orchestrator.ts</code></div>
-  <h2>Nyerat sebagai orkestrator: agent lain bekerja, Nyerat memegang papan</h2>
-  <p><b>Kebutuhan.</b> Kode proyek (misalnya <code>~/web-ecommerce</code>) tidak tinggal di folder kerja Nyerat, dan pekerjaannya butuh agent yang bisa menjalankan perintah, mengedit kode, dan menjalankan tes. Itu bukan tugas agent Nyerat, yang sengaja tidak pernah menulis sendiri. Jawabannya: biarkan agent lain (<a href="https://pi.dev">pi</a>) yang bekerja, dan jadikan papan kanban Nyerat <b>bidang kendali</b>. Kartu menyatakan tugas, <code>@pi</code> menyatakan siapa yang mengerjakannya, dan daftar menyatakan statusnya.</p>
+<section class="chapter" id="ch9">
+  <div class="chapnum">Chapter 9 · commit b1ab712 · <code>agent/harness.ts</code>, <code>orchestrator.ts</code></div>
+  <h2>Nyerat as an orchestrator: another agent works, Nyerat holds the board</h2>
+  <p><b>The need.</b> Project code (for example <code>~/web-ecommerce</code>) does not live in Nyerat's work folder, and the work needs an agent that can run commands, edit code, and run tests. That is not a job for the Nyerat agent, which deliberately never writes by itself. The answer: let another agent (<a href="https://pi.dev">pi</a>) do the work, and make the Nyerat kanban board the <b>control plane</b>. The card states the task, <code>@pi</code> states who does it, and the list states its status.</p>
   <div class="grid2">
     <div class="panel">
-<pre><code>## Rencana
-- [ ] Checkout pakai QRIS @pi #fitur
-  Pakai SDK resmi.
-- [ ] Tes keranjang @pi #proyek/toko-admin
+<pre><code>## Plan
+- [ ] Checkout with QRIS @pi #feature
+  Use the official SDK.
+- [ ] Test the cart @pi #project/shop-admin
 
-// frontmatter papan: proyek: web-ecommerce
+// board frontmatter: project: web-ecommerce
 // settings.json: projects = {
 //   "web-ecommerce": "/home/eka/web-ecommerce",
-//   "toko-admin":    "/home/eka/toko-admin" }</code></pre>
+//   "shop-admin":    "/home/eka/shop-admin" }</code></pre>
     </div>
     <div class="panel">
 <pre><code>interface Run {
-  board, card        // papan + teks kartu (pengenal)
+  board, card        // board + card text (the identifier)
   agent: 'pi'
-  project, folder    // nama → folder dari pengaturan
+  project, folder    // name → folder from the settings
   prompt
   status: 'queued' | 'working' | 'done'
         | 'failed' | 'stopped'
-  trace: AgentTrace  // Log pi
+  trace: AgentTrace  // the pi log
   result: HarnessResult | null
 }</code></pre>
     </div>
   </div>
-  <div class="flow" aria-label="Alur satu kartu">
-    <span class="node user">klik kanan → Kerjakan dengan pi</span><span class="to">→</span>
+  <div class="flow" aria-label="The flow of one card">
+    <span class="node user">right-click → Work on it with pi</span><span class="to">→</span>
     <span class="node pure">buildPrompt + RunQueue</span><span class="to">→</span>
-    <span class="node">pi --mode json (cwd = folder proyek)</span><span class="to">→ JSONL</span>
+    <span class="node">pi --mode json (cwd = project folder)</span><span class="to">→ JSONL</span>
     <span class="node pure">PiReader → AgentTrace</span><span class="to">→</span>
-    <span class="node ctl">kartu: Dikerjakan → Review + ↳ ringkasan</span>
+    <span class="node ctl">card: In Progress → Review + ↳ summary</span>
   </div>
-  <h3>9a. Batas kepercayaan pindah ke folder</h3>
-  <p>Sampai Bab 8, setiap tulisan melewati <code>Change</code> dan jendela tinjau. Harness eksternal tidak bisa diperlakukan seperti itu: pi menulis langsung, menjalankan <code>bash</code>, dan memakai aturan izinnya sendiri. Jadi batasnya tidak lagi per perubahan, tetapi <b>per folder</b>:</p>
+  <h3>9a. The trust boundary moves to the folder</h3>
+  <p>Up to Chapter 8, every write went through <code>Change</code> and the review window. An external harness cannot be treated like that: pi writes directly, runs <code>bash</code>, and uses its own permission rules. So the boundary is no longer per change, but <b>per folder</b>:</p>
   <div class="scroll-x">
   <table class="data cards">
-    <thead><tr><th>Risiko</th><th>Pengaman</th></tr></thead>
+    <thead><tr><th>Risk</th><th>Safeguard</th></tr></thead>
     <tbody>
-      <tr><td data-k="Risiko">Kartu, catatan, atau agent Nyerat mengarahkan harness ke folder sembarang</td><td data-k="Pengaman">Markdown hanya menyebut <b>nama</b> proyek. Nama dipetakan ke folder di <code>settings.projects</code>, yang hanya diisi lewat dialog pilih folder oleh pengguna.</td></tr>
-      <tr><td data-k="Risiko">Harness menulis ke folder kerja Nyerat tanpa jendela tinjau</td><td data-k="Pengaman"><code>checkProjectFolder()</code> menolak folder kerja, isinya, induknya, root, dan path relatif.</td></tr>
-      <tr><td data-k="Risiko">Dua harness menimpa satu repo</td><td data-k="Pengaman"><code>RunQueue</code>: satu run <code>working</code> per folder, sisanya <code>queued</code> berurutan.</td></tr>
-      <tr><td data-k="Risiko">Harness menunggu masukan tanpa ada yang tahu</td><td data-k="Pengaman">Permintaan izin/masukan menjadi status ⏸ <i>menunggu</i> di kartu dan dijawab dari Nyerat (9d). Setelah giliran selesai tanpa pertanyaan, stdin ditutup supaya pi keluar.</td></tr>
-      <tr><td data-k="Risiko">Cucu proses menahan pipe, run tidak pernah selesai</td><td data-k="Pengaman">Setelah proses keluar, sisa keluaran diberi tenggang 1,5 detik lalu dibatalkan. <i>Hentikan</i> = SIGTERM, lalu SIGKILL setelah 5 detik. Menutup jendela menghentikan semua run.</td></tr>
-      <tr><td data-k="Risiko">Perubahan masuk tanpa ditinjau</td><td data-k="Pengaman">Prompt meminta pi tidak commit/push. Kartu berhenti di <i>Review</i>, dan diff ditinjau di repo proyek.</td></tr>
+      <tr><td data-k="Risk">A card, a note, or the Nyerat agent points the harness at an arbitrary folder</td><td data-k="Safeguard">Markdown only mentions the project <b>name</b>. The name is mapped to a folder in <code>settings.projects</code>, which is only filled in by the user through the folder chooser dialog.</td></tr>
+      <tr><td data-k="Risk">The harness writes into Nyerat's work folder without a review window</td><td data-k="Safeguard"><code>checkProjectFolder()</code> rejects the work folder, its contents, its parents, the root, and relative paths.</td></tr>
+      <tr><td data-k="Risk">Two harnesses overwrite one repo</td><td data-k="Safeguard"><code>RunQueue</code>: one <code>working</code> run per folder, the rest <code>queued</code> in order.</td></tr>
+      <tr><td data-k="Risk">The harness waits for input and nobody knows</td><td data-k="Safeguard">A permission/input request becomes a ⏸ <i>waiting</i> status on the card and is answered from Nyerat (9d). After a turn finishes without a question, stdin is closed so that pi exits.</td></tr>
+      <tr><td data-k="Risk">A grandchild process holds the pipe, the run never finishes</td><td data-k="Safeguard">After the process exits, the remaining output gets a 1.5-second grace period and is then abandoned. <i>Stop</i> = SIGTERM, then SIGKILL after 5 seconds. Closing the window stops all runs.</td></tr>
+      <tr><td data-k="Risk">Changes come in without being reviewed</td><td data-k="Safeguard">The prompt asks pi not to commit/push. The card stops at <i>Review</i>, and the diff is reviewed in the project repo.</td></tr>
     </tbody>
   </table>
   </div>
-  <h3>9b. Delegasi lewat kontrak proses, bukan pemanggilan alat</h3>
-  <p>pi tidak dipanggil sebagai alat model. Ia proses terpisah dengan kontrak yang jelas: argumen masuk, JSONL keluar, kode keluar di akhir. <code>PiReader</code> membaca event <code>tool_execution_start/end</code>, <code>message_update</code>, <code>message_end</code> (dengan <code>stopReason</code> dan <code>usage.cost</code>), dan <code>agent_settled</code>, lalu memetakannya ke <code>AgentTrace</code> yang sama dengan Bab 7. Jendela Log agent dipakai ulang tanpa perubahan apa pun. Baris yang bukan JSON dicatat apa adanya dan tidak menggagalkan pembacaan.</p>
-  <p>Satu jebakan GJS: pipe dari <code>Gio.Subprocess.get_stdout_pipe()</code> dibungkus sebagai <code>Gio.UnixInputStream</code> setelah Gtk dimuat, dan GJS mencetak <code>Gjs-WARNING</code>. Karena itu pipe dibaca lewat <code>GLib.IOChannel</code>, dipisah hanya pada LF sesuai framing JSONL pi.</p>
-  <h3>9c. Papan sebagai sumber kebenaran, kartu dicari ulang</h3>
-  <p>Papan tidak punya id kartu, jadi kartu dikenali dari teksnya. Setiap kali status berubah, <code>locateCard()</code> mencarinya di papan <em>terkini</em> (pengguna mungkin sudah memindahkannya) dan menolak bila tidak ada atau tidak unik. Papan yang terbuka diubah lewat editornya (satu langkah undo); yang tertutup ditulis langsung ke disk.</p>
+  <h3>9b. Delegation through a process contract, not a tool call</h3>
+  <p>pi is not called as a model tool. It is a separate process with a clear contract: arguments in, JSONL out, an exit code at the end. <code>PiReader</code> reads the events <code>tool_execution_start/end</code>, <code>message_update</code>, <code>message_end</code> (with <code>stopReason</code> and <code>usage.cost</code>), and <code>agent_settled</code>, and maps them to the same <code>AgentTrace</code> as in Chapter 7. The Agent log window is reused without any change. Lines that are not JSON are recorded as they are and do not make the reading fail.</p>
+  <p>One GJS trap: the pipe from <code>Gio.Subprocess.get_stdout_pipe()</code> is wrapped as a <code>Gio.UnixInputStream</code> after Gtk is loaded, and GJS prints a <code>Gjs-WARNING</code>. That is why the pipe is read through <code>GLib.IOChannel</code>, split only at LF according to pi's JSONL framing.</p>
+  <h3>9c. The board as the source of truth, the card looked up again</h3>
+  <p>The board has no card ids, so a card is recognized by its text. Every time the status changes, <code>locateCard()</code> looks for it on the <em>current</em> board (the user may have moved it) and refuses if it is missing or not unique. A board that is open is changed through its editor (one undo step); a closed one is written straight to disk.</p>
   <div class="sim" id="sim6">
-    <h3>Simulasi 6: antrean per folder proyek <span class="kind">Interaktif · logika nyata</span></h3>
-    <p>Tugaskan beberapa kartu ke dua proyek, lalu selesaikan, gagalkan, atau batalkan run-nya. Yang berjalan adalah salinan <code>RunQueue.add()</code> dan <code>end()</code> dari <code>agent/harness.ts</code>.</p>
-    <div class="btnrow"><button id="s6-a">+ kartu web-ecommerce</button><button id="s6-b">+ kartu toko-admin</button><button class="ghost" id="s6-reset">Ulang</button></div>
+    <h3>Simulation 6: the queue per project folder <span class="kind">Interactive · real logic</span></h3>
+    <p>Assign several cards to two projects, and then finish, fail, or cancel their runs. What runs is a copy of <code>RunQueue.add()</code> and <code>end()</code> from <code>agent/harness.ts</code>.</p>
+    <div class="btnrow"><button id="s6-a">+ web-ecommerce card</button><button id="s6-b">+ shop-admin card</button><button class="ghost" id="s6-reset">Reset</button></div>
     <div class="runs" id="s6-runs"></div>
-    <div class="msg" id="s6-msg">Belum ada kartu yang ditugaskan.</div>
+    <div class="msg" id="s6-msg">No cards have been assigned yet.</div>
   </div>
-  <h3>9d. Menunggu jawaban: dari aliran satu arah ke percakapan dua arah</h3>
-  <p><b>Gejala.</b> Versi pertama memakai <code>pi --mode json</code> dengan stdin langsung ditutup. Kalau pi bertanya ("Mau pakai SDK A atau B?"), kartu tetap masuk <i>Review</i> dan pertanyaannya hanya tertinggal di catatan. Kalau sebuah extension pi meminta izin (misalnya sebelum <code>rm -rf</code>), dialognya tidak punya penerima: <code>permission-gate</code> bawaan contoh pi justru <b>memblokir</b> perintah bila tidak ada UI.</p>
-  <p><b>Desain.</b> pi dijalankan dengan <code>--mode rpc</code>. Prosesnya hidup selama run, menerima perintah lewat stdin, dan mengirim event yang sama seperti mode JSON, ditambah dua hal baru:</p>
+  <h3>9d. Waiting for an answer: from a one-way stream to a two-way conversation</h3>
+  <p><b>The symptom.</b> The first version used <code>pi --mode json</code> with stdin closed right away. If pi asked ("Do you want SDK A or B?"), the card still went into <i>Review</i> and the question was simply left behind in the note. If a pi extension asked for permission (for example before <code>rm -rf</code>), the dialog had no recipient: the <code>permission-gate</code> shipped with pi's examples actually <b>blocks</b> the command when there is no UI.</p>
+  <p><b>The design.</b> pi is started with <code>--mode rpc</code>. Its process stays alive for the run, receives commands through stdin, and sends the same events as the JSON mode, plus two new things:</p>
   <div class="grid2">
     <div class="panel">
 <pre><code>// stdout → Nyerat
 {"type":"extension_ui_request","id":"u1",
- "method":"confirm","title":"Izinkan perintah bash?",
+ "method":"confirm","title":"Allow the bash command?",
  "message":"rm -rf build"}
-{"type":"agent_settled"}    // giliran selesai
+{"type":"agent_settled"}    // the turn is finished
 
 // Nyerat → stdin
 {"type":"extension_ui_response","id":"u1","confirmed":true}
-{"id":"nyerat-2","type":"prompt","message":"Pakai SDK A"}
+{"id":"nyerat-2","type":"prompt","message":"Use SDK A"}
 {"id":"nyerat-steer","type":"steer","message":"…"}</code></pre>
     </div>
     <div class="panel">
@@ -854,189 +854,188 @@ TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
 HarnessAsk {
   kind: 'select' | 'confirm' | 'input'
       | 'editor' | 'question'
-  id     // null untuk pertanyaan
+  id     // null for a question
   title, message, options, prefill
-  timeout  // pi menjawab sendiri setelahnya
+  timeout  // pi answers by itself after it
 }</code></pre>
     </div>
   </div>
-  <div class="flow" aria-label="Alur menunggu jawaban">
+  <div class="flow" aria-label="The waiting-for-an-answer flow">
     <span class="node pure">PiReader.line() → ask</span><span class="to">→</span>
     <span class="node ctl">run.status = 'waiting' · chip ⏸</span><span class="to">→</span>
-    <span class="node user">Jawab pi… (Izinkan / Tolak / teks / Nanti)</span><span class="to">→</span>
-    <span class="node">extension_ui_response / prompt lewat stdin</span>
+    <span class="node user">Answer pi… (Allow / Deny / text / Later)</span><span class="to">→</span>
+    <span class="node">extension_ui_response / prompt through stdin</span>
   </div>
-  <p>Ada dua jenis "menunggu" dengan saluran jawaban yang berbeda. <b>Dialog extension</b> punya id dan dijawab dengan <code>extension_ui_response</code>. <b>Pertanyaan model</b> tidak punya protokol khusus: pi hanya berhenti dengan teks. Nyerat menganggapnya pertanyaan bila jawaban terakhir diakhiri <code>?</code>, dan balasannya dikirim sebagai <code>prompt</code> berikutnya ke proses yang sama. Pembaca membuang status giliran lama lewat <code>restart()</code> supaya galat atau jawaban sebelumnya tidak terbawa. Heuristik ini bisa meleset, jadi setiap run yang selesai tetap bisa dibalas lewat <i>Balas pi…</i>, yang menjalankan pi lagi dengan <code>--session &lt;id&gt;</code> dan log yang sama.</p>
+  <p>There are two kinds of "waiting" with different answer channels. An <b>extension dialog</b> has an id and is answered with <code>extension_ui_response</code>. A <b>model question</b> has no special protocol: pi just stops with some text. Nyerat treats it as a question if the last answer ends with <code>?</code>, and the reply is sent as the next <code>prompt</code> to the same process. The reader discards the old turn state through <code>restart()</code> so that an error or answer from before is not carried over. This heuristic can miss, so every finished run can still be replied to through <i>Reply to pi…</i>, which runs pi again with <code>--session &lt;id&gt;</code> and the same log.</p>
   <div class="sim" id="sim7">
-    <h3>Simulasi 7: apakah pi sedang bertanya? <span class="kind">Interaktif · logika nyata</span></h3>
-    <p>Tulis jawaban terakhir pi. Salinan <code>endsWithQuestion()</code> menentukan apakah kartu menunggu balasan Anda atau stdin ditutup sehingga kartu masuk Review.</p>
-    <textarea id="s7-text" rows="4" aria-label="Jawaban terakhir pi">Sudah saya cek struktur proyek.
+    <h3>Simulation 7: is pi asking a question? <span class="kind">Interactive · real logic</span></h3>
+    <p>Write pi's last answer. A copy of <code>endsWithQuestion()</code> decides whether the card waits for your reply or stdin is closed so that the card goes into Review.</p>
+    <textarea id="s7-text" rows="4" aria-label="pi's last answer">I have checked the project structure.
 
-Mau pakai SDK resmi atau API langsung?</textarea>
+Do you want to use the official SDK or the API directly?</textarea>
     <div class="msg" id="s7-out"></div>
   </div>
   <div class="scroll-x">
   <table class="data cards">
-    <thead><tr><th>Batas</th><th>Alasan</th></tr></thead>
+    <thead><tr><th>Limit</th><th>Reason</th></tr></thead>
     <tbody>
-      <tr><td data-k="Batas">Run yang menunggu tetap memegang antrean foldernya</td><td data-k="Alasan">Prosesnya masih hidup dan bisa melanjutkan pekerjaan begitu dijawab; harness lain di folder yang sama bisa bertabrakan.</td></tr>
-      <tr><td data-k="Batas"><i>Nanti</i> menutup dialog tanpa menjawab</td><td data-k="Alasan">Menjawab adalah keputusan. Menutup dialog tidak boleh diartikan sebagai "izinkan" atau "tolak".</td></tr>
-      <tr><td data-k="Batas"><code>timeout</code> dari extension diikuti</td><td data-k="Alasan">pi memakai jawaban bawaannya setelah batas waktu. Status di kartu ikut kembali ke <i>bekerja</i> supaya tidak menampilkan permintaan yang sudah basi.</td></tr>
-      <tr><td data-k="Batas">Satu perintah = satu baris JSON, byte dengan panjang eksplisit</td><td data-k="Alasan">Framing RPC pi dipisah LF. <code>write_chars()</code> dengan string dan panjang -1 di GJS memicu <code>GLib-WARNING: Invalid UTF-8</code>, dan arahan yang terkirim rusak.</td></tr>
+      <tr><td data-k="Limit">A waiting run still holds its folder's queue</td><td data-k="Reason">Its process is still alive and can continue the work as soon as it is answered; another harness in the same folder could collide with it.</td></tr>
+      <tr><td data-k="Limit"><i>Later</i> closes the dialog without answering</td><td data-k="Reason">Answering is a decision. Closing a dialog must not be read as "allow" or "deny".</td></tr>
+      <tr><td data-k="Limit">An extension's <code>timeout</code> is followed</td><td data-k="Reason">pi uses its default answer after the time limit. The status on the card goes back to <i>working</i> too, so that it does not show a request that has gone stale.</td></tr>
+      <tr><td data-k="Limit">One command = one JSON line, bytes with an explicit length</td><td data-k="Reason">pi's RPC framing is split on LF. <code>write_chars()</code> with a string and length -1 in GJS triggers <code>GLib-WARNING: Invalid UTF-8</code>, and the steering that is sent is corrupted.</td></tr>
     </tbody>
   </table>
   </div>
-  <div class="caveat"><b>Diukur dengan pi sungguhan (sekali):</b> kartu yang memintanya bertanya dulu masuk status menunggu dengan pertanyaan "Nama berkas catatannya apa?". Setelah dijawab, extension scratch meminta izin untuk <code>ls</code>, izin diberikan dari skrip, lalu pi membuat berkas dan kartu masuk Review (8.699 token, ±$0,0037). Itu satu run, bukan evaluasi. pi Anda sendiri belum punya extension izin, jadi tanpa memasangnya hanya pertanyaan yang akan muncul. Dialog <code>custom()</code> (khusus TUI) tidak didukung mode RPC, dan belum ada terminal interaktif.</div>
-  <div class="lesson"><b>Pelajaran</b>Delegasi yang baik tetap butuh saluran balik. Bedakan permintaan yang punya protokol (id + jawaban terstruktur) dari yang hanya tersirat dalam teks (pertanyaan model). Yang pertama dijawab persis. Yang kedua ditebak secara sederhana, lalu beri jalan keluar ketika tebakannya meleset (<i>Balas</i>).</div>
-  <h3>9f. Catatan sebagai konteks: isi dikirim, akses tidak</h3>
-  <p><b>Kebutuhan.</b> Keputusan desain, spesifikasi, dan notulen tinggal di folder kerja Nyerat, sedangkan pi bekerja di repo proyek. Batas 9a sengaja membuat pi tidak bisa membaca folder kerja. Akibatnya kartu "Checkout pakai QRIS" hanya membawa satu baris judul. Pengguna harus menyalin spesifikasi ke catatan kartu dengan tangan, dan salinan itu cepat basi.</p>
-  <p><b>Desain.</b> Kartu menautkan catatan dengan sintaks yang sudah dipakai di editor, <code>[[Spesifikasi#Pembayaran]]</code>. Saat <i>Kerjakan dengan pi</i>, Nyerat menyelesaikan tautan itu dan menyalin <b>isinya</b> ke prompt. Pi tetap tidak mendapat path ke folder kerja, dan batas 9a tidak berubah.</p>
+  <div class="caveat"><b>Measured with a real pi (once):</b> a card that asked it to ask a question first went into the waiting status with the question "What is the note file's name?". After it was answered, a scratch extension asked for permission for <code>ls</code>, permission was given from a script, and then pi created the file and the card went into Review (8,699 tokens, ±$0.0037). That is a single run, not an evaluation. Your own pi does not have a permission extension yet, so without installing one only questions will appear. The <code>custom()</code> dialog (TUI only) is not supported by RPC mode, and there is no interactive terminal yet.</div>
+  <div class="lesson"><b>Lesson</b>Good delegation still needs a return channel. Tell apart requests that have a protocol (an id + a structured answer) from those that are only implied in text (a model question). The first is answered exactly. The second is guessed simply, and then give a way out when the guess misses (<i>Reply</i>).</div>
+  <h3>9f. Notes as context: the contents are sent, the access is not</h3>
+  <p><b>The need.</b> Design decisions, specifications, and meeting minutes live in Nyerat's work folder, while pi works in the project repo. The boundary in 9a deliberately makes pi unable to read the work folder. As a result, the card "Checkout with QRIS" only carries a single title line. Users had to copy the specification into the card note by hand, and that copy went stale quickly.</p>
+  <p><b>The design.</b> A card links notes with the syntax already used in the editor, <code>[[Specification#Payment]]</code>. On <i>Work on it with pi</i>, Nyerat resolves the link and copies its <b>contents</b> into the prompt. Pi still gets no path to the work folder, and the boundary in 9a does not change.</p>
   <div class="grid2">
     <div class="panel">
-<pre><code>// murni: agent/harness.ts + markdown/wikilink.ts
-cardWikiLinks(card)        // judul + catatan, ≤ 10,
-                           // tanpa duplikat, kode dilewati
+<pre><code>// pure: agent/harness.ts + markdown/wikilink.ts
+cardWikiLinks(card)        // title + note, ≤ 10,
+                           // no duplicates, code skipped
 LinkedNote {
   link: WikiLink           // target, heading, alias
-  file: string | null      // null = tidak ditemukan
-  text: string | null      // null = #bagian tidak ada
+  file: string | null      // null = not found
+  text: string | null      // null = #section is missing
 }
 buildPrompt(card, project, board, notes)</code></pre>
     </div>
     <div class="panel">
-<pre><code>// host (window.ts), aturan sama dengan Ctrl+klik
+<pre><code>// host (window.ts), same rules as Ctrl+click
 linkedNotes(boardFile, links):
-  root  = folder kerja (atau folder papan)
-  files = listMarkdownFiles(root)  // tanpa titik,
-                                   // tanpa symlink
-  file  = resolveWikiLink(target, files, papan)
-  text  = editor terbuka ?? disk
+  root  = work folder (or the board's folder)
+  files = listMarkdownFiles(root)  // no dot folders,
+                                   // no symlinks
+  file  = resolveWikiLink(target, files, board)
+  text  = open editor ?? disk
   text  = heading ? noteSection(text, heading) : text</code></pre>
     </div>
   </div>
-  <div class="flow" aria-label="Alur catatan terkait">
-    <span class="node user">Kerjakan dengan pi</span><span class="to">→</span>
+  <div class="flow" aria-label="The related notes flow">
+    <span class="node user">Work on it with pi</span><span class="to">→</span>
     <span class="node pure">cardWikiLinks</span><span class="to">→</span>
-    <span class="node">host.linkedNotes (baca folder kerja)</span><span class="to">→</span>
-    <span class="node pure">linkedNotesSection: pagar + batas</span><span class="to">→</span>
-    <span class="node ctl">prompt (terlihat utuh di Log pi)</span>
+    <span class="node">host.linkedNotes (reads the work folder)</span><span class="to">→</span>
+    <span class="node pure">linkedNotesSection: fence + limits</span><span class="to">→</span>
+    <span class="node ctl">prompt (shown in full in the pi log)</span>
   </div>
   <div class="scroll-x">
   <table class="data cards">
-    <thead><tr><th>Risiko</th><th>Pengaman</th></tr></thead>
+    <thead><tr><th>Risk</th><th>Safeguard</th></tr></thead>
     <tbody>
-      <tr><td data-k="Risiko">Tautan dipakai untuk membaca berkas di luar folder kerja</td><td data-k="Pengaman">Target hanya dicocokkan dengan daftar <code>listMarkdownFiles()</code>: berkas Markdown di folder kerja, tanpa folder bertitik dan tanpa mengikuti symlink. Tidak ada path dari Markdown yang dibuka langsung.</td></tr>
-      <tr><td data-k="Risiko">Catatan panjang membengkakkan prompt dan biaya pi</td><td data-k="Pengaman">Maksimal 10 tautan, 8.000 karakter per catatan, dan 24.000 total. Yang terpotong diberi tanda jumlah karakter yang dibuang. <code>#bagian</code> menyalin satu bagian saja.</td></tr>
-      <tr><td data-k="Risiko">Isi catatan memuat <code>```</code> dan "keluar" dari blok, terbaca sebagai instruksi</td><td data-k="Pengaman">Pagar blok dibuat satu backtick lebih panjang dari deretan backtick terpanjang di isi. Prompt menyatakan isinya konteks, bukan perintah.</td></tr>
-      <tr><td data-k="Risiko">Pengguna tidak tahu apa yang terkirim</td><td data-k="Pengaman">Prompt lengkap, termasuk isi catatan, tercatat di Log pi. Tautan yang tidak ditemukan disebut apa adanya, tidak diam-diam dibuang.</td></tr>
+      <tr><td data-k="Risk">A link is used to read files outside the work folder</td><td data-k="Safeguard">The target is only matched against the <code>listMarkdownFiles()</code> list: Markdown files in the work folder, without dot folders and without following symlinks. No path from Markdown is opened directly.</td></tr>
+      <tr><td data-k="Risk">A long note inflates the prompt and pi's cost</td><td data-k="Safeguard">At most 10 links, 8,000 characters per note, and 24,000 in total. Whatever is cut is marked with the number of characters dropped. <code>#section</code> copies only a single section.</td></tr>
+      <tr><td data-k="Risk">A note's contents hold <code>```</code> and "escape" the block, being read as instructions</td><td data-k="Safeguard">The block fence is made one backtick longer than the longest run of backticks in the contents. The prompt states that the contents are context, not commands.</td></tr>
+      <tr><td data-k="Risk">The user does not know what was sent</td><td data-k="Safeguard">The full prompt, including the note contents, is recorded in the pi log. A link that is not found is mentioned as it is, not silently dropped.</td></tr>
     </tbody>
   </table>
   </div>
   <div class="sim" id="sim8">
-    <h3>Simulasi 8: catatan terkait di prompt <span class="kind">Interaktif · logika nyata</span></h3>
-    <p>Ubah kartu atau isi catatan "Spesifikasi". Yang berjalan adalah salinan <code>wikiLinksIn()</code>, <code>noteSection()</code>, dan <code>linkedNotesSection()</code>. Folder kerja contoh berisi <code>spek/Spesifikasi.md</code> dan <code>Catatan Rapat.md</code>. Batas di simulasi diperkecil menjadi 300 karakter per catatan supaya pemotongan terlihat.</p>
-    <label for="s8-card" style="display:block;font-size:.85rem;margin-top:8px">Kartu (baris pertama = judul, sisanya catatan)</label>
-    <textarea id="s8-card" rows="3" style="min-height:70px" spellcheck="false">Checkout pakai QRIS [[Spesifikasi#Pembayaran]] @pi
-Ikuti keputusan di [[catatan rapat]] dan [[Desain Lama]].</textarea>
-    <label for="s8-note" style="display:block;font-size:.85rem;margin-top:8px">spek/Spesifikasi.md</label>
-    <textarea id="s8-note" rows="6" spellcheck="false"># Spesifikasi
+    <h3>Simulation 8: related notes in the prompt <span class="kind">Interactive · real logic</span></h3>
+    <p>Change the card or the contents of the "Specification" note. What runs is a copy of <code>wikiLinksIn()</code>, <code>noteSection()</code>, and <code>linkedNotesSection()</code>. The sample work folder holds <code>specs/Specification.md</code> and <code>Meeting Notes.md</code>. The limit in the simulation is reduced to 300 characters per note so that the truncation is visible.</p>
+    <label for="s8-card" style="display:block;font-size:.85rem;margin-top:8px">Card (first line = title, the rest is the note)</label>
+    <textarea id="s8-card" rows="3" style="min-height:70px" spellcheck="false">Checkout with QRIS [[Specification#Payment]] @pi
+Follow the decisions in [[meeting notes]] and [[Old Design]].</textarea>
+    <label for="s8-note" style="display:block;font-size:.85rem;margin-top:8px">specs/Specification.md</label>
+    <textarea id="s8-note" rows="6" spellcheck="false"># Specification
 
-## Pembayaran
+## Payment
 
-QRIS dinamis lewat SDK resmi. Contoh:
+Dynamic QRIS through the official SDK. Example:
 
 ```js
 pay({ method: 'qris' })
 ```
 
-## Pengiriman
+## Shipping
 
-Belum diputuskan.</textarea>
+Not decided yet.</textarea>
     <pre class="msg" id="s8-out" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
   </div>
-  <div class="caveat"><b>Yang diukur dan yang belum:</b> 4 tes unit (tautan kartu, prompt dengan bagian/hilang/terpotong, batas total) dan 1 tes GUI dengan pi tiruan memeriksa bahwa prompt yang sampai ke proses memuat bagian <code>#Warna</code> tetapi tidak bagian lain, catatan yang hilang tetap disebut, dan klik tautan di kartu tidak ikut membuka dialog sunting. Belum dijalankan dengan pi sungguhan. Belum diukur apakah model memakai konteks itu lebih baik daripada salinan manual. Isi diambil saat run dimulai. <i>Balas pi</i> tidak menyalinnya lagi, jadi catatan yang diubah di tengah jalan tidak terkirim.</div>
-  <div class="lesson"><b>Pelajaran</b>Ketika agent yang didelegasikan butuh data dari wilayah yang sengaja ditutup baginya, jangan buka aksesnya. Kirim isinya: host yang menyelesaikan rujukan dengan aturan yang sama seperti untuk pengguna, membatasi ukurannya, membungkusnya supaya tidak terbaca sebagai perintah, dan mencatat persis apa yang terkirim.</div>
-  <h3>9e. Uji: proses sungguhan, harness tiruan</h3>
-  <p>Tes GUI menjalankan skrip shell yang berpura-pura menjadi pi, lewat jalur proses yang sama. Tes ini memeriksa cwd dan prompt, kartu yang berpindah ke <i>Dikerjakan</i> lalu <i>Review</i> dengan catatan, antrean yang benar-benar berurutan (skrip mencatat <code>mulai</code>/<code>selesai</code>), <i>Hentikan</i> pada proses yang macet 30 detik, kegagalan dengan pesan dari stderr, folder proyek yang ditanyakan sekali lalu diingat, dan papan tertutup yang diperbarui di disk. Untuk mode RPC, skrip tiruan membaca <code>get_state</code> dan <code>prompt</code> dari stdin, mengirim permintaan izin atau pertanyaan, lalu mencatat jawaban yang diterimanya. Tes memeriksa jawaban persis yang sampai (<code>{"type":"extension_ui_response","id":"ui-1","confirmed":true}</code>), <i>Nanti</i> yang tetap menunggu, <i>Akhiri tanpa membalas</i>, arahan yang tiba sebagai <code>steer</code>, dan balasan yang berjalan dengan <code>--session sesi-uji</code> di log yang sama. Tes unit mencakup penugasan <code>@nama</code> (bukan email atau <code>@{tanggal}</code>), proyek, penolakan folder, prompt, <code>PiReader</code>, catatan hasil, dan antrean. Ada 23 tes, semuanya tanpa pi atau API sungguhan.</p>
-  <div class="caveat"><b>Yang diukur dan yang belum:</b> satu uji ujung-ke-ujung dengan pi 1.0.3 sungguhan (DeepSeek, tugas "buat HALO.txt" di repo contoh) berhasil. Berkas dibuat di repo proyek tanpa commit, folder kerja tetap kosong, kartu pindah ke Review, dan run memakai 4.248 token (±$0,0038). Itu satu run, bukan evaluasi. Mengurai <code>@nama</code> menambah ±0,35 ms per 500 kartu pada <code>cardMeta()</code> (±0,7 µs per kartu). Belum ada: status <i>menunggu</i> saat harness meminta izin, terminal interaktif, worktree per kartu (kartu di proyek yang sama mengantre), dan tampilan diff hasil harness di Nyerat. Status run hanya ada selama aplikasi terbuka; yang bertahan adalah posisi kartu dan catatan <code>↳</code>.</div>
-  <div class="lesson"><b>Pelajaran</b>Saat mendelegasikan ke agent lain, jangan pura-pura bisa meninjau setiap langkahnya. Pindahkan batasnya ke tempat yang bisa dijaga: <b>di mana</b> ia boleh bekerja (nama → folder yang dipilih pengguna), <b>berapa banyak</b> sekaligus (antrean per folder), dan <b>kapan berhenti</b> (EOF, tenggang, SIGKILL). Lalu buat hasilnya terlihat di tempat pengguna sudah bekerja: kartu, catatan, dan log.</div>
+  <div class="caveat"><b>What has been measured and what has not:</b> 4 unit tests (card links, a prompt with a section/missing/truncated note, the total limit) and 1 GUI test with a fake pi check that the prompt reaching the process contains the <code>#Color</code> section but not the other sections, that a missing note is still mentioned, and that clicking a link on the card does not also open the edit dialog. It has not been run with a real pi. It has not been measured whether the model uses that context better than a manual copy. The contents are taken when the run starts. <i>Reply to pi</i> does not copy them again, so a note changed midway is not sent.</div>
+  <div class="lesson"><b>Lesson</b>When a delegated agent needs data from territory that is deliberately closed to it, do not open the access. Send the contents: the host resolves the reference with the same rules as for the user, limits its size, wraps it so it is not read as a command, and records exactly what was sent.</div>
+  <h3>9e. Testing: a real process, a fake harness</h3>
+  <p>The GUI tests run a shell script that pretends to be pi, through the same process path. These tests check the cwd and the prompt, a card moving to <i>In Progress</i> and then <i>Review</i> with a note, a queue that is truly in order (the script records <code>start</code>/<code>end</code>), <i>Stop</i> on a process stuck for 30 seconds, a failure with a message from stderr, a project folder that is asked for once and then remembered, and a closed board that is updated on disk. For RPC mode, the fake script reads <code>get_state</code> and <code>prompt</code> from stdin, sends a permission request or a question, and then records the answer it received. The tests check the exact answer that arrives (<code>{"type":"extension_ui_response","id":"ui-1","confirmed":true}</code>), <i>Later</i> still waiting, <i>End without replying</i>, steering that arrives as <code>steer</code>, and a reply that runs with <code>--session test-session</code> in the same log. The unit tests cover <code>@name</code> assignment (not an email or <code>@{date}</code>), the project, folder rejection, the prompt, <code>PiReader</code>, the result note, and the queue. There are 23 tests, all without a real pi or API.</p>
+  <div class="caveat"><b>What has been measured and what has not:</b> one end-to-end test with a real pi 1.0.3 (DeepSeek, the task "create HALO.txt" in a sample repo) succeeded. The file was created in the project repo without a commit, the work folder stayed empty, the card moved to Review, and the run used 4,248 tokens (±$0.0038). That is a single run, not an evaluation. Parsing <code>@name</code> adds ±0.35 ms per 500 cards in <code>cardMeta()</code> (±0.7 µs per card). Not there yet: the <i>waiting</i> status when the harness asks for permission, an interactive terminal, a worktree per card (cards in the same project queue up), and a diff view of the harness result in Nyerat. The run status only exists while the app is open; what persists is the card position and the <code>↳</code> note.</div>
+  <div class="lesson"><b>Lesson</b>When delegating to another agent, do not pretend to be able to review every step. Move the boundary to a place that can be guarded: <b>where</b> it may work (a name → a folder chosen by the user), <b>how many</b> at a time (a queue per folder), and <b>when to stop</b> (EOF, grace period, SIGKILL). Then make the result visible where the user already works: the card, the note, and the log.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="biaya">
-  <div class="chapnum">Biaya · <code>bench/AGENTIC.md</code> · <code>npm run bench:agentic</code></div>
-  <h2>Berapa biaya keamanan itu?</h2>
-  <p>Snapshot, verifikasi, dan journal tidak gratis. Pengukuran berikut berjalan lokal tanpa memanggil model: 10 pengulangan setelah 3 pemanasan, paket berisi 20 berkas, ukuran 30.000 dan 480.000 karakter per berkas. Fixture mengganti seluruh isi berkas, jadi sengaja dibuat lebih berat daripada pekerjaan biasa.</p>
+<section class="chapter" id="cost">
+  <div class="chapnum">Cost · <code>bench/AGENTIC.md</code> · <code>npm run bench:agentic</code></div>
+  <h2>What does that safety cost?</h2>
+  <p>Snapshots, verification, and the journal are not free. The following measurements run locally without calling a model: 10 repetitions after 3 warm-ups, a batch of 20 files, at sizes of 30,000 and 480,000 characters per file. The fixture replaces the entire contents of a file, so it is deliberately heavier than ordinary work.</p>
   <div class="scroll-x">
   <table class="data cards">
-    <thead><tr><th>Operasi (20 berkas)</th><th class="num">30.000 kar.: median</th><th class="num">p95</th><th class="num">480.000 kar.: median</th><th class="num">p95</th></tr></thead>
+    <thead><tr><th>Operation (20 files)</th><th class="num">30,000 chars: median</th><th class="num">p95</th><th class="num">480,000 chars: median</th><th class="num">p95</th></tr></thead>
     <tbody>
-      <tr><td>Rencanakan paket</td><td class="num" data-k="30 rb median">8,98 ms</td><td class="num" data-k="p95">12,00 ms</td><td class="num" data-k="480 rb median">113,94 ms</td><td class="num" data-k="p95">122,10 ms</td></tr>
-      <tr><td>Verifikasi hasil</td><td class="num" data-k="30 rb median">0,25 ms</td><td class="num" data-k="p95">0,33 ms</td><td class="num" data-k="480 rb median">3,43 ms</td><td class="num" data-k="p95">4,73 ms</td></tr>
-      <tr><td>Checkpoint tanpa journal</td><td class="num" data-k="30 rb median">3,52 ms</td><td class="num" data-k="p95">4,51 ms</td><td class="num" data-k="480 rb median">3,46 ms</td><td class="num" data-k="p95">4,61 ms</td></tr>
-      <tr><td>Checkpoint dengan journal</td><td class="num" data-k="30 rb median">19,46 ms</td><td class="num" data-k="p95">31,58 ms</td><td class="num" data-k="480 rb median">188,56 ms</td><td class="num" data-k="p95">212,64 ms</td></tr>
-      <tr><td>Verifikasi struktur (dengan baseline)</td><td class="num" data-k="30 rb median">10,11 ms</td><td class="num" data-k="p95">10,81 ms</td><td class="num" data-k="480 rb median">157,35 ms</td><td class="num" data-k="p95">160,57 ms</td></tr>
+      <tr><td>Plan the batch</td><td class="num" data-k="30k median">8.98 ms</td><td class="num" data-k="p95">12.00 ms</td><td class="num" data-k="480k median">113.94 ms</td><td class="num" data-k="p95">122.10 ms</td></tr>
+      <tr><td>Verify the result</td><td class="num" data-k="30k median">0.25 ms</td><td class="num" data-k="p95">0.33 ms</td><td class="num" data-k="480k median">3.43 ms</td><td class="num" data-k="p95">4.73 ms</td></tr>
+      <tr><td>Checkpoint without the journal</td><td class="num" data-k="30k median">3.52 ms</td><td class="num" data-k="p95">4.51 ms</td><td class="num" data-k="480k median">3.46 ms</td><td class="num" data-k="p95">4.61 ms</td></tr>
+      <tr><td>Checkpoint with the journal</td><td class="num" data-k="30k median">19.46 ms</td><td class="num" data-k="p95">31.58 ms</td><td class="num" data-k="480k median">188.56 ms</td><td class="num" data-k="p95">212.64 ms</td></tr>
+      <tr><td>Structure verification (with a baseline)</td><td class="num" data-k="30k median">10.11 ms</td><td class="num" data-k="p95">10.81 ms</td><td class="num" data-k="480k median">157.35 ms</td><td class="num" data-k="p95">160.57 ms</td></tr>
     </tbody>
   </table>
   </div>
-  <h3>Optimasi kode baru dalam pekerjaan yang sama (90c28bb)</h3>
-  <p>Versi pertama pemeriksaan struktur menelusuri setiap dokumen tiga kali (frontmatter/kode, tabel, tautan) dan memotong spasi di setiap baris. Pemeriksaan <code>"*"</code> memecah <em>semua</em> berkas menjadi baris walaupun teks yang dicari tidak ada di berkas itu. Sekarang ketiganya digabung menjadi satu penelusuran dengan saringan karakter sebelum regex, dan <code>"*"</code> hanya memecah berkas yang memang memuat teksnya (<code>file.text.includes()</code> lebih dulu).</p>
-  <div class="legend"><span style="--c:var(--before)">Versi pertama</span><span style="--c:var(--after)">Setelah digabung (90c28bb)</span></div>
+  <h3>Optimizing the new code in the same piece of work (90c28bb)</h3>
+  <p>The first version of the structure check walked every document three times (frontmatter/code, tables, links) and trimmed whitespace on every line. The <code>"*"</code> check split <em>all</em> files into lines even if the text being looked for was not in that file. Now the three are merged into a single pass with a character filter before the regex, and <code>"*"</code> only splits files that actually contain the text (<code>file.text.includes()</code> first).</p>
+  <div class="legend"><span style="--c:var(--before)">First version</span><span style="--c:var(--after)">After merging (90c28bb)</span></div>
   <div class="cmp" data-rows='[
-    ["Verifikasi struktur, 20 × 480.000 karakter", 396.9, 157.345, "ms"],
-    ["Cari sisa teks di seluruh folder (*), 20 × 480.000", 66.6, 3.394, "ms"]]'></div>
-  <div class="caveat"><b>Yang jujur belum selesai:</b> checkpoint dengan journal 20 × 480.000 karakter memakan ±190 ms di thread utama dan masih ditulis sinkron. Verifikasi struktur 157 ms juga terasa sebagai jeda, walaupun hanya terjadi sekali per panggilan <code>verifikasi_pekerjaan</code>, bukan saat mengetik. Snapshot journal bisa membuat berkas percakapan besar. Benchmark ini tidak mengukur latensi API, ketepatan model memilih kriteria, atau lamanya pengguna meninjau diff. Evaluasi model sungguhan tersedia lewat <code>npm run test:live -- --agentic</code> (memakai kuota API) dan belum dijalankan pada sesi pengukuran ini. Benchmark editor (<code>bench:compare</code>) tidak menunjukkan regresi yang terulang.</div>
+    ["Structure verification, 20 × 480,000 characters", 396.9, 157.345, "ms"],
+    ["Search for leftover text across the folder (*), 20 × 480,000", 66.6, 3.394, "ms"]]'></div>
+  <div class="caveat"><b>Honestly unfinished:</b> a checkpoint with the journal at 20 × 480,000 characters takes ±190 ms on the main thread and is still written synchronously. The 157 ms structure verification is also felt as a pause, although it only happens once per <code>verify_work</code> call, not while typing. Journal snapshots can make the conversation file large. This benchmark does not measure API latency, how accurately the model picks criteria, or how long the user takes to review a diff. An evaluation of a real model is available through <code>npm run test:live -- --agentic</code> (it uses API quota) and has not been run in this measurement session. The editor benchmark (<code>bench:compare</code>) shows no repeated regression.</div>
 </section>
 
 <!-- ============================================================ -->
-<section class="chapter" id="pelajaran">
-  <div class="chapnum">Ringkasan</div>
-  <h2>Pola yang bisa dibawa ke agent lain</h2>
+<section class="chapter" id="lessons">
+  <div class="chapnum">Summary</div>
+  <h2>Patterns that carry over to other agents</h2>
   <div class="scroll-x">
   <table class="data cards">
-    <thead><tr><th>Pola</th><th>Struktur</th><th>Di Nyerat</th></tr></thead>
+    <thead><tr><th>Pattern</th><th>Structure</th><th>In Nyerat</th></tr></thead>
     <tbody>
-      <tr><td data-k="Pola">Konteks dibagi menurut frekuensi perubahan</td><td data-k="Struktur"><code>system</code> stabil + <code>note</code> berubah</td><td data-k="Di Nyerat"><code>buildContext</code>, <code>buildMessages</code></td></tr>
-      <tr><td data-k="Pola">Loop dengan batas keras</td><td data-k="Struktur"><code>MAX_ROUNDS</code>, <code>toolBudget</code>, putaran terakhir tanpa alat</td><td data-k="Di Nyerat"><code>ChatSession.ask</code></td></tr>
-      <tr><td data-k="Pola">Alat murni yang tidak melempar</td><td data-k="Struktur"><code>(args, SourceFile[]) → { content, summary }</code></td><td data-k="Di Nyerat"><code>runTool</code>, <code>formatGit</code></td></tr>
-      <tr><td data-k="Pola">Perubahan sebagai data</td><td data-k="Struktur"><code>Change { before, after }</code></td><td data-k="Di Nyerat"><code>planChange</code>, <code>onProposal</code></td></tr>
-      <tr><td data-k="Pola">Periksa ulang tepat sebelum menulis</td><td data-k="Struktur"><code>preflight(c, read)</code></td><td data-k="Di Nyerat"><code>applyBatch</code>, Urungkan</td></tr>
-      <tr><td data-k="Pola">Rencanakan di salinan virtual</td><td data-k="Struktur">salinan <code>SourceFile[]</code> + kunci</td><td data-k="Di Nyerat"><code>planBatch</code></td></tr>
-      <tr><td data-k="Pola">Selesai = lulus pemeriksaan</td><td data-k="Struktur"><code>WorkState.status</code> + <code>Verification</code></td><td data-k="Di Nyerat"><code>verifyWork</code>, <code>structureCheck</code></td></tr>
-      <tr><td data-k="Pola">Satu status, dua pembaca</td><td data-k="Struktur">data tersimpan → teks untuk model, widget untuk manusia</td><td data-k="Di Nyerat"><code>workText</code>, <code>WorkList</code></td></tr>
-      <tr><td data-k="Pola">Niat dicatat sebelum bertindak</td><td data-k="Struktur"><code>ActionEvent</code>, rekonsiliasi tiga hasil</td><td data-k="Di Nyerat"><code>reconcileEvents</code></td></tr>
-      <tr><td data-k="Pola">Observabilitas terpisah dari konteks</td><td data-k="Struktur">log berbatas di memori</td><td data-k="Di Nyerat"><code>AgentTrace</code></td></tr>
-      <tr><td data-k="Pola">Delegasi lewat kontrak proses</td><td data-k="Struktur">argumen → JSONL → kode keluar, dipetakan ke log yang sama</td><td data-k="Di Nyerat"><code>PiReader</code>, <code>spawnHarness</code></td></tr>
-      <tr><td data-k="Pola">Nama, bukan path, untuk tempat berbahaya</td><td data-k="Struktur">nama di data, pemetaan hanya dari pengguna</td><td data-k="Di Nyerat"><code>settings.projects</code>, <code>checkProjectFolder</code></td></tr>
-      <tr><td data-k="Pola">Saluran balik untuk agent yang didelegasikan</td><td data-k="Struktur">permintaan ber-id dijawab persis; pertanyaan teks ditebak + jalan keluar</td><td data-k="Di Nyerat"><code>HarnessAsk</code>, <code>answer</code>, <code>resume</code></td></tr>
-      <tr><td data-k="Pola">Konteks dikirim sebagai isi, bukan akses</td><td data-k="Struktur">tautan di data diselesaikan host, isinya disalin dengan batas</td><td data-k="Di Nyerat"><code>linkedNotes</code>, <code>linkedNotesSection</code></td></tr>
-      <tr><td data-k="Pola">Satu penulis per sumber daya</td><td data-k="Struktur">antrean per kunci (folder)</td><td data-k="Di Nyerat"><code>RunQueue</code></td></tr>
+      <tr><td data-k="Pattern">Context split by how often it changes</td><td data-k="Structure">stable <code>system</code> + changing <code>note</code></td><td data-k="In Nyerat"><code>buildContext</code>, <code>buildMessages</code></td></tr>
+      <tr><td data-k="Pattern">A loop with hard limits</td><td data-k="Structure"><code>MAX_ROUNDS</code>, <code>toolBudget</code>, the last round without tools</td><td data-k="In Nyerat"><code>ChatSession.ask</code></td></tr>
+      <tr><td data-k="Pattern">Pure tools that do not throw</td><td data-k="Structure"><code>(args, SourceFile[]) → { content, summary }</code></td><td data-k="In Nyerat"><code>runTool</code>, <code>formatGit</code></td></tr>
+      <tr><td data-k="Pattern">Changes as data</td><td data-k="Structure"><code>Change { before, after }</code></td><td data-k="In Nyerat"><code>planChange</code>, <code>onProposal</code></td></tr>
+      <tr><td data-k="Pattern">Re-check right before writing</td><td data-k="Structure"><code>preflight(c, read)</code></td><td data-k="In Nyerat"><code>applyBatch</code>, Undo</td></tr>
+      <tr><td data-k="Pattern">Plan on a virtual copy</td><td data-k="Structure">a copy of <code>SourceFile[]</code> + locks</td><td data-k="In Nyerat"><code>planBatch</code></td></tr>
+      <tr><td data-k="Pattern">Done = passes the checks</td><td data-k="Structure"><code>WorkState.status</code> + <code>Verification</code></td><td data-k="In Nyerat"><code>verifyWork</code>, <code>structureCheck</code></td></tr>
+      <tr><td data-k="Pattern">One state, two readers</td><td data-k="Structure">stored data → text for the model, a widget for humans</td><td data-k="In Nyerat"><code>workText</code>, <code>WorkList</code></td></tr>
+      <tr><td data-k="Pattern">Record the intent before acting</td><td data-k="Structure"><code>ActionEvent</code>, three-outcome reconciliation</td><td data-k="In Nyerat"><code>reconcileEvents</code></td></tr>
+      <tr><td data-k="Pattern">Observability separate from context</td><td data-k="Structure">a bounded in-memory log</td><td data-k="In Nyerat"><code>AgentTrace</code></td></tr>
+      <tr><td data-k="Pattern">Delegation through a process contract</td><td data-k="Structure">arguments → JSONL → exit code, mapped to the same log</td><td data-k="In Nyerat"><code>PiReader</code>, <code>spawnHarness</code></td></tr>
+      <tr><td data-k="Pattern">Names, not paths, for dangerous places</td><td data-k="Structure">a name in the data, the mapping only from the user</td><td data-k="In Nyerat"><code>settings.projects</code>, <code>checkProjectFolder</code></td></tr>
+      <tr><td data-k="Pattern">A return channel for the delegated agent</td><td data-k="Structure">requests with an id are answered exactly; text questions are guessed + a way out</td><td data-k="In Nyerat"><code>HarnessAsk</code>, <code>answer</code>, <code>resume</code></td></tr>
+      <tr><td data-k="Pattern">Context sent as contents, not access</td><td data-k="Structure">links in the data are resolved by the host, the contents copied with limits</td><td data-k="In Nyerat"><code>linkedNotes</code>, <code>linkedNotesSection</code></td></tr>
+      <tr><td data-k="Pattern">One writer per resource</td><td data-k="Structure">a queue per key (folder)</td><td data-k="In Nyerat"><code>RunQueue</code></td></tr>
     </tbody>
   </table>
   </div>
-  <div class="lesson"><b>Checklist sebelum menambah kemampuan agent</b>
-    1) Apakah alatnya membaca atau mengubah? Alat pengubah harus masuk <code>CHANGE_TOOLS</code> dan hanya menghasilkan <code>Change</code>.
-    2) Apa batasnya? Tentukan path, ukuran hasil, jumlah, dan apa yang terjadi jika batas itu terlewati.
-    3) Apa yang dilihat pengguna sebelum menyetujui, dan bagaimana cara membatalkannya?
-    4) Bagaimana hasilnya diverifikasi, dan bagaimana kemampuan ini pulih setelah interupsi?
-    5) Tulis tes dengan <code>Provider</code> palsu, ukur biayanya dengan <code>bench:agentic</code>, lalu perbarui halaman ini.
+  <div class="lesson"><b>Checklist before adding an agent capability</b>
+    1) Does the tool read or change? A tool that changes things must go into <code>CHANGE_TOOLS</code> and only produce a <code>Change</code>.
+    2) What is its limit? Decide the path, the result size, the count, and what happens when the limit is exceeded.
+    3) What does the user see before approving, and how can it be undone?
+    4) How is the result verified, and how does this capability recover after an interruption?
+    5) Write tests with a fake <code>Provider</code>, measure the cost with <code>bench:agentic</code>, and then update this page.
   </div>
-  <p>Sumber: <a href="https://github.com/EkaPutCom/nyerat/blob/main/README.md">README.md</a> (bagian "Cara kerja asisten"), <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/AGENTIC.md">AGENTIC.md</a>, <a href="https://github.com/EkaPutCom/nyerat/tree/main/src/agent">src/agent/</a>, dan riwayat git commit f6a4cc7 sampai 90c28bb, ditambah orkestrator harness (Bab 9). Lihat juga <a href="belajar-performa.html">belajar performa dari editor Nyerat</a>.</p>
+  <p>Sources: <a href="https://github.com/EkaPutCom/nyerat/blob/main/README.md">README.md</a> (the "How the assistant works" section), <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/AGENTIC.md">AGENTIC.md</a>, <a href="https://github.com/EkaPutCom/nyerat/tree/main/src/agent">src/agent/</a>, and the git commit history from f6a4cc7 to 90c28bb, plus the harness orchestrator (Chapter 9). See also <a href="learn-performance.html">learning performance from the Nyerat editor</a>.</p>
 </section>
 
-<footer>Simulasi 1, 4, 5, 6, 7, 8, dan 9 menjalankan salinan logika Nyerat di browser Anda (WorkList, tokenizer dan BM25, preflight dan Urungkan, rekonsiliasi journal, antrean harness, deteksi pertanyaan, catatan terkait di prompt). Simulasi 2 adalah model sederhana tanpa hasil ukur penyedia. Simulasi 3 adalah peragaan dengan skenario tertulis, bukan keluaran model sungguhan.</footer>
+<footer>Simulations 1, 4, 5, 6, 7, 8, and 9 run copies of Nyerat's logic in your browser (WorkList, tokenizer and BM25, preflight and Undo, journal reconciliation, the harness queue, question detection, related notes in the prompt). Simulation 2 is a simple model without provider measurements. Simulation 3 is a walkthrough with a written scenario, not real model output.</footer>
 </div>
-
 <script>
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
 const fmt = (v, d) => {
   if (d === undefined) d = v >= 100 ? 0 : v >= 10 ? 1 : 2;
-  return v.toLocaleString('id-ID', { minimumFractionDigits: d, maximumFractionDigits: d });
+  return v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 };
-const int = v => Math.round(v).toLocaleString('id-ID');
-const ms = v => (v > 0 && v < 0.01 ? '<0,01' : fmt(v)) + ' ms';
+const int = v => Math.round(v).toLocaleString('en-US');
+const ms = v => (v > 0 && v < 0.01 ? '<0.01' : fmt(v)) + ' ms';
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const NS = 'http://www.w3.org/2000/svg';
@@ -1060,7 +1059,7 @@ function attachTip(node, html) {
   node.addEventListener('mouseleave', () => { tip.style.opacity = 0; });
 }
 
-/* ---------- bar perbandingan sebelum/sesudah (sama dengan belajar-performa) ---------- */
+/* ---------- before/after comparison bars (same as learn-performance) ---------- */
 document.querySelectorAll('.cmp[data-rows]').forEach(box => {
   const rows = JSON.parse(box.dataset.rows);
   for (const [label, b, a] of rows) {
@@ -1072,8 +1071,8 @@ document.querySelectorAll('.cmp[data-rows]').forEach(box => {
     bars.className = 'bars';
     const change = (a - b) / b * 100;
     const sign = change > 0 ? '+' : '−';
-    const word = change > 0 ? 'naik' : 'turun';
-    for (const [cls, v, name] of [['b', b, 'Sebelum'], ['a', a, 'Sesudah']]) {
+    const word = change > 0 ? 'up' : 'down';
+    for (const [cls, v, name] of [['b', b, 'Before'], ['a', a, 'After']]) {
       const row = document.createElement('div');
       row.className = 'row';
       const wrap = document.createElement('div');
@@ -1095,7 +1094,7 @@ document.querySelectorAll('.cmp[data-rows]').forEach(box => {
   }
 });
 
-/* ukuran SVG mengikuti lebar sebenarnya, supaya teks 11px tetap 11px */
+/* the SVG size follows the real width, so 11px text stays 11px */
 function fit(svg, H) {
   const W = Math.max(260, Math.round(svg.parentNode.clientWidth || 900));
   svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
@@ -1103,34 +1102,34 @@ function fit(svg, H) {
   return W;
 }
 
-/* ---------- grafik perjalanan: jumlah alat per commit, ditumpuk per jenis ---------- */
-// Diambil dari `git grep "name: '"` di src/agent per commit; tes = jumlah test( di berkas tes asisten.
-// Saat menambah commit agent, tambahkan satu baris di sini (lihat AGENT.md).
+/* ---------- journey chart: number of tools per commit, stacked by kind ---------- */
+// Taken from `git grep "name: '"` in src/agent per commit; tests = the number of test( calls in the assistant test files.
+// When adding an agent commit, add a row here (see AGENT.md).
 const journey = [
-  { c: 'f6a4cc7', t: 'asisten + 4 alat baca', read: 4, propose: 0, control: 0, tests: 65, lines: 1099, files: 8 },
-  { c: '2d0150f', t: 'riwayat percakapan', read: 4, propose: 0, control: 0, tests: 82, lines: 1285, files: 10 },
-  { c: '49021f3', t: 'visi workbench', read: 4, propose: 0, control: 0, tests: 82, lines: 1285, files: 10 },
-  { c: '3f387e6', t: 'cari_dokumen', read: 4, propose: 0, control: 0, tests: 82, lines: 1285, files: 10 },
-  { c: '5a64789', t: 'usulan + setuju', read: 4, propose: 2, control: 0, tests: 101, lines: 1505, files: 11 },
-  { c: 'c6f71da', t: 'jendela diff', read: 4, propose: 2, control: 0, tests: 104, lines: 1527, files: 11 },
-  { c: '8db7c55', t: 'panel terpotong', read: 4, propose: 2, control: 0, tests: 105, lines: 1527, files: 11 },
-  { c: 'deb8aa5', t: 'ubah_kanban', read: 4, propose: 3, control: 0, tests: 111, lines: 1655, files: 11 },
-  { c: '6c47266', t: 'rencana, paket, verifikasi', read: 4, propose: 4, control: 2, tests: 132, lines: 2063, files: 17 },
-  { c: '1c90735', t: 'Log agent', read: 4, propose: 4, control: 2, tests: 137, lines: 2186, files: 18 },
-  { c: '90c28bb', t: 'tindakan lebih luas', read: 7, propose: 7, control: 2, tests: 162, lines: 2619, files: 19 },
-  { c: 'b1ab712', t: 'orkestrator pi', read: 7, propose: 7, control: 2, tests: 178, lines: 2908, files: 20 },
-  { c: '0db63d2', t: 'pi menunggu jawaban', read: 7, propose: 7, control: 2, tests: 185, lines: 3010, files: 20 },
-  { c: '8d0cdec', t: 'catatan [[ ]] ke prompt pi', read: 7, propose: 7, control: 2, tests: 189, lines: 3078, files: 20 },
-  { c: 'b31556d', t: 'rencana sebagai daftar centang', read: 7, propose: 7, control: 2, tests: 189, lines: 3078, files: 20 },
-  { c: 'a8dd69a', t: 'kotak pesan + ringkasan konteks', read: 7, propose: 7, control: 2, tests: 191, lines: 3078, files: 20 },
+  { c: 'f6a4cc7', t: 'assistant + 4 read tools', read: 4, propose: 0, control: 0, tests: 65, lines: 1099, files: 8 },
+  { c: '2d0150f', t: 'conversation history', read: 4, propose: 0, control: 0, tests: 82, lines: 1285, files: 10 },
+  { c: '49021f3', t: 'workbench vision', read: 4, propose: 0, control: 0, tests: 82, lines: 1285, files: 10 },
+  { c: '3f387e6', t: 'search_documents', read: 4, propose: 0, control: 0, tests: 82, lines: 1285, files: 10 },
+  { c: '5a64789', t: 'proposals + approval', read: 4, propose: 2, control: 0, tests: 101, lines: 1505, files: 11 },
+  { c: 'c6f71da', t: 'diff window', read: 4, propose: 2, control: 0, tests: 104, lines: 1527, files: 11 },
+  { c: '8db7c55', t: 'panel cut off', read: 4, propose: 2, control: 0, tests: 105, lines: 1527, files: 11 },
+  { c: 'deb8aa5', t: 'edit_kanban', read: 4, propose: 3, control: 0, tests: 111, lines: 1655, files: 11 },
+  { c: '6c47266', t: 'plan, batch, verification', read: 4, propose: 4, control: 2, tests: 132, lines: 2063, files: 17 },
+  { c: '1c90735', t: 'Agent log', read: 4, propose: 4, control: 2, tests: 137, lines: 2186, files: 18 },
+  { c: '90c28bb', t: 'broader actions', read: 7, propose: 7, control: 2, tests: 162, lines: 2619, files: 19 },
+  { c: 'b1ab712', t: 'pi orchestrator', read: 7, propose: 7, control: 2, tests: 178, lines: 2908, files: 20 },
+  { c: '0db63d2', t: 'pi waits for an answer', read: 7, propose: 7, control: 2, tests: 185, lines: 3010, files: 20 },
+  { c: '8d0cdec', t: '[[ ]] notes into the pi prompt', read: 7, propose: 7, control: 2, tests: 189, lines: 3078, files: 20 },
+  { c: 'b31556d', t: 'plan as a checklist', read: 7, propose: 7, control: 2, tests: 189, lines: 3078, files: 20 },
+  { c: 'a8dd69a', t: 'message box + context summary', read: 7, propose: 7, control: 2, tests: 191, lines: 3078, files: 20 },
 ];
 function toolsChart() {
   const svg = $('#chart-tools');
   svg.innerHTML = '';
-  const parts = [['read', '--after', 'baca'], ['propose', '--before', 'usulan'], ['control', '--third', 'kendali']];
+  const parts = [['read', '--after', 'read'], ['propose', '--before', 'proposal'], ['control', '--third', 'control']];
   const max = 16;
-  const tipOf = d => '<b>' + d.c + '</b>: ' + d.t + '<br>' + (d.read + d.propose + d.control) + ' alat (' + d.read + ' baca, ' + d.propose + ' usulan, ' + d.control + ' kendali)<br><span style="color:var(--text-2)">' + d.tests + ' tes · ' + int(d.lines) + ' baris di ' + d.files + ' berkas src/agent</span>';
-  // Di bawah ±820 px label commit mulai bertumpuk; pakai batang horizontal.
+  const tipOf = d => '<b>' + d.c + '</b>: ' + d.t + '<br>' + (d.read + d.propose + d.control) + ' tools (' + d.read + ' read, ' + d.propose + ' proposal, ' + d.control + ' control)<br><span style="color:var(--text-2)">' + d.tests + ' tests · ' + int(d.lines) + ' lines in ' + d.files + ' src/agent files</span>';
+  // Below ±820 px the commit labels start to overlap; use horizontal bars.
   const narrow = (svg.parentNode.clientWidth || 900) < 820;
   if (narrow) {
     const row = 38, T = 6, H = T + row * journey.length;
@@ -1179,23 +1178,23 @@ function toolsChart() {
   });
 }
 
-/* ---------- Simulasi 1: BM25 (salinan logika context.ts) ---------- */
+/* ---------- Simulation 1: BM25 (a copy of the context.ts logic) ---------- */
 const STOPWORDS = new Set((
   'yang dan di ke dari untuk pada dengan atau ini itu adalah akan juga tidak ada saya aku kamu dia mereka kita kami ' +
   'apa siapa kapan dimana mana bagaimana kenapa mengapa seperti dalam oleh sebagai karena agar supaya bisa dapat ' +
   'sudah telah masih lebih sangat saja hanya tapi tetapi namun jika kalau lalu kemudian setelah sebelum ketika saat ' +
-  'bab tolong coba mohon berikan jelaskan cari carikan the and for with what who how'
+  'bab tolong coba mohon berikan jelaskan cari carikan the and for with what who how chapter please try give explain search find'
 ).split(' '));
 const stem = t => { const s = t.replace(/(nya|lah|kah|kan|an|i)$/, ''); return s.length >= 4 ? s : t; };
 const tokenize = s => (s.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
   .filter(t => (t.length >= 3 || /^\d+$/.test(t)) && !STOPWORDS.has(t)).map(stem);
 
 const CORPUS = {
-  'rapat/2026-10-01.md': '# Rapat peluncuran 1 Oktober\n## Keputusan\nRilis versi 2 dijadwalkan Rabu, 8 Oktober. Dina memimpin uji regresi; Bima menyiapkan catatan rilis.\n## Tindak lanjut\nMigrasi data pelanggan ke skema baru ditangani Raka, target selesai sebelum rilis. Risiko: tabel faktur lama belum punya indeks.',
-  'rencana/oktober.md': '# Rencana Oktober\n## Minggu 1\nFinalisasi fitur ekspor PDF dan uji beban server.\n## Minggu 2\nRilis versi 2 pada Rabu, 8 Oktober. Setelah rilis, pantau galat selama 48 jam.\n## Minggu 3\nWawancara lima pengguna untuk riset onboarding.',
-  'riset/pesaing.md': '# Riset pesaing\n## Harga\nDua pesaing utama memakai paket bulanan; satu menawarkan paket gratis untuk tim kecil.\n## Migrasi\nPesaing A menyediakan alat migrasi data otomatis dari spreadsheet; pengguna menyebutnya alasan utama berpindah layanan.',
-  'tugas.md': '# Tugas\n## Dikerjakan\n- [ ] Migrasi data pelanggan (Raka)\n- [ ] Catatan rilis versi 2 (Bima)\n## Selesai\n- [x] Uji beban server (Dina)',
-  'catatan/onboarding.md': '# Catatan onboarding\n## Masalah pengguna baru\nPengguna baru bingung memilih folder kerja pertama dan tidak menemukan tombol impor data.\n## Ide\nTambahkan contoh folder dan panduan singkat saat aplikasi pertama dibuka.',
+  'meetings/2026-10-01.md': '# Launch meeting October 1\n## Decisions\nThe version 2 release is scheduled for Wednesday, October 8. Dina leads the regression tests; Bima prepares the release notes.\n## Follow-ups\nMigrating customer data to the new schema is handled by Raka, targeted to finish before the release. Risk: the old invoice table has no index yet.',
+  'plans/october.md': '# October plan\n## Week 1\nFinalize the PDF export feature and the server load test.\n## Week 2\nRelease version 2 on Wednesday, October 8. After the release, monitor errors for 48 hours.\n## Week 3\nInterview five users for onboarding research.',
+  'research/competitors.md': '# Competitor research\n## Pricing\nThe two main competitors use monthly plans; one offers a free plan for small teams.\n## Migration\nCompetitor A provides an automatic data migration tool from spreadsheets; users call it the main reason for switching services.',
+  'tasks.md': '# Tasks\n## In Progress\n- [ ] Customer data migration (Raka)\n- [ ] Version 2 release notes (Bima)\n## Done\n- [x] Server load test (Dina)',
+  'notes/onboarding.md': '# Onboarding notes\n## New user problems\nNew users are confused choosing their first work folder and cannot find the data import button.\n## Idea\nAdd a sample folder and a short guide when the app is first opened.',
 };
 const chunks = [];
 for (const [file, text] of Object.entries(CORPUS)) {
@@ -1234,11 +1233,11 @@ function sim1() {
   add($('#s1-prev').value, 0.4);
   add($('#s1-q').value, 1);
   const budget = +$('#s1-b').value;
-  $('#s1-b-out').textContent = int(budget) + ' token';
+  $('#s1-b-out').textContent = int(budget) + ' tokens';
   const ranked = rankChunks(query);
   const box = $('#s1-rank');
   box.innerHTML = '';
-  if (!ranked.length) { box.innerHTML = '<div class="hit out">Tidak ada potongan yang cocok. Model masih bisa menelusuri dengan alat.</div>'; return; }
+  if (!ranked.length) { box.innerHTML = '<div class="hit out">No excerpts match. The model can still browse with tools.</div>'; return; }
   let left = budget;
   const mark = text => text.replace(/[\p{L}\p{N}]+/gu, w => {
     const t = tokenize(w)[0];
@@ -1251,25 +1250,25 @@ function sim1() {
     if (fits) left -= cost;
     const d = document.createElement('div');
     d.className = 'hit ' + (fits ? 'in' : 'out');
-    d.innerHTML = '<div class="top"><b>' + esc(chunk.file) + ' › ' + esc(chunk.heading) + '</b><span>skor ' + fmt(score, 2) + ' · ±' + cost + ' token · ' + (fits ? 'dikirim' : 'tidak muat') + '</span></div>' +
+    d.innerHTML = '<div class="top"><b>' + esc(chunk.file) + ' › ' + esc(chunk.heading) + '</b><span>score ' + fmt(score, 2) + ' · ±' + cost + ' tokens · ' + (fits ? 'sent' : 'does not fit') + '</span></div>' +
       '<div class="body">' + esc(mark(chunk.text)).replace(/\u0001/g, '<mark>').replace(/\u0002/g, '</mark>') + '</div>';
     box.appendChild(d);
   }
 }
 ['#s1-prev', '#s1-q', '#s1-b'].forEach(id => $(id).addEventListener('input', sim1));
 
-/* ---------- Simulasi 2: cache prefiks (model) ---------- */
+/* ---------- Simulation 2: prefix cache (model) ---------- */
 const NOTE = 2500, PER_TURN = 600, INSTR = 1500;
 function sim2() {
   const n = +$('#s2-n').value, S = +$('#s2-s').value;
   $('#s2-n-out').textContent = n;
-  $('#s2-s-out').textContent = int(S) + ' token';
+  $('#s2-s-out').textContent = int(S) + ' tokens';
   const rows = [];
   for (let i = 1; i <= n; i++) {
     const total = S + PER_TURN * (i - 1) + NOTE;
-    // Nyerat: system + riwayat sampai giliran sebelumnya sama persis dengan permintaan sebelumnya.
+    // Nyerat: system + the history up to the previous turn is exactly the same as in the previous request.
     const good = i === 1 ? 0 : S + PER_TURN * (i - 2);
-    // Kursor ditulis di system setelah instruksi: hanya instruksi yang tetap sama.
+    // The cursor is written in system after the instructions: only the instructions stay the same.
     const bad = i === 1 ? 0 : INSTR;
     rows.push({ i, total, good, bad });
   }
@@ -1287,62 +1286,62 @@ function sim2() {
       if (r[key]) el('rect', { x, y: base - h(r[key]), width: bw, height: h(r[key]), fill: css('--after'), rx: 2 }, g);
       el('text', { x: x + bw / 2, y: H - 5, 'text-anchor': 'middle' }, g).textContent = r.i;
       el('rect', { x: x - (slot - bw) / 2, y: 0, width: slot, height: H, fill: 'transparent' }, g);
-      attachTip(g, '<b>Pertanyaan ' + r.i + '</b><br>' + int(r.total) + ' token masuk<br>' + int(r[key]) + ' dari cache (' + fmt(r[key] / r.total * 100, 0) + '%)');
+      attachTip(g, '<b>Question ' + r.i + '</b><br>' + int(r.total) + ' input tokens<br>' + int(r[key]) + ' from cache (' + fmt(r[key] / r.total * 100, 0) + '%)');
     });
   }
   const sum = k => rows.reduce((a, r) => a + r[k], 0), tot = sum('total');
   $('#s2-bad-v').textContent = fmt(sum('bad') / tot * 100, 0) + '%';
-  $('#s2-bad-s').textContent = int(sum('bad')) + ' dari ' + int(tot) + ' token';
+  $('#s2-bad-s').textContent = int(sum('bad')) + ' of ' + int(tot) + ' tokens';
   $('#s2-good-v').textContent = fmt(sum('good') / tot * 100, 0) + '%';
-  $('#s2-good-s').textContent = int(sum('good')) + ' dari ' + int(tot) + ' token';
+  $('#s2-good-s').textContent = int(sum('good')) + ' of ' + int(tot) + ' tokens';
 }
 ['#s2-n', '#s2-s'].forEach(id => $(id).addEventListener('input', sim2));
 
-/* ---------- Simulasi 3: peragaan satu giliran ---------- */
-const RENCANA = CORPUS['rencana/oktober.md'];
-const TUGAS = '---\nkanban-plugin: board\n---\n## Dikerjakan\n- [ ] Rapat peluncuran Rabu, 8 Oktober\n- [ ] Migrasi data pelanggan (Raka)\n## Selesai\n- [x] Uji beban server (Dina)';
-const numbered = (name, text) => { const l = text.split('\n'); return '[' + name + ', baris 1–' + l.length + ' dari ' + l.length + ']\n' + l.map((x, i) => (i + 1) + '│ ' + x).join('\n'); };
+/* ---------- Simulation 3: a walkthrough of one turn ---------- */
+const PLAN = CORPUS['plans/october.md'];
+const TASKS = '---\nkanban-plugin: board\n---\n## In Progress\n- [ ] Launch meeting Wednesday, October 8\n- [ ] Customer data migration (Raka)\n## Done\n- [x] Server load test (Dina)';
+const numbered = (name, text) => { const l = text.split('\n'); return '[' + name + ', lines 1–' + l.length + ' of ' + l.length + ']\n' + l.map((x, i) => (i + 1) + '│ ' + x).join('\n'); };
 const BUDGET = 48000, ALL_TOOLS = 16;
 const intro = [
-  { type: 'user', text: 'Rapat peluncuran pindah dari Rabu ke Kamis 9 Oktober, perbarui semua dokumen.' },
-  { type: 'round', text: 'Model meminta 2 alat' },
-  { type: 'tool', name: 'atur_pekerjaan', args: '{ "tujuan": "Pindahkan rapat peluncuran ke Kamis 9 Oktober",\n  "langkah": [ { "teks": "Cari semua penyebutan Rabu, 8 Oktober", "status": "pending" },\n              { "teks": "Usulkan perubahan", "status": "pending" },\n              { "teks": "Verifikasi tidak ada tanggal lama", "status": "pending" } ] }', result: 'Pekerjaan: Pindahkan rapat peluncuran ke Kamis 9 Oktober (berjalan)', work: 'berjalan', free: true },
-  { type: 'tool', name: 'cari_teks', args: '{ "teks": "Rabu, 8 Oktober" }', result: '2 baris memuat "Rabu, 8 Oktober":\nrencana/oktober.md:5: Rilis versi 2 pada Rabu, 8 Oktober. Setelah rilis, pantau galat selama 48 jam.\ntugas.md:5: - [ ] Rapat peluncuran Rabu, 8 Oktober' },
-  { type: 'round', text: 'Model meminta 2 alat' },
-  { type: 'tool', name: 'baca_berkas', args: '{ "nama": "rencana/oktober.md" }', result: numbered('rencana/oktober.md', RENCANA) },
-  { type: 'tool', name: 'baca_berkas', args: '{ "nama": "tugas.md" }', result: numbered('tugas.md', TUGAS) },
-  { type: 'round', text: 'Model meminta 1 alat' },
-  { type: 'tool', name: 'usulkan_paket', args: '{ "tindakan": [\n  { "alat": "ubah_berkas", "argumen": "{ nama: rencana/oktober.md, teks_lama: Rabu, 8 Oktober, teks_baru: Kamis, 9 Oktober, … }" },\n  { "alat": "ubah_kanban", "argumen": "{ nama: tugas.md, aksi: ubah_kartu, … }" } ] }', wait: true, free: true },
+  { type: 'user', text: 'The launch meeting moved from Wednesday to Thursday, October 9; update all the documents.' },
+  { type: 'round', text: 'The model asks for 2 tools' },
+  { type: 'tool', name: 'set_work', args: '{ "goal": "Move the launch meeting to Thursday, October 9",\n  "steps": [ { "text": "Find every mention of Wednesday, October 8", "status": "pending" },\n             { "text": "Propose the changes", "status": "pending" },\n             { "text": "Verify no old date remains", "status": "pending" } ] }', result: 'Work: Move the launch meeting to Thursday, October 9 (running)', work: 'running', free: true },
+  { type: 'tool', name: 'search_text', args: '{ "text": "Wednesday, October 8" }', result: '2 lines contain "Wednesday, October 8":\nplans/october.md:5: Release version 2 on Wednesday, October 8. After the release, monitor errors for 48 hours.\ntasks.md:5: - [ ] Launch meeting Wednesday, October 8' },
+  { type: 'round', text: 'The model asks for 2 tools' },
+  { type: 'tool', name: 'read_file', args: '{ "name": "plans/october.md" }', result: numbered('plans/october.md', PLAN) },
+  { type: 'tool', name: 'read_file', args: '{ "name": "tasks.md" }', result: numbered('tasks.md', TASKS) },
+  { type: 'round', text: 'The model asks for 1 tool' },
+  { type: 'tool', name: 'propose_batch', args: '{ "actions": [\n  { "tool": "edit_file", "arguments": "{ name: plans/october.md, old_text: Wednesday, October 8, new_text: Thursday, October 9, … }" },\n  { "tool": "edit_kanban", "arguments": "{ name: tasks.md, action: edit, … }" } ] }', wait: true, free: true },
 ];
-const verifyArgs = '{ "pemeriksaan": [ { "berkas": "*", "jenis": "tidak_ada", "teks": "Rabu, 8 Oktober" },\n                  { "berkas": "rencana/oktober.md", "jenis": "ada", "teks": "Kamis, 9 Oktober" } ] }';
+const verifyArgs = '{ "checks": [ { "file": "*", "kind": "absent", "text": "Wednesday, October 8" },\n              { "file": "plans/october.md", "kind": "present", "text": "Thursday, October 9" } ] }';
 const endings = {
   all: [
-    { type: 'result', text: 'Seluruh paket disetujui pengguna dan sudah diterapkan.', written: 2 },
-    { type: 'round', text: 'Model meminta 2 alat' },
-    { type: 'tool', name: 'verifikasi_pekerjaan', args: verifyArgs, result: 'LULUS *: tidak_ada di seluruh folder: Rabu, 8 Oktober\nLULUS rencana/oktober.md: ada: Kamis, 9 Oktober\nLULUS rencana/oktober.md: struktur: tidak ada masalah baru\nGAGAL tugas.md: Berkas yang diubah belum diperiksa\nLULUS tugas.md: struktur: tidak ada masalah baru', ok: false, free: true, note: 'Sesi menambah pemeriksaan sendiri: tugas.md diubah tetapi tidak disebut dalam kriteria.' },
-    { type: 'tool', name: 'atur_pekerjaan', args: '{ …, semua langkah "done" }', result: 'Pekerjaan: … (berjalan)', free: true },
-    { type: 'round', text: 'Model meminta 1 alat' },
-    { type: 'tool', name: 'verifikasi_pekerjaan', args: '{ …kriteria tadi, + { "berkas": "tugas.md", "jenis": "ada", "teks": "Kamis, 9 Oktober" } }', result: 'LULUS *: tidak_ada di seluruh folder: Rabu, 8 Oktober\nLULUS rencana/oktober.md: ada: Kamis, 9 Oktober\nLULUS tugas.md: ada: Kamis, 9 Oktober\nLULUS (struktur kedua berkas): tidak ada masalah baru', ok: true, work: 'selesai dan terverifikasi', free: true },
-    { type: 'round', text: 'Jawaban akhir' },
-    { type: 'answer', text: 'Jadwal sudah dipindah ke Kamis, 9 Oktober di rencana/oktober.md (baris 5) dan kartu di tugas.md. Pemeriksaan memastikan "Rabu, 8 Oktober" tidak tersisa di folder.' },
+    { type: 'result', text: 'The whole batch was approved by the user and has been applied.', written: 2 },
+    { type: 'round', text: 'The model asks for 2 tools' },
+    { type: 'tool', name: 'verify_work', args: verifyArgs, result: 'PASS *: absent in the whole folder: Wednesday, October 8\nPASS plans/october.md: present: Thursday, October 9\nPASS plans/october.md: structure: no new problems\nFAIL tasks.md: Changed file not yet checked\nPASS tasks.md: structure: no new problems', ok: false, free: true, note: 'The session adds a check of its own: tasks.md was changed but is not mentioned in the criteria.' },
+    { type: 'tool', name: 'set_work', args: '{ …, all steps "done" }', result: 'Work: … (running)', free: true },
+    { type: 'round', text: 'The model asks for 1 tool' },
+    { type: 'tool', name: 'verify_work', args: '{ …the earlier criteria, + { "file": "tasks.md", "kind": "present", "text": "Thursday, October 9" } }', result: 'PASS *: absent in the whole folder: Wednesday, October 8\nPASS plans/october.md: present: Thursday, October 9\nPASS tasks.md: present: Thursday, October 9\nPASS (structure of both files): no new problems', ok: true, work: 'done and verified', free: true },
+    { type: 'round', text: 'Final answer' },
+    { type: 'answer', text: 'The schedule has been moved to Thursday, October 9 in plans/october.md (line 5) and the card in tasks.md. The check confirmed that "Wednesday, October 8" remains nowhere in the folder.' },
   ],
   part: [
-    { type: 'result', text: 'Pengguna hanya menerapkan sebagian paket. Diterapkan: rencana/oktober.md. Ditolak (jangan ulangi tanpa ditanya): tugas.md.', written: 1 },
-    { type: 'round', text: 'Model meminta 1 alat' },
-    { type: 'tool', name: 'verifikasi_pekerjaan', args: verifyArgs, result: 'GAGAL *: tidak_ada di seluruh folder: Rabu, 8 Oktober — masih ada di tugas.md:5\nLULUS rencana/oktober.md: ada: Kamis, 9 Oktober\nLULUS rencana/oktober.md: struktur: tidak ada masalah baru', ok: false, free: true },
-    { type: 'round', text: 'Jawaban akhir' },
-    { type: 'answer', text: 'rencana/oktober.md sudah diperbarui. Kartu di tugas.md tidak saya ubah karena Anda menolaknya, jadi "Rabu, 8 Oktober" masih ada di tugas.md:5. Beri tahu saya jika kartu itu juga perlu diubah.', work: 'tertunda' },
+    { type: 'result', text: 'The user applied only part of the batch. Applied: plans/october.md. Rejected (do not repeat without asking): tasks.md.', written: 1 },
+    { type: 'round', text: 'The model asks for 1 tool' },
+    { type: 'tool', name: 'verify_work', args: verifyArgs, result: 'FAIL *: absent in the whole folder: Wednesday, October 8 — still present in tasks.md:5\nPASS plans/october.md: present: Thursday, October 9\nPASS plans/october.md: structure: no new problems', ok: false, free: true },
+    { type: 'round', text: 'Final answer' },
+    { type: 'answer', text: 'plans/october.md has been updated. I did not change the card in tasks.md because you rejected it, so "Wednesday, October 8" is still in tasks.md:5. Let me know if that card needs to be changed too.', work: 'paused' },
   ],
   no: [
-    { type: 'result', text: 'Pengguna menolak seluruh paket. Jangan ulangi usulan ini.' },
-    { type: 'round', text: 'Jawaban akhir' },
-    { type: 'answer', text: 'Baik, tidak ada berkas yang saya ubah. Apa yang perlu disesuaikan dari usulan tadi?', work: 'tertunda' },
+    { type: 'result', text: 'The user rejected the whole batch. Do not repeat this proposal.' },
+    { type: 'round', text: 'Final answer' },
+    { type: 'answer', text: 'Understood, I changed no files. What should be adjusted in that proposal?', work: 'paused' },
   ],
 };
 let s3 = null;
 function s3reset() {
   s3 = { steps: intro.slice(), i: 0, round: 0, budget: BUDGET, work: '–', written: 0, waiting: false, done: false };
-  $('#s3-log').innerHTML = '<div><span class="k">siap</span><span>Tekan <b>Langkah berikutnya</b>.</span></div>';
+  $('#s3-log').innerHTML = '<div><span class="k">ready</span><span>Press <b>Next step</b>.</span></div>';
   s3render();
 }
 function s3add(cls, k, html) {
@@ -1356,41 +1355,41 @@ function s3add(cls, k, html) {
 }
 function s3render() {
   $('#s3-round').textContent = s3.round + ' / 10';
-  $('#s3-tools').textContent = 'alat ditawarkan: ' + (s3.round ? ALL_TOOLS : '–') + ' · putaran ke-10: tanpa alat';
+  $('#s3-tools').textContent = 'tools offered: ' + (s3.round ? ALL_TOOLS : '–') + ' · round 10: no tools';
   $('#s3-budget').textContent = int(s3.budget);
   $('#s3-meter').style.width = (s3.budget / BUDGET * 100) + '%';
   $('#s3-work').textContent = s3.work;
-  $('#s3-written').textContent = 'berkas ditulis: ' + s3.written;
+  $('#s3-written').textContent = 'files written: ' + s3.written;
   $('#s3-next').disabled = s3.waiting || s3.done;
   $('#s3-decide').hidden = !s3.waiting;
 }
 function s3step() {
   const s = s3.steps[s3.i++];
   if (!s) return;
-  if (s.type === 'user') s3add('user', 'pengguna', esc(s.text));
-  if (s.type === 'round') { s3.round++; s3add('round', 'putaran ' + s3.round, esc(s.text)); }
+  if (s.type === 'user') s3add('user', 'user', esc(s.text));
+  if (s.type === 'round') { s3.round++; s3add('round', 'round ' + s3.round, esc(s.text)); }
   if (s.type === 'tool') {
     let body = '<b>' + s.name + '</b><pre><code>' + esc(s.args) + '</code></pre>';
     if (s.wait) {
-      body += '<span class="bad">Menunggu keputusan pengguna di jendela tinjau…</span> Belum ada berkas yang ditulis.';
+      body += '<span class="bad">Waiting for the user\'s decision in the review window…</span> No files have been written yet.';
       s3.waiting = true;
     } else {
       const cost = s.free ? 0 : Math.ceil(s.result.length / 3);
       s3.budget -= cost;
-      body += '<pre><code>' + esc(s.result) + '</code></pre>' + (s.ok === true ? '<span class="ok">lulus</span> · ' : s.ok === false ? '<span class="bad">gagal</span> · ' : '') +
-        (s.free ? 'tidak memakai anggaran bacaan' : '−' + int(cost) + ' token anggaran bacaan') + (s.note ? '<br>' + esc(s.note) : '');
+      body += '<pre><code>' + esc(s.result) + '</code></pre>' + (s.ok === true ? '<span class="ok">passed</span> · ' : s.ok === false ? '<span class="bad">failed</span> · ' : '') +
+        (s.free ? 'does not use the read budget' : '−' + int(cost) + ' tokens of read budget') + (s.note ? '<br>' + esc(s.note) : '');
     }
     if (s.work) s3.work = s.work;
-    s3add('tool', 'alat', body);
+    s3add('tool', 'tool', body);
   }
   if (s.type === 'result') {
     if (s.written) s3.written = s.written;
-    s3add('tool', 'hasil', esc(s.text) + (s.written ? ' Jendela menulis berkas setelah preflight lolos.' : ''));
+    s3add('tool', 'result', esc(s.text) + (s.written ? ' The window wrote the files after the preflight passed.' : ''));
   }
   if (s.type === 'answer') {
     if (s.work) s3.work = s.work;
-    s3add('', 'jawaban', esc(s.text));
-    s3add('', 'selesai', 'Giliran berakhir. ' + (s3.work === 'tertunda' ? 'Status pekerjaan menjadi <b>tertunda</b> dan bisa dilanjutkan nanti.' : 'Pekerjaan berstatus <b>' + s3.work + '</b> karena verifikasi lulus dan semua langkah selesai.'));
+    s3add('', 'answer', esc(s.text));
+    s3add('', 'done', 'The turn ends. ' + (s3.work === 'paused' ? 'The work status becomes <b>paused</b> and can be continued later.' : 'The work has the status <b>' + s3.work + '</b> because verification passed and all steps are done.'));
     s3.done = true;
   }
   s3render();
@@ -1398,7 +1397,7 @@ function s3step() {
 function s3decide(kind) {
   if (!s3.waiting) return;
   s3.waiting = false;
-  s3add('user', 'pengguna', { all: 'Terapkan semua', part: 'Hapus centang tugas.md, lalu Terapkan 1 dari 2', no: 'Tolak paket' }[kind]);
+  s3add('user', 'user', { all: 'Apply all', part: 'Uncheck tasks.md, then Apply 1 of 2', no: 'Reject the batch' }[kind]);
   s3.steps = s3.steps.slice(0, s3.i).concat(endings[kind]);
   s3step();
 }
@@ -1408,13 +1407,13 @@ $('#s3-all').addEventListener('click', () => s3decide('all'));
 $('#s3-part').addEventListener('click', () => s3decide('part'));
 $('#s3-no').addEventListener('click', () => s3decide('no'));
 
-/* ---------- Simulasi 4: preflight dan Urungkan (salinan changes.ts) ---------- */
+/* ---------- Simulation 4: preflight and Undo (a copy of changes.ts) ---------- */
 function preflight(c, read) {
   const at = read(c.file);
-  if (c.kind === 'create') return at === null ? null : c.file + ' sudah ada';
-  if (at === null) return c.file + ' tidak ada lagi';
-  if (at !== c.before) return c.file + ' berubah sejak diusulkan; minta usulan baru';
-  if (c.kind === 'move' && c.to && read(c.to) !== null) return c.to + ' sudah ada';
+  if (c.kind === 'create') return at === null ? null : c.file + ' already exists';
+  if (at === null) return c.file + ' no longer exists';
+  if (at !== c.before) return c.file + ' changed since it was proposed; ask for a new proposal';
+  if (c.kind === 'move' && c.to && read(c.to) !== null) return c.to + ' already exists';
   return null;
 }
 function changeState(c, read) {
@@ -1431,7 +1430,7 @@ function changeState(c, read) {
   }
 }
 function invertChange(c) {
-  const reason = 'Urungkan: ' + c.reason;
+  const reason = 'Undo: ' + c.reason;
   switch (c.kind) {
     case 'create': return { kind: 'delete', file: c.file, before: c.after, after: '', reason };
     case 'delete': return { kind: 'create', file: c.file, before: '', after: c.before, reason };
@@ -1439,8 +1438,8 @@ function invertChange(c) {
     default: return { kind: 'edit', file: c.file, before: c.after, after: c.before, reason };
   }
 }
-const s4file = RENCANA.replace(/\n## /g, '\n\n## ');
-const s4change = { kind: 'edit', file: 'rencana/oktober.md', before: s4file, after: s4file.replace('Rabu, 8 Oktober', 'Kamis, 9 Oktober'), reason: 'Rilis pindah ke Kamis sesuai permintaan pengguna.' };
+const s4file = PLAN.replace(/\n## /g, '\n\n## ');
+const s4change = { kind: 'edit', file: 'plans/october.md', before: s4file, after: s4file.replace('Wednesday, October 8', 'Thursday, October 9'), reason: 'The release moves to Thursday as the user requested.' };
 let s4applied = null;
 const s4read = file => file === s4change.file ? $('#s4-file').value : null;
 function s4diff() {
@@ -1451,53 +1450,53 @@ function s4diff() {
   out.push('<div class="del">- ' + esc(a[i]) + '</div>', '<div class="add">+ ' + esc(b[i]) + '</div>');
   for (let k = i + 1; k < Math.min(a.length, i + 2); k++) out.push('<div>  ' + esc(a[k]) + '</div>');
   $('#s4-diff').innerHTML = out.join('');
-  $('#s4-reason').textContent = 'Alasan: ' + s4change.reason;
+  $('#s4-reason').textContent = 'Reason: ' + s4change.reason;
 }
 function s4msg(text, cls) {
   const st = changeState(s4change, s4read);
   const box = $('#s4-msg');
   box.className = 'msg' + (cls ? ' ' + cls : '');
-  box.innerHTML = (text ? text + '<br>' : '') + 'changeState(usulan) = <code>' + st + '</code>' +
-    { before: ' · isi masih sama dengan saat diusulkan', after: ' · isi sama dengan hasil usulan', other: ' · isi berbeda dari keduanya, jadi preflight akan menolak' }[st];
+  box.innerHTML = (text ? text + '<br>' : '') + 'changeState(proposal) = <code>' + st + '</code>' +
+    { before: ' · the contents are still the same as when it was proposed', after: ' · the contents equal the result of the proposal', other: ' · the contents differ from both, so preflight would reject it' }[st];
 }
 $('#s4-apply').addEventListener('click', () => {
   const err = preflight(s4change, s4read);
-  if (err) return s4msg('<b>Terapkan ditolak:</b> ' + esc(err) + '. Tidak ada yang ditulis.', 'bad');
+  if (err) return s4msg('<b>Apply rejected:</b> ' + esc(err) + '. Nothing was written.', 'bad');
   $('#s4-file').value = s4change.after;
   s4applied = s4change;
   $('#s4-undo').disabled = false;
-  s4msg('<b>Diterapkan.</b> Journal: <code>applied</code>.', 'ok');
+  s4msg('<b>Applied.</b> Journal: <code>applied</code>.', 'ok');
 });
 $('#s4-undo').addEventListener('click', () => {
   const inv = invertChange(s4applied);
   const err = preflight(inv, s4read);
-  if (err) return s4msg('<b>Urungkan ditolak:</b> ' + esc(err) + '. Suntingan Anda tidak ditimpa.', 'bad');
+  if (err) return s4msg('<b>Undo rejected:</b> ' + esc(err) + '. Your edit was not overwritten.', 'bad');
   $('#s4-file').value = inv.after;
   s4applied = null;
   $('#s4-undo').disabled = true;
-  s4msg('<b>Diurungkan</b> lewat kebalikan perubahan. Journal: <code>reverted</code>.', 'ok');
+  s4msg('<b>Undone</b> through the inverse change. Journal: <code>reverted</code>.', 'ok');
 });
 $('#s4-reset').addEventListener('click', () => { $('#s4-file').value = s4file; s4applied = null; $('#s4-undo').disabled = true; s4msg(''); });
 $('#s4-file').addEventListener('input', () => s4msg(''));
 
-/* ---------- Simulasi 5: reconcileEvents (salinan journal.ts) ---------- */
+/* ---------- Simulation 5: reconcileEvents (a copy of journal.ts) ---------- */
 const s5changes = [
-  { label: 'ubah rencana/oktober.md', opts: { before: 'isi masih seperti sebelum usulan', after: 'isi sudah sama dengan usulan', other: 'isi berbeda dari keduanya' }, def: 'after' },
-  { label: 'buat catatan/rilis-v2.md', opts: { before: 'berkas belum ada', after: 'ada, isinya sama dengan usulan', other: 'ada, isinya berbeda' }, def: 'after' },
-  { label: 'pindah draf/ide.md → arsip/ide.md', opts: { before: 'masih di draf/, tujuan kosong', after: 'sudah di arsip/, isi sama', other: 'keduanya ada atau isinya berubah' }, def: 'before' },
+  { label: 'edit plans/october.md', opts: { before: 'contents still as before the proposal', after: 'contents already equal the proposal', other: 'contents differ from both' }, def: 'after' },
+  { label: 'create notes/release-v2.md', opts: { before: 'the file does not exist yet', after: 'exists, contents equal the proposal', other: 'exists, contents differ' }, def: 'after' },
+  { label: 'move drafts/idea.md → archive/idea.md', opts: { before: 'still in drafts/, destination empty', after: 'already in archive/, same contents', other: 'both exist or the contents changed' }, def: 'before' },
 ];
-const s5files = 'rencana/oktober.md, catatan/rilis-v2.md, draf/ide.md → arsip/ide.md';
+const s5files = 'plans/october.md, notes/release-v2.md, drafts/idea.md → archive/idea.md';
 function sim5() {
   const states = s5changes.map((_, i) => $('#s5-sel-' + i).value);
   let status, summary, cls;
-  if (states.every(s => s === 'after')) { status = 'applied'; cls = 'ok'; summary = 'Hasil aktual cocok dengan seluruh usulan; dipulihkan setelah interupsi.'; }
-  else if (states.every(s => s === 'before')) { status = 'interrupted'; cls = ''; summary = 'Proses berhenti sebelum penerapan; perlu usulan dan persetujuan baru.'; }
-  else { status = 'failed'; cls = 'bad'; summary = 'Isi aktual berbeda atau paket diterapkan sebagian; periksa berkas sebelum melanjutkan.'; }
-  const label = { applied: 'Diterapkan', interrupted: 'Terputus', failed: 'Gagal' }[status];
+  if (states.every(s => s === 'after')) { status = 'applied'; cls = 'ok'; summary = 'The actual result matches the entire proposal; recovered after the interruption.'; }
+  else if (states.every(s => s === 'before')) { status = 'interrupted'; cls = ''; summary = 'The process stopped before applying; a new proposal and approval are needed.'; }
+  else { status = 'failed'; cls = 'bad'; summary = 'The actual contents differ or the batch was only partly applied; check the files before continuing.'; }
+  const label = { applied: 'Applied', interrupted: 'Interrupted', failed: 'Failed' }[status];
   const out = $('#s5-out');
   out.className = 'msg ' + cls;
   out.innerHTML = 'status: <code>proposed</code> → <code>' + status + '</code><br>' + esc(summary);
-  $('#s5-journal').textContent = label + ': usulkan_paket ' + s5files + ' — ' + summary;
+  $('#s5-journal').textContent = label + ': propose_batch ' + s5files + ' — ' + summary;
 }
 (() => {
   const box = $('#s5-states');
@@ -1510,7 +1509,7 @@ function sim5() {
   });
 })();
 
-/* ---------- Simulasi 6: antrean harness (salinan RunQueue di agent/harness.ts) ---------- */
+/* ---------- Simulation 6: the harness queue (a copy of RunQueue in agent/harness.ts) ---------- */
 class RunQueue {
   constructor() { this.runs = []; this.seq = 0; }
   add(run) {
@@ -1529,8 +1528,8 @@ class RunQueue {
   }
 }
 let s6q = new RunQueue();
-const s6names = { working: 'bekerja', queued: 'antre', done: 'selesai', failed: 'gagal', stopped: 'dibatalkan' };
-const s6tasks = ['Checkout QRIS', 'Tes keranjang', 'Rapikan README', 'Perbaiki ongkir', 'Ekspor laporan', 'Validasi stok'];
+const s6names = { working: 'working', queued: 'queued', done: 'done', failed: 'failed', stopped: 'cancelled' };
+const s6tasks = ['QRIS checkout', 'Cart tests', 'Tidy the README', 'Fix shipping costs', 'Export the report', 'Validate stock'];
 function s6render(text) {
   const box = $('#s6-runs');
   box.innerHTML = '';
@@ -1545,27 +1544,27 @@ function s6render(text) {
       b.textContent = label;
       b.addEventListener('click', () => {
         const next = s6q.end(r, status);
-        s6render('end(#' + r.id + ', <code>' + status + '</code>)' + (next ? ' → giliran <b>#' + next.id + '</b> di ' + esc(next.project) + ' mulai bekerja.' : ' → tidak ada giliran baru' + (status === 'stopped' ? ' (membatalkan antrean tidak memberi giliran).' : '.')));
+        s6render('end(#' + r.id + ', <code>' + status + '</code>)' + (next ? ' → the turn of <b>#' + next.id + '</b> in ' + esc(next.project) + ' starts working.' : ' → no new turn' + (status === 'stopped' ? ' (cancelling a queued run gives nobody a turn).' : '.')));
       });
       acts.appendChild(b);
     };
-    if (r.status === 'working') { act('Selesai', 'done'); act('Gagal', 'failed'); }
-    if (r.status === 'queued') act('Batalkan', 'stopped');
+    if (r.status === 'working') { act('Done', 'done'); act('Fail', 'failed'); }
+    if (r.status === 'queued') act('Cancel', 'stopped');
     box.appendChild(row);
   }
   const msg = $('#s6-msg');
   msg.className = 'msg';
-  msg.innerHTML = text || 'Belum ada kartu yang ditugaskan.';
+  msg.innerHTML = text || 'No cards have been assigned yet.';
 }
 function s6add(project) {
   const r = s6q.add({ card: s6tasks[s6q.seq % s6tasks.length], project, folder: '/home/eka/' + project });
-  s6render('add(#' + r.id + ') di ' + esc(project) + ' → <code>' + r.status + '</code>' + (r.status === 'queued' ? ': folder ini sedang dikerjakan run lain.' : '.'));
+  s6render('add(#' + r.id + ') in ' + esc(project) + ' → <code>' + r.status + '</code>' + (r.status === 'queued' ? ': another run is working in this folder.' : '.'));
 }
 $('#s6-a').addEventListener('click', () => s6add('web-ecommerce'));
-$('#s6-b').addEventListener('click', () => s6add('toko-admin'));
+$('#s6-b').addEventListener('click', () => s6add('shop-admin'));
 $('#s6-reset').addEventListener('click', () => { s6q = new RunQueue(); s6render(''); });
 
-/* ---------- Simulasi 7: endsWithQuestion (salinan agent/harness.ts) ---------- */
+/* ---------- Simulation 7: endsWithQuestion (a copy of agent/harness.ts) ---------- */
 function endsWithQuestion(text) {
   const last = text.trim().split('\n').map(l => l.trim()).filter(Boolean).pop() || '';
   return /\?[\s*_`)"'»”]*$/u.test(last.replace(/\p{Extended_Pictographic}/gu, '').trim());
@@ -1576,12 +1575,12 @@ function sim7() {
   const out = $('#s7-out');
   out.className = 'msg' + (q ? ' ok' : '');
   out.innerHTML = 'endsWithQuestion() = <code>' + q + '</code> → ' + (q
-    ? 'status <code>waiting</code>: kartu ⏸ menunggu, balasan Anda dikirim sebagai <code>prompt</code> ke proses yang sama.'
-    : 'stdin ditutup, pi keluar, kartu ke <i>Review</i>. Kalau ternyata pi bertanya, masih ada <i>Balas pi…</i> (<code>--session</code>).');
+    ? 'status <code>waiting</code>: the card is ⏸ waiting, your reply is sent as a <code>prompt</code> to the same process.'
+    : 'stdin is closed, pi exits, the card goes to <i>Review</i>. If pi was in fact asking, there is still <i>Reply to pi…</i> (<code>--session</code>).');
 }
 $('#s7-text').addEventListener('input', sim7);
 
-/* ---------- Simulasi 8: catatan terkait (salinan markdown/wikilink.ts dan agent/harness.ts) ---------- */
+/* ---------- Simulation 8: related notes (a copy of markdown/wikilink.ts and agent/harness.ts) ---------- */
 const S8_NOTE_CHARS = 300, S8_CONTEXT_CHARS = 24000;
 const s8fold = s => s.normalize('NFC').toLowerCase();
 function s8parse(inner) {
@@ -1623,25 +1622,25 @@ function s8fenced(text) {
   return fence + 'markdown\n' + text + '\n' + fence;
 }
 function s8sectionText(notes) {
-  if (!notes.length) return ['(kartu tidak menautkan catatan: prompt tanpa bagian konteks)'];
+  if (!notes.length) return ['(the card links no notes: the prompt has no context section)'];
   const name = l => '[[' + l.target + (l.heading ? '#' + l.heading : '') + ']]';
-  const lines = ['## Catatan terkait dari Nyerat', '', 'Kartu ini menautkan catatan berikut. Isinya disalin dari folder kerja Nyerat …'];
+  const lines = ['## Related notes from Nyerat', '', 'This card links the following notes. Their contents are copied from the Nyerat work folder …'];
   let budget = S8_CONTEXT_CHARS;
   for (const note of notes) {
-    if (!note.file) { lines.push('', '### ' + name(note.link), '', '(tidak ditemukan di folder kerja Nyerat)'); continue; }
+    if (!note.file) { lines.push('', '### ' + name(note.link), '', '(not found in the Nyerat work folder)'); continue; }
     const title = '### ' + name(note.link) + ' — ' + note.file;
-    if (note.text === null) { lines.push('', title, '', '(bagian "' + note.link.heading + '" tidak ditemukan di berkas ini)'); continue; }
-    if (budget <= 0) { lines.push('', title, '', '(dilewati: batas konteks catatan terkait sudah tercapai)'); continue; }
+    if (note.text === null) { lines.push('', title, '', '(the section "' + note.link.heading + '" was not found in this file)'); continue; }
+    if (budget <= 0) { lines.push('', title, '', '(skipped: the related notes context limit has been reached)'); continue; }
     const limit = Math.min(S8_NOTE_CHARS, budget), body = note.text.trim();
-    const cut = body.length > limit ? body.slice(0, limit) + '\n…(dipotong, ' + (body.length - limit) + ' karakter lagi)' : body;
+    const cut = body.length > limit ? body.slice(0, limit) + '\n…(truncated, ' + (body.length - limit) + ' more characters)' : body;
     budget -= Math.min(body.length, limit);
     lines.push('', title, '', s8fenced(cut));
   }
   return lines;
 }
 function sim8() {
-  const files = { 'spek/Spesifikasi.md': $('#s8-note').value, 'Catatan Rapat.md': 'Klien minta QRIS dinamis, bukan statis.' };
-  // resolveWikiLink disederhanakan: nama berkas tanpa ekstensi, tanpa membedakan huruf besar.
+  const files = { 'specs/Specification.md': $('#s8-note').value, 'Meeting Notes.md': 'The client asked for dynamic QRIS, not static.' };
+  // resolveWikiLink simplified: the file name without its extension, case-insensitive.
   const find = target => Object.keys(files).find(f => s8fold(f.split('/').pop().replace(/\.md$/, '')) === s8fold(target)) || null;
   const notes = s8links($('#s8-card').value).map(link => {
     const file = find(link.target);
@@ -1653,40 +1652,40 @@ function sim8() {
 $('#s8-card').addEventListener('input', sim8);
 $('#s8-note').addEventListener('input', sim8);
 
-/* ---------- simulasi 9: WorkList (salinan aturan ui/worklist.ts dan workText di agent/work.ts) ---------- */
+/* ---------- simulation 9: WorkList (a copy of the rules in ui/worklist.ts and workText in agent/work.ts) ---------- */
 const s9 = {
-  goal: 'Sinkronkan jadwal rilis dengan keputusan rapat 1 Oktober',
-  note: 'Rilis publik diundur ke 22 November.',
+  goal: 'Sync the release schedule with the October 1 meeting decisions',
+  note: 'The public release is postponed to November 22.',
   steps: [
-    { text: 'Cari keputusan rapat yang belum masuk rencana', status: 'done' },
-    { text: 'Perbarui rencana, papan, dan catatan rapat', status: 'pending' },
-    { text: 'Periksa hasilnya', status: 'pending' },
+    { text: 'Find the meeting decisions that are not in the plan yet', status: 'done' },
+    { text: 'Update the plan, the board, and the meeting notes', status: 'pending' },
+    { text: 'Check the result', status: 'pending' },
   ],
 };
-const S9_STATUS = { running: 'berjalan', paused: 'tertunda', failed: 'gagal', complete: 'selesai dan terverifikasi' };
+const S9_STATUS = { running: 'running', paused: 'paused', failed: 'failed', complete: 'finished and verified' };
 function sim9() {
   const running = $('#s9-running').checked, status = $('#s9-status').value;
   const done = s9.steps.filter(s => s.status === 'done').length;
-  const meta = [done + '/' + s9.steps.length + ' langkah', running ? 'sedang bekerja' : S9_STATUS[status]];
+  const meta = [done + '/' + s9.steps.length + ' steps', running ? 'working' : S9_STATUS[status]];
   const current = running && status === 'running' ? s9.steps.findIndex(s => s.status === 'pending') : -1;
   const rows = s9.steps.map((st, i) => {
     const cur = i === current;
     const mk = cur ? '<span class="mk spin"></span>' : st.status === 'done' ? '<span class="mk done">✓</span>'
       : st.status === 'blocked' ? '<span class="mk blocked">⚠</span>' : '<span class="mk pending"></span>';
-    const state = { pending: cur ? 'sedang dikerjakan' : 'belum', done: 'selesai', blocked: 'tertunda' }[st.status];
+    const state = { pending: cur ? 'in progress' : 'not yet', done: 'done', blocked: 'blocked' }[st.status];
     return '<li class="' + st.status + '" aria-label="' + esc(st.text + ' — ' + state) + '">' + mk + '<span>' + esc(st.text) + '</span></li>';
   });
   $('#s9-view').innerHTML = '<div class="goal">' + esc(s9.goal) + '</div><div class="meta">' + meta.join(' · ') + '</div><ul>' + rows.join('') + '</ul><div class="meta" style="margin:6px 0 0">' + esc(s9.note) + '</div>';
-  $('#s9-text').textContent = 'Pekerjaan: ' + s9.goal + ' (' + S9_STATUS[status] + ')\n' +
-    s9.steps.map(st => '- [' + (st.status === 'done' ? 'x' : ' ') + '] ' + st.text + (st.status === 'blocked' ? ' — tertunda' : '')).join('\n') + '\n' + s9.note;
+  $('#s9-text').textContent = 'Work: ' + s9.goal + ' (' + S9_STATUS[status] + ')\n' +
+    s9.steps.map(st => '- [' + (st.status === 'done' ? 'x' : ' ') + '] ' + st.text + (st.status === 'blocked' ? ' — blocked' : '')).join('\n') + '\n' + s9.note;
 }
-$('#s9-steps').innerHTML = s9.steps.map((st, i) => '<label><select data-i="' + i + '" aria-label="Status langkah ' + (i + 1) + '">' +
+$('#s9-steps').innerHTML = s9.steps.map((st, i) => '<label><select data-i="' + i + '" aria-label="Status of step ' + (i + 1) + '">' +
   ['pending', 'done', 'blocked'].map(v => '<option' + (v === st.status ? ' selected' : '') + '>' + v + '</option>').join('') + '</select>' + esc(st.text) + '</label>').join('');
 $('#s9-steps').addEventListener('change', e => { const i = +e.target.dataset.i; if (s9.steps[i]) { s9.steps[i].status = e.target.value; sim9(); } });
 $('#s9-running').addEventListener('change', sim9);
 $('#s9-status').addEventListener('change', sim9);
 
-/* ---------- mulai ---------- */
+/* ---------- start ---------- */
 function drawAll() { toolsChart(); sim2(); }
 drawAll();
 sim1();
@@ -1700,7 +1699,7 @@ sim8();
 sim9();
 let resizeTimer = 0;
 addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawAll, 120); });
-/* gambar ulang saat tema berubah supaya warna SVG mengikuti */
+/* redraw when the theme changes so the SVG colors follow */
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAll);
 })();
 </script>
