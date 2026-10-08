@@ -1,96 +1,96 @@
-# Pemeriksaan performa fitur agentic — 5 Oktober 2026
+# Performance check of the agentic features — 5 October 2026
 
-Fitur baru mencakup rencana pekerjaan, paket perubahan, verifikasi, journal, checkpoint,
-retry, dan cuplikan riwayat. Pengukuran lokal tidak memanggil penyedia model.
+The new features include the work plan, change batches, verification, the journal, checkpoints,
+retry, and history excerpts. The local measurements do not call a model provider.
 
-## Biaya paket dan checkpoint
+## The cost of batches and checkpoints
 
-Perintah: `npm run bench:agentic`. Sepuluh pengulangan setelah tiga pemanasan,
-20 berkas per paket, ukuran 30.000 dan 480.000 karakter per berkas. Fixture mengganti
-seluruh isi berkas; ini sengaja lebih berat daripada mengganti satu tanggal.
-Checkpoint mencakup serialisasi, tulis sinkron, baca, dan parsing ulang untuk memastikan
-snapshot lengkap. Kontrol memakai pertanyaan/jawaban yang sama tanpa journal;
-kontrol ini mengukur tambahan biaya metadata, bukan pembandingan seluruh aplikasi lama.
+Command: `npm run bench:agentic`. Ten repetitions after three warm-ups,
+20 files per batch, sizes of 30,000 and 480,000 characters per file. The fixture replaces
+the whole contents of a file; this is deliberately heavier than replacing a single date.
+A checkpoint covers serialization, a synchronous write, a read, and parsing again to make sure the
+snapshot is complete. The control uses the same question/answer without a journal;
+this control measures the additional cost of the metadata, not a comparison with the whole old app.
 
-| Operasi | Ukuran per berkas | Median (ms) | p95 (ms) | Maksimum (ms) |
+| Operation | Size per file | Median (ms) | p95 (ms) | Maximum (ms) |
 | --- | ---: | ---: | ---: | ---: |
-| Rencanakan paket | 30.000 karakter | 8,984 | 12,003 | 12,003 |
-| Verifikasi hasil | 30.000 karakter | 0,246 | 0,329 | 0,329 |
-| Checkpoint tanpa journal | 30.000 karakter | 3,524 | 4,506 | 4,506 |
-| Checkpoint dengan journal | 30.000 karakter | 19,460 | 31,577 | 31,577 |
-| Rencanakan paket | 480.000 karakter | 113,940 | 122,101 | 122,101 |
-| Verifikasi hasil | 480.000 karakter | 3,428 | 4,734 | 4,734 |
-| Checkpoint tanpa journal | 480.000 karakter | 3,455 | 4,611 | 4,611 |
-| Checkpoint dengan journal | 480.000 karakter | 188,555 | 212,635 | 212,635 |
-| Cuplikan 200 giliran (24.000 karakter/giliran) | — | 2,928 | 5,321 | 5,321 |
+| Plan batch | 30,000 characters | 8.984 | 12.003 | 12.003 |
+| Verify the result | 30,000 characters | 0.246 | 0.329 | 0.329 |
+| Text checkpoint without a journal (control) | 30,000 characters | 3.524 | 4.506 | 4.506 |
+| Checkpoint with a journal | 30,000 characters | 19.460 | 31.577 | 31.577 |
+| Plan batch | 480,000 characters | 113.940 | 122.101 | 122.101 |
+| Verify the result | 480,000 characters | 3.428 | 4.734 | 4.734 |
+| Text checkpoint without a journal (control) | 480,000 characters | 3.455 | 4.611 | 4.611 |
+| Checkpoint with a journal | 480,000 characters | 188.555 | 212.635 | 212.635 |
+| Summarize 200 turns (24,000 characters/turn) | — | 2.928 | 5.321 | 5.321 |
 
-Journal menyimpan snapshot sebelum/sesudah agar diff dapat dibuka lagi dan interupsi
-bisa direkonsiliasi. Biayanya nyata: paket 20 dokumen besar dapat menahan thread utama.
-Angka checkpoint di atas juga mencakup pembacaan ulang yang tidak dilakukan aplikasi
-pada setiap penyimpanan, sehingga bukan pengukuran jeda UI secara langsung.
-Penulisan checkpoint masih sinkron; hasil ini tidak membuktikan kenyamanan untuk
-percakapan dengan ratusan snapshot besar. Tidak ada klaim peningkatan performa.
+The journal stores before/after snapshots so that a diff can be opened again and an interruption
+can be reconciled. The cost is real: a batch of 20 large documents can hold up the main thread.
+The checkpoint numbers above also include a reread that the app does not do
+on every save, so they are not a direct measurement of a UI pause.
+Writing a checkpoint is still synchronous; this result does not prove comfort for
+a conversation with hundreds of large snapshots. There is no claim of a performance improvement.
 
-## Benchmark editor
+## The editor benchmark
 
-`npm run bench:compare` selesai pada fixture mixed, 100 blok untuk modul dan 25/50/100
-blok GUI, 10 pengulangan, dengan baseline proyek yang tetap dipertahankan.
-Pada pengukuran awal Enter 50 blok meningkat dari median 2,67 ke 6,93 ms
-(p95/maksimum 13,77 ms), sedangkan 25 dan 100 blok masing-masing 2,44 dan 2,40 ms.
-Angka ini diperiksa lagi dengan snapshot kode sebelum perubahan pada lingkungan yang
-sama; hasil pembandingan langsung berikut menunjukkan kenaikan Enter tersebut tidak terulang.
+`npm run bench:compare` finished on the mixed fixture, 100 blocks for the module and 25/50/100
+GUI blocks, 10 repetitions, with the project baseline kept unchanged.
+In the first measurement, Enter at 50 blocks rose from a median of 2.67 to 6.93 ms
+(p95/maximum 13.77 ms), while 25 and 100 blocks were 2.44 and 2.40 ms.
+This number was checked again with a snapshot of the code before the change in the same
+environment; the direct comparison that follows shows that the rise of Enter did not repeat.
 
-| Operasi (50 blok) | Median sebelum → sesudah (ms) | p95 sebelum → sesudah (ms) | Maksimum sebelum → sesudah (ms) |
+| Operation (50 blocks) | Median before → after (ms) | p95 before → after (ms) | Maximum before → after (ms) |
 | --- | ---: | ---: | ---: |
-| setText + sorot + layout | 140,054 → 131,954 | 165,093 → 144,422 | 165,093 → 144,422 |
-| buka: jeda terpanjang | 24,382 → 24,142 | 33,760 → 28,203 | 33,760 → 28,203 |
-| ketik per karakter | 1,088 → 1,114 | 12,177 → 9,052 | 16,455 → 16,218 |
-| Enter paragraf baru | 2,328 → 1,885 | 13,008 → 12,342 | 13,008 → 12,342 |
-| paste besar + Unicode | 131,704 → 142,518 | 160,982 → 149,871 | 160,982 → 149,871 |
-| undo paste besar | 2,415 → 2,477 | 3,758 → 3,702 | 3,758 → 3,702 |
-| redo paste besar | 145,763 → 153,611 | 157,563 → 166,101 | 157,563 → 166,101 |
+| setText + highlight + layout | 140.054 → 131.954 | 165.093 → 144.422 | 165.093 → 144.422 |
+| open: longest pause | 24.382 → 24.142 | 33.760 → 28.203 | 33.760 → 28.203 |
+| type per character | 1.088 → 1.114 | 12.177 → 9.052 | 16.455 → 16.218 |
+| Enter new paragraph | 2.328 → 1.885 | 13.008 → 12.342 | 13.008 → 12.342 |
+| large paste + Unicode | 131.704 → 142.518 | 160.982 → 149.871 | 160.982 → 149.871 |
+| undo large paste | 2.415 → 2.477 | 3.758 → 3.702 | 3.758 → 3.702 |
+| redo large paste | 145.763 → 153.611 | 157.563 → 166.101 | 157.563 → 166.101 |
 
-Kedua pengukuran memakai fixture mixed, 100 blok modul, 50 blok GUI, 10 pengulangan, GJS/GTK dan konfigurasi Xvfb yang sama. Snapshot sebelum berasal dari HEAD saat pekerjaan dimulai, dibangun di folder sementara dengan dependensi yang sama. Enter turun dari 2,328 ke 1,885 ms pada pengukuran langsung; ini tidak dianggap optimasi karena implementasi Enter tidak berubah. findTables naik sekitar 32% tetapi hanya 0,25 → 0,33 ms (p95 0,31 → 0,49 ms); kode parser tidak berubah dan angka sekecil ini peka terhadap derau. Tidak ada regresi median editor lebih dari 25% pada pembandingan langsung. Hasil tidak dipakai mengganti baseline proyek.
+Both measurements use the mixed fixture, 100 module blocks, 50 GUI blocks, 10 repetitions, and the same GJS/GTK and Xvfb configuration. The snapshot before comes from the HEAD when the work started, built in a temporary folder with the same dependencies. Enter went down from 2.328 to 1.885 ms in the direct measurement; this is not counted as an optimization because the Enter implementation did not change. findTables rose by about 32% but only 0.25 → 0.33 ms (p95 0.31 → 0.49 ms); the parser code did not change and a number this small is sensitive to noise. There was no editor median regression of more than 25% in the direct comparison. The result was not used to replace the project baseline.
 
-Pengukuran ini tidak menilai latensi API, ketepatan pilihan kriteria oleh model,
-kemampuan model menyusun rencana, atau durasi pengguna meninjau diff. Evaluasi model
-tersedia lewat `npm run test:live -- --agentic`; belum dijalankan pada sesi ini karena
-memakai kuota API.
+This measurement does not assess the API latency, the accuracy of the model's choice of criteria,
+the ability of the model to write a plan, or how long the user takes to review a diff. A model evaluation
+is available through `npm run test:live -- --agentic`; it was not run in this session because it
+uses API quota.
 
-## Tindakan dan verifikasi tambahan — 5 Oktober 2026
+## Additional actions and verification — 5 October 2026
 
-Perubahan: alat `sisip_teks`, `hapus_berkas`, `pindah_berkas`, `ubah_berkas` dengan `semua`,
-aksi kanban tambahan, persetujuan paket sebagian, Urungkan, alat riwayat Git, dan verifikasi
-struktur (`markdown/lint.ts`) serta pencarian sisa teks di seluruh folder (berkas `"*"`).
+The changes: the tools `insert_text`, `delete_file`, `move_file`, `edit_file` with `all`,
+additional kanban actions, partial batch approval, Undo, the Git history tools, and the verification of
+structure (`markdown/lint.ts`) and the search for leftover text across the whole folder (the file `"*"`).
 
-`npm run bench:agentic`, 10 pengulangan setelah 3 pemanasan, 20 berkas per paket; bentuk fixture
-sama dengan bagian di atas (berkas tanpa tabel atau tautan, jadi seluruh biaya adalah penelusuran baris).
-Verifikasi struktur mengurai tiap berkas dua kali (isi sekarang dan isi sebelum pekerjaan).
+`npm run bench:agentic`, 10 repetitions after 3 warm-ups, 20 files per batch; the shape of the fixture
+is the same as in the section above (files without tables or links, so the whole cost is walking the lines).
+The structure verification parses every file twice (the current contents and the contents from before the work).
 
-| Operasi | Ukuran per berkas | Median (ms) | p95 (ms) | Maksimum (ms) |
+| Operation | Size per file | Median (ms) | p95 (ms) | Maximum (ms) |
 | --- | ---: | ---: | ---: | ---: |
-| Verifikasi struktur (dengan baseline) | 30.000 karakter | 10,113 | 10,808 | 10,808 |
-| Cari sisa teks di seluruh folder (`*`) | 30.000 karakter | 0,279 | 0,621 | 0,621 |
-| Verifikasi struktur (dengan baseline) | 480.000 karakter | 157,345 | 160,572 | 160,572 |
-| Cari sisa teks di seluruh folder (`*`) | 480.000 karakter | 3,394 | 4,627 | 4,627 |
+| Verify structure (with baseline) | 30,000 characters | 10.113 | 10.808 | 10.808 |
+| Find leftover text across the folder (`*`) | 30,000 characters | 0.279 | 0.621 | 0.621 |
+| Verify structure (with baseline) | 480,000 characters | 157.345 | 160.572 | 160.572 |
+| Find leftover text across the folder (`*`) | 480,000 characters | 3.394 | 4.627 | 4.627 |
 
-Versi pertama pemeriksaan struktur menjalankan tiga penelusuran per dokumen (frontmatter/kode,
-tabel, tautan) dan memotong spasi setiap baris: 396,9 ms (p95 404,6) untuk 20 × 480.000 karakter,
-dan `"*"` memecah semua berkas menjadi baris walau teksnya tidak ada (66,6 ms). Setelah digabung
-menjadi satu penelusuran dengan saringan karakter sebelum regex, dan `"*"` hanya memecah berkas yang
-memuat teksnya, angkanya menjadi seperti tabel di atas. Ini optimasi atas kode baru dalam pekerjaan
-yang sama, bukan peningkatan fitur lama. Pemeriksaan berjalan di thread utama sekali per panggilan
-`verifikasi_pekerjaan`, bukan saat mengetik; 157 ms untuk ±19 juta karakter (dua kali 20 × 480.000) masih terasa sebagai jeda.
+The first version of the structure check ran three walks per document (frontmatter/code,
+tables, links) and trimmed every line: 396.9 ms (p95 404.6) for 20 × 480,000 characters,
+and `"*"` split all the files into lines even when the text was not there (66.6 ms). After merging them
+into one walk with a character filter before the regex, and `"*"` only splitting the files that
+contain the text, the numbers became as in the table above. This is an optimization of new code within the same
+work, not an improvement of an old feature. The check runs on the main thread once per call of
+`verify_work`, not while typing; 157 ms for about 19 million characters (twice 20 × 480,000) is still felt as a pause.
 
-Operasi lama pada pengukuran yang sama dibandingkan dengan snapshot HEAD sebelum perubahan
-(dibangun di worktree sementara, dependensi dan lingkungan sama): rencanakan paket 480.000 karakter
-115,9 → 110,4 ms, verifikasi hasil 3,48 → 3,49 ms, checkpoint dengan journal 198,4 → 215,6 ms
-(p95 215,4 → 244,8). Kode checkpoint tidak berubah; journal kini bisa memuat `to` untuk pindah,
-yang tidak dipakai fixture ini, sehingga selisihnya dianggap derau pengukuran tulis disk.
+The old operations in the same measurement were compared with a snapshot of the HEAD before the change
+(built in a temporary worktree, the same dependencies and environment): plan batch 480,000 characters
+115.9 → 110.4 ms, verify the result 3.48 → 3.49 ms, checkpoint with a journal 198.4 → 215.6 ms
+(p95 215.4 → 244.8). The checkpoint code did not change; the journal can now hold `to` for a move,
+which this fixture does not use, so the difference is counted as noise in the disk write measurement.
 
-Benchmark editor (`bench:compare`, fixture mixed, 25/50/100 blok, 10 pengulangan) dijalankan untuk
-snapshot sebelum dan sesudah. Kode editor tidak berubah. Satu pembacaan awal "hapus teks besar"
-25 blok 6,28 → 19,58 ms tidak terulang: dua pengulangan berikutnya 7,73/8,84 ms (sebelum) dan
-7,06/8,05 ms (sesudah). Enter paragraf baru berfluktuasi ke dua arah pada kedua snapshot
-(snapshot sebelum sendiri mencatat +119% pada 100 blok). Tidak ada regresi editor yang terulang;
-baseline tidak diganti.
+The editor benchmark (`bench:compare`, the mixed fixture, 25/50/100 blocks, 10 repetitions) was run for
+the snapshots before and after. The editor code did not change. One first reading of "delete large text"
+at 25 blocks, 6.28 → 19.58 ms, did not repeat: the next two repetitions were 7.73/8.84 ms (before) and
+7.06/8.05 ms (after). Enter new paragraph fluctuated in both directions on both snapshots
+(the snapshot before itself recorded +119% at 100 blocks). No editor regression repeated;
+the baseline was not replaced.

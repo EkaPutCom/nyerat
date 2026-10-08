@@ -1,96 +1,96 @@
-# Diagnosis callback GC pada benchmark ekstrem — 4 Oktober 2026
+# Diagnosis of GC callbacks in the extreme benchmark — 4 October 2026
 
-Penyebab langsung kegagalan lama adalah **callback JavaScript yang dibuang oleh
-penjaga GC GJS**, bukan sekadar GC yang membutuhkan waktu lama. Reproduksi versi
-lama pada 500 grid menghasilkan `SourceFunc()` yang ditolak saat GLib hendak
-menjalankan pekerjaan idle. Callback yang hilang dapat menghentikan penyorotan
-atau penyelesaian Promise `idle()`, sehingga benchmark menunggu sampai timeout.
-Belum ada perubahan kode runtime atau baseline dari pemeriksaan ini.
+The direct cause of the old failure is a **JavaScript callback dropped by the
+GJS GC guard**, not simply a GC that takes a long time. Reproducing the old version
+on 500 grids produced a `SourceFunc()` that was refused when GLib was about to
+run the idle work. A lost callback can stop highlighting or the completion of the
+`idle()` Promise, so the benchmark waits until the timeout.
+This check made no change to the runtime code or the baseline.
 
-## Bukti
+## Evidence
 
-- Lingkungan: GJS 1.80.2 / SpiderMonkey 115, GLib 2.80.0, GTK 3.24.41,
-  X11/Xvfb pada mesin yang sama.
-- Log lama `/tmp/nyerat-perf-large-no-gc.log` dan
-  `/tmp/nyerat-perf-large-async-no-gc.log` memuat `mark-set` pada
-  `GtkSourceBuffer`, `changed` pada `GtkAdjustment`, `size-allocate`, dan
-  `SourceFunc()` yang diblokir. Buffer dan view tersebut masih dipakai benchmark.
-- Checkout commit `9f324c7` diekstrak ke `/tmp/nyerat-gc-old`, dibangun dengan
-  dependensi yang sama, lalu dijalankan melalui GDB dengan
-  `G_DEBUG=fatal-criticals`. Pada mixed 500 blok, 1 pengulangan, peringatan pertama
-  muncul setelah `highlight() ulang`, sebelum laporan mengetik selesai.
-- Native stack pada peringatan pertama:
+- Environment: GJS 1.80.2 / SpiderMonkey 115, GLib 2.80.0, GTK 3.24.41,
+  X11/Xvfb on the same machine.
+- The old logs `/tmp/nyerat-perf-large-no-gc.log` and
+  `/tmp/nyerat-perf-large-async-no-gc.log` contain `mark-set` on a
+  `GtkSourceBuffer`, `changed` on a `GtkAdjustment`, `size-allocate`, and a blocked
+  `SourceFunc()`. That buffer and view were still used by the benchmark.
+- A checkout of commit `9f324c7` was extracted to `/tmp/nyerat-gc-old`, built with the
+  same dependencies, and then run through GDB with
+  `G_DEBUG=fatal-criticals`. On mixed 500 blocks, 1 repetition, the first warning
+  appeared after `highlight() again`, before the typing report finished.
+- The native stack at the first warning:
   `g_application_run → g_main_context_iteration → GLib source dispatch → libffi → libgjs → g_log`.
-  Tidak terdapat `gtk_widget_destroy`, disposal widget, atau frame finalizer GC
-  pada stack thread utama itu. Ini tidak cocok dengan dugaan bahwa callback
-  `destroy` suatu widget yang sedang dikoleksi adalah pemicu langsung.
-- Reproduksi tersebut ada di `/tmp/nyerat-gc-old-mixed-gdb.log`.
-  Run versi lama untuk long 2000 blok, 3 pengulangan, justru selesai di bawah
-  debugger. Kegagalan bergantung pada waktu/keadaan GC; tidak terjadi pada setiap run.
-- Reproduksi kedua mixed 500 blok juga gagal, kali ini setelah redo, pada
-  `changed` milik `GtkAdjustment`. GDB mengidentifikasi sumber main loop
-  berprioritas **120**, bernama **`[gtk+] gdk_frame_clock_paint_idle`**:
-  GTK sedang menjalankan frame/tata letak biasa, bukan callback `destroy`.
-  Bukti ini ada di `/tmp/nyerat-gc-old-source-gdb.log`. Dengan demikian jalur
-  yang terkena bukan hanya callback benchmark, tetapi juga sinyal tata letak GTK.
+  There is no `gtk_widget_destroy`, widget disposal, or GC finalizer frame
+  on that main thread stack. This does not match the guess that the `destroy`
+  callback of a widget being collected is the direct trigger.
+- That reproduction is in `/tmp/nyerat-gc-old-mixed-gdb.log`.
+  The old version's run for long 2000 blocks, 3 repetitions, did finish under the
+  debugger. The failure depends on the timing/state of the GC; it does not happen on every run.
+- A second reproduction on mixed 500 blocks also failed, this time after redo, in the
+  `changed` of a `GtkAdjustment`. GDB identified the main loop source as having
+  priority **120**, named **`[gtk+] gdk_frame_clock_paint_idle`**:
+  GTK was running an ordinary frame/layout, not a `destroy` callback.
+  This evidence is in `/tmp/nyerat-gc-old-source-gdb.log`. So the affected path
+  is not only the benchmark callbacks, but also GTK's layout signals.
 
-## Penjelasan runtime dan batas kepastian
+## Runtime explanation and the limits of certainty
 
-Di [penjaga callback GJS 1.80.2](https://github.com/GNOME/gjs/blob/1.80.2/gi/function.cpp#L291),
-`gjs->sweeping()` menyebabkan callback ditolak sebelum fungsi JavaScript dipanggil.
-Penjaga [sinyal GObject](https://github.com/GNOME/gjs/blob/1.80.2/gi/value.cpp#L220)
-melakukan hal yang sama. Pesan tentang penghancuran widget adalah teks umum dari
-penjaga tersebut; pesannya bukan identifikasi widget yang bermasalah.
+In the [GJS 1.80.2 callback guard](https://github.com/GNOME/gjs/blob/1.80.2/gi/function.cpp#L291),
+`gjs->sweeping()` makes a callback be refused before the JavaScript function is called.
+The [GObject signal](https://github.com/GNOME/gjs/blob/1.80.2/gi/value.cpp#L220) guard
+does the same. The message about destroying a widget is generic text from that
+guard; the message does not identify the widget that has the problem.
 
-[Pengelolaan status GC](https://github.com/GNOME/gjs/blob/1.80.2/gjs/context.cpp#L888)
-mengaktifkan `m_in_gc_sweep` pada persiapan grup dan baru mematikannya saat
-seluruh koleksi berakhir. **Dugaan terkuat** adalah flag ini masih aktif di sela
-GC bertahap ketika main loop sudah kembali menjalankan callback biasa. Native
-stack reproduksi mendukung dugaan itu, tetapi status GC internal belum diperiksa
-langsung dengan simbol debug, dan GJS belum diuji dengan patch/versi lain.
-Jadi bug integrasi GC bertahap adalah dugaan beralasan, bukan kesimpulan upstream
-yang sudah terverifikasi.
+The [GC state management](https://github.com/GNOME/gjs/blob/1.80.2/gjs/context.cpp#L888)
+turns on `m_in_gc_sweep` at the preparation of the group and only turns it off when
+the whole collection ends. **The strongest guess** is that this flag is still active between the
+steps of an incremental GC when the main loop has already gone back to running ordinary callbacks. The native
+stack of the reproduction supports that guess, but the internal GC state has not been checked
+directly with debug symbols, and GJS has not been tested with another patch/version.
+So a bug in the integration of incremental GC is a reasoned guess, not a conclusion
+verified upstream.
 
-Sumber tekanan alokasi pada kode lama terlihat di `concealMarkers()`:
-`starts.map(() => [])` membuat array untuk setiap baris tiap ketukan/perpindahan
-kursor, kemudian marker seluruh dokumen membuat tuple tag baru. Pada long ada
-sekitar 20.000 array per pembaruan, ditambah penggabungan cache penyorot seukuran
-dokumen. Lapisan tabel lama juga menelusuri semua tabel/tag dan meminta posisi
-semua grid. Versi sekarang telah mengurangi pekerjaan ini lewat `MarkerConcealer`,
-penggabungan cache yang lebih ringan, penyorotan bertahap, dan perhitungan posisi
-grid yang terlihat. Hubungan penurunan alokasi dengan hilangnya gejala belum
-isolasi A/B per perubahan; jangan menganggap masalah GC dijamin selesai.
+The source of allocation pressure in the old code is visible in `concealMarkers()`:
+`starts.map(() => [])` makes an array for every line on every keystroke/cursor
+move, and then the markers of the whole document make new tag tuples. On long there are
+about 20,000 arrays per update, plus the merging of the highlighter cache the size of the
+document. The old table layer also walked all the tables/tags and asked for the position of
+all the grids. The current version has reduced this work through `MarkerConcealer`,
+a lighter cache merge, incremental highlighting, and the calculation of the position of the
+visible grids. The relation between the drop in allocations and the disappearance of the symptom has not been
+isolated by A/B per change; do not assume that the GC problem is guaranteed to be solved.
 
-Uji minimal satu `Gtk.TextBuffer` aktif dengan 30 putaran alokasi masing-masing
-10 × 100.000 array/objek selesai dengan seluruh 600 sinyal kursor diterima.
-Tidak ada widget yang dihancurkan. Ini menunjukkan tekanan alokasi saja pada
-uji tersebut belum cukup untuk mereproduksi masalah, bukan bukti bahwa GJS bebas
-masalah GC.
+A minimal test with one active `Gtk.TextBuffer` and 30 allocation rounds of 10 × 100,000
+arrays/objects each finished with all 600 cursor signals received.
+No widget was destroyed. This shows that allocation pressure alone in that
+test was not enough to reproduce the problem, not that GJS is free of
+GC problems.
 
-## Keadaan kode terbaru (`44cbc11`)
+## State of the latest code (`44cbc11`)
 
-| Kasus | Pengulangan | Hasil |
+| Case | Repetitions | Result |
 | --- | ---: | --- |
-| long 2000 blok, sekitar 1,3 MB | 3 | Semua 14 operasi GUI selesai, JSON tersimpan, tanpa warning/critical |
-| mixed 500 grid, sekitar 148 KB | 10 | Timeout 180 detik sesudah laporan Enter; tidak ada warning/critical, JSON tidak disimpan |
-| mixed 500 grid, sekitar 148 KB | 1 | Semua 14 operasi GUI selesai, JSON tersimpan, tanpa warning/critical |
+| long 2000 blocks, about 1.3 MB | 3 | All 14 GUI operations finished, the JSON was saved, no warning/critical |
+| mixed 500 grids, about 148 KB | 10 | A 180 second timeout after the Enter report; no warning/critical, the JSON was not saved |
+| mixed 500 grids, about 148 KB | 1 | All 14 GUI operations finished, the JSON was saved, no warning/critical |
 
-Run mixed 10 pengulangan masih menunjukkan kemajuan antar-tahap dan penggunaan
-CPU tinggi. Bukti saat ini lebih cocok dengan durasi total yang melampaui batas,
-bukan pengulangan callback GC yang diblokir seperti log lama. Pembukaan tetap
-mahal: run 10 mencatat total setText sekitar 2,7 detik dan jeda terpanjang sekitar
-0,9 detik. Hasil 1 pengulangan hanya diagnostik, bukan baseline performa baru.
-Beberapa eksperimen debugger berjalan bersamaan dengan benchmark diagnostik;
-angka waktunya tidak dipakai untuk klaim perbaikan sebelum/sesudah.
+The mixed run with 10 repetitions still shows progress between stages and high CPU
+use. The current evidence fits better with a total duration that exceeds the limit,
+not with repeated blocked GC callbacks like the old log. Opening is still
+expensive: run 10 recorded a setText total of about 2.7 seconds and a longest pause of about
+0.9 seconds. The 1-repetition result is only a diagnostic, not a new performance baseline.
+Some debugger experiments ran at the same time as the diagnostic benchmark;
+their timing numbers are not used to claim a before/after improvement.
 
-Log dan sampel terbaru:
+The latest logs and samples:
 
 - `/tmp/nyerat-gc-long2000.log`, `/tmp/nyerat-gc-long2000.json`
-- `/tmp/nyerat-gc-mixed500.log` (run 10 yang timeout, hasil tidak lengkap)
+- `/tmp/nyerat-gc-mixed500.log` (the run of 10 that timed out, an incomplete result)
 - `/tmp/nyerat-gc-mixed500-one.log`, `/tmp/nyerat-gc-mixed500-one.json`
 - `/tmp/nyerat-gc-minimal.log`
 
-Pemeriksaan selanjutnya yang paling membedakan dugaan adalah menangkap status
-GC internal pada callback yang ditolak, atau menguji reproduksi lama dengan
-runtime yang mengubah cakupan flag sweeping. Untuk performa 500 tabel, masalah
-pembuatan awal seluruh grid perlu diprofilkan terpisah dari kegagalan callback GC.
+The next check that would best tell the guesses apart is to capture the internal
+GC state at a refused callback, or to test the old reproduction with a
+runtime that changes the scope of the sweeping flag. For the performance of 500 tables, the problem of the
+initial creation of all the grids needs to be profiled separately from the failure of the GC callbacks.
