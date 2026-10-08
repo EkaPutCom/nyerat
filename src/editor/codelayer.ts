@@ -1,19 +1,19 @@
-// Menampilkan blok kode (``` ... ```) sebagai kotak yang bisa digulir ke samping.
+// Displays code blocks (``` ... ```) as boxes that can be scrolled sideways.
 //
-// GtkTextView hanya bisa membungkus atau tidak membungkus seluruh teksnya: kalau baris kode
-// dibiarkan panjang, lebar seluruh dokumen ikut melebar. Karena itu, seperti tabel
-// (tablelayer.ts), blok kode ditampilkan sebagai widget yang ditempel di atas ruang kosong
-// di dalam teks, sehingga isi dokumen tidak berubah.
+// A GtkTextView can only wrap or not wrap all of its text: if code lines
+// are left long, the width of the whole document widens. That is why, like tables
+// (tablelayer.ts), code blocks are displayed as widgets attached above empty space
+// inside the text, so the document contents do not change.
 //
-//   Kursor DI LUAR blok → seluruh baris blok (termasuk pembatas) dikecilkan jadi ~1 px
-//                         (tag codehide), ruang setinggi kotak disediakan di bawah baris
-//                         terakhir, dan kotaknya ditempel di ruang itu.
-//   Kursor DI DALAM blok → kotak disembunyikan dan teks mentahnya (dibungkus) tampil untuk
-//                         disunting.
+//   Cursor OUTSIDE the block → all lines of the block (including fences) are shrunk to ~1 px
+//                         (tag codehide), space the height of the box is reserved below the last
+//                         line, and the box is attached in that space.
+//   Cursor INSIDE the block → the box is hidden and its raw (wrapped) text is shown for
+//                         editing.
 //
-// Klik kotak menaruh kursor di baris pertama isinya, yang membuka blok untuk disunting.
-// Blok diagram (mermaid, dbml) ditangani mermaid.ts; blok yang belum ditutup atau kosong
-// tetap berupa teks.
+// Clicking the box puts the cursor on the first line of its contents, which opens the block for editing.
+// Diagram blocks (mermaid, dbml) are handled by mermaid.ts; unclosed or empty
+// blocks stay as text.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
@@ -24,21 +24,21 @@ import { setTagGroup, setTagRanges, type Range } from './tagsync.js';
 import { OverlaySlots } from './overlays.js';
 import { iterAtLine, lineSpanOffsets, onClick } from '../gtkutil.js';
 
-const GAP = 12;         // jarak di atas dan bawah kotak
-const HIDDEN_LINE = 2;  // tinggi satu baris yang disembunyikan (lihat tablelayer.ts)
+const GAP = 12;         // distance above and below the box
+const HIDDEN_LINE = 2;  // height of one hidden line (see tablelayer.ts)
 const PAD_X = 12;
 const PAD_Y = 8;
 
 interface Block {
-    start: number;           // baris pembatas pembuka
-    end: number;             // baris pembatas penutup
+    start: number;           // opening fence line
+    end: number;             // closing fence line
     lang: string;
     code: string;
-    key: string;             // bahasa + isi; mencocokkan blok yang sama setelah baris bergeser
-    lines: number;           // jumlah baris isi
-    widget: Gtk.Box | null;  // slot overlay berisi kotak; dibuat saat pertama kali terlihat
+    key: string;             // language + contents; matches the same block after lines shift
+    lines: number;           // number of content lines
+    widget: Gtk.Box | null;  // overlay slot containing the box; created the first time it is visible
     height: number;
-    collapsed: boolean;      // true = tampil sebagai kotak
+    collapsed: boolean;      // true = shown as a box
     x: number;
     y: number;
 }
@@ -50,16 +50,16 @@ export class CodeLayer {
     maxWidth = 700;
     blocks: Block[] = [];
 
-    onActivate: (line: number) => void = () => {};  // kotak diklik
+    onActivate: (line: number) => void = () => {};  // box clicked
 
     private cursor: [number, number] = [-1, -1];
-    private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
+    private gapTags = new Map<number, Gtk.TextTag>();   // height → tag
     private relayoutQueued = false;
     private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
     private lineHeight = 0;
     private probe: Gtk.Label | null = null;
-    private holder: Gtk.ScrolledWindow | null = null;   // memberi probe CSS yang sama dengan kotaknya
+    private holder: Gtk.ScrolledWindow | null = null;   // gives the same CSS probe as the box
     private readonly slots: OverlaySlots;
 
     constructor(view: Gtk.TextView, private readonly hideTag: Gtk.TextTag, private readonly highlighter: CodeHighlighter) {
@@ -85,7 +85,7 @@ export class CodeLayer {
         adj.connect('value-changed', () => this.queueRelayout());
     }
 
-    // Skema warna berubah → markup berwarna dibuat ulang; tinggi baris bisa ikut berubah (CSS).
+    // The color scheme changed → the colored markup is rebuilt; the line height may change too (CSS).
     setPalette(): void {
         this.lineHeight = 0;
         for (const block of this.blocks) this.destroyWidget(block);
@@ -105,8 +105,8 @@ export class CodeLayer {
         this.sync();
     }
 
-    // codeBlocks dari highlighter.ts. force = teks blok bisa saja diganti (tag-nya hilang),
-    // jadi tag dipasang ulang walaupun daftar bloknya sama.
+    // codeBlocks from highlighter.ts. force = the block text may have been replaced (its tag is gone),
+    // so tags are reapplied even if the block list is the same.
     update(codeBlocks: CodeBlock[], force = false): void {
         const unused = [...this.blocks];
         const next: Block[] = [];
@@ -134,17 +134,17 @@ export class CodeLayer {
         for (const block of unused) this.destroyWidget(block);
         this.blocks = next;
         if (!changed && this.blocks.every(b => b.collapsed === this.isCollapsed(b))) {
-            // Rentang tag ikut bergeser di GTK (lihat TableLayer.update()); cukup pindahkan widgetnya.
+            // Tag ranges shift along in GTK (see TableLayer.update()); just move the widget.
             if (moved) this.queueRelayout();
             return;
         }
         this.sync();
     }
 
-    // Kursor (atau seleksi) berada di baris first..last. Hanya blok yang berganti antara kotak
-    // dan teks mentah yang disentuh: kursor tidak mengubah teks, jadi tag blok lain tetap benar.
-    // Menelusuri tag seluruh buffer setiap kursor masuk/keluar satu blok terlalu mahal (±4 ms
-    // per perpindahan pada 100 blok, ditambah GTK menata ulang).
+    // The cursor (or selection) is on lines first..last. Only blocks that switch between box
+    // and raw text are touched: the cursor does not change text, so other blocks' tags stay correct.
+    // Walking the tags of the whole buffer every time the cursor enters/leaves a block is too expensive (±4 ms
+    // per move at 100 blocks, plus GTK relayout).
     setCursor(first: number, last: number): void {
         this.cursor = [first, last];
         let changed = false;
@@ -181,7 +181,7 @@ export class CodeLayer {
         block.widget = null;
     }
 
-    // Tinggi satu baris kode, diukur dari label dengan CSS yang sama dengan kotaknya.
+    // Height of one code line, measured from a label with the same CSS as the box.
     private measureLine(): number {
         if (!this.lineHeight) {
             if (!this.probe) {
@@ -194,7 +194,7 @@ export class CodeLayer {
         return this.lineHeight;
     }
 
-    // Samakan teks, ruang kosong, dan widget dengan keadaan sekarang.
+    // Sync the text, blank space, and widgets with the current state.
     private sync(): void {
         const iter = this.buffer.get_start_iter();
         const hide: Range[] = [];
@@ -216,7 +216,7 @@ export class CodeLayer {
         this.queueRelayout();
     }
 
-    // Ruang di bawah baris terakhir (lihat TableLayer.reserved()).
+    // Space below the last line (see TableLayer.reserved()).
     private reserved(block: Block): number {
         return Math.max(0, block.height + 2 * GAP - (block.end - block.start + 1) * HIDDEN_LINE);
     }
@@ -255,7 +255,7 @@ export class CodeLayer {
         block.x = block.y = -1;
     }
 
-    // ---------- Posisi widget ----------
+    // ---------- Widget position ----------
 
     queueRelayout(): void {
         if (this.destroyed || this.relayoutQueued) return;
@@ -275,7 +275,7 @@ export class CodeLayer {
         const [bottom] = this.view.get_line_at_y(rect.y + rect.height);
         const first = top.get_line(), last = bottom.get_line();
         for (const block of this.blocks) {
-            // Hanya blok yang terlihat yang dibuat dan diposisikan (lihat TableLayer.relayout()).
+            // Only visible blocks are created and positioned (see TableLayer.relayout()).
             const visible = block.collapsed && block.end >= first && block.start <= last;
             if (visible && !block.widget) this.build(block);
             block.widget?.set_visible(visible);

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Basic concepts · Nyerat Documentation</title>
+<meta name="description" content="The four principles that explain how Nyerat works: the work folder, plain Markdown, an agent that proposes, and transparency.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
+<main class="doc">
+<p class="eyebrow">Getting started</p>
+<h1>Basic concepts</h1>
+<p class="lead">Four principles that explain how Nyerat works. When a behavior feels surprising, the answer is usually here.</p>
+
+<h2 id="work-folder">The work folder is the context</h2>
+<p>Nyerat works in one folder that you open: notes, documents, research, plans, and task boards. The agent receives a map of all the Markdown files in that folder, the contents of the open documents (including unsaved ones), the selected text, and the cursor position. It browses the rest on its own with the read tools.</p>
+<p>Without an open folder, the agent only sees the active document and cannot propose new files or changes to other files.</p>
+
+<h2 id="markdown">Everything stays plain Markdown</h2>
+<p>Documents, kanban boards, and conversation history are stored as Markdown files. There is no database, closed format, or account. Everything can be read by other editors, diffed, and committed to Git.</p>
+<ul>
+  <li>A kanban board is a Markdown file with <code>kanban: true</code> in the frontmatter.</li>
+  <li>Conversations with the agent are stored in <code>.nyerat/chats/</code> in the work folder.</li>
+  <li>The API key is your own and is stored in the system keyring.</li>
+</ul>
+
+<h2 id="proposing">The agent reads freely and writes through proposals</h2>
+<p>The read tools (browsing, reading files, reading Git history) run right away. The write tools do not write anything: every action becomes a <strong>proposal</strong> shown in the review window. Files are only touched after you press <em>Apply</em>.</p>
+<div class="callout"><strong>Write boundary</strong><p>A proposal may only touch Markdown files in the work folder. Names outside the folder, starting with a dot, or containing <code>..</code> are rejected. A file that changed since it was proposed is not overwritten.</p></div>
+
+<h2 id="transparent">Transparent about context and cost</h2>
+<p>Every answer shows the context that was sent, the lookups that were made, and the token usage. The context switches decide which documents may be sent to the model provider. The <em>Agent log</em> window shows every model round and tool call live.</p>
+
+<h2 id="two-agents">Two kinds of agent</h2>
+<div class="table-wrap"><table>
+  <tr><th></th><th>The Nyerat agent</th><th>An external harness (pi)</th></tr>
+  <tr><td>Works in</td><td>The Nyerat work folder</td><td>Another project folder, e.g. a code repo</td></tr>
+  <tr><td>Triggered from</td><td>The Assistant panel</td><td>A kanban card marked <code>@pi</code></td></tr>
+  <tr><td>Writes</td><td>Only through proposals you approve</td><td>Freely in the project folder; you review in that repo</td></tr>
+  <tr><td>Files</td><td>Markdown only</td><td>Anything, including running commands</td></tr>
+</table></div>
+<p>See <a href="orchestrator.html">The pi orchestrator</a> for the details of the external harness.</p>
+</main>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

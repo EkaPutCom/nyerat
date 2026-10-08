@@ -1,7 +1,7 @@
-// Mengubah jawaban Markdown dari asisten menjadi markup Pango untuk Gtk.Label: heading, daftar, kutipan,
-// blok kode, dan format inline (lewat cellMarkup). Murni TypeScript tanpa GTK.
-// Dipanggil berulang selama jawaban mengalir, jadi tahan terhadap teks yang terpotong di tengah
-// (blok kode yang belum ditutup tetap dianggap kode sampai akhir teks).
+// Turns the assistant's Markdown answers into Pango markup for Gtk.Label: headings, lists, quotes,
+// code blocks, and inline formatting (through cellMarkup). Pure TypeScript without GTK.
+// Called repeatedly while an answer streams in, so it tolerates text cut off in the middle
+// (an unclosed code block is still treated as code until the end of the text).
 
 import { cellMarkup, escapeMarkup, type MarkupColors } from './pango.js';
 

@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Riwayat Git · Dokumentasi Nyerat</title>
-<meta name="description" content="Tab Riwayat Nyerat: lihat commit berkas yang dibuka, baca diff dan isi tiap versi, lalu commit satu atau beberapa berkas langsung dari sidebar.">
+<title>Git history · Nyerat Documentation</title>
+<meta name="description" content="The Nyerat History tab: see the commits of the open file, read the diff and the contents of each version, and commit one or several files straight from the sidebar.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="docs.css">
 </head>
@@ -18,39 +18,39 @@
   </a>
   <nav>
     <a href="index.html" aria-current="true">Docs</a>
-    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
     <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
   </nav>
 </header>
 
 <div class="layout">
-<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
 <main class="doc">
-<p class="eyebrow">Ruang kerja</p>
-<h1>Riwayat Git</h1>
-<p class="lead">Lihat dan simpan versi tulisan tanpa keluar editor. Butuh <code>git</code> terpasang dan folder kerja di dalam repositori.</p>
+<p class="eyebrow">Workspace</p>
+<h1>Git history</h1>
+<p class="lead">See and save versions of your writing without leaving the editor. It needs <code>git</code> installed and the work folder inside a repository.</p>
 
-<figure><img src="../assets/riwayat-gelap.png" width="1332" height="867" loading="lazy" alt="Tab Riwayat berisi daftar berkas belum di-commit dan tiga commit"><figcaption>Tab Riwayat: berkas belum di-commit dan daftar commit</figcaption></figure>
+<figure><img src="../assets/history-dark.png" width="1332" height="867" loading="lazy" alt="The History tab with the list of uncommitted files and three commits"><figcaption>The History tab: uncommitted files and the list of commits</figcaption></figure>
 
-<h2 id="commit">Daftar commit</h2>
+<h2 id="commits">The list of commits</h2>
 <ul>
-  <li>Commit yang menyentuh berkas yang dibuka, terbaru dulu, mengikuti berkas yang di-rename.</li>
-  <li>Klik commit untuk membuka jendela dengan dua tab: <em>Perubahan</em> (diff berwarna) dan <em>Isi versi ini</em>.</li>
-  <li>Dimuat 100 commit sekali muat, dengan tombol <em>Muat lebih banyak</em>.</li>
+  <li>The commits that touched the open file, newest first, following a renamed file.</li>
+  <li>Click a commit to open a window with two tabs: <em>Changes</em> (a colored diff) and <em>Contents of this version</em>.</li>
+  <li>100 commits are loaded at a time, with a <em>Load more</em> button.</li>
 </ul>
 
-<h2 id="belum">Perubahan belum di-commit</h2>
+<h2 id="uncommitted">Uncommitted changes</h2>
 <ul>
-  <li>Tombol <em>Perubahan belum di-commit</em> membuka diff berkas yang dibuka terhadap HEAD.</li>
-  <li>Daftar <em>Belum di-commit (N)</em> memuat semua berkas yang berubah di repositori (M, A, D, R, U), masing-masing dengan kotak centang.</li>
-  <li>Isi pesan lalu tekan <em>Commit N file</em> untuk meng-commit beberapa berkas sekaligus. Dokumen yang terbuka disimpan dulu.</li>
+  <li>The <em>Uncommitted changes</em> button opens the diff of the open file against HEAD.</li>
+  <li>The <em>Uncommitted (N)</em> list holds all the files that changed in the repository (M, A, D, R, U), each with a checkbox.</li>
+  <li>Write a message and press <em>Commit N files</em> to commit several files at once. Open documents are saved first.</li>
 </ul>
-<figure><img src="../assets/riwayat-diff.png" width="912" height="705" loading="lazy" alt="Jendela diff sebuah commit dengan baris tambah dan hapus berwarna"><figcaption>Diff sebuah commit</figcaption></figure>
+<figure><img src="../assets/history-diff.png" width="912" height="705" loading="lazy" alt="The diff window of a commit with colored added and removed lines"><figcaption>The diff of a commit</figcaption></figure>
 
-<h2 id="agent">Riwayat untuk agent</h2>
-<p>Agent bisa membaca riwayat yang sama lewat <code>riwayat_git</code>, <code>lihat_commit</code>, dan <code>isi_versi</code>, tetapi tidak pernah mengubah repositori. Lihat <a href="penelusuran.html#git">Menelusuri berkas dan Git</a>.</p>
+<h2 id="agent">History for the agent</h2>
+<p>The agent can read the same history through <code>git_log</code>, <code>show_commit</code>, and <code>file_at_commit</code>, but it never changes the repository. See <a href="browsing.html#git">Browsing files and Git</a>.</p>
 </main>
-<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
 </div>
 
 <script src="nav.js"></script>

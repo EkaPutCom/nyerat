@@ -1,39 +1,39 @@
-// Dekorasi yang bergantung pada posisi kursor. Dipanggil setiap kursor pindah baris.
+// Decorations that depend on the cursor position. Called every time the cursor changes line.
 
 import type Gtk from 'gi://Gtk?version=4.0';
 import type { Marker } from './highlighter.js';
 import { setTagRanges, type LineSpan, type LineTagger } from './tagsync.js';
 import { iterAtLine } from '../gtkutil.js';
 
-// Inti efek sintaks tersembunyi: sembunyikan semua marker, kecuali yang aktif di
-// baris l0..l1 (baris kursor atau baris yang terseleksi).
+// Core of the hidden-syntax effect: hide all markers, except those active on
+// lines l0..l1 (the cursor line or the selected lines).
 //
-// Dipanggil tiap ketukan dan tiap kursor pindah baris, jadi tidak boleh bekerja sebanding
-// panjang dokumen. Keadaan bawaan sebuah baris adalah "semua marker tersembunyi"; yang
-// berbeda hanya baris aktif. Karena itu yang diperiksa hanya baris aktif lama dan baru,
-// baris yang diurai ulang penyorot, dan baris yang tagnya belum diketahui (LineTagger).
+// Called on every keystroke and every time the cursor changes line, so it must not do work proportional to
+// the document length. The default state of a line is "all markers hidden"; only the
+// active lines differ. That is why only the old and new active lines,
+// the lines re-parsed by the highlighter, and lines whose tags are not yet known (LineTagger) are checked.
 export class MarkerConcealer {
     private markers: Marker[] = [];
-    private multiLine: Marker[] = [];   // marker yang aktif di beberapa baris (pembatas blok kode)
-    private active: number[] = [];      // baris yang dipasang dalam keadaan aktif, urut naik
+    private multiLine: Marker[] = [];   // markers active across several lines (code block fences)
+    private active: number[] = [];      // lines installed in the active state, ascending
     private recheck: [number, number][] = [];
     private enabled: boolean | null = null;
-    private state: { starts: number[]; l0: number; l1: number; enabled: boolean } | null = null;   // apply() terakhir
+    private state: { starts: number[]; l0: number; l1: number; enabled: boolean } | null = null;   // last apply()
 
     constructor(private readonly tagger: LineTagger, private readonly tag: Gtk.TextTag) {}
 
-    // Teks disunting di baris first..last (nomor baris sekarang), jumlah baris kini `count`.
+    // Text edited at lines first..last (current line numbers), the line count is now `count`.
     edited(first: number, last: number, count: number): void {
         const shift = count - this.tagger.lineCount;
-        // Baris di rentang suntingan menjadi "tidak diketahui" di tagger dan pasti diperiksa.
+        // Lines in the edit range become "unknown" to the tagger and are always checked.
         this.active = this.active.flatMap(l => l < first ? [l] : l > last - shift ? [l + shift] : []);
         this.recheck = this.recheck.map(([a, b]): [number, number] => b < first ? [a, b] : a > last - shift ? [a + shift, b + shift]
             : [Math.min(a, first), Math.max(b + shift, last)]);
         this.tagger.edited(first, last, count);
     }
 
-    // Penyorot mengurai ulang baris first..last: marker-nya mungkin berubah walaupun teksnya
-    // tidak (mis. pembatas ``` baru mengubah baris di bawahnya menjadi isi blok kode).
+    // The highlighter re-parses lines first..last: their markers may change even though the text
+    // does not (e.g. a new ``` fence turns the lines below it into code block content).
     reparsed(markers: Marker[], first: number, last: number): void {
         this.markers = markers;
         this.multiLine = markers.filter(m => m[2] !== m[3]);
@@ -54,24 +54,24 @@ export class MarkerConcealer {
         this.recheck = [];
         const spansOf = (line: number) => this.spansOf(line);
         if (enabled !== this.enabled) {
-            // Mode source dihidupkan/dimatikan: keadaan bawaan setiap baris berubah.
+            // Source mode turned on/off: the default state of every line changes.
             this.enabled = enabled;
             this.tagger.apply(starts.map((_, i) => spansOf(i)), starts);
         } else {
-            // Baris yang ditunda (lihat defer()) tetap dipasang jika aktif: kursor ada di sana.
+            // Deferred lines (see defer()) are still installed if active: the cursor is there.
             const forced = new Set(active);
             this.tagger.applyLines([...visit].sort((a, b) => a - b), spansOf, starts, line => forced.has(line));
         }
         this.active = [...new Set(active)].sort((a, b) => a - b);
     }
 
-    // Penyorotan bertahap: lihat LineTagger.defer()/fill().
+    // Incremental highlighting: see LineTagger.defer()/fill().
     defer(line: number): void {
         this.tagger.defer(line);
     }
 
-    // Pasang baris `visible` (jika ditunda) dan `lines` baris berikutnya yang ditunda.
-    // true = tidak ada lagi yang ditunda.
+    // Install line `visible` (if deferred) and the next `lines` deferred lines.
+    // true = nothing is deferred anymore.
     fill(lines: number, visible: number[]): boolean {
         if (!this.state) return true;
         const spansOf = (line: number) => this.spansOf(line);
@@ -92,15 +92,15 @@ export class MarkerConcealer {
     }
 }
 
-// Indeks marker pertama di baris `line` (marker urut menurut barisnya).
+// Index of the first marker on line `line` (markers are ordered by their lines).
 function lowerBound(markers: Marker[], line: number): number {
     let a = 0, b = markers.length;
     while (a < b) { const mid = (a + b) >>> 1; if (markers[mid][4] < line) a = mid + 1; else b = mid; }
     return a;
 }
 
-// Mode fokus: redupkan semua teks di luar paragraf yang memuat baris l0..l1.
-// Paragraf = baris-baris berurutan yang dibatasi baris kosong.
+// Focus mode: dim all text outside the paragraph containing lines l0..l1.
+// A paragraph = consecutive lines delimited by blank lines.
 export function dimOutsideParagraph(buffer: Gtk.TextBuffer, tag: Gtk.TextTag, lines: string[], l0: number, l1: number, enabled: boolean): void {
     if (!enabled || !lines.length) {
         setTagRanges(buffer, tag, []);

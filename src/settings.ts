@@ -1,27 +1,27 @@
-// Pengaturan pengguna di GSettings (schema: data/com.ekaput.Nyerat.gschema.xml).
+// User settings in GSettings (schema: data/com.ekaput.Nyerat.gschema.xml).
 //
-// AppSettings hanya membungkus Gio.Settings dengan properti bertipe, jadi kode lain tetap
-// menulis `settings.autosave = true`. Setiap penulisan langsung disimpan; tidak ada save().
-// Dialog preferensi mengikat widgetnya ke `gsettings` yang sama, dan jendela mendengarkan
-// "changed::<kunci>" untuk menerapkan perubahan itu.
+// AppSettings only wraps Gio.Settings with typed properties, so other code still
+// writes `settings.autosave = true`. Every write is saved immediately; there is no save().
+// The preferences dialog binds its widgets to the same `gsettings`, and the window listens to
+// "changed::<key>" to apply those changes.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { APP_ID } from './config.js';
 import type { RecentFile } from './markdown/home.js';
 
-// Tab berfile yang terbuka saat jendela terakhir ditutup, dipulihkan pada pembukaan berikutnya.
+// File-backed tabs that were open when the last window was closed, restored on the next launch.
 export interface SavedTab {
     file: string;
-    cursor: number;          // posisi kursor (code point)
+    cursor: number;          // cursor position (code points)
 }
 
 export type SidebarPage = 'files' | 'outline' | 'history';
 
-// Saat dijalankan dari dist/, schema yang sudah dikompilasi ada di samping bundel (lihat vite.config.ts).
-// Saat terpasang (Meson/Flatpak), schema ada di direktori schema sistem dan tidak ada salinan di samping bundel.
+// When run from dist/, the compiled schema is next to the bundle (see vite.config.ts).
+// When installed (Meson/Flatpak), the schema is in the system schema directory and there is no copy next to the bundle.
 function loadSchema(): Gio.SettingsSchema {
-    // Kode bersama dibundel ke dist/chunks/, jadi cari juga satu tingkat di atasnya.
+    // Shared code is bundled into dist/chunks/, so also look one level above.
     let folder = Gio.File.new_for_uri(import.meta.url).get_parent()!;
     if (!folder.get_child('gschemas.compiled').query_exists(null)) folder = folder.get_parent()!;
     const dir = folder.get_path()!;
@@ -30,19 +30,19 @@ function loadSchema(): Gio.SettingsSchema {
         ? Gio.SettingsSchemaSource.new_from_directory(dir, system, false)
         : system;
     const schema = source?.lookup(APP_ID, true) ?? null;
-    if (!schema) throw new Error(`schema ${APP_ID} tidak ditemukan di ${dir} maupun direktori schema sistem`);
+    if (!schema) throw new Error(`schema ${APP_ID} not found in ${dir} or the system schema directory`);
     return schema;
 }
 
 export class AppSettings {
     readonly gsettings: Gio.Settings;
 
-    // backend: tes memakai Gio.memory_settings_backend_new() supaya dconf pengguna tidak tersentuh.
+    // backend: tests use Gio.memory_settings_backend_new() so the user's dconf is not touched.
     constructor(backend?: Gio.SettingsBackend) {
         this.gsettings = new Gio.Settings({ settings_schema: loadSchema(), ...(backend && { backend }) });
     }
 
-    // null = ikuti tema sistem.
+    // null = follow the system theme.
     get dark(): boolean | null {
         const scheme = this.gsettings.get_string('color-scheme');
         return scheme === 'system' ? null : scheme === 'dark';
@@ -78,7 +78,7 @@ export class AppSettings {
     get activeTab(): number { return this.gsettings.get_int('active-tab'); }
     set activeTab(value: number) { this.gsettings.set_int('active-tab', value); }
 
-    // Folder terakhir; null = tidak ada.
+    // Last folder; null = none.
     get folder(): string | null { return this.gsettings.get_string('folder') || null; }
     set folder(value: string | null) { this.gsettings.set_string('folder', value ?? ''); }
 
@@ -103,7 +103,7 @@ export class AppSettings {
         this.gsettings.set_value('projects', new GLib.Variant('a{ss}', value));
     }
 
-    // Pengaturan di memori dengan nilai bawaan, plus `overrides`; untuk tes, bench, dan tangkapan layar.
+    // In-memory settings with default values, plus `overrides`; for tests, bench, and screenshots.
     static inMemory(overrides: Partial<Omit<AppSettings, 'gsettings'>> = {}): AppSettings {
         return Object.assign(new AppSettings(Gio.memory_settings_backend_new()), overrides);
     }

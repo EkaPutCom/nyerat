@@ -1,11 +1,11 @@
-// Panel Asisten di sisi kanan: chat dengan model (DeepSeek) yang tahu isi naskah.
-// Panel tidak tahu cara mengambil naskah; jendela memberikannya lewat `host`. Penyusunan konteks
-// ada di agent/context.ts, dan pemanggilan modelnya lewat Provider (agent/provider.ts).
+// The Assistant panel on the right side: a chat with a model (DeepSeek) that knows the manuscript contents.
+// The panel does not know how to get the manuscript; the window provides it through `host`. Context composition
+// is in agent/context.ts, and calling the model goes through the Provider (agent/provider.ts).
 //
-//   ┌ ASISTEN                 ⌫ ⚙ ┐
-//   │ (pesan, terbaru di bawah)    │
-//   │ Konteks · ≈12 rb token ▾     │
-//   │ [ketik pertanyaan…     ] [➤] │
+//   ┌ ASSISTANT               ⌫ ⚙ ┐
+//   │ (messages, newest below)     │
+//   │ Context · ≈12k tokens ▾      │
+//   │ [type a question…      ] [➤] │
 //   └──────────────────────────────┘
 
 import { journalText } from '../agent/journal.js';
@@ -30,42 +30,42 @@ import { escapeMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from './theme.js';
 import { childrenOf, onKeyPress, pack, uiTemplate } from '../gtkutil.js';
 import template from './chat.ui?raw';
-import { _, fmt } from '../i18n.js';
+import { _, fmt, ngettext } from '../i18n.js';
 
-// Yang perlu diketahui panel dari jendela.
+// What the panel needs to know from the window.
 export interface ChatHost {
-    active(): { name: string; text: string; cursorLine: number } | null;   // dokumen terbuka (isi buffer, bukan disk)
+    active(): { name: string; text: string; cursorLine: number } | null;   // the open document (buffer contents, not disk)
     selection(): string;
-    files(fresh?: boolean): SourceFile[];                                                  // berkas lain di folder proyek
-    // Terapkan perubahan yang sudah disetujui pengguna. Mengembalikan pesan galat, atau null bila berhasil.
+    files(fresh?: boolean): SourceFile[];                                                  // other files in the project folder
+    // Apply a change the user has approved. Returns an error message, or null on success.
     applyChange?(change: Change): string | null;
     applyBatch?(changes: Change[]): string | null;
-    window?(): Gtk.Window | null;                                           // induk jendela tinjau usulan
-    git?(request: GitRequest): Promise<GitAnswer>;                          // alat riwayat Git baca-saja di folder kerja
-    root(): string | null;                                                  // folder naskah; tempat riwayat percakapan disimpan
+    window?(): Gtk.Window | null;                                           // parent of the proposal review window
+    git?(request: GitRequest): Promise<GitAnswer>;                          // read-only Git history tools in the work folder
+    root(): string | null;                                                  // the manuscript folder; where conversation history is saved
 }
 
 const SOURCE_TEXT: Record<KeySource, string> = {
-    env: _('Memakai key dari variabel lingkungan DEEPSEEK_API_KEY.'),
-    keyring: _('Key tersimpan di keyring sistem.'),
-    file: _('Key tersimpan di ~/.config/nyerat/deepseek.key (keyring tidak tersedia).'),
+    env: _('Using the key from the DEEPSEEK_API_KEY environment variable.'),
+    keyring: _('The key is stored in the system keyring.'),
+    file: _('The key is stored in ~/.config/nyerat/deepseek.key (keyring unavailable).'),
 };
 
 const SUGGESTIONS = [
-    _('Ringkas dokumen ini dalam beberapa poin'),
-    _('Apa saja yang belum selesai atau belum sinkron di folder ini?'),
-    _('Susun rencana langkah berikutnya dari catatan saya'),
+    _('Summarize this document in a few points'),
+    _('What is unfinished or out of sync in this folder?'),
+    _('Draft a plan for the next steps from my notes'),
 ];
 
-const KIND_LABEL = { map: _('Peta'), active: _('Dokumen'), selection: _('Pilihan'), mention: _('Lampiran'), excerpt: _('Potongan') };
+const KIND_LABEL = { map: _('Map'), active: _('Document'), selection: _('Selection'), mention: _('Attachment'), excerpt: _('Excerpt') };
 
-const fmtTokens = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1).replace('.', ',')} rb` : `${n}`;
+const fmtTokens = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
 
 const usageText = (u: Usage, toolCalls: number, applied = 0): string => [
-    fmt(u.cached ? _('{prompt} masuk ({cached} dari cache)') : _('{prompt} masuk'), { prompt: fmtTokens(u.prompt), cached: fmtTokens(u.cached) }),
-    fmt(_('{completion} keluar'), { completion: fmtTokens(u.completion) }),
-    ...toolCalls ? [fmt(_('{count} penelusuran'), { count: toolCalls })] : [],
-    ...applied ? [fmt(_('{count} perubahan diterapkan'), { count: applied })] : [],
+    fmt(u.cached ? _('{prompt} in ({cached} from cache)') : _('{prompt} in'), { prompt: fmtTokens(u.prompt), cached: fmtTokens(u.cached) }),
+    fmt(_('{completion} out'), { completion: fmtTokens(u.completion) }),
+    ...toolCalls ? [fmt(ngettext('{count} lookup', '{count} lookups', toolCalls), { count: toolCalls })] : [],
+    ...applied ? [fmt(ngettext('{count} change applied', '{count} changes applied', applied), { count: applied })] : [],
 ].join(' · ');
 
 interface Bubble {
@@ -89,7 +89,7 @@ export class ChatPanel extends Gtk.Box {
             ],
         }, this);
     }
-    // Widget yang dideklarasikan di chat.ui.
+    // Widgets declared in chat.ui.
     declare readonly input: Gtk.TextView;
     declare readonly sendButton: Gtk.Button;
     declare readonly messages: Gtk.Box;
@@ -118,36 +118,36 @@ export class ChatPanel extends Gtk.Box {
     readonly session = new ChatSession();
 
     host: ChatHost = { active: () => null, selection: () => '', files: () => [], root: () => null };
-    // Diganti di tes dengan penyedia palsu.
+    // Replaced in tests with a fake provider.
     makeProvider: (key: string) => Provider = key => new DeepSeek(key);
     keyStore: KeyStore = systemKeyStore;
-    model = DEEPSEEK_MODELS[0];   // model dikirim apa adanya ke API; setModel() menormalkannya
+    model = DEEPSEEK_MODELS[0];   // the model is sent to the API as is; setModel() normalizes it
     onModelChanged: (model: string) => void = () => {};
     onThinkingChanged: (thinking: boolean) => void = () => {};
     onSaveChanged: (save: boolean) => void = () => {};
-    saveChats = true;   // simpan tiap giliran ke <folder>/.nyerat/chats
+    saveChats = true;   // save every turn to <folder>/.nyerat/chats
     options: ContextOptions = { activeDocument: true, selection: true, project: true };
     budget = DEFAULT_BUDGET;
 
     private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#1c71d8', mark: '#fff3a3' };
     private readonly bubbles: Bubble[] = [];
-    readonly empty: Gtk.Box;           // petunjuk awal; tampil selama percakapan kosong
+    readonly empty: Gtk.Box;           // initial hint; shown while the conversation is empty
     private generation = 0;
-    logViewer: LogViewer | null = null;   // jendela pemantau log agent, bila terbuka
+    logViewer: LogViewer | null = null;   // the agent log monitor window, if open
     private cancellable: Gio.Cancellable | null = null;
     private renderTimer = 0;
     private dark = false;
-    private cardsBox: Gtk.Box | null = null;   // tempat kartu usulan giliran yang sedang berjalan
-    viewer: ProposalViewer | null = null;   // jendela tinjau usulan yang sedang menunggu keputusan
+    private cardsBox: Gtk.Box | null = null;   // where the proposal cards of the running turn live
+    viewer: ProposalViewer | null = null;   // the proposal review window waiting for a decision
     private stickIdle = 0;
-    private stick = true;            // tetap menempel di bawah selama pengguna tidak menggulir ke atas
+    private stick = true;            // stay stuck to the bottom as long as the user has not scrolled up
     private summaryTimer = 0;
-    // Percakapan yang sedang tampil di disk: berkasnya (null = belum ditulis), folder asalnya, dan judulnya.
+    // The conversation currently shown on disk: its file (null = not written yet), the folder it came from, and its title.
     private chatPath: string | null = null;
     private chatRoot: string | null = null;
     private chatTitle = '';
     private chatCreated = '';
-    private readonly stepLabels = new Map<string, Gtk.Label>();   // id panggilan alat → baris langkahnya
+    private readonly stepLabels = new Map<string, Gtk.Label>();   // tool call id → its step row
 
     constructor() {
         super();
@@ -155,7 +155,7 @@ export class ChatPanel extends Gtk.Box {
         this._logButton.connect('clicked', () => this.showLog());
         this._historyPopover.connect('show', () => this.refreshChatList());
 
-        // Pengaturan: API key dan model.
+        // Settings: API key and model.
         this._settingsPopover.connect('show', () => void this.refreshKeyStatus());
         this._saveKeyButton.connect('clicked', () => void this.saveKey());
         this.keyEntry.connect('activate', () => void this.saveKey());
@@ -177,12 +177,12 @@ export class ChatPanel extends Gtk.Box {
             this.onSaveChanged(this.saveChats);
         });
 
-        // Pesan
+        // Messages
         this.empty = this.buildEmptyState();
         this.messages.append(this.empty);
         const vadj = this.scroller.get_vadjustment();
-        // Menggulir di dalam sinyal "changed" (dipancarkan saat alokasi tata letak) mengubah nilainya, tetapi viewport tidak
-        // menerapkannya: isi tampil terpotong beberapa baris dengan footer tak terlihat. Karena itu digulirkan di idle berikutnya.
+        // Scrolling inside the "changed" signal (emitted during layout allocation) changes its value, but the viewport does not
+        // apply it: the contents show cut off by a few lines with an invisible footer. That is why it scrolls at the next idle.
         vadj.connect('changed', () => {
             if (!this.stick || this.stickIdle) return;
             this.stickIdle = GLib.idle_add(GLib.PRIORITY_HIGH_IDLE, () => {
@@ -193,7 +193,7 @@ export class ChatPanel extends Gtk.Box {
         });
         vadj.connect('value-changed', () => { this.stick = vadj.get_upper() - vadj.get_page_size() - vadj.get_value() < 24; });
 
-        // Konteks: pilihan apa yang dikirim.
+        // Context: which choices are sent.
         const checks: [Gtk.CheckButton, keyof ContextOptions][] = [
             [this._contextDocument, 'activeDocument'], [this._contextSelection, 'selection'], [this._contextProject, 'project'],
         ];
@@ -203,21 +203,21 @@ export class ChatPanel extends Gtk.Box {
         }
         this._contextPopover.connect('show', () => this.updateContextPreview());
 
-        // Masukan. Fase CAPTURE: sebelum TextView sendiri menyisipkan baris baru untuk Enter.
+        // Input. CAPTURE phase: before the TextView itself inserts a new line for Enter.
         onKeyPress(this.input, (keyval, state) => this.onInputKey(keyval, state), Gtk.PropagationPhase.CAPTURE);
         this.input.buffer.connect('changed', () => { this.queueContextSummary(); this.updateSendButton(); });
         this.sendButton.connect('clicked', () => this.busy ? this.stop() : void this.send());
         this.updateSendButton();
-        // Panel bisa sudah terbuka sejak jendela dibuat (GSettings), tanpa notify::show-sidebar: hitung saat tampil.
+        // The panel may already be open since the window was created (GSettings), without notify::show-sidebar: compute when shown.
         this.connect('map', () => this.updateContextSummary());
     }
 
-    // Kirim: tombol utama (suggested-action), nonaktif selama kotak pesan kosong. Hentikan: tombol biasa, selalu aktif.
+    // Send: the primary button (suggested-action), disabled while the message box is empty. Stop: a plain button, always enabled.
     private updateSendButton(): void {
         const busy = this.busy;
         this.sendButton.set_icon_name(busy ? 'media-playback-stop-symbolic' : 'go-up-symbolic');
-        this.sendButton.set_tooltip_text(busy ? _('Hentikan') : _('Kirim (Enter)'));
-        this.sendButton.update_property([Gtk.AccessibleProperty.LABEL], [busy ? _('Hentikan') : _('Kirim')]);
+        this.sendButton.set_tooltip_text(busy ? _('Stop') : _('Send (Enter)'));
+        this.sendButton.update_property([Gtk.AccessibleProperty.LABEL], [busy ? _('Stop') : _('Send')]);
         if (busy) this.sendButton.remove_css_class('suggested-action');
         else this.sendButton.add_css_class('suggested-action');
         this.sendButton.set_sensitive(busy || !!this.input.buffer.text.trim());
@@ -227,7 +227,7 @@ export class ChatPanel extends Gtk.Box {
         return this;
     }
 
-    // Jendela ditutup: hentikan permintaan dan timer yang masih berjalan.
+    // Window closed: stop the requests and timers that are still running.
     destroy(): void {
         this.stop();
         this.logViewer?.window.destroy();
@@ -250,7 +250,7 @@ export class ChatPanel extends Gtk.Box {
         for (const b of this.bubbles) this.render(b);
     }
 
-    // Nama model lama atau tak dikenal (mis. dari pengaturan versi sebelumnya) diganti model bawaan.
+    // An old or unknown model name (e.g. from a settings version) is replaced with the default model.
     setModel(model: string): void {
         this.model = DEEPSEEK_MODELS.includes(model) ? model : DEEPSEEK_MODELS[0];
         this.modelDrop.set_selected(DEEPSEEK_MODELS.indexOf(this.model));
@@ -270,14 +270,14 @@ export class ChatPanel extends Gtk.Box {
         this.input.grab_focus();
     }
 
-    // ---------- Percakapan ----------
+    // ---------- Conversation ----------
 
     reset(): void {
         this.generation++;
         this.stop();
         this.session.clear();
         this.chatPath = null;
-        this.stepLabels.clear();   // labelnya ikut dibuang di bawah; id alat yang sama tidak boleh memakainya lagi
+        this.stepLabels.clear();   // the labels are discarded below; the same tool id must not reuse them
         this.bubbles.length = 0;
         for (const child of childrenOf(this.messages)) if (child !== this.empty) this.messages.remove(child);
         this.empty.show();
@@ -288,14 +288,14 @@ export class ChatPanel extends Gtk.Box {
         this.cancellable?.cancel();
     }
 
-    // Buka (atau fokuskan) jendela pemantau log agent.
+    // Open (or focus) the agent log monitor window.
     showLog(): void {
         if (this.logViewer?.window.get_realized()) { this.logViewer.show(); return; }
         this.logViewer = new LogViewer(this.host.window?.() ?? null, this.session.trace);
         this.logViewer.show();
     }
 
-    // Isi kotak masukan lalu (opsional) langsung kirim; dipakai tombol saran dan tes.
+    // Fill the input box and (optionally) send right away; used by the suggestion buttons and tests.
     ask(text: string, send = true): Promise<void> {
         this.input.buffer.set_text(text, -1);
         return send ? this.send() : Promise.resolve();
@@ -308,7 +308,7 @@ export class ChatPanel extends Gtk.Box {
         const found = await this.keyStore.get();
         if (generation !== this.generation || this.busy) return;
         if (!found) {
-            this.addNote('Belum ada API key DeepSeek. Buka pengaturan (ikon roda gigi), tempel key-nya, lalu kirim lagi.', true);
+            this.addNote('There is no DeepSeek API key yet. Open the settings (gear icon), paste the key, then send again.', true);
             this.settingsButton.get_popover()?.popup();
             return;
         }
@@ -340,7 +340,7 @@ export class ChatPanel extends Gtk.Box {
                     answer.thinkingLabel.set_text(reasoning.trim());
                 },
                 currentFiles: () => {
-                    if (requestRoot !== this.host.root()) throw Error('Folder kerja berubah selama permintaan');
+                    if (requestRoot !== this.host.root()) throw Error('The work folder changed during the request');
                     const active = this.options.activeDocument ? this.host.active() : null;
                     return [...this.host.files(true).filter(f => f.name !== active?.name), ...(active ? [{ name: active.name, text: active.text }] : [])];
                 },
@@ -349,16 +349,16 @@ export class ChatPanel extends Gtk.Box {
                     this.persist();
                     if (this.session.work) { answer.work.update(this.session.work, true, elapsed()); answer.work.widget.show(); }
                 },
-                // Rencana yang valid sudah tampil sebagai daftar centang; baris langkahnya tidak perlu diulang.
-                onTool: step => { if (!(step.label === 'Rencana pekerjaan' && this.session.work && step.summary !== 'rencana tidak valid')) this.showStep(answer.steps, step); },
-                onBatchProposal: this.host.applyBatch ? changes => requestRoot === this.host.root() ? this.propose(changes) : Promise.resolve({ applied: false, error: 'Folder kerja berubah selama permintaan' }) : undefined,
-                onProposal: change => requestRoot === this.host.root() ? this.propose(change) : Promise.resolve({ applied: false, error: 'Folder kerja berubah selama permintaan' }),
-                git: this.host.git ? request => requestRoot === this.host.root() ? this.host.git!(request) : Promise.resolve({ ok: false, message: 'Folder kerja berubah selama permintaan' }) : undefined,
+                // A valid plan is already shown as a checklist; its step row does not need repeating.
+                onTool: step => { if (!(step.label === 'Work plan' && this.session.work && step.summary !== 'invalid plan')) this.showStep(answer.steps, step); },
+                onBatchProposal: this.host.applyBatch ? changes => requestRoot === this.host.root() ? this.propose(changes) : Promise.resolve({ applied: false, error: 'The work folder changed during the request' }) : undefined,
+                onProposal: change => requestRoot === this.host.root() ? this.propose(change) : Promise.resolve({ applied: false, error: 'The work folder changed during the request' }),
+                git: this.host.git ? request => requestRoot === this.host.root() ? this.host.git!(request) : Promise.resolve({ ok: false, message: 'The work folder changed during the request' }) : undefined,
             }, this.cancellable);
             if (generation !== this.generation) return;
             this.render(answer.bubble);
             if (answer.work.widget.get_visible() && this.session.work) answer.work.update(this.session.work, false, elapsed());
-            if (result.cancelled) answer.footer.set_text(answer.bubble.text || result.toolCalls ? _('Dihentikan') : _('Dihentikan sebelum ada jawaban'));
+            if (result.cancelled) answer.footer.set_text(answer.bubble.text || result.toolCalls ? _('Stopped') : _('Stopped before any answer'));
             else if (result.usage) answer.footer.set_text(usageText(result.usage, result.toolCalls, result.applied));
             answer.footer.set_visible(!!answer.footer.get_text());
             this.persist();
@@ -378,15 +378,15 @@ export class ChatPanel extends Gtk.Box {
         }
     }
 
-    // ---------- Riwayat di disk ----------
+    // ---------- History on disk ----------
 
-    // Tulis percakapan ke <folder>/.nyerat/chats setelah tiap giliran. Tanpa folder, atau saat dimatikan, tidak menulis apa-apa.
+    // Write the conversation to <folder>/.nyerat/chats after every turn. Without a folder, or when turned off, nothing is written.
     private persist(): void {
         const root = this.host.root();
         const history = this.session.history;
         if (!this.saveChats || !root || !history.length && !this.session.work && !this.session.events.length) return;
         if (root !== this.chatRoot) {
-            // Pindah folder di tengah percakapan: lanjutannya ditulis sebagai berkas baru di folder yang baru.
+            // Switching folders in the middle of a conversation: the continuation is written as a new file in the new folder.
             this.chatRoot = root;
             this.chatPath = null;
         }
@@ -397,15 +397,15 @@ export class ChatPanel extends Gtk.Box {
         try {
             this.chatPath = saveChat(root, { title: this.chatTitle, model: this.model, created: this.chatCreated, turns: [...history], work: this.session.work, events: this.session.events }, this.chatPath);
         } catch (e) {
-            this.addNote(fmt(_('Riwayat percakapan tidak tersimpan: {error}'), { error: e instanceof Error ? e.message : String(e) }), true);
+            this.addNote(fmt(_('Conversation history was not saved: {error}'), { error: e instanceof Error ? e.message : String(e) }), true);
         }
     }
 
-    // Tampilkan percakapan tersimpan dan lanjutkan dari sana: giliran berikutnya ditambahkan ke berkas yang sama.
+    // Show a saved conversation and continue from there: the next turns are appended to the same file.
     openChat(path: string): boolean {
         const chat = loadChat(path);
         if (!chat) {
-            this.addNote('Berkas percakapan tidak bisa dibaca.', true);
+            this.addNote('The conversation file could not be read.', true);
             return false;
         }
         this.reset();
@@ -430,8 +430,8 @@ export class ChatPanel extends Gtk.Box {
             this.addNote(journalText(this.session.events));
             for (const event of this.session.events.filter(e => e.changes.length).slice(-20)) {
                 const row = new Gtk.Box({ spacing: 6, halign: Gtk.Align.START });
-                const review = new Gtk.Button({ label: fmt(_('Lihat diff · {count} berkas'), { count: event.changes.length }), tooltip_text: event.changes.map(c => c.file).join('\n') });
-                review.connect('clicked', () => new ProposalViewer(this.host.window?.() ?? null, event.changes, this.dark, () => _('Riwayat hanya dapat dibaca'), true).show());
+                const review = new Gtk.Button({ label: fmt(_('View diff · {count} files'), { count: event.changes.length }), tooltip_text: event.changes.map(c => c.file).join('\n') });
+                review.connect('clicked', () => new ProposalViewer(this.host.window?.() ?? null, event.changes, this.dark, () => _('History is read-only'), true).show());
                 row.append(review);
                 if (event.status === 'applied' && this.host.applyBatch) row.append(this.undoButton(event.changes, null));
                 this.messages.append(row);
@@ -442,8 +442,8 @@ export class ChatPanel extends Gtk.Box {
             list.update(this.session.work, false);
             this.messages.append(list.widget);
             if (this.session.work.status !== 'complete') {
-                const resume = new Gtk.Button({ label: _('Lanjutkan pekerjaan'), halign: Gtk.Align.START });
-                resume.connect('clicked', () => { resume.set_sensitive(false); void this.ask('Lanjutkan pekerjaan yang tersimpan. Baca isi aktual, periksa journal, dan jangan ulangi perubahan yang sudah diterapkan.'); });
+                const resume = new Gtk.Button({ label: _('Resume work'), halign: Gtk.Align.START });
+                resume.connect('clicked', () => { resume.set_sensitive(false); void this.ask('Resume the saved work. Read the actual contents, check the journal, and do not repeat changes that were already applied.'); });
                 this.messages.append(resume);
             }
         }
@@ -461,13 +461,13 @@ export class ChatPanel extends Gtk.Box {
             this.chatList.append(l);
         };
         const root = this.host.root();
-        if (!root) return note('Buka folder kerja untuk menyimpan dan membuka riwayat percakapan.');
+        if (!root) return note('Open a work folder to save and open conversation history.');
         const chats = listChats(root);
-        if (!chats.length) return note('Belum ada percakapan tersimpan di folder ini.');
+        if (!chats.length) return note('There are no saved conversations in this folder yet.');
         const popover = this.historyButton.get_popover();
         for (const chat of chats) {
             const row = new Gtk.Box({ spacing: 2 });
-            const open = new Gtk.Button({ has_frame: false, tooltip_text: fmt(_('{date} · {turns} tanya-jawab'), { date: chat.created.replace('T', ' '), turns: chat.turns / 2 | 0 }) });
+            const open = new Gtk.Button({ has_frame: false, tooltip_text: fmt(_('{date} · {turns} Q&A'), { date: chat.created.replace('T', ' '), turns: chat.turns / 2 | 0 }) });
             const text = new Gtk.Label({ label: chat.title, xalign: 0, ellipsize: 3, max_width_chars: 30 });
             const date = new Gtk.Label({ label: chat.created.slice(0, 10), xalign: 0 });
             date.add_css_class('side-meta');
@@ -481,7 +481,7 @@ export class ChatPanel extends Gtk.Box {
             });
             const remove = Gtk.Button.new_from_icon_name('user-trash-symbolic');
             remove.set_has_frame(false);
-            remove.set_tooltip_text(_('Buang ke Tempat Sampah'));
+            remove.set_tooltip_text(_('Move to the Trash'));
             remove.connect('clicked', () => {
                 try {
                     deleteChat(chat.path);
@@ -497,7 +497,7 @@ export class ChatPanel extends Gtk.Box {
         }
     }
 
-    // ---------- Konteks ----------
+    // ---------- Context ----------
 
     private turnInput(question: string) {
         return {
@@ -511,14 +511,14 @@ export class ChatPanel extends Gtk.Box {
         };
     }
 
-    // Membangun konteks untuk teks yang sedang diketik, tanpa mengirim apa pun.
+    // Builds the context for the text being typed, without sending anything.
     previewContext(): BuiltContext {
         return buildContext({ ...this.turnInput(this.input.buffer.text), recent: this.session.questions });
     }
 
-    // Ringkasan satu baris tentang apa yang dikirim: dokumen, pilihan, lampiran, dan jumlah potongan per berkas.
+    // A one-line summary of what is sent: the document, selection, attachments, and the number of excerpts per file.
     private describe(built: BuiltContext): string {
-        const parts = [`≈${fmtTokens(built.tokens)} token`];
+        const parts = [fmt(_('≈{tokens} tokens'), { tokens: fmtTokens(built.tokens) })];
         const excerpts = new Map<string, number>();
         for (const item of built.items) {
             if (item.kind === 'excerpt') {
@@ -528,18 +528,18 @@ export class ChatPanel extends Gtk.Box {
                 parts.push(item.label);
             }
         }
-        for (const [file, n] of excerpts) parts.push(fmt(_('{count} potongan dari {file}'), { count: n, file }));
-        if (built.unknownMentions.length) parts.push(fmt(_('tidak ditemukan: {names}'), { names: built.unknownMentions.map(m => `@${m}`).join(', ') }));
-        return fmt(_('Konteks: {parts}'), { parts: parts.join(' · ') });
+        for (const [file, n] of excerpts) parts.push(fmt(ngettext('{count} excerpt from {file}', '{count} excerpts from {file}', n), { count: n, file }));
+        if (built.unknownMentions.length) parts.push(fmt(_('not found: {names}'), { names: built.unknownMentions.map(m => `@${m}`).join(', ') }));
+        return fmt(_('Context: {parts}'), { parts: parts.join(' · ') });
     }
 
     private setContextSummary(built: BuiltContext): void {
-        // Tanpa panah sendiri: MenuButton GTK 4 berlabel sudah menampilkan panah arah popover-nya.
-        this.contextButton.set_label(fmt(_('Konteks · ≈{tokens} token'), { tokens: fmtTokens(built.tokens) }));
+        // No arrow of its own: a labeled GTK 4 MenuButton already shows its popover direction arrow.
+        this.contextButton.set_label(fmt(_('Context · ≈{tokens} tokens'), { tokens: fmtTokens(built.tokens) }));
     }
 
-    // Membangun konteks menyentuh seluruh proyek, jadi ringkasan hanya diperbarui saat panel terlihat
-    // dan setelah pengetikan berhenti sebentar.
+    // Building the context touches the whole project, so the summary is only updated while the panel is visible
+    // and after typing pauses for a moment.
     queueContextSummary(): void {
         if (this.summaryTimer || this.busy || !this.widget.get_mapped()) return;
         this.summaryTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 400, () => {
@@ -563,10 +563,10 @@ export class ChatPanel extends Gtk.Box {
             l.show();
             this.contextList.append(l);
         };
-        if (!built.items.length) add('Tidak ada konteks dokumen yang dikirim.', true);
+        if (!built.items.length) add('No document context is being sent.', true);
         for (const item of built.items) add(`${KIND_LABEL[item.kind]}: ${item.label} · ${fmtTokens(item.tokens)}`);
-        add(fmt(_('Total ≈{tokens} token dari anggaran {budget}'), { tokens: fmtTokens(built.tokens), budget: fmtTokens(this.budget) }), true);
-        for (const m of built.unknownMentions) add(fmt(_('Berkas @{name} tidak ditemukan di folder proyek.'), { name: m }), true);
+        add(fmt(_('Total ≈{tokens} tokens of the {budget} budget'), { tokens: fmtTokens(built.tokens), budget: fmtTokens(this.budget) }), true);
+        for (const m of built.unknownMentions) add(fmt(_('File @{name} was not found in the project folder.'), { name: m }), true);
         this.setContextSummary(built);
     }
 
@@ -574,7 +574,7 @@ export class ChatPanel extends Gtk.Box {
 
     private async refreshKeyStatus(): Promise<void> {
         const found = await this.keyStore.get();
-        this.keyStatus.set_text(found ? SOURCE_TEXT[found.source] : _('Belum ada key. Buat di platform.deepseek.com.'));
+        this.keyStatus.set_text(found ? SOURCE_TEXT[found.source] : _('No key yet. Create one at platform.deepseek.com.'));
     }
 
     private async saveKey(): Promise<void> {
@@ -585,7 +585,7 @@ export class ChatPanel extends Gtk.Box {
             this.keyEntry.set_text('');
             this.keyStatus.set_text(SOURCE_TEXT[source]);
         } catch (e) {
-            this.keyStatus.set_text(fmt(_('Gagal menyimpan: {error}'), { error: e instanceof Error ? e.message : String(e) }));
+            this.keyStatus.set_text(fmt(_('Failed to save: {error}'), { error: e instanceof Error ? e.message : String(e) }));
         }
     }
 
@@ -594,12 +594,12 @@ export class ChatPanel extends Gtk.Box {
         await this.refreshKeyStatus();
     }
 
-    // ---------- Pesan ----------
+    // ---------- Messages ----------
 
     private buildEmptyState(): Gtk.Box {
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: 8 });
         const intro = new Gtk.Label({
-            label: _('Tanyakan atau minta bantuan apa saja soal pekerjaan Anda. Asisten membaca dokumen yang terbuka dan potongan relevan dari berkas lain di folder.'),
+            label: _('Ask or request help with anything about your work. The assistant reads the open document and relevant excerpts from other files in the folder.'),
             xalign: 0, wrap: true, max_width_chars: 38,
         });
         intro.add_css_class('side-meta');
@@ -627,7 +627,7 @@ export class ChatPanel extends Gtk.Box {
         b.label.set_markup(b.markdown ? chatMarkup(b.text, this.colors) : escapeMarkup(b.text));
     }
 
-    // Pembaruan beruntun saat jawaban mengalir digabung; markup diurai ulang paling sering ±15 kali per detik.
+    // Consecutive updates while an answer streams in are merged; the markup is re-parsed at most ±15 times per second.
     private queueRender(b: Bubble): void {
         if (this.renderTimer) return;
         this.renderTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 65, () => {
@@ -654,11 +654,11 @@ export class ChatPanel extends Gtk.Box {
         const work = new WorkList();
         work.widget.hide();
         const steps = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, visible: false });
-        // Kartu usulan perubahan agent: di antara langkah penelusuran dan jawaban, sesuai urutan kejadiannya.
+        // Proposal cards of agent changes: between the browsing steps and the answer, in the order they happened.
         const cards = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, visible: false });
         const thinkingLabel = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 40, selectable: true });
         thinkingLabel.add_css_class('chat-thinking');
-        const thinking = new Gtk.Expander({ label: _('Proses berpikir'), visible: false });
+        const thinking = new Gtk.Expander({ label: _('Thinking process'), visible: false });
         thinking.set_child(thinkingLabel);
         const footer = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, selectable: true, visible: false, use_markup: true });
         footer.add_css_class('side-meta');
@@ -677,8 +677,8 @@ export class ChatPanel extends Gtk.Box {
         return { bubble, meta, work, steps, cards, thinking, thinkingLabel, footer };
     }
 
-    // Satu baris per penelusuran asisten: "Mencari “surat”…" lalu, setelah selesai, "… → 5 potongan".
-    // Dipanggil dua kali per alat (mulai dan selesai) dengan id yang sama.
+    // One row per assistant lookup: "Searching “letter”…" and then, once finished, "… → 5 snippets".
+    // Called twice per tool (start and finish) with the same id.
     private showStep(box: Gtk.Box, step: ToolStep): void {
         let label = this.stepLabels.get(step.id);
         if (!label) {
@@ -692,13 +692,13 @@ export class ChatPanel extends Gtk.Box {
         box.show();
     }
 
-    // Usulan perubahan: jendela tinjau (seperti diff riwayat Git) terbuka otomatis; di panel tertinggal kartu
-    // ringkas dengan status dan tombol untuk membukanya lagi. Berkas tidak disentuh sebelum Terapkan; menutup
-    // jendela, Tolak, atau menghentikan giliran sama dengan menolak.
+    // Change proposal: the review window (like a Git history diff) opens automatically; in the panel a compact card
+    // is left behind with the status and a button to open it again. Files are not touched before Apply; closing
+    // the window, Reject, or stopping the turn is the same as rejecting.
     private propose(change: Change | Change[]): Promise<ProposalResult> {
         const proposalRoot = this.host.root();
         const changes = Array.isArray(change) ? change : [change];
-        const description = Array.isArray(change) ? fmt(_('Paket perubahan · {count} berkas'), { count: changes.length }) : describeChange(change);
+        const description = Array.isArray(change) ? fmt(_('Change batch · {count} files'), { count: changes.length }) : describeChange(change);
         const reasonText = changes.map(c => `${c.file}: ${c.reason}`).join('\n');
         const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
         card.add_css_class('chat-proposal');
@@ -711,9 +711,9 @@ export class ChatPanel extends Gtk.Box {
             card.append(reason);
         }
         const diff = changes.map(c => diffPreview(c.before, c.after)).reduce((a, b) => ({ added: a.added + b.added, removed: a.removed + b.removed }), { added: 0, removed: 0 });
-        const status = new Gtk.Label({ label: fmt(_('+{added} −{removed} · menunggu keputusan Anda'), { added: diff.added, removed: diff.removed }), xalign: 0, wrap: true, max_width_chars: 44 });
+        const status = new Gtk.Label({ label: fmt(_('+{added} −{removed} · waiting for your decision'), { added: diff.added, removed: diff.removed }), xalign: 0, wrap: true, max_width_chars: 44 });
         status.add_css_class('side-meta');
-        const review = new Gtk.Button({ label: _('Tinjau perubahan'), halign: Gtk.Align.START });
+        const review = new Gtk.Button({ label: _('Review changes'), halign: Gtk.Align.START });
         review.add_css_class('suggested-action');
         card.append(status);
         card.append(review);
@@ -739,18 +739,18 @@ export class ChatPanel extends Gtk.Box {
                 if (done) return;
                 if (this.viewer) { this.viewer.show(); return; }
                 const viewer = new ProposalViewer(this.host.window?.() ?? null, change, this.dark,
-                    c => proposalRoot !== this.host.root() ? 'Folder kerja berubah sejak usulan dibuat' : Array.isArray(c) ? this.host.applyBatch ? this.host.applyBatch(c) : 'penerapan paket tidak tersedia' : this.host.applyChange ? this.host.applyChange(c) : 'penerapan tidak tersedia');
+                    c => proposalRoot !== this.host.root() ? 'The work folder changed since the proposal was made' : Array.isArray(c) ? this.host.applyBatch ? this.host.applyBatch(c) : 'applying batches is not available' : this.host.applyChange ? this.host.applyChange(c) : 'applying is not available');
                 viewer.onDecision = applied => {
                     const note = viewer.note ? { note: viewer.note } : {};
                     if (applied && viewer.accepted) {
                         const kept = viewer.accepted.map(i => changes[i]);
-                        finish({ applied: true, accepted: viewer.accepted, ...note }, fmt(_('Diterapkan {applied} dari {count} berkas.'), { applied: kept.length, count: changes.length }));
+                        finish({ applied: true, accepted: viewer.accepted, ...note }, fmt(_('Applied {applied} of {count} files.'), { applied: kept.length, count: changes.length }));
                         if (this.host.applyBatch) card.append(this.undoButton(kept, status));
                     } else if (applied) {
-                        finish({ applied: true, ...note }, _('Diterapkan.'));
+                        finish({ applied: true, ...note }, _('Applied.'));
                         if (this.host.applyBatch) card.append(this.undoButton(changes, status));
-                    } else if (viewer.error) finish({ applied: false, error: viewer.error, ...note }, fmt(_('Gagal diterapkan: {error}'), { error: viewer.error }), true);
-                    else finish({ applied: false, ...note }, viewer.note ? fmt(_('Ditolak: {note}'), { note: viewer.note }) : _('Ditolak.'));
+                    } else if (viewer.error) finish({ applied: false, error: viewer.error, ...note }, fmt(_('Failed to apply: {error}'), { error: viewer.error }), true);
+                    else finish({ applied: false, ...note }, viewer.note ? fmt(_('Rejected: {note}'), { note: viewer.note }) : _('Rejected.'));
                 };
                 this.viewer = viewer;
                 viewer.show();
@@ -758,29 +758,29 @@ export class ChatPanel extends Gtk.Box {
             review.connect('clicked', open);
             this.cancellable?.connect(() => {
                 const viewer = this.viewer;
-                finish({ applied: false }, _('Dibatalkan.'));
+                finish({ applied: false }, _('Cancelled.'));
                 viewer?.close();
             });
             open();
         });
     }
 
-    // Tombol Urungkan untuk perubahan agent yang sudah diterapkan: menerapkan kebalikannya lewat preflight yang sama,
-    // jadi gagal (tanpa menimpa apa pun) bila berkasnya sudah disunting lagi sejak itu. Journal mencatatnya supaya
-    // agent tahu perubahan itu tidak berlaku lagi.
+    // The Undo button for agent changes that were already applied: applies the inverse through the same preflight,
+    // so it fails (without overwriting anything) if the file has been edited again since. The journal records it so the
+    // agent knows that change no longer applies.
     private undoButton(changes: Change[], status: Gtk.Label | null): Gtk.Button {
-        const button = new Gtk.Button({ label: _('Urungkan'), halign: Gtk.Align.START, tooltip_text: _('Kembalikan berkas ke isi sebelum perubahan ini') });
+        const button = new Gtk.Button({ label: _('Undo'), halign: Gtk.Align.START, tooltip_text: _('Restore the files to their contents before this change') });
         button.connect('clicked', () => {
-            if (this.busy) { this.addNote('Tunggu agent selesai sebelum mengurungkan perubahan.', true); return; }
+            if (this.busy) { this.addNote('Wait for the agent to finish before undoing the change.', true); return; }
             const root = this.host.root();
-            const error = this.host.applyBatch ? this.host.applyBatch([...changes].reverse().map(invertChange)) : 'penerapan tidak tersedia';
-            if (error) { this.addNote(fmt(_('Tidak dapat diurungkan: {error}'), { error }), true); return; }
+            const error = this.host.applyBatch ? this.host.applyBatch([...changes].reverse().map(invertChange)) : 'applying is not available';
+            if (error) { this.addNote(fmt(_('Cannot be undone: {error}'), { error }), true); return; }
             button.hide();
-            status?.set_text(_('Diurungkan.'));
+            status?.set_text(_('Undone.'));
             for (const event of this.session.events) {
                 if (event.status !== 'applied' || !event.changes.some(c => changes.includes(c))) continue;
                 event.status = 'reverted';
-                event.summary = 'Diurungkan pengguna dari panel; berkas kembali ke isi sebelumnya.';
+                event.summary = 'Undone by the user from the panel; the files are back to their previous contents.';
             }
             const work = this.session.work;
             if (work) { delete work.verification; if (work.status === 'complete') work.status = 'paused'; }
@@ -797,7 +797,7 @@ export class ChatPanel extends Gtk.Box {
         this.messages.append(l);
     }
 
-    // Enter mengirim; Shift+Enter baris baru.
+    // Enter sends; Shift+Enter is a new line.
     onInputKey(keyval: number, state: number): boolean {
         if ((keyval !== Gdk.KEY_Return && keyval !== Gdk.KEY_KP_Enter) || state & Gdk.ModifierType.SHIFT_MASK) return false;
         if (!this.busy) void this.send();

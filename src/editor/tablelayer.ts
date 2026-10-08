@@ -1,16 +1,16 @@
-// Menampilkan tabel sebagai grid sungguhan.
+// Displays a table as a real grid.
 //
-// Caranya sama dengan gambar (images.ts): widget ditempel di atas ruang kosong
-// yang disediakan di dalam teks, sehingga isi dokumen tidak berubah.
+// It works the same as images (images.ts): a widget is attached above empty space
+// provided inside the text, so the document contents do not change.
 //
-//   Kursor DI LUAR tabel → baris-baris tabel dikecilkan jadi ~1 px (tag tablehide),
-//                          ruang setinggi grid disediakan di bawah baris terakhir,
-//                          dan grid ditempel di ruang itu.
-//   Kursor DI DALAM tabel → grid disembunyikan dan teks mentahnya terlihat untuk
-//                          disunting (Tab pindah sel, lihat tableedit.ts).
+//   Cursor OUTSIDE the table → the table rows are shrunk to ~1 px (tag tablehide),
+//                          space the height of the grid is reserved below the last row,
+//                          and the grid is attached in that space.
+//   Cursor INSIDE the table → the grid is hidden and the raw text is visible for
+//                          editing (Tab moves between cells, see tableedit.ts).
 //
-// Klik sel di grid menaruh kursor di sel itu pada teks mentahnya, yang otomatis
-// membuka tabelnya untuk disunting.
+// Clicking a cell in the grid puts the cursor in that cell in the raw text, which automatically
+// opens the table for editing.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
@@ -23,13 +23,13 @@ import { setTagGroup, setTagRanges, type Range } from './tagsync.js';
 import { iterAtLine, lineSpanOffsets, onClick } from '../gtkutil.js';
 import { OverlaySlots } from './overlays.js';
 
-const BORDER = 1;       // tebal garis sel (sama dengan CSS di ui/theme.ts)
-const GAP = 12;         // jarak di atas dan bawah grid
-const HIDDEN_LINE = 2;  // tinggi satu baris tabel yang disembunyikan (tag tablehide, ~1 px + pembulatan)
-const MIN_COLUMN = 56;  // lebar kolom terkecil saat tabel harus dipersempit
+const BORDER = 1;       // thickness of the cell border (same as the CSS in ui/theme.ts)
+const GAP = 12;         // distance above and below the grid
+const HIDDEN_LINE = 2;  // height of one hidden table row (tag tablehide, ~1 px + rounding)
+const MIN_COLUMN = 56;  // smallest column width when the table has to be narrowed
 
-// Lebar kolom agar jumlahnya muat di `available`. Kolom yang sudah sempit dibiarkan,
-// sisa ruang dibagi rata ke kolom yang lebar (teksnya dibungkus ke baris berikutnya).
+// Column widths so that they fit in `available`. Columns that are already narrow are left alone,
+// the remaining space is divided evenly among the wide columns (their text wraps onto the next line).
 export function fitColumns(natural: number[], available: number): number[] {
     const widths = [...natural];
     if (natural.reduce((a, b) => a + b, 0) <= available) return widths;
@@ -51,14 +51,14 @@ export function fitColumns(natural: number[], available: number): number[] {
 }
 
 interface Block {
-    start: number;           // baris judul
-    end: number;             // baris isi terakhir
-    key: string;             // isi tabel; mencocokkan blok yang sama setelah baris bergeser
-    widget: Gtk.Box | null;    // slot overlay berisi grid (lihat overlays.ts); dibuat saat pertama kali terlihat
+    start: number;           // header row
+    end: number;             // last body row
+    key: string;             // table contents; matches the same block after lines shift
+    widget: Gtk.Box | null;    // overlay slot containing the grid (see overlays.ts); created the first time it is visible
     grid: Gtk.Grid | null;
     height: number;
-    geometry: Geometry | null;  // tetap tersedia meski cache bersama sudah berganti
-    collapsed: boolean;      // true = tampil sebagai grid
+    geometry: Geometry | null;  // stays available even after the shared cache has been replaced
+    collapsed: boolean;      // true = shown as a grid
     x: number;
     y: number;
 }
@@ -67,9 +67,9 @@ interface Geometry {
     table: ReturnType<typeof parseTable>;
     markup: string[][];
     natural: number[];
-    cellWidth: number[][];    // lebar alami tiap sel (satu baris), termasuk garis
-    cellHeight: number[][];   // tinggi tiap sel bila tidak dibungkus
-    height: number;           // tinggi tabel bila tidak ada sel yang dibungkus
+    cellWidth: number[][];    // natural width of each cell (one line), including the border
+    cellHeight: number[][];   // height of each cell if not wrapped
+    height: number;           // table height if no cell is wrapped
 }
 
 export class TableLayer {
@@ -79,11 +79,11 @@ export class TableLayer {
     maxWidth = 700;
     blocks: Block[] = [];
 
-    onActivate: (line: number, col: number) => void = () => {};  // sel diklik
+    onActivate: (line: number, col: number) => void = () => {};  // cell clicked
 
     private cursor: [number, number] = [-1, -1];
     private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#1c71d8', mark: '#fff3a3' };
-    private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
+    private gapTags = new Map<number, Gtk.TextTag>();   // height → tag
     private relayoutQueued = false;
     private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
@@ -91,7 +91,7 @@ export class TableLayer {
     private geometryUnits = 0;
     private cellSizes = new Map<string, [number, number]>();
     private cellUnits = 0;
-    private wrapSizes = new Map<string, number>();   // lebar kolom + isi sel → tinggi setelah dibungkus
+    private wrapSizes = new Map<string, number>();   // column width + cell contents → height after wrapping
     private probe: Gtk.Grid | null = null;
     private probeCells: { label: Gtk.Label; box: Gtk.Box }[] = [];
     private readonly slots: OverlaySlots;
@@ -104,7 +104,7 @@ export class TableLayer {
         this.watchAdjustment();
     }
 
-    // Editor ditutup: hentikan pekerjaan tertunda (lihat MarkdownView.destroy()).
+    // Editor closed: stop the pending work (see MarkdownView.destroy()).
     destroy(): void {
         this.destroyed = true;
         this.slots.destroy();
@@ -131,13 +131,13 @@ export class TableLayer {
         this.rebuildAll();
     }
 
-    // Lebar kolom teks berubah → hitung ulang lebar kolom tabel.
+    // The text column width changed → recompute the table column widths.
     setMaxWidth(width: number): void {
         width = Math.max(200, Math.floor(width));
         if (width === this.maxWidth) return;
         this.maxWidth = width;
-        // Sel dibungkus, jadi tinggi tabel ikut berubah saat lebar berubah: ruang kosong di teks
-        // dihitung ulang (sync) selain widget yang sudah ada.
+        // Cells wrap, so the table height changes when the width changes: the blank space in the text
+        // is recomputed (sync) in addition to the existing widgets.
         for (const block of this.blocks) if (block.widget) this.resize(block);
         this.sync();
     }
@@ -148,9 +148,9 @@ export class TableLayer {
         this.sync();
     }
 
-    // tables dari highlighter.ts; lines = isi dokumen per baris.
+    // tables from highlighter.ts; lines = document contents per line.
     update(tables: TableRange[], lines: string[], force = false): void {
-        // Pakai ulang blok yang isinya sama walaupun barisnya bergeser.
+        // Reuse blocks with the same contents even if their lines shifted.
         let changed = force, moved = false;
         const unused = [...this.blocks];
         const next: Block[] = [];
@@ -172,14 +172,14 @@ export class TableLayer {
         for (const block of unused) this.destroyWidget(block);
         this.blocks = next;
         if (!changed && this.blocks.every(b => b.collapsed === this.isCollapsed(b))) {
-            // Rentang tag ikut bergeser di GTK; cukup pindahkan widgetnya.
+            // Tag ranges shift along in GTK; just move the widget.
             if (moved) this.queueRelayout();
             return;
         }
         this.sync();
     }
 
-    // Kursor (atau seleksi) berada di baris first..last.
+    // The cursor (or selection) is on lines first..last.
     setCursor(first: number, last: number): void {
         this.cursor = [first, last];
         let changed = false;
@@ -191,8 +191,8 @@ export class TableLayer {
             if (collapsed) block.height = this.tableHeight(block);
             if (!collapsed) block.widget?.set_visible(false);
 
-            // Kursor tidak mengubah teks: tag tabel lain tetap benar. Jangan menelusuri
-            // seluruh buffer untuk mencari selisih tag setiap masuk/keluar satu tabel.
+            // The cursor does not change text: other tables' tags stay correct. Do not walk
+            // the whole buffer to find tag differences every time one table is entered/left.
             const start = iterAtLine(this.buffer, block.start);
             const lastLine = iterAtLine(this.buffer, block.end);
             const end = lastLine.copy();
@@ -209,7 +209,7 @@ export class TableLayer {
         if (changed) this.queueRelayout();
     }
 
-    // ---------- Keadaan ----------
+    // ---------- State ----------
 
     private isCollapsed(block: Block): boolean {
         const [first, last] = this.cursor;
@@ -227,7 +227,7 @@ export class TableLayer {
         block.grid = null;
     }
 
-    // Samakan teks, ruang kosong, dan widget dengan keadaan sekarang.
+    // Sync the text, blank space, and widgets with the current state.
     private sync(): void {
         const iter = this.buffer.get_start_iter();
         const hide: Range[] = [];
@@ -249,9 +249,9 @@ export class TableLayer {
         this.queueRelayout();
     }
 
-    // Ruang di bawah baris terakhir: tinggi grid ditambah GAP di kedua sisi, dikurangi
-    // tinggi baris-baris tersembunyi di atasnya. Tanpa pengurangan itu grid, yang
-    // diposisikan dari baris terakhir, bergeser turun sebanyak baris tabelnya.
+    // Space below the last row: the grid height plus GAP on both sides, minus
+    // the height of the hidden rows above it. Without that subtraction the grid, which is
+    // positioned from the last row, would shift down by the number of rows of the table.
     private reserved(block: Block): number {
         return Math.max(0, block.height + 2 * GAP - (block.end - block.start + 1) * HIDDEN_LINE);
     }
@@ -276,8 +276,8 @@ export class TableLayer {
         });
     }
 
-    // Dua sel pengukur memakai CSS yang sama dengan grid, tanpa membuat seluruh grid.
-    // Ukuran alami (satu baris) dihitung di sini; tinggi setelah dibungkus: tableHeight().
+    // Two measuring cells use the same CSS as the grid, without building the whole grid.
+    // The natural size (one line) is computed here; the height after wrapping: tableHeight().
     private measure(block: Block): Geometry {
         if (block.geometry) return block.geometry;
         const cached = this.geometry.get(block.key);
@@ -317,7 +317,7 @@ export class TableLayer {
             return result;
         });
         const result = { table, markup, natural, cellWidth, cellHeight, height };
-        // Boros bila naskah terus diganti: batasi cache isi tabel, bukan hanya jumlahnya.
+        // Wasteful if the manuscript keeps being replaced: limit the table contents cache, not just its count.
         if (block.key.length <= 1024 * 1024) {
             while (this.geometry.size >= 256 || this.geometryUnits + block.key.length > 1024 * 1024) {
                 const key = this.geometry.keys().next().value!;
@@ -349,8 +349,8 @@ export class TableLayer {
         return size;
     }
 
-    // Tinggi tabel pada lebar sekarang: sel yang lebih lebar dari kolomnya dibungkus,
-    // sehingga barisnya lebih tinggi.
+    // Table height at the current width: cells wider than their column are wrapped,
+    // so their rows are taller.
     private tableHeight(block: Block): number {
         const geo = this.measure(block);
         const widths = fitColumns(geo.natural, this.maxWidth - BORDER);
@@ -366,7 +366,7 @@ export class TableLayer {
         return height;
     }
 
-    // Tinggi sel yang dibungkus pada lebar kolom `width`.
+    // Height of a wrapped cell at column width `width`.
     private measureWrapped(markup: string, header: boolean, width: number): number {
         const key = `${header ? 'h' : 'b'}${width}:${markup}`;
         const cached = this.wrapSizes.get(key);
@@ -416,14 +416,14 @@ export class TableLayer {
         block.x = block.y = -1;
     }
 
-    // ---------- Posisi widget ----------
+    // ---------- Widget position ----------
 
     queueRelayout(): void {
         if (this.destroyed || this.relayoutQueued) return;
         this.relayoutQueued = true;
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this.relayoutQueued = false;
-            if (!this.destroyed) this.relayout();   // tab bisa ditutup sebelum idle berjalan
+            if (!this.destroyed) this.relayout();   // the tab may be closed before idle runs
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -436,16 +436,16 @@ export class TableLayer {
         const [bottom] = this.view.get_line_at_y(rect.y + rect.height);
         const first = top.get_line(), last = bottom.get_line();
         for (const block of this.blocks) {
-            // get_line_yrange() untuk semua tabel memaksa GTK menata sampai akhir
-            // dokumen tiap kursor berpindah. Grid di luar layar menyimpan ruangnya
-            // lewat tag, tetapi baru diposisikan saat digulir ke layar.
+            // get_line_yrange() for all tables forces GTK to lay out to the end of the
+            // document every time the cursor moves. Off-screen grids keep their space
+            // through tags, but are only positioned when scrolled into view.
             const visible = block.collapsed && block.end >= first && block.start <= last;
             if (visible && !block.widget) this.build(block);
             block.widget?.set_visible(visible);
             if (!visible || block.end >= this.buffer.get_line_count()) continue;
             const [lineY, lineHeight] = this.view.get_line_yrange(iterAtLine(this.buffer, block.end));
             const y = lineY + lineHeight - block.height - GAP;
-            // Hanya pindahkan jika berubah, supaya tidak memicu resize berulang.
+            // Only move if changed, so as not to trigger repeated resizes.
             if (x === block.x && y === block.y) continue;
             block.x = x;
             block.y = y;

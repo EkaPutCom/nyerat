@@ -1,8 +1,8 @@
-// Palet perintah (Ctrl+Shift+P): daftar semua aksi aplikasi yang bisa dicari lalu dijalankan.
+// Command palette (Ctrl+Shift+P): a searchable list of all app actions that can then be run.
 //
-// Daftarnya Gio.ListStore → Gtk.FilterListModel → Gtk.SingleSelection → Gtk.ListView; mengetik
-// hanya mengubah filter, tidak ada widget baris yang dibuat atau dibuang manual. Yang dijalankan
-// adalah Gio.Action yang sama dengan tombol, menu, dan pintasan.
+// The list is Gio.ListStore → Gtk.FilterListModel → Gtk.SingleSelection → Gtk.ListView; typing
+// only changes the filter, no row widgets are created or discarded manually. What runs
+// is the same Gio.Action as the button, menu, and shortcut.
 
 import Adw from 'gi://Adw?version=1';
 import GLib from 'gi://GLib';
@@ -15,7 +15,7 @@ import { COMMAND_LABELS } from '../commands.js';
 import { uiTemplate } from '../gtkutil.js';
 import template from './palette.ui?raw';
 
-// Satu baris palet: nama aksi (tanpa awalan "app."), label, dan pintasannya.
+// One palette row: the action name (without the "app." prefix), the label, and its shortcut.
 export class Command extends GObject.Object {
     static {
         GObject.registerClass({
@@ -32,7 +32,7 @@ export class Command extends GObject.Object {
     declare accel: string;
 }
 
-// Aksi aplikasi yang aktif dan punya label, sebagai model daftar.
+// Active app actions that have a label, as the list model.
 export function commandStore(app: Gtk.Application): Gio.ListStore {
     const store = new Gio.ListStore({ item_type: Command.$gtype });
     for (const [name, label] of Object.entries(COMMAND_LABELS)) {
@@ -62,7 +62,7 @@ export class CommandPalette extends Adw.Dialog {
         const filter = Gtk.CustomFilter.new(item => {
             const query = this._search.text.trim().toLowerCase();
             const label = (item as Command).label.toLowerCase();
-            // Setiap kata yang diketik harus ada di label, urutan bebas.
+            // Every typed word must be in the label, in any order.
             return query.split(/\s+/).every(word => label.includes(word));
         });
         this.selection = new Gtk.SingleSelection({ model: new Gtk.FilterListModel({ model: commandStore(app), filter }) });
@@ -76,7 +76,7 @@ export class CommandPalette extends Adw.Dialog {
         this._list.connect('activate', (_list, position) => this.run(position));
     }
 
-    // Jumlah perintah yang lolos filter (untuk tes).
+    // Number of commands that pass the filter (for tests).
     get visibleCount(): number {
         return this.selection.get_n_items();
     }
@@ -91,7 +91,7 @@ export class CommandPalette extends Adw.Dialog {
         const command = this.selection.get_item(position) as Command | null;
         if (!command) return;
         this.close();
-        // Setelah dialog tertutup: aksi bisa membuka dialog lain atau memindahkan fokus.
+        // After the dialog closes: the action may open another dialog or move the focus.
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { this.app.activate_action(command.name, null); return GLib.SOURCE_REMOVE; });
     }
 

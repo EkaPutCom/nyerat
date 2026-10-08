@@ -1,20 +1,20 @@
-// Menampilkan blok ```mermaid dan ```dbml sebagai diagram.
-// Blok DBML (bahasa skema dbdiagram.io) diterjemahkan dulu menjadi diagram ER Mermaid
-// oleh markdown/dbml.ts, lalu dirender dengan jalur yang sama.
+// Displays ```mermaid and ```dbml blocks as diagrams.
+// DBML blocks (dbdiagram.io schema language) are first translated into a Mermaid ER diagram
+// by markdown/dbml.ts, then rendered through the same path.
 //
-// Caranya sama dengan tabel (tablelayer.ts) dan gambar (images.ts): widget ditempel di
-// atas ruang kosong yang disediakan di dalam teks, sehingga isi dokumen tidak berubah.
-// Gambar diagramnya dibuat oleh mermaidrender.ts.
+// It works the same as tables (tablelayer.ts) and images (images.ts): a widget is attached
+// above empty space provided inside the text, so the document contents do not change.
+// The diagram image is produced by mermaidrender.ts.
 //
-//   Kursor DI LUAR blok → seluruh baris blok (termasuk pembatas) dikecilkan jadi ~1 px
-//                         (tag mermaidhide) dan hanya diagram yang terlihat.
-//   Kursor DI DALAM blok → kodenya tampil untuk disunting, diagram tetap tampil di
-//                         bawahnya sebagai pratinjau yang ikut berubah saat mengetik.
+//   Cursor OUTSIDE the block → all lines of the block (including fences) are shrunk to ~1 px
+//                         (tag mermaidhide) and only the diagram is visible.
+//   Cursor INSIDE the block → the code is shown for editing, the diagram stays visible
+//                         below it as a preview that updates while typing.
 //
-// Kode yang salah tidak pernah disembunyikan: pesan galatnya muncul di bawah blok,
-// sehingga kodenya bisa langsung diperbaiki.
+// Invalid code is never hidden: its error message appears below the block,
+// so the code can be fixed right away.
 //
-// Render ditunda sebentar setelah kode berubah, supaya mengetik tidak merender tiap huruf.
+// Rendering is delayed briefly after the code changes, so typing does not render every letter.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
@@ -27,14 +27,14 @@ import { OverlaySlots } from './overlays.js';
 import { iterAtLine, lineSpanOffsets, onClick, removeChildren, textureFromPixbuf } from '../gtkutil.js';
 import { _ } from '../i18n.js';
 
-const GAP = 12;             // jarak di atas dan bawah diagram
-const NOTE_HEIGHT = 24;     // tinggi pesan "Merender…" / galat
-const MAX_HEIGHT = 640;     // tinggi maksimum diagram yang ditampilkan
-const DEBOUNCE_MS = 400;    // jeda setelah kode berubah sebelum dirender
+const GAP = 12;             // distance above and below the diagram
+const NOTE_HEIGHT = 24;     // height of the "Rendering…" / error message
+const MAX_HEIGHT = 640;     // maximum height of the displayed diagram
+const DEBOUNCE_MS = 400;    // pause after the code changes before rendering
 
 export type Kind = 'mermaid' | 'dbml';
 
-// Jenis diagram sebuah blok kode, atau null jika bukan diagram (atau kosong/belum ditutup).
+// The diagram type of a code block, or null if it is not a diagram (or is empty/unclosed).
 export const diagramKind = (block: CodeBlock): Kind | null => {
     if (!block.closed || block.text.trim() === '') return null;
     const lang = block.lang.toLowerCase();
@@ -44,15 +44,15 @@ export const diagramKind = (block: CodeBlock): Kind | null => {
 type Status = 'loading' | 'ok' | 'error';
 
 export interface Block {
-    start: number;           // baris pembatas pembuka
-    end: number;             // baris pembatas penutup
+    start: number;           // opening fence line
+    end: number;             // closing fence line
     kind: Kind;
     code: string;
     status: Status;
-    busy: boolean;           // ada permintaan render yang belum selesai
-    pixbuf: GdkPixbuf.Pixbuf | null;   // diagram terakhir yang berhasil (tetap tampil selama dirender ulang)
+    busy: boolean;           // a render request is still pending
+    pixbuf: GdkPixbuf.Pixbuf | null;   // the last successful diagram (stays visible while re-rendering)
     error: string | null;
-    widget: Gtk.Box;         // slot overlay (lihat overlays.ts)
+    widget: Gtk.Box;         // overlay slot (see overlays.ts)
     content: Gtk.Box;
     height: number;
     collapsed: boolean;
@@ -68,13 +68,13 @@ export class MermaidLayer {
     maxWidth = 700;
     blocks: Block[] = [];
 
-    onActivate: (line: number) => void = () => {};                        // diagram diklik sekali
-    onZoom: (pixbuf: GdkPixbuf.Pixbuf, title: string) => void = () => {};  // diagram diklik dua kali
+    onActivate: (line: number) => void = () => {};                        // diagram clicked once
+    onZoom: (pixbuf: GdkPixbuf.Pixbuf, title: string) => void = () => {};  // diagram double-clicked
 
     private theme: DiagramTheme = { dark: false, bg: '#ffffff', fg: '#333333', accent: '#1c71d8', node: '#f3f4f4' };
     private cursor: [number, number] = [-1, -1];
     private signature = '';
-    private gapTags = new Map<number, Gtk.TextTag>();   // tinggi → tag
+    private gapTags = new Map<number, Gtk.TextTag>();   // height → tag
     private relayoutQueued = false;
     private destroyed = false;
     private adjustment: Gtk.Adjustment | null = null;
@@ -88,7 +88,7 @@ export class MermaidLayer {
         this.watchAdjustment();
     }
 
-    // Editor ditutup: hentikan pekerjaan tertunda (lihat MarkdownView.destroy()).
+    // Editor closed: stop the pending work (see MarkdownView.destroy()).
     destroy(): void {
         this.destroyed = true;
         this.slots.destroy();
@@ -102,14 +102,14 @@ export class MermaidLayer {
         adj.connect('changed', () => this.queueRelayout());
     }
 
-    // Tema berubah → semua diagram dirender ulang dengan warna baru.
+    // Theme changed → all diagrams are re-rendered with the new colors.
     setTheme(theme: DiagramTheme): void {
         if (JSON.stringify(theme) === JSON.stringify(this.theme)) return;
         this.theme = theme;
         for (const block of this.blocks) this.request(block, false);
     }
 
-    // Lebar kolom teks berubah → skala ulang diagram.
+    // The text column width changed → rescale the diagrams.
     setMaxWidth(width: number): void {
         width = Math.max(100, Math.floor(width));
         if (width === this.maxWidth) return;
@@ -124,7 +124,7 @@ export class MermaidLayer {
         this.sync();
     }
 
-    // codeBlocks dari highlighter.ts.
+    // codeBlocks from highlighter.ts.
     update(codeBlocks: CodeBlock[]): void {
         const unused = [...this.blocks];
         const next: Block[] = [];
@@ -132,8 +132,8 @@ export class MermaidLayer {
         for (const found of codeBlocks) {
             const kind = diagramKind(found);
             if (!kind) continue;
-            // Blok yang kodenya sama dipakai ulang walaupun barisnya bergeser; blok yang
-            // kodenya baru diubah (sedang diketik) dikenali dari baris awalnya.
+            // Blocks with the same code are reused even if their lines shifted; a block whose
+            // code was just changed (being typed) is recognized by its starting line.
             let k = unused.findIndex(b => b.kind === kind && b.code === found.text);
             const edited = k < 0;
             if (edited) k = unused.findIndex(b => b.kind === kind && b.start === found.startLine);
@@ -154,13 +154,13 @@ export class MermaidLayer {
         }
         for (const block of unused) this.destroyBlock(block);
         this.blocks = next;
-        // Setelah this.blocks diisi: hasil dari cache datang seketika dan hanya diterima blok yang terdaftar.
+        // After this.blocks is filled: results from the cache arrive immediately and are only accepted by registered blocks.
         for (const [block, delay] of toRender) this.request(block, delay);
         this.signature = '';
         this.sync();
     }
 
-    // Kursor (atau seleksi) berada di baris first..last.
+    // The cursor (or selection) is on lines first..last.
     setCursor(first: number, last: number): void {
         this.cursor = [first, last];
         if (this.stateSignature() !== this.signature) this.sync();
@@ -168,7 +168,7 @@ export class MermaidLayer {
 
     // ---------- Render ----------
 
-    // Minta gambar untuk kode blok ini. delay = true saat kode sedang diketik.
+    // Request an image for this block's code. delay = true while the code is being typed.
     private request(block: Block, delay: boolean): void {
         this.cancelTimer(block);
         block.busy = true;
@@ -180,7 +180,7 @@ export class MermaidLayer {
             try {
                 source = dbmlToMermaid(code);
             } catch (e) {
-                // Galat DBML dilaporkan seketika, tanpa menunggu jeda ketik.
+                // DBML errors are reported immediately, without waiting for the typing pause.
                 block.busy = false;
                 block.status = 'error';
                 block.error = e instanceof Error ? e.message : String(e);
@@ -192,7 +192,7 @@ export class MermaidLayer {
         const run = () => {
             block.timer = 0;
             renderer.render(source, theme, result => {
-                // Hasil lama (kode atau tema sudah berganti, atau blok dibuang) diabaikan.
+                // Old results (the code or theme has changed, or the block was discarded) are ignored.
                 if (block.code !== code || this.theme !== theme || !this.blocks.includes(block)) return;
                 block.busy = false;
                 if (result.ok) {
@@ -220,9 +220,9 @@ export class MermaidLayer {
         block.timer = 0;
     }
 
-    // ---------- Keadaan ----------
+    // ---------- State ----------
 
-    // Diagram yang berhasil dirender menggantikan kodenya saat kursor di luar blok.
+    // A successfully rendered diagram replaces its code when the cursor is outside the block.
     private isCollapsed(block: Block): boolean {
         const [first, last] = this.cursor;
         return this.enabled && block.status === 'ok' && !(block.end >= first && block.start <= last);
@@ -232,7 +232,7 @@ export class MermaidLayer {
         return this.blocks.map(b => `${b.start}-${b.end}:${this.isCollapsed(b) ? 1 : 0}`).join(',');
     }
 
-    // Samakan teks, ruang kosong, dan widget dengan keadaan sekarang.
+    // Sync the text, blank space, and widgets with the current state.
     private sync(): void {
         const iter = this.buffer.get_start_iter();
         const hide: Range[] = [];
@@ -288,21 +288,21 @@ export class MermaidLayer {
         this.slots.release(block.widget);
     }
 
-    // Klik sekali: kursor masuk ke kode (kodenya terbuka). Klik ganda: perbesar.
+    // Single click: the cursor enters the code (the code opens). Double click: zoom.
     press(block: Block, doubleClick: boolean): void {
         if (doubleClick) this.zoom(block);
         else this.onActivate(block.end - 1);
     }
 
     zoom(block: Block): void {
-        if (block.pixbuf) this.onZoom(block.pixbuf, block.kind === 'dbml' ? _('Diagram DBML') : _('Diagram Mermaid'));
+        if (block.pixbuf) this.onZoom(block.pixbuf, block.kind === 'dbml' ? _('DBML Diagram') : _('Mermaid Diagram'));
     }
 
-    // Bangun ulang isi widget sesuai status dan lebar kolom saat ini.
+    // Rebuild the widget contents according to the current status and column width.
     private render(block: Block): void {
         removeChildren(block.content);
         const note = (text: string, tooltip?: string) => {
-            // Tanpa wrap: widget di dalam TextView hanya diberi lebar minimum.
+            // No wrap: a widget inside a TextView is only given the minimum width.
             const label = new Gtk.Label({ label: text, xalign: 0 });
             label.add_css_class('image-note');
             if (tooltip) label.set_tooltip_text(tooltip);
@@ -311,34 +311,34 @@ export class MermaidLayer {
         };
 
         if (block.status === 'error') {
-            // Diagram lama (jika ada) disembunyikan: yang tampil harus sesuai kode sekarang.
-            note(`⚠ Diagram tidak bisa dirender: ${block.error}`, block.error ?? undefined);
+            // The old diagram (if any) is hidden: what is shown must match the current code.
+            note(`⚠ The diagram could not be rendered: ${block.error}`, block.error ?? undefined);
         } else if (block.pixbuf) {
             const pb = block.pixbuf;
             const scale = Math.min(1, this.maxWidth / pb.get_width(), MAX_HEIGHT / pb.get_height());
             const w = Math.max(1, Math.round(pb.get_width() * scale));
             const h = Math.max(1, Math.round(pb.get_height() * scale));
             const scaled = (scale < 1 ? pb.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR) : null) ?? pb;
-            // Gtk.Image di GTK 4 berukuran ikon; Picture tampil seukuran gambarnya.
+            // Gtk.Image in GTK 4 is icon-sized; Picture is shown at the size of its image.
             const image = Gtk.Picture.new_for_paintable(textureFromPixbuf(scaled));
             image.set_can_shrink(false);
             image.set_halign(Gtk.Align.START);
-            image.set_tooltip_text(_('Klik ganda untuk memperbesar'));
+            image.set_tooltip_text(_('Double-click to enlarge'));
             block.content.append(image);
             block.height = h;
         } else {
-            note('Merender diagram…');
+            note('Rendering diagram…');
         }
     }
 
-    // ---------- Posisi widget ----------
+    // ---------- Widget position ----------
 
     queueRelayout(): void {
         if (this.destroyed || this.relayoutQueued) return;
         this.relayoutQueued = true;
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this.relayoutQueued = false;
-            if (!this.destroyed) this.relayout();   // tab bisa ditutup sebelum idle berjalan
+            if (!this.destroyed) this.relayout();   // the tab may be closed before idle runs
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -350,7 +350,7 @@ export class MermaidLayer {
             if (block.end >= this.buffer.get_line_count()) continue;
             const [lineY, lineHeight] = this.view.get_line_yrange(iterAtLine(this.buffer, block.end));
             const y = lineY + lineHeight - block.height - GAP;
-            // Hanya pindahkan jika berubah, supaya tidak memicu resize berulang.
+            // Only move if changed, so as not to trigger repeated resizes.
             if (x === block.x && y === block.y) continue;
             block.x = x;
             block.y = y;

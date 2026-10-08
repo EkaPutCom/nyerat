@@ -1,7 +1,7 @@
-// Nyerat — personal workbench for humans and AI agents (editor Markdown, kanban, riwayat Git, asisten AI) dengan GTK 4 + GtkSourceView 5 (GJS).
-// Titik masuk aplikasi. Build: npm run build, lalu jalankan: gjs -m dist/nyerat.js [file.md]
+// Nyerat — personal workbench for humans and AI agents (Markdown editor, kanban, Git history, AI assistant) with GTK 4 + GtkSourceView 5 (GJS).
+// Application entry point. Build: npm run build, then run: gjs -m dist/nyerat.js [file.md]
 
-import './i18n.js';   // ikat domain gettext sebelum modul lain dievaluasi
+import './i18n.js';   // bind the gettext domain before other modules are evaluated
 import System from 'system';
 import { main } from './app.js';
 

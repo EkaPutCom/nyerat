@@ -1,5 +1,5 @@
-// Tes perubahan yang diusulkan agent: validasi usulan, pratinjau selisih, dan alur persetujuan di sesi.
-// Tanpa GUI dan tanpa jaringan.
+// Tests for changes proposed by the agent: proposal validation, diff preview, and the approval flow in a session.
+// Without a GUI and without a network.
 
 import { buildContext, type ContextInput, type SourceFile } from '../../src/agent/context.js';
 import { cleanNewName, CHANGE_TOOLS, diffPreview, planChange, unifiedDiff, type Change } from '../../src/agent/changes.js';
@@ -8,166 +8,166 @@ import { describeCall } from '../../src/agent/tools.js';
 import type { ChatRequest, ChatResult, Provider } from '../../src/agent/provider.js';
 import { section, test, eq, ok, contains, settle } from '../framework.js';
 
-const RENCANA = '# Rencana\n\n- Draf pertama: Oktober\n- Revisi: November\n\n## Catatan\n\nBelum ada.\n';
-const files: SourceFile[] = [{ name: 'rencana.md', text: RENCANA }, { name: 'riset/pelabuhan.md', text: '# Pelabuhan\n\nAda dua dermaga.\n' }];
+const PLAN = '# Plan\n\n- First draft: October\n- Revision: November\n\n## Notes\n\nNone yet.\n';
+const files: SourceFile[] = [{ name: 'plan.md', text: PLAN }, { name: 'research/harbor.md', text: '# Harbor\n\nThere are two piers.\n' }];
 
-const PAPAN = '---\nkanban: true\n---\n\n## Rencana\n\n- [ ] Tulis laporan #penting\n  catatan laporan\n- [ ] Kirim undangan @{2026-10-20}\n\n## Dikerjakan\n\n- [ ] Riset pelabuhan\n\n## Selesai\n\n- [x] Pesan tempat\n';
-const kfiles: SourceFile[] = [...files, { name: 'papan.md', text: PAPAN }];
-const kanban = (args: object) => planChange('ubah_kanban', JSON.stringify({ nama: 'papan', alasan: 'x', ...args }), kfiles);
+const BOARD = '---\nkanban: true\n---\n\n## Plan\n\n- [ ] Write report #important\n  report note\n- [ ] Send invitations @{2026-10-20}\n\n## In Progress\n\n- [ ] Harbor research\n\n## Done\n\n- [x] Book venue\n';
+const kfiles: SourceFile[] = [...files, { name: 'board.md', text: BOARD }];
+const kanban = (args: object) => planChange('edit_kanban', JSON.stringify({ name: 'board', reason: 'x', ...args }), kfiles);
 const kanbanAfter = (args: object): string => { const r = kanban(args); if (!r.ok) throw new Error(r.message); return r.change.after; };
 
 const plan = (name: string, args: object, over: SourceFile[] = files) => planChange(name, JSON.stringify(args), over);
 
 export function changeTests(): void {
-    section('Agent: usulan perubahan');
+    section('Agent: change proposals');
 
-    test('ubah_berkas: mengganti satu potongan persis dan menghasilkan isi baru', () => {
-        const r = plan('ubah_berkas', { nama: 'rencana', teks_lama: '- Revisi: November', teks_baru: '- Revisi: Desember', alasan: 'jadwal bergeser' });
-        ok(r.ok, 'ditolak');
+    test('edit_file: replaces one exact piece and produces the new contents', () => {
+        const r = plan('edit_file', { name: 'plan', old_text: '- Revision: November', new_text: '- Revision: December', reason: 'schedule shifted' });
+        ok(r.ok, 'rejected');
         if (!r.ok) return;
         eq(r.change.kind, 'edit');
-        eq(r.change.file, 'rencana.md');
-        eq(r.change.before, RENCANA);
-        eq(r.change.after, RENCANA.replace('November', 'Desember'));
-        eq(r.change.reason, 'jadwal bergeser');
+        eq(r.change.file, 'plan.md');
+        eq(r.change.before, PLAN);
+        eq(r.change.after, PLAN.replace('November', 'December'));
+        eq(r.change.reason, 'schedule shifted');
     });
 
-    test('ubah_berkas: teks tidak cocok, tidak unik, sama, atau berkas tidak ada → pesan untuk model', () => {
-        const bad = (args: object) => { const r = plan('ubah_berkas', { alasan: 'x', teks_baru: 'y', ...args }); ok(!r.ok, 'seharusnya gagal'); return r.ok ? '' : r.message; };
-        contains(bad({ nama: 'rencana.md', teks_lama: 'tidak ada di berkas' }), 'tidak ditemukan');
-        contains(bad({ nama: 'rencana.md', teks_lama: 'a' }), 'kali');
-        contains(bad({ nama: 'rencana.md', teks_lama: 'Oktober', teks_baru: 'Oktober' }), 'sama');
-        contains(bad({ nama: 'bab-9.md', teks_lama: 'x' }), 'tidak ditemukan');
-        contains(bad({ nama: 'rencana.md', teks_lama: '' }), 'wajib');
-        contains(planChange('ubah_berkas', '{rusak', files).ok ? '' : (planChange('ubah_berkas', '{rusak', files) as { message: string }).message, 'bukan JSON');
+    test('edit_file: text does not match, is not unique, is the same, or the file does not exist → message for the model', () => {
+        const bad = (args: object) => { const r = plan('edit_file', { reason: 'x', new_text: 'y', ...args }); ok(!r.ok, 'should have failed'); return r.ok ? '' : r.message; };
+        contains(bad({ name: 'plan.md', old_text: 'not in the file' }), 'not found');
+        contains(bad({ name: 'plan.md', old_text: 'a' }), 'times');
+        contains(bad({ name: 'plan.md', old_text: 'October', new_text: 'October' }), 'same');
+        contains(bad({ name: 'chapter-9.md', old_text: 'x' }), 'not found');
+        contains(bad({ name: 'plan.md', old_text: '' }), 'required');
+        contains(planChange('edit_file', '{broken', files).ok ? '' : (planChange('edit_file', '{broken', files) as { message: string }).message, 'not a valid JSON');
     });
 
-    test('ubah_berkas: teks_baru kosong menghapus potongan', () => {
-        const r = plan('ubah_berkas', { nama: 'rencana.md', teks_lama: '\n## Catatan\n\nBelum ada.\n', teks_baru: '', alasan: 'bersih' });
-        ok(r.ok, "usulan ditolak");
-        if (r.ok) eq(r.change.after, '# Rencana\n\n- Draf pertama: Oktober\n- Revisi: November\n');
+    test('edit_file: an empty new_text deletes the piece', () => {
+        const r = plan('edit_file', { name: 'plan.md', old_text: '\n## Notes\n\nNone yet.\n', new_text: '', reason: 'clean' });
+        ok(r.ok, "proposal rejected");
+        if (r.ok) eq(r.change.after, '# Plan\n\n- First draft: October\n- Revision: November\n');
     });
 
-    test('buat_berkas: berkas baru dengan .md dan baris akhir; nama terpakai atau tidak aman ditolak', () => {
-        const r = plan('buat_berkas', { nama: 'tugas/minggu-1', isi: '# Minggu 1', alasan: 'daftar tugas' });
-        ok(r.ok, "usulan ditolak");
-        if (r.ok) { eq(r.change.kind, 'create'); eq(r.change.file, 'tugas/minggu-1.md'); eq(r.change.after, '# Minggu 1\n'); eq(r.change.before, ''); }
-        for (const nama of ['rencana.md', 'RENCANA', '../luar.md', '/etc/x.md', '.nyerat/x.md', 'a//b.md', 'a\\b.md', '']) {
-            ok(!plan('buat_berkas', { nama, isi: 'x', alasan: 'x' }).ok, `diterima: "${nama}"`);
+    test('create_file: a new file with .md and a trailing newline; a taken or unsafe name is rejected', () => {
+        const r = plan('create_file', { name: 'tasks/week-1', content: '# Week 1', reason: 'task list' });
+        ok(r.ok, "proposal rejected");
+        if (r.ok) { eq(r.change.kind, 'create'); eq(r.change.file, 'tasks/week-1.md'); eq(r.change.after, '# Week 1\n'); eq(r.change.before, ''); }
+        for (const name of ['plan.md', 'PLAN', '../outside.md', '/etc/x.md', '.nyerat/x.md', 'a//b.md', 'a\\b.md', '']) {
+            ok(!plan('create_file', { name, content: 'x', reason: 'x' }).ok, `accepted: "${name}"`);
         }
-        ok(!plan('buat_berkas', { nama: 'kosong.md', isi: '  ', alasan: 'x' }).ok, 'isi kosong diterima');
-        eq(cleanNewName('./catatan.markdown'), 'catatan.markdown');
+        ok(!plan('create_file', { name: 'empty.md', content: '  ', reason: 'x' }).ok, 'empty content accepted');
+        eq(cleanNewName('./notes.markdown'), 'notes.markdown');
     });
 
-    test('diffPreview: konteks, hapus, tambah, dan pemotongan', () => {
-        const r = plan('ubah_berkas', { nama: 'rencana.md', teks_lama: '- Revisi: November', teks_baru: '- Revisi: Desember', alasan: 'x' });
-        if (!r.ok) throw new Error('usulan gagal');
+    test('diffPreview: context, removal, addition, and truncation', () => {
+        const r = plan('edit_file', { name: 'plan.md', old_text: '- Revision: November', new_text: '- Revision: December', reason: 'x' });
+        if (!r.ok) throw new Error('proposal failed');
         const d = diffPreview(r.change.before, r.change.after);
         eq([d.added, d.removed], [1, 1]);
-        eq(d.lines.filter(l => l.sign === '-').map(l => l.text), ['- Revisi: November']);
-        eq(d.lines.filter(l => l.sign === '+').map(l => l.text), ['- Revisi: Desember']);
-        ok(d.lines.some(l => l.sign === ' ' && l.text === '- Draf pertama: Oktober'), 'tanpa konteks');
+        eq(d.lines.filter(l => l.sign === '-').map(l => l.text), ['- Revision: November']);
+        eq(d.lines.filter(l => l.sign === '+').map(l => l.text), ['- Revision: December']);
+        ok(d.lines.some(l => l.sign === ' ' && l.text === '- First draft: October'), 'no context');
         const created = diffPreview('', 'a\nb\n');
         eq([created.added, created.removed], [2, 0]);
-        const big = diffPreview('', Array.from({ length: 200 }, (_, i) => `baris ${i}`).join('\n'));
+        const big = diffPreview('', Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n'));
         eq(big.added, 200);
-        ok(big.lines.length <= 61, `terlalu panjang: ${big.lines.length}`);
+        ok(big.lines.length <= 61, `too long: ${big.lines.length}`);
         eq(big.lines[big.lines.length - 1].sign, '…');
     });
 
-    test('unifiedDiff: hunk gaya git dengan tiga baris konteks dan nomor baris yang benar', () => {
-        const r = plan('ubah_berkas', { nama: 'rencana.md', teks_lama: '- Revisi: November', teks_baru: '- Revisi: Desember', alasan: 'x' });
-        if (!r.ok) throw new Error('usulan gagal');
+    test('unifiedDiff: git-style hunks with three context lines and the right line numbers', () => {
+        const r = plan('edit_file', { name: 'plan.md', old_text: '- Revision: November', new_text: '- Revision: December', reason: 'x' });
+        if (!r.ok) throw new Error('proposal failed');
         eq(unifiedDiff(r.change.before, r.change.after), [
-            '@@ -1,6 +1,6 @@', ' # Rencana', ' ', ' - Draf pertama: Oktober', '-- Revisi: November', '+- Revisi: Desember', ' ', ' ## Catatan', ' ',
+            '@@ -1,6 +1,6 @@', ' # Plan', ' ', ' - First draft: October', '-- Revision: November', '+- Revision: December', ' ', ' ## Notes', ' ',
         ].join('\n').replace('@@ -1,6 +1,6 @@', '@@ -1,7 +1,7 @@'));
         eq(unifiedDiff('', 'a\nb\n'), '@@ -0,0 +1,2 @@\n+a\n+b');
         eq(unifiedDiff('x\n', 'x\n'), '');
     });
 
-    test('ubah_kanban: tambah kartu di akhir daftar, hanya baris itu yang berubah', () => {
-        const after = kanbanAfter({ aksi: 'tambah', kartu: 'Susun jadwal #rencana', daftar: 'dikerjakan' });
-        eq(after, PAPAN.replace('- [ ] Riset pelabuhan\n', '- [ ] Riset pelabuhan\n- [ ] Susun jadwal #rencana\n'));
-        const r = kanban({ aksi: 'tambah', kartu: 'Susun jadwal', daftar: 'Dikerjakan' });
-        ok(r.ok && r.change.kind === 'edit' && r.change.file === 'papan.md', 'bentuk usulan salah');
+    test('edit_kanban: add a card at the end of a list, only that line changes', () => {
+        const after = kanbanAfter({ action: 'add', card: 'Arrange schedule #plan', list: 'in progress' });
+        eq(after, BOARD.replace('- [ ] Harbor research\n', '- [ ] Harbor research\n- [ ] Arrange schedule #plan\n'));
+        const r = kanban({ action: 'add', card: 'Arrange schedule', list: 'In Progress' });
+        ok(r.ok && r.change.kind === 'edit' && r.change.file === 'board.md', 'wrong proposal shape');
     });
 
-    test('ubah_kanban: pindah kartu ke akhir daftar lain dan tandai selesai/belum', () => {
-        const moved = kanbanAfter({ aksi: 'pindah', kartu: 'riset pelabuhan', daftar: 'Selesai' });
-        eq(moved, PAPAN.replace('## Dikerjakan\n\n- [ ] Riset pelabuhan\n\n', '## Dikerjakan\n\n').replace('- [x] Pesan tempat\n', '- [x] Pesan tempat\n- [ ] Riset pelabuhan\n'));
-        const done = kanbanAfter({ aksi: 'tandai', kartu: 'undangan', selesai: true });
-        contains(done, '- [x] Kirim undangan @{2026-10-20}');
-        contains(kanbanAfter({ aksi: 'tandai', kartu: 'Pesan tempat', selesai: false }), '- [ ] Pesan tempat');
-        contains(kanbanAfter({ aksi: 'tandai', kartu: 'laporan', selesai: true }), '  catatan laporan');   // catatan kartu tetap
+    test('edit_kanban: move a card to the end of another list and mark done/not done', () => {
+        const moved = kanbanAfter({ action: 'move', card: 'harbor research', list: 'Done' });
+        eq(moved, BOARD.replace('## In Progress\n\n- [ ] Harbor research\n\n', '## In Progress\n\n').replace('- [x] Book venue\n', '- [x] Book venue\n- [ ] Harbor research\n'));
+        const done = kanbanAfter({ action: 'mark', card: 'invitations', done: true });
+        contains(done, '- [x] Send invitations @{2026-10-20}');
+        contains(kanbanAfter({ action: 'mark', card: 'Book venue', done: false }), '- [ ] Book venue');
+        contains(kanbanAfter({ action: 'mark', card: 'report', done: true }), '  report note');   // card notes stay
     });
 
-    test('diff memisahkan perubahan yang berjauhan: pindah kartu tidak menandai daftar lain sebagai berubah', () => {
-        const after = kanbanAfter({ aksi: 'pindah', kartu: 'Kirim undangan', daftar: 'Selesai' });
-        const d = diffPreview(PAPAN, after);
+    test('the diff separates distant changes: moving a card does not mark other lists as changed', () => {
+        const after = kanbanAfter({ action: 'move', card: 'Send invitations', list: 'Done' });
+        const d = diffPreview(BOARD, after);
         eq([d.added, d.removed], [1, 1]);
-        const u = unifiedDiff(PAPAN, after);
+        const u = unifiedDiff(BOARD, after);
         eq(u.split('\n').filter(l => l.startsWith('@@')).length, 2);
-        eq(u.split('\n').filter(l => /^[-+]/.test(l)), ['-- [ ] Kirim undangan @{2026-10-20}', '+- [ ] Kirim undangan @{2026-10-20}']);
-        ok(!u.includes('-## Dikerjakan') && !u.includes('-- [ ] Riset'), 'bagian yang tidak berubah ikut ditandai');
+        eq(u.split('\n').filter(l => /^[-+]/.test(l)), ['-- [ ] Send invitations @{2026-10-20}', '+- [ ] Send invitations @{2026-10-20}']);
+        ok(!u.includes('-## In Progress') && !u.includes('-- [ ] Harbor'), 'an unchanged part was marked too');
         eq(unifiedDiff('a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk\nl\n', 'a\nB\nc\nd\ne\nf\ng\nh\ni\nj\nK\nl\n').split('\n').filter(l => l.startsWith('@@')), ['@@ -1,5 +1,5 @@', '@@ -8,5 +8,5 @@']);
     });
 
-    test('ubah_kanban: galat yang jelas untuk model (bukan papan, daftar/kartu tidak cocok, tanpa perubahan)', () => {
-        const bad = (args: object, base = kanban): string => { const r = base(args); ok(!r.ok, 'seharusnya gagal'); return r.ok ? '' : r.message; };
-        contains(bad({ aksi: 'tambah', kartu: 'x', daftar: 'Rencana', nama: 'rencana.md' }), 'bukan papan kanban');
-        contains(bad({ aksi: 'tambah', kartu: 'x', daftar: 'Ditunda' }), 'Daftar di papan: Rencana, Dikerjakan, Selesai');
-        contains(bad({ aksi: 'tambah', kartu: 'x', daftar: '' }), '"daftar" wajib');
-        contains(bad({ aksi: 'pindah', kartu: 'tidak ada', daftar: 'Selesai' }), 'Tidak ada kartu');
-        contains(bad({ aksi: 'pindah', kartu: 'a', daftar: 'Selesai' }), 'cocok dengan');   // banyak kartu memuat "a"
-        contains(bad({ aksi: 'pindah', kartu: 'Pesan tempat', daftar: 'Selesai' }), 'sudah ada di daftar');
-        contains(bad({ aksi: 'tandai', kartu: 'Pesan tempat', selesai: true }), 'sudah berstatus');
-        contains(bad({ aksi: 'tandai', kartu: 'Pesan tempat' }), '"selesai"');
-        contains(bad({ aksi: 'arsipkan', kartu: 'Pesan tempat' }), 'salah satu dari');
-        contains(bad({ aksi: 'tambah', kartu: 'baris\nbaru', daftar: 'Rencana' }), 'satu baris');
-        contains(bad({ aksi: 'tambah', kartu: '', daftar: 'Rencana' }), 'wajib');
+    test('edit_kanban: clear errors for the model (not a board, list/card does not match, no change)', () => {
+        const bad = (args: object, base = kanban): string => { const r = base(args); ok(!r.ok, 'should have failed'); return r.ok ? '' : r.message; };
+        contains(bad({ action: 'add', card: 'x', list: 'Plan', name: 'plan.md' }), 'not a kanban board');
+        contains(bad({ action: 'add', card: 'x', list: 'Postponed' }), 'Lists on the board: Plan, In Progress, Done');
+        contains(bad({ action: 'add', card: 'x', list: '' }), '"list" argument is required');
+        contains(bad({ action: 'move', card: 'nonexistent', list: 'Done' }), 'No card contains');
+        contains(bad({ action: 'move', card: 'a', list: 'Done' }), 'matches');   // many cards contain "a"
+        contains(bad({ action: 'move', card: 'Book venue', list: 'Done' }), 'already in that list');
+        contains(bad({ action: 'mark', card: 'Book venue', done: true }), 'already has that status');
+        contains(bad({ action: 'mark', card: 'Book venue' }), '"done"');
+        contains(bad({ action: 'archive', card: 'Book venue' }), 'must be one of');
+        contains(bad({ action: 'add', card: 'line\nbreak', list: 'Plan' }), 'single line');
+        contains(bad({ action: 'add', card: '', list: 'Plan' }), 'required');
     });
 
-    test('describeCall untuk alat pengubah', () => {
-        eq(describeCall('buat_berkas', '{"nama":"a.md"}'), 'Mengusulkan berkas baru a.md');
-        eq(describeCall('ubah_berkas', '{"nama":"a.md"}'), 'Mengusulkan perubahan pada a.md');
-        eq(describeCall('ubah_kanban', '{"nama":"papan.md"}'), 'Mengusulkan perubahan papan papan.md');
+    test('describeCall for change tools', () => {
+        eq(describeCall('create_file', '{"name":"a.md"}'), 'Proposing new file a.md');
+        eq(describeCall('edit_file', '{"name":"a.md"}'), 'Proposing changes to a.md');
+        eq(describeCall('edit_kanban', '{"name":"board.md"}'), 'Proposing changes to board board.md');
     });
 
-    section('Agent: persetujuan perubahan di sesi');
+    section('Agent: change approval in a session');
 
     const input = (over: Partial<ContextInput> = {}): Omit<ContextInput, 'recent'> => ({
-        question: 'Geser revisi ke Desember', active: null, selection: '', files, mentions: [],
+        question: 'Move the revision to December', active: null, selection: '', files, mentions: [],
         options: { activeDocument: true, selection: true, project: true }, budget: 48_000, ...over,
     });
     const base = { onContext: () => {}, onText: () => {}, onReasoning: () => {} };
     const result = (over: Partial<ChatResult> = {}): ChatResult => ({ usage: { prompt: 10, cached: 0, completion: 2 }, cancelled: false, toolCalls: [], reasoning: '', ...over });
-    const EDIT = JSON.stringify({ nama: 'rencana.md', teks_lama: '- Revisi: November', teks_baru: '- Revisi: Desember', alasan: 'permintaan pengguna' });
+    const EDIT = JSON.stringify({ name: 'plan.md', old_text: '- Revision: November', new_text: '- Revision: December', reason: 'user request' });
 
-    // Provider yang mengusulkan satu perubahan, lalu menjawab; menyimpan hasil alat yang dilihatnya.
-    const proposing = (calls: ChatRequest[], toolResults: string[], args = EDIT, name = 'ubah_berkas'): Provider => ({
+    // A provider that proposes one change and then answers; it stores the tool results it saw.
+    const proposing = (calls: ChatRequest[], toolResults: string[], args = EDIT, name = 'edit_file'): Provider => ({
         async chat(req) {
             calls.push(req);
             const last = req.messages[req.messages.length - 1];
             if (last.role === 'tool') toolResults.push(last.content);
             if (calls.length === 1) return result({ toolCalls: [{ id: 'p1', name, arguments: args }] });
-            req.onText('Selesai.');
+            req.onText('Done.');
             return result();
         },
     });
 
-    test('tanpa onProposal agent tidak diberi alat pengubah dan prompt tetap baca-saja', () => {
+    test('without onProposal the agent is not given change tools and the prompt stays read-only', () => {
         const calls: ChatRequest[] = [];
         settle(new ChatSession().ask(input(), proposing(calls, []), 'm', base));
         const names = calls[0].tools!.map(t => t.name);
-        ok(!names.includes('ubah_berkas') && !names.includes('buat_berkas'), names.join(','));
-        contains(calls[0].messages[0].content as string, 'Kamu tidak dapat mengubah berkas');
-        // Model tetap mencoba memanggilnya: ditolak sebagai alat tidak dikenal, tidak ada yang ditulis.
+        ok(!names.includes('edit_file') && !names.includes('create_file'), names.join(','));
+        contains(calls[0].messages[0].content as string, 'You cannot change files');
+        // The model still tries to call it: rejected as an unknown tool, nothing is written.
         const results: string[] = [];
         settle(new ChatSession().ask(input(), proposing([], results), 'm', base));
-        contains(results[0], 'tidak dikenal');
+        contains(results[0], 'not recognized');
     });
 
-    test('disetujui: handler menerima selisih, hasil kembali ke model, isi baru terlihat di putaran berikutnya', () => {
+    test('approved: the handler receives the diff, the result goes back to the model, the new contents are visible in the next round', () => {
         const calls: ChatRequest[] = [];
         const results: string[] = [];
         const seen: Change[] = [];
@@ -178,23 +178,23 @@ export function changeTests(): void {
             onProposal: async change => { seen.push(change); return { applied: true }; },
         }));
         eq(seen.length, 1);
-        eq(seen[0].after, RENCANA.replace('November', 'Desember'));
-        contains(results[0], 'disetujui pengguna dan sudah diterapkan');
+        eq(seen[0].after, PLAN.replace('November', 'December'));
+        contains(results[0], 'approved by the user and has been applied');
         eq(r.applied, 1);
-        eq(r.toolCalls, 0);   // hitungan "penelusuran" tidak ikut
-        eq(steps.map(s => s.summary), ['', 'diterapkan']);
-        contains(steps[0].label, 'Ubah rencana.md');
+        eq(r.toolCalls, 0);   // the "lookups" count does not include it
+        eq(steps.map(s => s.summary), ['', 'applied']);
+        contains(steps[0].label, 'Edit plan.md');
         const names = calls[0].tools!.map(t => t.name);
-        ok(names.includes('ubah_berkas') && names.includes('buat_berkas'), names.join(','));
+        ok(names.includes('edit_file') && names.includes('create_file'), names.join(','));
         const system = calls[0].messages[0].content as string;
-        contains(system, 'buat_berkas');
-        ok(!system.includes('Kamu tidak dapat mengubah berkas'), 'aturan baca-saja masih ada');
+        contains(system, 'create_file');
+        ok(!system.includes('You cannot change files'), 'the read-only rule is still there');
     });
 
-    test('ditolak atau gagal diterapkan: model diberi tahu dan tidak ada perubahan dihitung', () => {
+    test('rejected or failed to apply: the model is told and no change is counted', () => {
         for (const [answer, expected, summary] of [
-            [{ applied: false }, 'menolak', 'ditolak'],
-            [{ applied: false, error: 'berkas berubah' }, 'gagal diterapkan: berkas berubah', 'gagal diterapkan'],
+            [{ applied: false }, 'rejected', 'rejected'],
+            [{ applied: false, error: 'file changed' }, 'failed to apply: file changed', 'failed to apply'],
         ] as [ProposalResult, string, string][]) {
             const results: string[] = [];
             const steps: ToolStep[] = [];
@@ -205,16 +205,16 @@ export function changeTests(): void {
         }
     });
 
-    test('usulan tidak valid tidak sampai ke handler; model mendapat alasannya', () => {
+    test('an invalid proposal does not reach the handler; the model gets the reason', () => {
         const results: string[] = [];
         let asked = 0;
-        const bad = JSON.stringify({ nama: 'rencana.md', teks_lama: 'tidak ada', teks_baru: 'x', alasan: 'x' });
+        const bad = JSON.stringify({ name: 'plan.md', old_text: 'nonexistent', new_text: 'x', reason: 'x' });
         settle(new ChatSession().ask(input(), proposing([], results, bad), 'm', { ...base, onProposal: async () => { asked++; return { applied: true }; } }));
         eq(asked, 0);
-        contains(results[0], 'tidak ditemukan');
+        contains(results[0], 'not found');
     });
 
-    test('buat_berkas lalu ubah_berkas pada berkas itu dalam satu giliran memakai isi yang baru', () => {
+    test('create_file followed by edit_file on that file in one turn uses the new contents', () => {
         const results: string[] = [];
         let round = 0;
         const provider: Provider = {
@@ -222,8 +222,8 @@ export function changeTests(): void {
                 const last = req.messages[req.messages.length - 1];
                 if (last.role === 'tool') results.push(last.content);
                 round++;
-                if (round === 1) return result({ toolCalls: [{ id: 'a', name: 'buat_berkas', arguments: JSON.stringify({ nama: 'baru.md', isi: '# Baru\n\nSatu.', alasan: 'x' }) }] });
-                if (round === 2) return result({ toolCalls: [{ id: 'b', name: 'ubah_berkas', arguments: JSON.stringify({ nama: 'baru.md', teks_lama: 'Satu.', teks_baru: 'Dua.', alasan: 'x' }) }] });
+                if (round === 1) return result({ toolCalls: [{ id: 'a', name: 'create_file', arguments: JSON.stringify({ name: 'new.md', content: '# New\n\nOne.', reason: 'x' }) }] });
+                if (round === 2) return result({ toolCalls: [{ id: 'b', name: 'edit_file', arguments: JSON.stringify({ name: 'new.md', old_text: 'One.', new_text: 'Two.', reason: 'x' }) }] });
                 req.onText('ok');
                 return result();
             },
@@ -231,21 +231,21 @@ export function changeTests(): void {
         const edits: Change[] = [];
         const r = settle(new ChatSession().ask(input(), provider, 'm', { ...base, onProposal: async c => { edits.push(c); return { applied: true }; } }));
         eq(r.applied, 2);
-        eq(edits[1].before, '# Baru\n\nSatu.\n');
-        eq(edits[1].after, '# Baru\n\nDua.\n');
+        eq(edits[1].before, '# New\n\nOne.\n');
+        eq(edits[1].after, '# New\n\nTwo.\n');
     });
 
-    test('opsi proyek dimatikan: tidak ada alat, walau handler ada', () => {
+    test('the project option is off: no tools, even though a handler exists', () => {
         const calls: ChatRequest[] = [];
         settle(new ChatSession().ask(input({ options: { activeDocument: true, selection: true, project: false } }), proposing(calls, []), 'm', { ...base, onProposal: async () => ({ applied: true }) }));
         eq(calls[0].tools, undefined);
     });
 
-    test('instruksi: bagian usulan hanya ada bila diizinkan', () => {
+    test('instructions: the proposal section only exists if allowed', () => {
         const on = buildContext({ ...input(), recent: [], canPropose: true }).system;
         const off = buildContext({ ...input(), recent: [] }).system;
-        contains(on, 'ubah_berkas');
-        ok(!off.includes('ubah_berkas'), 'instruksi usulan ada tanpa izin');
-        eq(CHANGE_TOOLS.map(t => t.name), ['buat_berkas', 'ubah_berkas', 'sisip_teks', 'hapus_berkas', 'pindah_berkas', 'ubah_kanban']);
+        contains(on, 'edit_file');
+        ok(!off.includes('edit_file'), 'proposal instructions present without permission');
+        eq(CHANGE_TOOLS.map(t => t.name), ['create_file', 'edit_file', 'insert_text', 'delete_file', 'move_file', 'edit_kanban']);
     });
 }

@@ -1,5 +1,5 @@
-// Jendela pemantau kegiatan agent: lini masa tiap giliran (putaran model, penalaran, alat yang dipanggil beserta
-// argumen dan hasilnya, usulan, token). Memperbarui diri selama agent bekerja; hanya membaca AgentTrace.
+// Agent activity monitor window: the timeline of each turn (model rounds, reasoning, tools called with their
+// arguments and results, proposals, tokens). Updates itself while the agent works; only reads AgentTrace.
 
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -10,7 +10,7 @@ import { onKeyPress, pack } from '../gtkutil.js';
 import { _, fmt } from '../i18n.js';
 
 const KIND_ICON: Record<TraceKind, string> = { turn: '▶', round: '◆', reasoning: '💭', text: '✎', tool: '🔧', usage: '∑', note: '■', error: '⚠' };
-const KIND_FILTER = (): [string, TraceKind[]][] => [[_('Semua'), []], [_('Alat'), ['tool']], [_('Penalaran'), ['reasoning']], [_('Model'), ['round', 'text']]];
+const KIND_FILTER = (): [string, TraceKind[]][] => [[_('All'), []], [_('Tools'), ['tool']], [_('Reasoning'), ['reasoning']], [_('Model'), ['round', 'text']]];
 
 interface Row {
     box: Gtk.Box;
@@ -30,13 +30,13 @@ export class LogViewer {
     private stick = true;
     private stickIdle = 0;
 
-    constructor(parent: Gtk.Window | null, private readonly trace: AgentTrace, title = _('Log agent')) {
+    constructor(parent: Gtk.Window | null, private readonly trace: AgentTrace, title = _('Agent log')) {
         this.window = new Adw.Window({ transient_for: parent, default_width: 760, default_height: 640, title });
         const header = new Adw.HeaderBar();
 
-        const copy = new Gtk.Button({ label: _('Salin semua'), tooltip_text: _('Salin seluruh log sebagai teks') });
+        const copy = new Gtk.Button({ label: _('Copy all'), tooltip_text: _('Copy the whole log as text') });
         copy.connect('clicked', () => this.window.get_clipboard().set(this.trace.text()));
-        const clear = new Gtk.Button({ label: _('Bersihkan'), tooltip_text: _('Kosongkan tampilan log (percakapan tidak terpengaruh)') });
+        const clear = new Gtk.Button({ label: _('Clear'), tooltip_text: _('Clear the log view (the conversation is not affected)') });
         clear.connect('clicked', () => this.trace.clear());
         header.pack_start(copy);
         header.pack_start(clear);
@@ -57,7 +57,7 @@ export class LogViewer {
         this.scroller = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vexpand: true });
         this.scroller.set_child(this.list);
         const vadj = this.scroller.get_vadjustment();
-        // Sama seperti panel Asisten: menggulir di dalam "changed" tidak diterapkan viewport, jadi ditunda ke idle.
+        // Same as the Assistant panel: scrolling inside "changed" is not applied by the viewport, so it is deferred to idle.
         vadj.connect('changed', () => {
             if (!this.stick || this.stickIdle) return;
             this.stickIdle = GLib.idle_add(GLib.PRIORITY_HIGH_IDLE, () => {
@@ -98,20 +98,20 @@ export class LogViewer {
         this.window.present();
     }
 
-    // Penalaran mengalir puluhan kali per detik; tampilan cukup diperbarui beberapa kali.
+    // Reasoning streams dozens of times per second; the view only needs to be updated a few times.
     private queueRefresh(): void {
         if (this.timer) return;
         this.timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => { this.timer = 0; this.refresh(); return GLib.SOURCE_REMOVE; });
     }
 
     private static titleText(e: TraceEvent): string {
-        const state = e.status === 'running' ? ' …' : e.status === 'failed' ? ' — gagal' : '';
-        return `${KIND_ICON[e.kind]}  ${e.time.slice(11)}  ${e.title}${e.ms !== undefined ? `  (${e.ms < 1000 ? `${e.ms} ms` : `${(e.ms / 1000).toFixed(1)} dtk`})` : ''}${state}`;
+        const state = e.status === 'running' ? ' …' : e.status === 'failed' ? ' — failed' : '';
+        return `${KIND_ICON[e.kind]}  ${e.time.slice(11)}  ${e.title}${e.ms !== undefined ? `  (${e.ms < 1000 ? `${e.ms} ms` : `${(e.ms / 1000).toFixed(1)} s`})` : ''}${state}`;
     }
 
     private refresh(): void {
         const events = this.trace.events;
-        // Kejadian terpangkas atau log dikosongkan: bangun ulang dari awal.
+        // Events were trimmed or the log was cleared: rebuild from the start.
         const first = events[0]?.seq;
         for (const [seq, row] of [...this.rows]) {
             if (first === undefined || seq < first || this.rows.size > events.length) {
@@ -142,7 +142,7 @@ export class LogViewer {
         this.applyFilter();
         const tools = events.filter(e => e.kind === 'tool').length;
         const rounds = events.filter(e => e.kind === 'round').length;
-        this.summary.set_text(events.length ? fmt(_('{rounds} putaran model · {tools} panggilan alat'), { rounds, tools }) : _('Belum ada kegiatan. Kirim pertanyaan ke Asisten.'));
+        this.summary.set_text(events.length ? fmt(_('{rounds} model rounds · {tools} tool calls'), { rounds, tools }) : _('No activity yet. Send a question to the Assistant.'));
     }
 
     private applyFilter(): void {

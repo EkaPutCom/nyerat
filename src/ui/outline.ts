@@ -1,7 +1,7 @@
-// Tab Outline di sidebar: daftar heading dokumen. Klik heading untuk melompat ke sana.
+// The Outline tab in the sidebar: the list of document headings. Click a heading to jump to it.
 //
-// Heading disimpan di Gio.ListStore dan ditampilkan Gtk.ListView, yang hanya membuat widget untuk
-// baris yang terlihat. Dokumen dengan ribuan heading tidak perlu dicicil.
+// Headings are kept in a Gio.ListStore and displayed by a Gtk.ListView, which only creates widgets for
+// visible rows. A document with thousands of headings does not need to be fed in piece by piece.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
@@ -11,7 +11,7 @@ import Pango from 'gi://Pango';
 import type { Heading } from '../editor/highlighter.js';
 import { _ } from '../i18n.js';
 
-// Satu baris outline: hanya yang memengaruhi tampilannya. Nomor baris tujuan klik dibaca dari daftar heading terbaru.
+// One outline row: only what affects its display. The target line number of a click is read from the latest list of headings.
 export class HeadingItem extends GObject.Object {
     static {
         GObject.registerClass({
@@ -26,8 +26,8 @@ export class HeadingItem extends GObject.Object {
     declare text: string;
 }
 
-const SMALL = 8;    // perubahan sebesar ini (mis. menyunting satu heading) langsung diterapkan
-const CHUNK = 25;   // item outline baru per giliran saat dicicil
+const SMALL = 8;    // a change this size (e.g. editing one heading) is applied right away
+const CHUNK = 25;   // new outline items per turn when fed in piece by piece
 
 interface Shown { level: number; text: string }
 
@@ -35,10 +35,10 @@ export class Outline {
     readonly store = new Gio.ListStore({ item_type: HeadingItem.$gtype });
     readonly list: Gtk.ListView;
     readonly widget: Gtk.Box;
-    onJump: (line: number) => void = () => {};  // heading diklik
+    onJump: (line: number) => void = () => {};  // heading clicked
 
     private headings: Heading[] = [];
-    private shown: Shown[] = [];   // isi store saat ini (bisa tertinggal dari headings selagi dicicil)
+    private shown: Shown[] = [];   // the store's current contents (can lag behind headings while being fed in)
     private filling = 0;
 
     constructor() {
@@ -50,7 +50,7 @@ export class Outline {
             const listItem = item as Gtk.ListItem;
             const heading = listItem.item as HeadingItem;
             const label = listItem.child as Gtk.Label;
-            const text = heading.text || '(kosong)';
+            const text = heading.text || '(empty)';
             label.margin_start = 16 + (heading.level - 1) * 14;
             if (heading.level === 1) label.set_markup(`<b>${GLib.markup_escape_text(text, -1)}</b>`);
             else label.set_label(text);
@@ -62,7 +62,7 @@ export class Outline {
             if (heading) this.onJump(heading.line);
         });
 
-        const placeholder = new Gtk.Label({ label: _('Belum ada heading'), margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16, valign: Gtk.Align.START });
+        const placeholder = new Gtk.Label({ label: _('No headings yet'), margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16, valign: Gtk.Align.START });
         placeholder.add_css_class('dim-label');
         const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vexpand: true, child: this.list });
         const pages = new Gtk.Stack();
@@ -82,14 +82,14 @@ export class Outline {
         return this.store.n_items;
     }
 
-    // headings dari editor/highlighter.ts
+    // headings from editor/highlighter.ts
     update(headings: Heading[]): void {
-        // Pergeseran baris mengubah tujuan klik, bukan tampilan label.
+        // Line shifts change the click target, not the label's appearance.
         this.headings = headings;
         if (this.filling || this.step(SMALL)) return;
-        // Membuka dokumen lain: membuat semua item sekaligus menahan main loop (±0,1 ms per item,
-        // ±20 ms untuk 440 heading). Perubahan besar dicicil di idle setelah frame digambar
-        // (GDK_PRIORITY_REDRAW = HIGH_IDLE + 20), tetapi sebelum cicilan tag editor (+22).
+        // Opening another document: creating all items at once holds up the main loop (±0.1 ms per item,
+        // ±20 ms for 440 headings). A large change is fed in at idle after the frame is drawn
+        // (GDK_PRIORITY_REDRAW = HIGH_IDLE + 20), but before the editor tag installments (+22).
         this.filling = GLib.idle_add(GLib.PRIORITY_HIGH_IDLE + 21, () => {
             if (!this.step(CHUNK)) return GLib.SOURCE_CONTINUE;
             this.filling = 0;
@@ -97,10 +97,10 @@ export class Outline {
         });
     }
 
-    // Samakan store dengan heading terbaru, paling banyak `limit` item baru (tanpa menyentuh store
-    // bila perubahannya lebih besar dari itu dan limit = SMALL). true = sudah sama.
-    // Awalan dan akhiran yang sama dipertahankan: mengedit satu heading hanya mengganti satu item,
-    // jadi baris lain tidak digambar ulang.
+    // Make the store match the latest headings, at most `limit` new items (without touching the store
+    // if the change is larger than that and limit = SMALL). true = already the same.
+    // The common prefix and suffix are kept: editing one heading replaces only one item,
+    // so the other rows are not redrawn.
     private step(limit: number): boolean {
         const shown = this.shown, headings = this.headings;
         const same = (a: Shown, b: Heading) => a.level === b.level && a.text === b.text;

@@ -1,37 +1,37 @@
-// Data halaman Beranda: tenggat dari papan kanban, item inbox yang belum diproses, berkas terbaru,
-// dan salam menurut jam. Murni TypeScript tanpa GTK; jendela yang membaca berkas dan pengaturan.
-// Sumber kebenarannya tetap berkas Markdown, jadi tidak ada indeks atau database yang bisa basi:
-// semuanya dihitung ulang setiap kali Beranda ditampilkan.
+// Data for the Home page: due dates from kanban boards, unprocessed inbox items, recent files,
+// and a time-based greeting. Pure TypeScript without GTK; the window reads files and settings.
+// The source of truth remains the Markdown files, so there is no index or database that can go stale:
+// everything is recomputed every time Home is shown.
 
 import { cardMeta, dueStatus, isKanban, parseBoard, type Board, type Card, type DueStatus, type Position } from './kanban.js';
 import { isInbox, parseInbox } from './inbox.js';
 
 export interface HomeFile {
-    name: string;    // relatif terhadap folder kerja
+    name: string;    // relative to the work folder
     text: string;
 }
 
 export interface Task {
-    file: string;           // nama relatif papan
+    file: string;           // relative name of the board
     at: Position;
-    card: string;           // teks kartu saat dibaca, untuk memastikan kartunya belum berubah sebelum ditulis
-    box: boolean;           // kartu punya kotak centang ("- [ ]"); tanpa itu, batal centang mengembalikan butir biasa
+    card: string;           // card text when read, to make sure the card has not changed before writing
+    box: boolean;           // the card has a checkbox ("- [ ]"); without it, unchecking restores a plain bullet
     title: string;
     project: string | null;
     due: string;            // "YYYY-MM-DD"
     status: DueStatus;
-    days: number;           // selisih hari dari hari ini; negatif = terlambat
+    days: number;           // day difference from today; negative = overdue
 }
 
-// Kolom yang judulnya seperti ini berisi kartu yang sudah beres walau tanpa kotak centang.
-const DONE_COLUMN = /^(selesai|done|complete(d)?|beres)$/i;
+// A column whose title looks like this holds finished cards even without checkboxes.
+const DONE_COLUMN = /^(done|complete(d)?)$/i;
 const DAY = 24 * 60 * 60 * 1000;
 
 const daysBetween = (from: string, to: string): number =>
     Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY);
 
-// Kartu yang belum selesai dengan tenggat terlambat, hari ini, atau dalam dua hari ke depan, urut menurut tenggat.
-// projectOf menentukan nama proyek kartu (lihat cardProject di agent/harness.ts); lapisan ini tidak mengenalnya.
+// Unfinished cards whose due date is overdue, today, or within the next two days, ordered by due date.
+// projectOf determines the card's project name (see cardProject in agent/harness.ts); this layer does not know about it.
 export function dueTasks(files: HomeFile[], today: string, projectOf: (board: Board, card: Card) => string | null = () => null): Task[] {
     const tasks: Task[] = [];
     for (const file of files) {
@@ -57,10 +57,10 @@ export function dueTasks(files: HomeFile[], today: string, projectOf: (board: Bo
 
 export interface InboxCount {
     file: string;
-    open: number;    // item yang belum dicentang
+    open: number;    // items that are not checked
 }
 
-// Inbox yang masih punya item belum diproses, yang terbanyak dulu.
+// Inboxes that still have unprocessed items, the largest first.
 export function openInboxes(files: HomeFile[]): InboxCount[] {
     return files
         .filter(f => isInbox(f.text))
@@ -69,21 +69,21 @@ export function openInboxes(files: HomeFile[]): InboxCount[] {
         .sort((a, b) => b.open - a.open || a.file.localeCompare(b.file));
 }
 
-// ---------- Berkas terbaru ----------
+// ---------- Recent files ----------
 
 export interface RecentFile {
     path: string;
-    time: number;    // detik Unix saat terakhir dibuka
+    time: number;    // Unix seconds of the last time it was opened
 }
 
 export const MAX_RECENT = 30;
 
-// Catat path sebagai yang terakhir dibuka: pindah ke paling depan tanpa duplikat.
+// Record a path as the last opened: move it to the front without duplicates.
 export function rememberRecent(list: RecentFile[], path: string, time: number, max = MAX_RECENT): RecentFile[] {
     return [{ path, time }, ...list.filter(r => r.path !== path)].slice(0, max);
 }
 
-// Ganti path setelah berkas dipindah atau folder induknya diganti nama.
+// Replace a path after a file is moved or its parent folder is renamed.
 export function moveRecent(list: RecentFile[], from: string, to: string): RecentFile[] {
     return list.map(r => r.path === from ? { ...r, path: to } : r.path.startsWith(`${from}/`) ? { ...r, path: to + r.path.slice(from.length) } : r);
 }
@@ -91,12 +91,12 @@ export function moveRecent(list: RecentFile[], from: string, to: string): Recent
 const parentOf = (path: string): string => path.slice(0, Math.max(0, path.lastIndexOf('/')));
 
 export interface RecentSplit {
-    resume: RecentFile[];    // kartu "Lanjutkan": berkas terakhir dari folder yang berbeda-beda
-    others: RecentFile[];    // sisanya untuk daftar "Berkas terbaru"
+    resume: RecentFile[];    // "Continue" cards: the latest file from different folders
+    others: RecentFile[];    // the rest for the "Recent files" list
 }
 
-// Kartu Lanjutkan mewakili tempat kerja yang berbeda (satu per folder), supaya beberapa berkas dari
-// folder yang sama tidak memenuhi semua kartu. Berkas yang tidak masuk kartu tampil di daftar terbaru.
+// Continue cards represent different work places (one per folder), so several files from the
+// same folder do not fill all the cards. Files that do not make it into a card show up in the recent list.
 export function splitRecent(list: RecentFile[], cards = 4, rows = 6): RecentSplit {
     const resume: RecentFile[] = [];
     const folders = new Set<string>();
@@ -110,11 +110,11 @@ export function splitRecent(list: RecentFile[], cards = 4, rows = 6): RecentSpli
     return { resume, others: list.filter(r => !resume.includes(r)).slice(0, rows) };
 }
 
-// ---------- Salam ----------
+// ---------- Greeting ----------
 
 export type DayPart = 'morning' | 'midday' | 'afternoon' | 'evening';
 
-// Pembagian waktu sapaan bahasa Indonesia: pagi, siang, sore, malam.
+// Greeting time-of-day split: morning, midday, afternoon, evening.
 export function dayPart(hour: number): DayPart {
     if (hour >= 4 && hour < 11) return 'morning';
     if (hour >= 11 && hour < 15) return 'midday';
@@ -122,7 +122,7 @@ export function dayPart(hour: number): DayPart {
     return 'evening';
 }
 
-// Tanggal lokal "YYYY-MM-DD", sama dengan format tenggat kartu.
+// Local date "YYYY-MM-DD", the same as the card due date format.
 export function localDate(date: Date): string {
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;

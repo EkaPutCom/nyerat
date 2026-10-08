@@ -1,6 +1,6 @@
-// Jendela baca untuk satu commit (atau, dengan commit null, perubahan file yang belum di-commit): tab Perubahan (diff terhadap commit sebelumnya) dan
-// tab Isi (file lengkap pada commit itu). Hanya baca; jendela tidak modal supaya dokumen
-// tetap bisa dibandingkan sambil mengedit.
+// Reading window for one commit (or, with a null commit, a file's uncommitted changes): the Changes tab (diff against the previous commit) and
+// the Contents tab (the whole file at that commit). Read-only; the window is not modal so the document
+// can still be compared while editing.
 
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -17,7 +17,7 @@ const DIFF_COLORS = {
     dark: { add: '#17331f', del: '#3d1a1c', hunk: '#78aeed' },
 };
 
-// Tampilan diff bersama (riwayat Git dan usulan perubahan agent): tag warna di buffer, lalu isi baris berjenis.
+// Shared diff view (Git history and agent change proposals): color tags in the buffer, then the typed line contents.
 export function setupDiffTags(view: Gtk.TextView, dark: boolean): void {
     const colors = DIFF_COLORS[dark ? 'dark' : 'light'];
     const table = view.buffer.get_tag_table();
@@ -34,7 +34,7 @@ export function setupDiffTags(view: Gtk.TextView, dark: boolean): void {
 
 export function fillDiff(view: Gtk.TextView, lines: DiffLine[]): void {
     const buffer = view.buffer;
-    // Diff dan isi file bisa sepanjang satu buku.
+    // Diffs and file contents can be as long as a book.
     replaceAllText(view, () => buffer.set_text(lines.map(l => l.text).join('\n'), -1));
     lines.forEach((line, i) => {
         if (line.kind === 'context') return;
@@ -61,21 +61,21 @@ export class HistoryViewer {
     readonly contentView: Gtk.TextView;
     readonly stack: Gtk.Stack;
     closed = false;
-    readonly messageEntry: Gtk.Entry;          // pesan commit (hanya mode perubahan belum di-commit)
+    readonly messageEntry: Gtk.Entry;          // commit message (uncommitted-changes mode only)
     readonly commitButton: Gtk.Button;
     readonly status: Gtk.Label;
-    beforeCommit: () => boolean = () => true;  // simpan dokumen dulu; false = batalkan commit
+    beforeCommit: () => boolean = () => true;  // save the document first; false = cancel the commit
     onCommitted: () => void = () => {};
 
     constructor(parent: Gtk.Window | null, file: string, readonly commit: Commit | null, dark: boolean) {
         this.window = new Adw.Window({
             transient_for: parent, default_width: 860, default_height: 620,
         });
-        const title = commit ? commit.subject || _('(tanpa pesan)') : _('Perubahan belum di-commit');
+        const title = commit ? commit.subject || _('(no message)') : _('Uncommitted changes');
         const detail = commit
             ? `${commit.short} · ${commit.author} · ${GLib.DateTime.new_from_unix_local(commit.time).format('%d %b %Y %H:%M')}`
-            : fmt(_('{name} · dibandingkan dengan commit terakhir'), { name: GLib.path_get_basename(file) });
-        // Judul header dipakai StackSwitcher, jadi info commit ditaruh di atas isi.
+            : fmt(_('{name} · compared with the last commit'), { name: GLib.path_get_basename(file) });
+        // The header title is used by the StackSwitcher, so the commit info is placed above the contents.
         const header = new Adw.HeaderBar();
         this.window.set_title(title);
         const subject = new Gtk.Label({ label: title, xalign: 0, wrap: true });
@@ -89,10 +89,10 @@ export class HistoryViewer {
         this.diffView = this.createView();
         this.contentView = this.createView();
         this.stack = new Gtk.Stack({ transition_type: Gtk.StackTransitionType.CROSSFADE, transition_duration: 100 });
-        this.stack.add_titled(this.scrolled(this.diffView), 'diff', _('Perubahan'));
-        // Perubahan yang belum di-commit tidak punya "versi"; isi terbarunya sudah ada di editor.
+        this.stack.add_titled(this.scrolled(this.diffView), 'diff', _('Changes'));
+        // Uncommitted changes have no "version"; their latest contents are already in the editor.
         if (commit) {
-            this.stack.add_titled(this.scrolled(this.contentView), 'content', _('Isi versi ini'));
+            this.stack.add_titled(this.scrolled(this.contentView), 'content', _('Contents of this version'));
             header.set_title_widget(new Gtk.StackSwitcher({ stack: this.stack }));
         }
         const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
@@ -100,8 +100,8 @@ export class HistoryViewer {
         body.append(new Gtk.Separator());
         pack(body, this.stack, true);
 
-        this.messageEntry = new Gtk.Entry({ placeholder_text: _('Pesan commit'), hexpand: true });
-        this.commitButton = new Gtk.Button({ label: _('Commit file ini') });
+        this.messageEntry = new Gtk.Entry({ placeholder_text: _('Commit message'), hexpand: true });
+        this.commitButton = new Gtk.Button({ label: _('Commit this file') });
         this.commitButton.add_css_class('suggested-action');
         this.status = new Gtk.Label({ xalign: 0, wrap: true, visible: false, margin_start: 12, margin_end: 12, margin_bottom: 8 });
         if (!commit) {
@@ -118,7 +118,7 @@ export class HistoryViewer {
         view.add_top_bar(header);
         this.window.set_content(view);
 
-        // Jendela dihancurkan (GTK 4 tidak memancarkan "destroy" selama objeknya dipegang JavaScript).
+        // The window is destroyed (GTK 4 does not emit "destroy" while its object is held by JavaScript).
         this.window.connect('unrealize', () => { this.closed = true; });
         onKeyPress(this.window, keyval => {
             if (keyval !== Gdk.KEY_Escape) return false;
@@ -127,7 +127,7 @@ export class HistoryViewer {
         });
 
         setupDiffTags(this.diffView, dark);
-        this.setPlaceholder('Memuat…');
+        this.setPlaceholder('Loading…');
         if (commit) {
             commitDiff(file, commit).then(result => this.showDiff(result));
             commitContent(file, commit).then(result => this.showContent(result));
@@ -138,14 +138,14 @@ export class HistoryViewer {
 
     private async doCommit(file: string): Promise<void> {
         const message = this.messageEntry.get_text().trim();
-        if (!message) return this.showStatus('Isi pesan commit dulu');
-        if (!this.beforeCommit()) return this.showStatus('Dokumen gagal disimpan; commit dibatalkan');
+        if (!message) return this.showStatus('Enter a commit message first');
+        if (!this.beforeCommit()) return this.showStatus('The document failed to save; the commit was cancelled');
         this.commitButton.set_sensitive(false);
         const result = await commitFile(file, message);
         if (this.closed) return;
         if (!result.ok) {
             this.commitButton.set_sensitive(true);
-            return this.showStatus(fmt(_('Commit gagal: {message}'), { message: result.message }));
+            return this.showStatus(fmt(_('Commit failed: {message}'), { message: result.message }));
         }
         this.onCommitted();
         this.window.destroy();
@@ -178,17 +178,17 @@ export class HistoryViewer {
     private showDiff(result: TextResult): void {
         if (this.closed) return;
         const buffer = this.diffView.buffer;
-        if (!result.ok) return buffer.set_text(fmt(_('Gagal membaca perubahan:\n{message}'), { message: result.message }), -1);
+        if (!result.ok) return buffer.set_text(fmt(_('Failed to read the changes:\n{message}'), { message: result.message }), -1);
         const lines = parseDiff(result.text);
         if (!lines.length) return buffer.set_text(this.commit
-            ? _('Tidak ada perubahan isi pada commit ini (misalnya hanya ganti nama)')
-            : _('Tidak ada perubahan yang belum di-commit'), -1);
+            ? _('There are no content changes in this commit (for example only a rename)')
+            : _('There are no uncommitted changes'), -1);
         fillDiff(this.diffView, lines);
     }
 
     private showContent(result: TextResult): void {
         if (this.closed) return;
         replaceAllText(this.contentView, () =>
-            this.contentView.buffer.set_text(result.ok ? result.text : fmt(_('Gagal membaca isi file:\n{message}'), { message: result.message }), -1));
+            this.contentView.buffer.set_text(result.ok ? result.text : fmt(_('Failed to read the file contents:\n{message}'), { message: result.message }), -1));
     }
 }

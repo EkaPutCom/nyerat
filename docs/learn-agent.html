@@ -1,0 +1,1707 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learning Agents with Nyerat</title>
+<meta name="description" content="Learning notes on how the Nyerat agent evolved: from a read-only chat to plans, approved batches of changes, verification, and recovery, with the data structures and small simulations.">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f5f2;
+  --surface: #fcfcfb;
+  --surface-2: #efeee9;
+  --line: #dcdad3;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --text-3: #7a7974;
+  --before: #eb6834;
+  --before-soft: #fbe3d8;
+  --after: #2a78d6;
+  --after-soft: #dbe8f8;
+  --neutral: #b9b7af;
+  --code-bg: #efeee9;
+  --warn-bg: #fff6df;
+  --warn-line: #e3c472;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211;
+    --surface: #1a1a19;
+    --surface-2: #242422;
+    --line: #34342f;
+    --text: #ffffff;
+    --text-2: #c3c2b7;
+    --text-3: #93928a;
+    --before: #d95926;
+    --before-soft: #3a2419;
+    --after: #3987e5;
+    --after-soft: #17283d;
+    --neutral: #55544e;
+    --code-bg: #242422;
+    --warn-bg: #2c2717;
+    --warn-line: #7a6624;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211;
+  --surface: #1a1a19;
+  --surface-2: #242422;
+  --line: #34342f;
+  --text: #ffffff;
+  --text-2: #c3c2b7;
+  --text-3: #93928a;
+  --before: #d95926;
+  --before-soft: #3a2419;
+  --after: #3987e5;
+  --after-soft: #17283d;
+  --neutral: #55544e;
+  --code-bg: #242422;
+  --warn-bg: #2c2717;
+  --warn-line: #7a6624;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+}
+code, pre, .mono { font-family: ui-monospace, "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace; font-size: .88em; }
+code { background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; line-height: 1.5; margin: 12px 0; }
+pre code { background: none; padding: 0; font-size: .85em; }
+a { color: var(--after); }
+h1, h2, h3 { line-height: 1.25; letter-spacing: -.01em; }
+h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin: 0 0 .4em; }
+h2 { font-size: 1.55rem; margin: 0 0 .3em; }
+h3 { font-size: 1.1rem; margin: 1.6em 0 .4em; }
+p { margin: .6em 0; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+header.hero { padding: 56px 0 28px; }
+.eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; color: var(--text-3); font-weight: 600; }
+.lede { font-size: 1.12rem; color: var(--text-2); max-width: 46em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 18px 0 0; }
+nav.toc a { font-size: .85rem; text-decoration: none; color: var(--text-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; background: var(--surface); }
+nav.toc a:hover { color: var(--text); border-color: var(--text-3); }
+section.chapter { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px clamp(16px, 3vw, 32px); margin: 22px 0; box-shadow: var(--shadow); }
+.chapnum { font-size: .8rem; color: var(--text-3); font-weight: 600; }
+.meta { font-size: .82rem; color: var(--text-3); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+.grid2 > * { min-width: 0; }
+p code, li code, td code, dd code, .note code { overflow-wrap: anywhere; }
+.panel { border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--surface); min-width: 0; }
+.panel h4 { margin: 0 0 8px; font-size: .95rem; display: flex; gap: 8px; align-items: center; }
+.tag { display: inline-block; font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+.tag.old { background: var(--before-soft); color: var(--text); border: 1px solid var(--before); }
+.tag.new { background: var(--after-soft); color: var(--text); border: 1px solid var(--after); }
+.lesson { border-left: 3px solid var(--after); background: var(--after-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.lesson b:first-child { display: block; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); margin-bottom: 2px; }
+.caveat { border-left: 3px solid var(--warn-line); background: var(--warn-bg); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: .93rem; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: .82rem; color: var(--text-2); margin: 6px 0 10px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.scroll-x { overflow-x: auto; }
+table.data { border-collapse: collapse; width: 100%; font-size: .88rem; }
+table.data th, table.data td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; }
+details { margin: 10px 0; }
+details summary { cursor: pointer; color: var(--text-2); font-size: .88rem; }
+
+/* comparison bars */
+.cmp { display: grid; grid-template-columns: minmax(130px, 210px) 1fr; gap: 4px 14px; align-items: center; font-size: .86rem; }
+.cmp .lbl { color: var(--text-2); line-height: 1.25; }
+.cmp .bars { display: grid; gap: 3px; position: relative; }
+.cmp .bar { height: 12px; border-radius: 0 4px 4px 0; min-width: 2px; position: relative; }
+.cmp .bar.b { background: var(--before); }
+.cmp .bar.a { background: var(--after); }
+.cmp .row { display: flex; align-items: center; gap: 8px; }
+.cmp .row .v { font-size: .78rem; color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cmp .row .v b { color: var(--text); }
+.cmp .row .barwrap { flex: 0 1 auto; display: flex; }
+.cmp .sep { grid-column: 1 / -1; height: 6px; }
+.delta { font-weight: 700; }
+@media (max-width: 560px) { .cmp { grid-template-columns: 1fr; } .cmp .lbl { margin-top: 6px; } }
+
+/* timeline chart */
+.chart { width: 100%; display: block; overflow: visible; }
+.chart text { fill: var(--text-2); font-size: 11px; }
+.chart .axis { stroke: var(--line); }
+.chart .grid { stroke: var(--line); stroke-dasharray: 2 3; }
+.chart .valtxt { fill: var(--text); font-weight: 600; }
+#tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: .8rem; box-shadow: 0 6px 20px rgba(0,0,0,.15); max-width: 300px; opacity: 0; transition: opacity .08s; }
+
+/* data structure diagram */
+.arr { display: flex; flex-wrap: wrap; gap: 3px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .75rem; }
+.cell { border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; background: var(--surface-2); min-width: 28px; text-align: center; }
+.cell.hot { background: var(--before-soft); border-color: var(--before); }
+.cell.cool { background: var(--after-soft); border-color: var(--after); }
+.cell.null { color: var(--text-3); border-style: dashed; background: transparent; }
+.cell .i { display: block; font-size: .65rem; color: var(--text-3); }
+.doclines { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .74rem; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.doclines div { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 8px; transition: background .25s; }
+.doclines div:last-child { border-bottom: 0; }
+.doclines .n { color: var(--text-3); width: 22px; text-align: right; flex: none; }
+.doclines .hot { background: var(--before-soft); }
+.doclines .cool { background: var(--after-soft); }
+.doclines .cp { box-shadow: inset 3px 0 0 var(--text-3); }
+.doclines.click div { cursor: pointer; }
+.doclines.click div:hover { outline: 1px solid var(--text-3); outline-offset: -1px; }
+.arrow { text-align: center; color: var(--text-3); font-size: .85rem; margin: 6px 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: .8rem; }
+.kv dt { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--text-2); }
+.kv dd { margin: 0; }
+
+/* simulation */
+.sim { border: 1px solid var(--after); border-radius: 12px; padding: 16px; margin: 20px 0 6px; background: linear-gradient(var(--after-soft), var(--surface) 90px); }
+.sim > h3 { margin-top: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sim .kind { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--text-2); background: var(--surface); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 10px 0; font-size: .88rem; }
+.controls label { display: flex; align-items: center; gap: 8px; color: var(--text-2); }
+.controls input[type=range] { width: 170px; accent-color: var(--after); }
+.controls output { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; min-width: 4.5em; }
+button { font: inherit; font-size: .88rem; border: 1px solid var(--after); background: var(--after); color: #fff; padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+button.ghost { background: var(--surface); color: var(--text); border-color: var(--line); }
+button:disabled { opacity: .5; cursor: progress; }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--after); outline-offset: 2px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+.stat .k { font-size: .74rem; color: var(--text-3); }
+.stat .v { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat .s { font-size: .74rem; color: var(--text-2); }
+.stat.old { border-top: 3px solid var(--before); }
+.stat.new { border-top: 3px solid var(--after); }
+.minimap { display: grid; gap: 1px; margin: 6px 0; }
+.minimap i { display: block; height: 7px; background: var(--surface-2); border-radius: 1px; transition: background .2s; }
+.minimap i.hot { background: var(--before); }
+.minimap i.cool { background: var(--after); }
+.minimap i.view { outline: 1px solid var(--text); outline-offset: -1px; }
+.note { font-size: .8rem; color: var(--text-3); }
+.track-label { font-size: .8rem; color: var(--text-2); margin: 10px 0 2px; }
+@media (max-width: 600px) {
+  table.data.cards thead { display: none; }
+  table.data.cards, table.data.cards tbody, table.data.cards tr, table.data.cards td { display: block; width: 100%; }
+  table.data.cards tr { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+  table.data.cards td { border: 0; padding: 2px 0; white-space: normal; }
+  table.data.cards td:first-child { font-weight: 650; }
+  table.data.cards td:not(:first-child)::before { content: attr(data-k) ": "; color: var(--text-3); font-size: .8rem; }
+  .sim { padding: 12px; }
+  .controls label { flex: 1 1 100%; display: grid; grid-template-columns: 7.5em 1fr auto; }
+  .controls input[type=range] { width: 100%; min-width: 0; }
+}
+footer { color: var(--text-3); font-size: .82rem; padding: 30px 0 60px; }
+.timeline-steps { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
+.timeline-steps li { display: grid; grid-template-columns: 86px 1fr; gap: 10px; font-size: .9rem; }
+.timeline-steps .h { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem; color: var(--text-3); padding-top: 2px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 22px 0 6px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.kpi .big { font-size: 1.9rem; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.kpi .from { color: var(--text-3); font-size: .85rem; }
+.kpi .what { font-size: .85rem; color: var(--text-2); }
+/* extras specific to the agent page */
+:root { --third: #1f8f6b; --third-soft: #d7efe6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --third: #34b38a; --third-soft: #16302a; } }
+:root[data-theme="dark"] { --third: #34b38a; --third-soft: #16302a; }
+.tag.ctl { background: var(--third-soft); color: var(--text); border: 1px solid var(--third); }
+.worklist { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); font-size: .9rem; max-width: 420px; }
+.worklist .goal { font-weight: 700; }
+.worklist .meta { font-size: .76rem; color: var(--text-3); margin-bottom: 6px; }
+.worklist ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.worklist li { display: flex; gap: 8px; align-items: flex-start; }
+.worklist .mk { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; line-height: 1; }
+.worklist .mk.done { background: var(--third); color: var(--surface); }
+.worklist .mk.pending { border: 1.5px solid var(--text-3); width: 13px; height: 13px; margin: 3px 1.5px 0; }
+.worklist .mk.blocked { color: #c58a00; font-size: 14px; }
+.worklist .mk.spin { border: 2px solid var(--line); border-top-color: var(--after); animation: wl-spin .8s linear infinite; width: 12px; height: 12px; margin: 3px 2px 0; }
+.worklist li.done span:last-child { color: var(--text-2); }
+@keyframes wl-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .worklist .mk.spin { animation: none; border-top-color: var(--after); } }
+.wl-steps { display: grid; gap: 6px; margin: 8px 0; }
+.wl-steps label { display: flex; gap: 8px; align-items: center; font-size: .85rem; flex-wrap: wrap; }
+.wl-steps select { font: inherit; font-size: .82rem; }
+figure { margin: 16px 0; }
+figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+figcaption { font-size: .8rem; color: var(--text-3); margin-top: 6px; }
+.principle { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 14px 0; }
+.principle .panel h4 { margin-bottom: 4px; }
+.principle .panel p { margin: 0; font-size: .88rem; color: var(--text-2); }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0; font-size: .82rem; }
+.flow .node { border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 5px 10px; }
+.flow .node.user { border-color: var(--before); background: var(--before-soft); }
+.flow .node.pure { border-color: var(--after); background: var(--after-soft); }
+.flow .node.ctl { border-color: var(--third); background: var(--third-soft); }
+.flow .to { color: var(--text-3); }
+.ctx { display: grid; gap: 4px; font-size: .82rem; margin: 10px 0; }
+.ctx div { border-radius: 6px; padding: 6px 10px; border: 1px solid var(--line); }
+.ctx .sys { background: var(--after-soft); border-color: var(--after); }
+.ctx .hist { background: var(--surface-2); }
+.ctx .note { background: var(--before-soft); border-color: var(--before); color: var(--text); font-size: .82rem; }
+.ctx b { font-weight: 650; }
+textarea, input[type=text], select { font: inherit; font-size: .85rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; max-width: 100%; }
+textarea { width: 100%; min-height: 150px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .78rem; line-height: 1.5; resize: vertical; }
+input[type=text] { width: 100%; }
+.field { display: grid; gap: 4px; margin: 8px 0; font-size: .85rem; color: var(--text-2); }
+.rank { display: grid; gap: 6px; margin: 10px 0; }
+.rank .hit { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; background: var(--surface); font-size: .82rem; min-width: 0; }
+.rank .hit.in { border-color: var(--after); box-shadow: inset 3px 0 0 var(--after); }
+.rank .hit.out { opacity: .6; }
+.rank .hit .top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; color: var(--text-2); }
+.rank .hit .top b { color: var(--text); font-weight: 650; overflow-wrap: anywhere; }
+.rank .hit .body { color: var(--text-2); margin-top: 3px; overflow-wrap: anywhere; }
+.rank mark { background: var(--warn-bg); color: var(--text); outline: 1px solid var(--warn-line); border-radius: 2px; }
+.log { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: .8rem; max-height: 340px; overflow: auto; }
+.log div { padding: 5px 10px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 74px 1fr; gap: 8px; }
+.log div:last-child { border-bottom: 0; }
+.log .k { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .72rem; color: var(--text-3); padding-top: 1px; }
+.log .round { background: var(--surface-2); }
+.log .tool .k { color: var(--after); }
+.log .user .k { color: var(--before); }
+.log .ok { color: var(--third); font-weight: 650; }
+.log .bad { color: var(--before); font-weight: 650; }
+.log pre { margin: 3px 0 0; padding: 6px 8px; font-size: .74rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.meter { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
+.meter i { display: block; height: 100%; background: var(--after); transition: width .25s; }
+.msg { font-size: .85rem; border-radius: 8px; padding: 8px 12px; margin: 8px 0; border: 1px solid var(--line); background: var(--surface); }
+.msg.ok { border-color: var(--third); background: var(--third-soft); }
+.msg.bad { border-color: var(--before); background: var(--before-soft); }
+.diff { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .76rem; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.diff div { padding: 2px 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff .del { background: var(--before-soft); }
+.diff .add { background: var(--after-soft); }
+.states { display: grid; gap: 8px; margin: 10px 0; }
+.states label { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: .85rem; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--surface); }
+.states label span { overflow-wrap: anywhere; }
+.runs { display: grid; gap: 6px; margin: 10px 0; }
+.runs .run { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; font-size: .85rem; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--surface); }
+.runs .run span { overflow-wrap: anywhere; }
+.runs .st { font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.runs .st.working { border-color: var(--third); background: var(--third-soft); }
+.runs .st.queued { border-color: var(--line); background: var(--surface-2); }
+.runs .st.failed, .runs .st.stopped { border-color: var(--before); background: var(--before-soft); }
+.runs .st.done { border-color: var(--after); background: var(--after-soft); }
+.runs .run .acts { display: flex; gap: 4px; }
+.runs .run button { padding: 2px 8px; font-size: .78rem; }
+.machine { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; font-size: .8rem; margin: 10px 0; }
+.machine .st { border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; background: var(--surface-2); }
+.machine .st.good { border-color: var(--third); background: var(--third-soft); }
+.machine .st.warn { border-color: var(--warn-line); background: var(--warn-bg); }
+.machine .st.bad { border-color: var(--before); background: var(--before-soft); }
+@media (max-width: 600px) {
+  .log div { grid-template-columns: 1fr; gap: 0; }
+  .states label { grid-template-columns: 1fr; }
+  .runs .run { grid-template-columns: minmax(0, 1fr) auto; }
+  .runs .run .acts { grid-column: 1 / -1; }
+}
+</style>
+</head>
+<body>
+<div id="tip" role="tooltip"></div>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow"><a href="index.html">← Nyerat</a> · Learning notes · October 4–5, 2026</div>
+  <h1>Learning to build an agent from Nyerat</h1>
+  <p class="lede">In two days, the Nyerat assistant grew from a chat panel with <b>4 read tools</b> into an agent with <b>16 tools</b>. It can now plan work, propose batches of changes, check the result, and pick the work back up after an interruption. One principle has been held since the first commit: <b>the agent may read freely, but every file change must be approved by the user first</b>. The last chapter shows the next step: Nyerat assigns kanban cards to another agent (pi) that works in a separate project folder, while Nyerat only holds the board. This page explains how that principle is kept at every stage. It covers data structures, the loop flow, safety limits, costs, and small simulations you can try yourself.</p>
+  <div class="kpis">
+    <div class="kpi"><div class="what">Tools offered to the model</div><div class="big">16</div><div class="from">from 4 · f6a4cc7 → 8d0cdec</div></div>
+    <div class="kpi"><div class="what">Assistant tests (unit + GUI)</div><div class="big">191</div><div class="from">from 65 · all without a paid API</div></div>
+    <div class="kpi"><div class="what">Code in <code>src/agent/</code></div><div class="big">3,078 lines</div><div class="from">from 1,099 lines in 8 files → 20 files</div></div>
+    <div class="kpi"><div class="what">Work folder writes without approval</div><div class="big">0</div><div class="from">all through <code>Change</code> + preflight; the external harness only in another project folder (Chapter 9)</div></div>
+  </div>
+  <nav class="toc" aria-label="Table of contents">
+    <a href="#journey">Journey</a>
+    <a href="#principles">Principles</a>
+    <a href="#ch1">1 · Context</a>
+    <a href="#ch2">2 · Tool loop</a>
+    <a href="#ch3">3 · Memory &amp; names</a>
+    <a href="#ch4">4 · Proposals</a>
+    <a href="#ch5">5 · Plan &amp; verification</a>
+    <a href="#ch6">6 · Journal &amp; recovery</a>
+    <a href="#ch7">7 · Agent log</a>
+    <a href="#ch8">8 · Broader actions</a>
+    <a href="#ch9">9 · Orchestrator</a>
+    <a href="#cost">Cost</a>
+    <a href="#lessons">Lessons</a>
+  </nav>
+</header>
+
+<!-- ============================================================ -->
+<section class="chapter" id="journey">
+  <div class="chapnum">The big picture</div>
+  <h2>The journey: from answering to finishing the work</h2>
+  <p>Each bar is one commit that changed the agent. The colors tell three kinds of tools apart: <b>read</b> (browsing files and Git history), <b>proposal</b> (producing changes that wait for approval), and <b>control</b> (the plan and verification, which do not touch files). Hover over a bar to see the number of tests and lines of code at that point.</p>
+  <div class="legend"><span style="--c:var(--after)">Read</span><span style="--c:var(--before)">Change proposals</span><span style="--c:var(--third)">Work control</span></div>
+  <svg class="chart" id="chart-tools" viewBox="0 0 900 300" role="img" aria-label="Number of agent tools per commit"></svg>
+  <ol class="timeline-steps">
+    <li><span class="h">f6a4cc7</span><span><b>Chapters 1, 2</b> · The DeepSeek Assistant panel: context within a token budget, a stable prefix for the cache, BM25, an agent loop with 4 read-only tools.</span></li>
+    <li><span class="h">2d0150f</span><span><b>Chapter 3</b> · Conversation history is saved as Markdown in <code>.nyerat/chats</code> and can be resumed.</span></li>
+    <li><span class="h">49021f3</span><span><b>Chapter 3</b> · The prompt and identity are aligned with the personal workbench vision, no longer specific to book manuscripts.</span></li>
+    <li><span class="h">3f387e6</span><span><b>Chapter 3</b> · <code>search_manuscript</code> → <code>search_documents</code>; the tool descriptions are neutralized.</span></li>
+    <li><span class="h">5a64789</span><span><b>Chapter 4</b> · The first write tools (<code>create_file</code>, <code>edit_file</code>), which only produce proposals and wait for Apply/Reject.</span></li>
+    <li><span class="h">c6f71da</span><span><b>Chapter 4</b> · Proposals are reviewed in the same diff window as Git history.</span></li>
+    <li><span class="h">8db7c55</span><span><b>Chapter 4</b> · Fix for the panel being cut off after a long answer (scrolling through an idle).</span></li>
+    <li><span class="h">deb8aa5</span><span><b>Chapter 4</b> · <code>edit_kanban</code> and multi-hunk diffs.</span></li>
+    <li><span class="h">6c47266</span><span><b>Chapters 5, 6</b> · The plan (<code>set_work</code>), batches (<code>propose_batch</code>), verification, the action journal, retry, and the history summary.</span></li>
+    <li><span class="h">1c90735</span><span><b>Chapter 7</b> · The Agent log window for monitoring rounds, reasoning, tools, and their results.</span></li>
+    <li><span class="h">90c28bb</span><span><b>Chapter 8</b> · Insert, delete, move, replace all, partial approval, Undo, Git history tools, and structure verification.</span></li>
+    <li><span class="h">b1ab712</span><span><b>Chapter 9</b> · The harness orchestrator: <code>@pi</code> cards are worked on by pi in another project folder, a queue per folder, the pi log, cards move to In Progress/Review.</span></li>
+    <li><span class="h">0db63d2</span><span><b>Chapter 9d</b> · pi through RPC mode: a ⏸ waiting status when pi asks or an extension requests permission, answered from Nyerat; steering while working and replies that continue the session.</span></li>
+    <li><span class="h">8d0cdec</span><span><b>Chapter 9f</b> · A <code>[[note]]</code> on a card becomes pi prompt context: the note contents from the work folder are copied into the prompt, limited per note and in total.</span></li>
+    <li><span class="h">b31556d</span><span><b>Chapter 5d</b> · The <code>set_work</code> plan is shown as a checklist (<code>WorkList</code>): progress, a spinner on the step being worked on, turn duration; tidied to GNOME idioms in 4a35bc8 (<code>Adw.Spinner</code>, accessible labels).</span></li>
+    <li><span class="h">a8dd69a</span><span><b>Chapter 5d</b> · The Assistant message box: the send button inside the message frame (6037ab4), the context summary appears immediately when the panel is open from the start.</span></li>
+  </ol>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="principles">
+  <div class="chapnum">Before adding capabilities</div>
+  <h2>Four rules kept in every commit</h2>
+  <p>The agent's capabilities quadrupled, but its basic shape stayed the same. Every new feature has to satisfy these four rules. That is why each chapter below can also be read as a way of satisfying them.</p>
+  <div class="principle">
+    <div class="panel"><h4><span class="tag new">Pure</span></h4><p>The agent logic in <code>src/agent/</code> does not import GTK. Tools work on a <code>SourceFile[]</code>, return values, and do not throw. That is why everything can be tested without a window and without a network.</p></div>
+    <div class="panel"><h4><span class="tag old">Proposals, not writes</span></h4><p>Tools that change things only produce a <code>Change { before, after }</code>. The window is what writes to disk, and that happens after the user presses Apply and the file contents are checked again.</p></div>
+    <div class="panel"><h4><span class="tag ctl">Transparent</span></h4><p>The user can see the context that was sent together with its token count, the browsing steps, the diff, the journal, and now the Agent log too. No decision is hidden.</p></div>
+    <div class="panel"><h4><span class="tag new">Bounded</span></h4><p>Every resource has a limit: context tokens, model rounds, the read budget, the size of tool results, the number of actions per batch, and paths inside the work folder.</p></div>
+  </div>
+  <div class="flow" aria-label="Direction of dependencies">
+    <span class="node pure">agent/* (pure)</span><span class="to">→ used by</span>
+    <span class="node">ui/chat.ts</span><span class="to">→ asks for a decision</span>
+    <span class="node user">the user</span><span class="to">→ Apply</span>
+    <span class="node ctl">window.ts: preflight + write</span>
+  </div>
+  <p class="note">The direction of calls is never reversed. <code>agent/</code> knows nothing about the editor or widgets. The window only gives it a way to read files (<code>ChatHost</code>) and a way to ask for the user's decision (<code>onProposal</code>, <code>onBatchProposal</code>).</p>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch1">
+  <div class="chapnum">Chapter 1 · commit f6a4cc7 · <code>src/agent/context.ts</code></div>
+  <h2>The model only knows what is sent: building context within a budget</h2>
+  <p><b>The problem.</b> The model cannot see the editor. If the work folder holds hundreds of KB of notes, it is impossible to send everything, and sending too much is also expensive and slow. So the quality of the answers is largely determined by a single function: <code>buildContext()</code>.</p>
+  <p><b>The design.</b> The context is split into two parts with different properties, and then ordered so that the part that rarely changes comes first:</p>
+  <div class="ctx">
+    <div class="sys"><b>system (stable)</b> · instructions + the project map + the active document with line numbers. This part stays the same as long as the manuscript does not change, so its prefix can be served from the DeepSeek cache.</div>
+    <div class="hist"><b>history</b> · earlier questions and answers, at most 25% of the budget (<code>HISTORY_SHARE</code>).</div>
+    <div class="note"><b>note (changes)</b> · the selection, the cursor position, files that were <code>@mention</code>ed, and relevant excerpts from other files. This part is attached only in front of the latest question.</div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <h4>Budget and priorities</h4>
+<pre><code>DEFAULT_BUDGET = 48_000            // tokens
+estimateTokens = s =&gt; ceil(s.length / 3)
+// deliberately wasteful for Indonesian text
+// order: selection → active document → @mention
+//        → project map → BM25 excerpts</code></pre>
+    </div>
+    <div class="panel">
+      <h4>Excerpts and search</h4>
+<pre><code>splitChunks(file, text)   // per heading,
+  // sections &gt;1,800 characters are split at blank lines
+rankChunks(chunks, query) // BM25, k1 = 1.5, b = 0.75
+  // headings count twice
+buildQuery: question ×1, selection ×0.5,
+            last 2 questions ×0.4</code></pre>
+    </div>
+  </div>
+  <p>Earlier questions also go into the query with a small weight. That way, a follow-up question such as "then who handles it?" still finds the right excerpts. Suffixes are stripped roughly (the Indonesian <code>-nya</code>, <code>-kan</code>, <code>-an</code>, …) so that "rapatnya" matches "rapat".</p>
+
+  <div class="sim" id="sim1">
+    <h3>Simulation 1: which excerpts go into the <code>note</code>? <span class="kind">Interactive · real computation</span></h3>
+    <p>This is a mock work folder with meeting notes, plans, research, and a task board. The heading splitter, tokenizer, and BM25 below are copies of the <code>context.ts</code> logic. Change the question or the budget to see which excerpts get selected. Excerpts that do not fit in the budget are not sent. The model can still read them later with a tool.</p>
+    <label class="field">Previous question (weight 0.4)<input type="text" id="s1-prev" value="When is the version 2 release scheduled?"></label>
+    <label class="field">Current question (weight 1)<input type="text" id="s1-q" value="Who is handling the data migration?"></label>
+    <div class="controls">
+      <label>Excerpt budget <input type="range" id="s1-b" min="60" max="900" step="20" value="260"><output id="s1-b-out"></output></label>
+    </div>
+    <div class="rank" id="s1-rank"></div>
+    <p class="note">The budget is counted with the same estimate (3 characters ≈ 1 token). In Nyerat, excerpts compete with the selection, the active document, and the project map within a 48,000-token budget. Here the budget is deliberately small so that the effect is visible.</p>
+  </div>
+
+  <h3>Why the order matters: the prefix cache</h3>
+  <p>Providers such as DeepSeek keep a cache for a message prefix that is exactly the same as in the previous request. A single different character at the start is enough to break the cache for the whole message after it. That is why the cursor position and the selection (which change with every question) <b>must not</b> be placed in <code>system</code>.</p>
+  <div class="sim" id="sim2">
+    <h3>Simulation 2: tokens from the cache over one session <span class="kind">Interactive · model</span></h3>
+    <p>Compare two arrangements. Left: the cursor position is slipped into <code>system</code>. Right: Nyerat's arrangement, with every part that changes going into the <code>note</code> at the end. A bar shows the input tokens per question. Blue marks tokens that can be served from the cache.</p>
+    <div class="controls">
+      <label>Number of questions <input type="range" id="s2-n" min="2" max="16" step="1" value="8"><output id="s2-n-out"></output></label>
+      <label>System size <input type="range" id="s2-s" min="4000" max="40000" step="1000" value="24000"><output id="s2-s-out"></output></label>
+    </div>
+    <div class="legend"><span style="--c:var(--after)">From cache</span><span style="--c:var(--before)">Reprocessed</span></div>
+    <div class="grid2">
+      <div><div class="track-label"><span class="tag old">Cursor in system</span></div><svg class="chart" id="s2-bad" viewBox="0 0 440 160" aria-label="Tokens per question, the bad arrangement"></svg></div>
+      <div><div class="track-label"><span class="tag new">Cursor in note (Nyerat)</span></div><svg class="chart" id="s2-good" viewBox="0 0 440 160" aria-label="Tokens per question, Nyerat's arrangement"></svg></div>
+    </div>
+    <div class="stats">
+      <div class="stat old"><div class="k">Cursor in system: from cache</div><div class="v" id="s2-bad-v">–</div><div class="s" id="s2-bad-s"></div></div>
+      <div class="stat new"><div class="k">Cursor in note: from cache</div><div class="v" id="s2-good-v">–</div><div class="s" id="s2-good-s"></div></div>
+    </div>
+    <p class="note">This model assumes the manuscript does not change, the note is ±2,500 tokens, and each turn adds ±600 tokens of history. In the left arrangement, the cursor position is written right after the instructions (±1,500 tokens), so only the instructions stay the same as in the previous request. This is not a DeepSeek measurement. The real numbers per round (input tokens, from cache, output) can be seen in the <a href="#ch7">Agent log</a>. When the manuscript changes, the active document in <code>system</code> changes too and the cache really does have to be rebuilt.</p>
+  </div>
+  <div class="lesson"><b>Lesson</b>Context is the main interface to the model. Split the context by how often its contents change, give each part a budget, and show the breakdown to the user. In Nyerat, the Context button shows each part along with its token count.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch2">
+  <div class="chapnum">Chapter 2 · commit f6a4cc7 · <code>src/agent/session.ts</code>, <code>tools.ts</code></div>
+  <h2>A bounded agent loop: the model asks, the code runs</h2>
+  <p>A turn starts by calling the model. If the model asks for a tool, that tool is run, the result is sent back, and then the model is called again. The loop stops when the model gives an answer. The first version had only 4 read tools: <code>list_files</code>, <code>search_manuscript</code> (BM25), <code>search_text</code> (exact text), and <code>read_file</code>.</p>
+  <div class="grid2">
+    <div class="panel">
+      <h4><span class="tag new">The core of the loop (condensed from f6a4cc7)</span></h4>
+<pre><code>for (round = 0; round &lt; MAX_ROUNDS; round++) {   // 10
+  useTools = round &lt; MAX_ROUNDS - 1
+  result = await provider.chat({ messages,
+             tools: useTools ? TOOLS : undefined })
+  if (!result.toolCalls.length) break  // the answer
+  for (call of result.toolCalls) {
+    out = runTool(call.name, call.arguments, files)
+    if (cost(out) &gt; toolBudget) out = 'Budget exhausted…'
+    messages.push({ role: 'tool', content: out })
+  }
+}</code></pre>
+    </div>
+    <div class="panel">
+      <h4>Three limits that guarantee the loop ends</h4>
+      <ul style="margin:0;padding-left:18px;font-size:.9rem">
+        <li><b>Rounds:</b> at most 10. The last round is called <em>without</em> tools, so the model is forced to answer.</li>
+        <li><b>Read budget:</b> the total of tool results per turn ≤ 1× the context budget (<code>TOOL_SHARE</code>). If it is exceeded, the model is asked to answer with the information it already has and to say what has not been checked.</li>
+        <li><b>Result per tool:</b> ≤ 6,000 tokens (<code>MAX_RESULT_TOKENS</code>). A longer result is cut off with a hint to read a specific range.</li>
+      </ul>
+    </div>
+  </div>
+  <p>There are several small decisions that matter. Tools never throw: broken JSON arguments become an error message the model can read, so the model can fix it by itself. The result of <code>read_file</code> is given the same line numbers as the context, so "file:line" references are consistent. Tools are only offered if the user allows other files to be read (the project context switch). In addition, unsaved editor contents replace the version on disk.</p>
+
+  <div class="sim" id="sim3">
+    <h3>Simulation 3: one agent turn, step by step <span class="kind">Interactive · walkthrough</span></h3>
+    <p>The user's request: <i>"The launch meeting moved from Wednesday to Thursday, October 9; update all the documents."</i> This is a walkthrough of the current loop flow (Chapters 5 and 8) with a scenario that has been written in advance. A real model may choose other steps. When the batch is proposed, you are the one who decides.</p>
+    <div class="btnrow"><button id="s3-next">Next step</button><button class="ghost" id="s3-reset">Reset</button></div>
+    <div class="btnrow" id="s3-decide" hidden>
+      <button id="s3-all">Apply all</button>
+      <button class="ghost" id="s3-part">Apply 1 of 2 (uncheck tasks.md)</button>
+      <button class="ghost" id="s3-no">Reject the batch</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">Model rounds</div><div class="v" id="s3-round">0 / 10</div><div class="s" id="s3-tools">tools offered: –</div></div>
+      <div class="stat"><div class="k">Read budget remaining</div><div class="v" id="s3-budget">48,000</div><div class="meter"><i id="s3-meter" style="width:100%"></i></div></div>
+      <div class="stat"><div class="k">Work status</div><div class="v" id="s3-work">–</div><div class="s" id="s3-written">files written: 0</div></div>
+    </div>
+    <div class="log" id="s3-log" aria-live="polite"></div>
+  </div>
+  <div class="lesson"><b>Lesson</b>A reliable agent is not one that is "smart enough to stop by itself", but one whose loop has hard limits in code: the number of rounds, the read budget, and the size of results. Error messages and "budget exhausted" messages are written to be read by the model, not by the developer.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch3">
+  <div class="chapnum">Chapter 3 · commits 2d0150f, 49021f3, 3f387e6 · <code>chatstore.ts</code>, <code>transcript.ts</code>, <code>context.ts</code>, <code>tools.ts</code></div>
+  <h2>Memory a human can read, and names that do not mislead</h2>
+  <h3>3a. A conversation as a Markdown file</h3>
+  <p>Each conversation is saved as one file in <code>&lt;folder&gt;/.nyerat/chats/</code>, with frontmatter (<code>title</code>, <code>model</code>, <code>created</code>) and then <code>## You</code> / <code>## Assistant</code> sections. The format is deliberately readable and editable by humans, not a hidden database.</p>
+  <div class="grid2">
+    <div class="panel">
+      <h4>What is saved</h4>
+      <p style="margin:0;font-size:.88rem">Questions and answers. Starting in Chapter 5, also <code>work</code> (the goal, steps, verification) and <code>actions</code> (the journal along with before/after snapshots). The <code>.nyerat/</code> folder automatically gets a <code>.gitignore</code> containing <code>*</code>, because its contents include document excerpts.</p>
+    </div>
+    <div class="panel">
+      <h4>What is deliberately not saved</h4>
+      <p style="margin:0;font-size:.88rem">The model's thinking process, the context breakdown, the full read results, and token usage. The document context is rebuilt every turn (file contents may change), so the history stays small.</p>
+    </div>
+  </div>
+  <div class="caveat"><b>A trap that is avoided:</b> the agent must not browse its own history as a document. <code>readProject</code> does not read dot folders, so <code>.nyerat/</code> never shows up in <code>search_documents</code> results. Without this rule, an old answer could be read as a "fact" from a document.</div>
+  <h3>3b. Tool names are part of the prompt</h3>
+  <p>Nyerat was originally designed for writing books, so its prompt and tools talked about the "manuscript". After the vision was widened into a personal workbench (notes, meetings, research, plans), the name <code>search_manuscript</code> was changed to <code>search_documents</code> and all the tool descriptions were neutralized. The model picks tools by their names and descriptions. A name that is too narrow makes the model hesitate to use the tool for meeting minutes.</p>
+  <div class="lesson"><b>Lesson</b>Treat tool names and descriptions like interface text for a very literal user. When the scope of the product changes, re-check the prompt and the tool descriptions, not just the UI.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch4">
+  <div class="chapnum">Chapter 4 · commits 5a64789, c6f71da, deb8aa5, 8db7c55 · <code>src/agent/changes.ts</code>, <code>ui/proposalviewer.ts</code></div>
+  <h2>From answering to proposing: changes as data</h2>
+  <p><b>The need.</b> Users want the agent not just to say "replace line 12", but to do it, without losing control over their files. <b>The design.</b> A write tool writes nothing. It only validates the arguments, and then computes the result as a value:</p>
+  <div class="grid2">
+    <div class="panel">
+      <h4><span class="tag new">Data structure</span></h4>
+<pre><code>interface Change {
+  kind: 'create' | 'edit' | 'delete' | 'move'
+  file: string     // relative path in the work folder
+  before: string   // contents at the time of the proposal
+  after: string    // contents if applied
+  reason: string   // the reason, shown in the review window
+  to?: string      // move only
+}</code></pre>
+      <p class="meta">The <code>kind</code> values delete/move were only added in Chapter 8. The first version only had create and edit.</p>
+    </div>
+    <div class="panel">
+      <h4><span class="tag old">Separating the tools</span></h4>
+<pre><code>TOOLS          // read-only, run directly
+CHANGE_TOOLS   // only produce a Change
+// session:
+change = planChange(name, args, files)
+answer = await handlers.onProposal(change)
+// ↑ a Promise that waits for the review window
+if (answer.applied) applyToFiles(files, change)</code></pre>
+      <p class="meta">Without an <code>onProposal</code> handler, the tools that change things are not offered at all.</p>
+    </div>
+  </div>
+  <p><code>edit_file</code> asks for an <code>old_text</code> that appears <b>exactly once</b>. If it does not match, the model gets a message telling it to read the file first or to add surrounding lines. This approach is stronger than line numbers, because models often miscount lines. <code>edit_kanban</code> (deb8aa5) does not edit text directly. It uses the same board model as the kanban UI (<code>parseBoard</code> → operation → <code>serializeBoard</code>), so the result is always a valid board.</p>
+  <h3>Preflight: the file contents must still be what they were at the proposal</h3>
+  <p>There is a gap between the moment a proposal is made and the moment the user presses Apply. During that gap the user may well edit the file. That is why, before writing, the window calls <code>preflight()</code>. A proposal is rejected if <code>before</code> is no longer the same as the actual contents, instead of overwriting the user's edit.</p>
+<pre><code>function preflight(c, read) {
+  const at = read(c.file)                  // null = does not exist
+  if (c.kind === 'create') return at === null ? null : `${c.file} already exists`
+  if (at === null)        return `${c.file} no longer exists`
+  if (at !== c.before)    return `${c.file} changed since it was proposed; ask for a new proposal`
+  if (c.kind === 'move' &amp;&amp; read(c.to) !== null) return `${c.to} already exists`
+  return null
+}</code></pre>
+  <div class="sim" id="sim4">
+    <h3>Simulation 4: Apply, edit, Undo <span class="kind">Interactive · real logic</span></h3>
+    <p>The agent proposes the change below. Try <b>Apply</b>, and then <b>Undo</b>. After that, repeat but edit the file contents in the text box before pressing the button. <code>preflight</code>, <code>changeState</code>, and <code>invertChange</code> here are copies of those in <code>changes.ts</code>.</p>
+    <div class="grid2">
+      <div>
+        <div class="track-label">Actual contents of <code>plans/october.md</code> (you may edit it)</div>
+        <textarea id="s4-file" spellcheck="false" aria-label="File contents"></textarea>
+      </div>
+      <div>
+        <div class="track-label">The <code>edit_file</code> proposal</div>
+        <div class="diff" id="s4-diff"></div>
+        <p class="meta" id="s4-reason"></p>
+        <div class="btnrow"><button id="s4-apply">Apply</button><button class="ghost" id="s4-undo" disabled>Undo</button><button class="ghost" id="s4-reset">Reset</button></div>
+      </div>
+    </div>
+    <div class="msg" id="s4-msg">changeState: –</div>
+  </div>
+  <figure>
+    <img src="assets/proposal-diff.png" alt="The agent proposal review window with a red-green diff and Reject/Apply buttons" loading="lazy">
+    <figcaption>The review window (c6f71da) uses the same diff view as Git history, so users only need to learn one visual language.</figcaption>
+  </figure>
+  <div class="caveat"><b>A UI bug along the way (8db7c55).</b> After a long answer, the Assistant panel was shown cut off and its footer disappeared. The cause: <code>set_value()</code> was called inside the adjustment's <code>changed</code> signal. The value changed, but the GTK viewport did not apply it. Scrolling is now scheduled through an idle. The test checks the position of the footer in the visible area, not only the adjustment value. A test that only checks internal numbers can pass even though the display is wrong.</div>
+  <div class="lesson"><b>Lesson</b>Separate "deciding a change" from "writing a change". If a proposal is pure data with <code>before</code> and <code>after</code>, you get the diff, validation, conflict checking, and later Undo, all from the same structure.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch5">
+  <div class="chapnum">Chapter 5 · commit 6c47266 · <code>work.ts</code>, <code>batch.ts</code>, <code>verification.ts</code></div>
+  <h2>Plan, batch, and verification: "done" must be checkable</h2>
+  <p><b>The symptom.</b> For multi-step work, such as moving a schedule across three documents and a task board, the model proposed changes one by one, sometimes forgot a file, and then declared "all done". The user had to approve five separate windows without seeing the whole picture.</p>
+  <h3>5a. A plan that is stored: <code>set_work</code></h3>
+<pre><code>interface WorkState {
+  goal: string
+  status: 'running' | 'paused' | 'failed' | 'complete'
+  steps: { text: string; status: 'pending' | 'done' | 'blocked' }[]   // 1–20
+  note: string
+  actionStart?: number          // journal index when this work started
+  verification?: Verification   // the latest check result
+}</code></pre>
+  <div class="machine" aria-label="Work status">
+    <span class="st">running</span><span class="to">→ turn ends →</span><span class="st warn">paused</span>
+    <span class="to">· changes applied →</span><span class="st">running</span><span class="to">(verification cleared)</span>
+    <span class="to">· verification passes + all steps done →</span><span class="st good">complete</span>
+    <span class="to">· error →</span><span class="st bad">failed</span>
+  </div>
+  <p>One important rule: <b>the model cannot set <code>complete</code> itself</b>. That status can only be reached if <code>verify_work</code> passes <em>and</em> all the steps have the status <code>done</code>. Every change applied afterwards clears the verification result, so the check has to be repeated. If, in the next turn, the file contents turn out no longer to match the changes that were applied, the <code>complete</code> status drops back to <code>paused</code>.</p>
+  <h3>5b. Batches: many actions, one review</h3>
+  <div class="grid2">
+    <div class="panel">
+<pre><code>planBatch(args, files) {
+  virtual = copy(files)          // a trial world
+  for (item of actions) {        // ≤ 20
+    c = planChange(item.tool, item.arguments, virtual)
+    // delete/move lock the file
+    merge per file: first before, last after
+    applyToFiles(virtual, c)     // the next action
+  }                              // sees this result
+}</code></pre>
+    </div>
+    <div class="panel">
+<pre><code>applyBatch(changes, host) {
+  // 1. preflight ALL first; one failure = cancel everything
+  // 2. write in order
+  // 3. if a write fails: roll back what was written,
+  //    return the error + any rollback failures
+}
+// an in-process transaction, no atomic guarantee
+// against power loss</code></pre>
+    </div>
+  </div>
+  <p>The actions in a batch are planned on a <b>virtual copy</b>, so a second action on the same file sees the result of the first. The final results are merged into <b>one <code>Change</code> per file</b>. This decision later makes the partial approval in Chapter 8 possible.</p>
+  <h3>5c. Deterministic verification</h3>
+  <p><code>verify_work</code> does not ask another model for an opinion. The model states its criteria, and then code checks them against the actual contents: <code>present</code> / <code>absent</code> (exact text), <code>kanban</code> (a card is in a given list with a given status), and since Chapter 8 also <code>structure</code>. The session also <b>adds checks of its own</b>: every file that was changed but is not mentioned in the criteria automatically produces "Changed files not yet checked: FAILED". That way, the model cannot get through just by checking the easy files.</p>
+  <figure>
+    <img src="assets/agent-done.png" alt="The Assistant panel showing a finished, verified work plan after the task board was updated" loading="lazy">
+    <figcaption>The plan, the approved batch, and the verification are shown in the panel. The status "done and verified" only appears after the checks pass.</figcaption>
+  </figure>
+  <div class="lesson"><b>Lesson</b>Do not trust the model's claim of "done". Make done a status that can only be reached through a deterministic check of the actual result, and revoke that status as soon as the result changes.</div>
+
+  <h3>5d. A visible plan: one <code>WorkState</code>, two readers · commits b31556d, 4a35bc8 · <code>ui/worklist.ts</code></h3>
+  <p><b>The symptom.</b> The plan had been stored since 6c47266, but the panel showed it as the <code>workText()</code> text as it was: <code>- [x] Read the meeting decisions</code>, exactly as sent to the model. While the agent worked, the user could not see at a glance which step was in progress, and the same plan appeared twice because the tool step line "Work plan → …" printed it as well.</p>
+  <div class="grid2">
+    <div class="panel">
+<pre><code>// before: one text for the model and for humans
+answer.work.set_text(workText(work))
+// - [x] Read the meeting decisions
+// - [ ] Check the plan and the task cards</code></pre>
+    </div>
+    <div class="panel">
+<pre><code>// after: the model still receives workText(),
+// the panel draws from the same data
+answer.work.update(work, running, seconds)
+current = running &amp;&amp; work.status === 'running'
+  ? steps.findIndex(s =&gt; s.status === 'pending') : -1</code></pre>
+    </div>
+  </div>
+  <p>There is no new status. <code>WorkList</code> only reads the existing <code>WorkState</code>, so a turn that is running and a conversation reopened from <code>.nyerat/chats</code> look the same. The only piece of information that does not come from the model is <b>the step in progress</b>: the first <code>pending</code> step, only while the turn is running. As soon as the turn finishes, the spinner disappears and the status goes back to the saved status (<code>paused</code>, <code>failed</code>, or <code>done and verified</code>), so the display never claims progress that was not recorded. The "Work plan" line in the tool step list is hidden when the plan is valid; a plan rejected by <code>parseWork</code> still appears as an error line.</p>
+  <p>The display follows GNOME idioms (see AGENT.md, "The UI must follow GNOME standards"): symbolic icons, the <code>@success_bg_color</code>/<code>@success_fg_color</code> color pair, <code>Adw.Spinner</code> when libadwaita ≥ 1.6 with a <code>Gtk.Spinner</code> fallback, and every row has the <i>list item</i> role with an accessible label "text — status", so that the status is not conveyed through color alone.</p>
+  <figure>
+    <img src="assets/plan.png" alt="The Assistant panel showing the plan as a checklist: three steps with green checks, 3/3 steps, done and verified" loading="lazy" style="max-width:360px">
+    <figcaption>The plan from the work in 5b–5c after the turn finished: progress, the saved status, and the turn duration under the goal; one check per step.</figcaption>
+  </figure>
+  <div class="sim" id="sim9">
+    <h3>Simulation 9: from <code>WorkState</code> to a checklist <span class="kind">Interactive · real logic</span></h3>
+    <p>Change the status of each step and whether the turn is still running. The marker rules and the meta row are copies of the logic in <code>WorkList.update()</code> and <code>stepRow()</code>. Below it is the <code>workText()</code> text that the model receives for the same state.</p>
+    <div class="wl-steps" id="s9-steps"></div>
+    <div class="controls">
+      <label><input type="checkbox" id="s9-running" checked> The turn is running</label>
+      <label>Saved status <select id="s9-status"><option value="running">running</option><option value="paused">paused</option><option value="failed">failed</option><option value="complete">complete</option></select></label>
+    </div>
+    <div class="grid2">
+      <div class="worklist" id="s9-view" role="list"></div>
+      <pre><code id="s9-text"></code></pre>
+    </div>
+    <p class="note">The spinner appears only when the turn is running <em>and</em> the saved status is <code>running</code>. In Nyerat the status <code>complete</code> can only be reached through verification (5c); here it can be chosen directly to see how it looks.</p>
+  </div>
+  <div class="lesson"><b>Lesson</b>The same state may have two views: a compact text for the model, a widget for humans. Draw the human view from the saved data, not from the model's text, and limit the "live" additions (spinner, duration) to what is really known at that moment.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch6">
+  <div class="chapnum">Chapter 6 · commit 6c47266 · <code>journal.ts</code>, <code>recovery.ts</code>, <code>deepseek.ts</code></div>
+  <h2>The journal and recovery: interrupted work must not be repeated blindly</h2>
+  <p><b>The symptom.</b> The app can be closed, the connection can drop, or the user can open an old conversation tomorrow morning. Without a record, the agent might propose again a change that has already been applied, or conversely think a change that actually failed has succeeded.</p>
+<pre><code>interface ActionEvent {
+  id, question, tool, time: string
+  status: 'proposed' | 'applied' | 'rejected' | 'failed'
+        | 'interrupted' | 'read' | 'reverted'
+  changes: Change[]       // before/after snapshots → the diff can be reopened
+  summary: string
+}</code></pre>
+  <p>Every tool call is recorded. A proposal is recorded as <code>proposed</code> <em>before</em> the review window opens, and its status is updated after the decision. If the process dies between the two points, the journal still holds <code>proposed</code>. On the next turn, <code>reconcileEvents()</code> compares it with the actual contents:</p>
+  <div class="sim" id="sim5">
+    <h3>Simulation 5: reconciling an interrupted proposal <span class="kind">Interactive · real logic</span></h3>
+    <p>A batch of three changes had the status <code>proposed</code> when the app was closed. Choose the state of each file as found when the conversation is opened again.</p>
+    <div class="states" id="s5-states"></div>
+    <div class="msg" id="s5-out"></div>
+    <div class="track-label">Journal lines sent to the model (as data, not instructions)</div>
+<pre><code id="s5-journal"></code></pre>
+  </div>
+  <p>The journal and the work status are inserted as a message labeled <i>"data, not instructions"</i>, together with an order not to repeat actions that have been applied or rejected. When loaded from disk, <code>parseEvents()</code> only accepts entries with a valid shape (a clean path, a known kind). That metadata can be edited by the user, so its contents are only restored as data and never executed.</p>
+  <h3>A retry that does not duplicate text</h3>
+<pre><code>// recovery.ts: retry only if no output has been shown yet
+if (!(e instanceof TemporaryProviderError) || emitted || attempt &gt;= 2) throw e
+await wait(attempt === 0 ? 300 : 900)</code></pre>
+  <p>Temporary errors (429, 5xx, a failed connection, or a cut-off stream) are retried at most twice, but <b>only if not a single piece of text or reasoning has been shown yet</b>. Retrying after part of an answer has streamed in would duplicate text on the user's screen.</p>
+  <h3>A history summary that does not make things up</h3>
+  <p>When the history exceeds 25% of the budget, the oldest turns are cut off in pairs. The cut-off part is replaced by an <b>extractive excerpt</b> (≤400 characters per turn, ≤4,000 in total), not a model-written summary. Excerpts add no new facts and need no extra API call. The full history stays on disk.</p>
+  <div class="lesson"><b>Lesson</b>Record the intent before acting and record the result afterwards. When recovering, reconcile with the real world, not with memory. There are three possible outcomes: <i>it already happened</i>, <i>it has not happened</i>, or <i>unclear, check first</i>. The third possibility must always exist.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch7">
+  <div class="chapnum">Chapter 7 · commit 1c90735 · <code>src/agent/trace.ts</code>, <code>ui/logviewer.ts</code></div>
+  <h2>The Agent log: seeing what the agent actually did</h2>
+  <p><b>The need.</b> When the agent answers strangely, the question is almost always the same: what was sent, which tools were called with which arguments, and what came back? The step cards in the panel only show a one-line summary.</p>
+  <div class="grid2">
+    <div class="panel">
+<pre><code>class AgentTrace {
+  events: TraceEvent[]        // ≤ 2,000, the oldest dropped
+  begin(kind, key, title)     // status 'running'
+  append(kind, round, delta)  // text/reasoning streaming in
+  finish(kind, key, status, detail)  // + duration (ms)
+}
+TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
+          | 'tool' | 'usage' | 'note' | 'error'</code></pre>
+    </div>
+    <div class="panel">
+      <p style="margin-top:0;font-size:.9rem">Every model round records the number of messages, the tools offered, and the tokens (input / from cache / output). Every tool records its tidied JSON arguments and <b>the exact result returned to the model</b>. Details are cut off at 20,000 characters.</p>
+      <p style="margin-bottom:0;font-size:.9rem">The log <b>exists only in memory</b>: it is not sent to the model, not written to the conversation file, and it is cleared by a New conversation.</p>
+    </div>
+  </div>
+  <div class="lesson"><b>Lesson</b>Observability for developers and context for the model are two different channels. If the log is sent to the model too, the model will "read itself" and the tokens will balloon. Separate the two from the start, and make sure the log is bounded.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch8">
+  <div class="chapnum">Chapter 8 · commit 90c28bb · <code>changes.ts</code>, <code>batch.ts</code>, <code>gittools.ts</code>, <code>markdown/lint.ts</code></div>
+  <h2>Broader actions, with limits just as tight</h2>
+  <p>With the foundation of <code>Change</code>, preflight, the journal, and verification, new capabilities can be added without opening a shortcut. Every new tool uses the same approval path.</p>
+  <div class="scroll-x">
+  <table class="data cards">
+    <thead><tr><th>Capability</th><th>Safeguard</th></tr></thead>
+    <tbody>
+      <tr><td data-k="Capability"><code>insert_text</code> at the start, the end, or after a line</td><td data-k="Safeguard">For <code>after_line</code>, the model must include <code>line_text</code>. If the number and the contents do not match, the proposal is rejected.</td></tr>
+      <tr><td data-k="Capability"><code>edit_file</code> with <code>all=true</code></td><td data-k="Safeguard">Must be stated explicitly. Without it, <code>old_text</code> must still be unique.</td></tr>
+      <tr><td data-k="Capability"><code>delete_file</code></td><td data-k="Safeguard">The file is moved to the Trash, not deleted permanently. The snapshot in the journal makes Undo possible.</td></tr>
+      <tr><td data-k="Capability"><code>move_file</code></td><td data-k="Safeguard">The destination must not already exist. The path is checked for symlinks with <code>projectPath()</code>.</td></tr>
+      <tr><td data-k="Capability">Git history (<code>git_log</code>, <code>show_commit</code>, <code>file_at_commit</code>)</td><td data-k="Safeguard">Read-only. The pathspec is limited to Markdown files that are not hidden. A commit may only be a hash or <code>HEAD~n</code>. Results ≤ 6,000 tokens.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>8a. Partial approval: why one <code>Change</code> per file matters</h3>
+  <p>The batch review window now has a checkbox per file. Partial approval is only safe if each <code>Change</code> stands on its own. That is why <code>planBatch</code> (Chapter 5) already merged actions per file, and why files that are deleted or moved are <b>locked</b> so that no other action in the same batch may touch them. When the user applies only part of a batch, the journal records <b>two events</b>: one <code>applied</code> and one <code>rejected</code>. The model is told that the rejected part must not be repeated without asking. The <i>Note for the agent</i> box is passed along with the decision (≤2,000 characters), so a rejection can come with a reason.</p>
+  <h3>8b. Undo = the inverse, passing through the same preflight</h3>
+<pre><code>invertChange(c):  create → delete    delete → create (from the before snapshot)
+                  edit   → edit with before/after swapped
+                  move   → move from c.to back to c.file
+// applied as a reversed batch: [...changes].reverse().map(invertChange)</code></pre>
+  <p>Because the inverse is also a <code>Change</code>, Undo automatically fails safely if the file has been edited again. You already tried it in Simulation 4. The journal marks it <code>reverted</code> so that the agent does not think the change is still in effect.</p>
+  <h3>8c. Structure verification: only <em>new</em> problems cause a failure</h3>
+  <p>The <code>structure</code> check (<code>markdown/lint.ts</code>) looks for tables whose cell counts do not match, unclosed code blocks, empty headings or ones that skip a level, and links to Markdown files that do not exist. Real documents often already have such problems, so the check is compared with the <b>contents before the work</b> (the <code>baseline</code>, taken from the <code>before</code> of the first change per file). Every problem has a key without a line number, so an old problem that only shifted lines is not counted as new. Only problems that appear because of the agent's change make it fail. The criterion <code>file: "*"</code> checks the whole folder, for example to make sure an old date remains nowhere.</p>
+  <figure>
+    <img src="assets/proposal-kanban.png" alt="The review window for a kanban board change proposal" loading="lazy">
+    <figcaption>Kanban board changes also go through the same review window. Board serialization may tidy the spacing elsewhere, and that is shown as it is in the diff.</figcaption>
+  </figure>
+  <div class="lesson"><b>Lesson</b>Investing in the right structure early (changes as data, one change per file, preflight) makes later features such as partial approval and Undo small and safe. A new feature does not need to make its own write path.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="ch9">
+  <div class="chapnum">Chapter 9 · commit b1ab712 · <code>agent/harness.ts</code>, <code>orchestrator.ts</code></div>
+  <h2>Nyerat as an orchestrator: another agent works, Nyerat holds the board</h2>
+  <p><b>The need.</b> Project code (for example <code>~/web-ecommerce</code>) does not live in Nyerat's work folder, and the work needs an agent that can run commands, edit code, and run tests. That is not a job for the Nyerat agent, which deliberately never writes by itself. The answer: let another agent (<a href="https://pi.dev">pi</a>) do the work, and make the Nyerat kanban board the <b>control plane</b>. The card states the task, <code>@pi</code> states who does it, and the list states its status.</p>
+  <div class="grid2">
+    <div class="panel">
+<pre><code>## Plan
+- [ ] Checkout with QRIS @pi #feature
+  Use the official SDK.
+- [ ] Test the cart @pi #project/shop-admin
+
+// board frontmatter: project: web-ecommerce
+// settings.json: projects = {
+//   "web-ecommerce": "/home/eka/web-ecommerce",
+//   "shop-admin":    "/home/eka/shop-admin" }</code></pre>
+    </div>
+    <div class="panel">
+<pre><code>interface Run {
+  board, card        // board + card text (the identifier)
+  agent: 'pi'
+  project, folder    // name → folder from the settings
+  prompt
+  status: 'queued' | 'working' | 'done'
+        | 'failed' | 'stopped'
+  trace: AgentTrace  // the pi log
+  result: HarnessResult | null
+}</code></pre>
+    </div>
+  </div>
+  <div class="flow" aria-label="The flow of one card">
+    <span class="node user">right-click → Work on it with pi</span><span class="to">→</span>
+    <span class="node pure">buildPrompt + RunQueue</span><span class="to">→</span>
+    <span class="node">pi --mode json (cwd = project folder)</span><span class="to">→ JSONL</span>
+    <span class="node pure">PiReader → AgentTrace</span><span class="to">→</span>
+    <span class="node ctl">card: In Progress → Review + ↳ summary</span>
+  </div>
+  <h3>9a. The trust boundary moves to the folder</h3>
+  <p>Up to Chapter 8, every write went through <code>Change</code> and the review window. An external harness cannot be treated like that: pi writes directly, runs <code>bash</code>, and uses its own permission rules. So the boundary is no longer per change, but <b>per folder</b>:</p>
+  <div class="scroll-x">
+  <table class="data cards">
+    <thead><tr><th>Risk</th><th>Safeguard</th></tr></thead>
+    <tbody>
+      <tr><td data-k="Risk">A card, a note, or the Nyerat agent points the harness at an arbitrary folder</td><td data-k="Safeguard">Markdown only mentions the project <b>name</b>. The name is mapped to a folder in <code>settings.projects</code>, which is only filled in by the user through the folder chooser dialog.</td></tr>
+      <tr><td data-k="Risk">The harness writes into Nyerat's work folder without a review window</td><td data-k="Safeguard"><code>checkProjectFolder()</code> rejects the work folder, its contents, its parents, the root, and relative paths.</td></tr>
+      <tr><td data-k="Risk">Two harnesses overwrite one repo</td><td data-k="Safeguard"><code>RunQueue</code>: one <code>working</code> run per folder, the rest <code>queued</code> in order.</td></tr>
+      <tr><td data-k="Risk">The harness waits for input and nobody knows</td><td data-k="Safeguard">A permission/input request becomes a ⏸ <i>waiting</i> status on the card and is answered from Nyerat (9d). After a turn finishes without a question, stdin is closed so that pi exits.</td></tr>
+      <tr><td data-k="Risk">A grandchild process holds the pipe, the run never finishes</td><td data-k="Safeguard">After the process exits, the remaining output gets a 1.5-second grace period and is then abandoned. <i>Stop</i> = SIGTERM, then SIGKILL after 5 seconds. Closing the window stops all runs.</td></tr>
+      <tr><td data-k="Risk">Changes come in without being reviewed</td><td data-k="Safeguard">The prompt asks pi not to commit/push. The card stops at <i>Review</i>, and the diff is reviewed in the project repo.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>9b. Delegation through a process contract, not a tool call</h3>
+  <p>pi is not called as a model tool. It is a separate process with a clear contract: arguments in, JSONL out, an exit code at the end. <code>PiReader</code> reads the events <code>tool_execution_start/end</code>, <code>message_update</code>, <code>message_end</code> (with <code>stopReason</code> and <code>usage.cost</code>), and <code>agent_settled</code>, and maps them to the same <code>AgentTrace</code> as in Chapter 7. The Agent log window is reused without any change. Lines that are not JSON are recorded as they are and do not make the reading fail.</p>
+  <p>One GJS trap: the pipe from <code>Gio.Subprocess.get_stdout_pipe()</code> is wrapped as a <code>Gio.UnixInputStream</code> after Gtk is loaded, and GJS prints a <code>Gjs-WARNING</code>. That is why the pipe is read through <code>GLib.IOChannel</code>, split only at LF according to pi's JSONL framing.</p>
+  <h3>9c. The board as the source of truth, the card looked up again</h3>
+  <p>The board has no card ids, so a card is recognized by its text. Every time the status changes, <code>locateCard()</code> looks for it on the <em>current</em> board (the user may have moved it) and refuses if it is missing or not unique. A board that is open is changed through its editor (one undo step); a closed one is written straight to disk.</p>
+  <div class="sim" id="sim6">
+    <h3>Simulation 6: the queue per project folder <span class="kind">Interactive · real logic</span></h3>
+    <p>Assign several cards to two projects, and then finish, fail, or cancel their runs. What runs is a copy of <code>RunQueue.add()</code> and <code>end()</code> from <code>agent/harness.ts</code>.</p>
+    <div class="btnrow"><button id="s6-a">+ web-ecommerce card</button><button id="s6-b">+ shop-admin card</button><button class="ghost" id="s6-reset">Reset</button></div>
+    <div class="runs" id="s6-runs"></div>
+    <div class="msg" id="s6-msg">No cards have been assigned yet.</div>
+  </div>
+  <h3>9d. Waiting for an answer: from a one-way stream to a two-way conversation</h3>
+  <p><b>The symptom.</b> The first version used <code>pi --mode json</code> with stdin closed right away. If pi asked ("Do you want SDK A or B?"), the card still went into <i>Review</i> and the question was simply left behind in the note. If a pi extension asked for permission (for example before <code>rm -rf</code>), the dialog had no recipient: the <code>permission-gate</code> shipped with pi's examples actually <b>blocks</b> the command when there is no UI.</p>
+  <p><b>The design.</b> pi is started with <code>--mode rpc</code>. Its process stays alive for the run, receives commands through stdin, and sends the same events as the JSON mode, plus two new things:</p>
+  <div class="grid2">
+    <div class="panel">
+<pre><code>// stdout → Nyerat
+{"type":"extension_ui_request","id":"u1",
+ "method":"confirm","title":"Allow the bash command?",
+ "message":"rm -rf build"}
+{"type":"agent_settled"}    // the turn is finished
+
+// Nyerat → stdin
+{"type":"extension_ui_response","id":"u1","confirmed":true}
+{"id":"nyerat-2","type":"prompt","message":"Use SDK A"}
+{"id":"nyerat-steer","type":"steer","message":"…"}</code></pre>
+    </div>
+    <div class="panel">
+<pre><code>PiSignal = { type: 'ask', ask: HarnessAsk }
+         | { type: 'settled' }
+         | { type: 'rejected', error }
+
+HarnessAsk {
+  kind: 'select' | 'confirm' | 'input'
+      | 'editor' | 'question'
+  id     // null for a question
+  title, message, options, prefill
+  timeout  // pi answers by itself after it
+}</code></pre>
+    </div>
+  </div>
+  <div class="flow" aria-label="The waiting-for-an-answer flow">
+    <span class="node pure">PiReader.line() → ask</span><span class="to">→</span>
+    <span class="node ctl">run.status = 'waiting' · chip ⏸</span><span class="to">→</span>
+    <span class="node user">Answer pi… (Allow / Deny / text / Later)</span><span class="to">→</span>
+    <span class="node">extension_ui_response / prompt through stdin</span>
+  </div>
+  <p>There are two kinds of "waiting" with different answer channels. An <b>extension dialog</b> has an id and is answered with <code>extension_ui_response</code>. A <b>model question</b> has no special protocol: pi just stops with some text. Nyerat treats it as a question if the last answer ends with <code>?</code>, and the reply is sent as the next <code>prompt</code> to the same process. The reader discards the old turn state through <code>restart()</code> so that an error or answer from before is not carried over. This heuristic can miss, so every finished run can still be replied to through <i>Reply to pi…</i>, which runs pi again with <code>--session &lt;id&gt;</code> and the same log.</p>
+  <div class="sim" id="sim7">
+    <h3>Simulation 7: is pi asking a question? <span class="kind">Interactive · real logic</span></h3>
+    <p>Write pi's last answer. A copy of <code>endsWithQuestion()</code> decides whether the card waits for your reply or stdin is closed so that the card goes into Review.</p>
+    <textarea id="s7-text" rows="4" aria-label="pi's last answer">I have checked the project structure.
+
+Do you want to use the official SDK or the API directly?</textarea>
+    <div class="msg" id="s7-out"></div>
+  </div>
+  <div class="scroll-x">
+  <table class="data cards">
+    <thead><tr><th>Limit</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td data-k="Limit">A waiting run still holds its folder's queue</td><td data-k="Reason">Its process is still alive and can continue the work as soon as it is answered; another harness in the same folder could collide with it.</td></tr>
+      <tr><td data-k="Limit"><i>Later</i> closes the dialog without answering</td><td data-k="Reason">Answering is a decision. Closing a dialog must not be read as "allow" or "deny".</td></tr>
+      <tr><td data-k="Limit">An extension's <code>timeout</code> is followed</td><td data-k="Reason">pi uses its default answer after the time limit. The status on the card goes back to <i>working</i> too, so that it does not show a request that has gone stale.</td></tr>
+      <tr><td data-k="Limit">One command = one JSON line, bytes with an explicit length</td><td data-k="Reason">pi's RPC framing is split on LF. <code>write_chars()</code> with a string and length -1 in GJS triggers <code>GLib-WARNING: Invalid UTF-8</code>, and the steering that is sent is corrupted.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="caveat"><b>Measured with a real pi (once):</b> a card that asked it to ask a question first went into the waiting status with the question "What is the note file's name?". After it was answered, a scratch extension asked for permission for <code>ls</code>, permission was given from a script, and then pi created the file and the card went into Review (8,699 tokens, ±$0.0037). That is a single run, not an evaluation. Your own pi does not have a permission extension yet, so without installing one only questions will appear. The <code>custom()</code> dialog (TUI only) is not supported by RPC mode, and there is no interactive terminal yet.</div>
+  <div class="lesson"><b>Lesson</b>Good delegation still needs a return channel. Tell apart requests that have a protocol (an id + a structured answer) from those that are only implied in text (a model question). The first is answered exactly. The second is guessed simply, and then give a way out when the guess misses (<i>Reply</i>).</div>
+  <h3>9f. Notes as context: the contents are sent, the access is not</h3>
+  <p><b>The need.</b> Design decisions, specifications, and meeting minutes live in Nyerat's work folder, while pi works in the project repo. The boundary in 9a deliberately makes pi unable to read the work folder. As a result, the card "Checkout with QRIS" only carries a single title line. Users had to copy the specification into the card note by hand, and that copy went stale quickly.</p>
+  <p><b>The design.</b> A card links notes with the syntax already used in the editor, <code>[[Specification#Payment]]</code>. On <i>Work on it with pi</i>, Nyerat resolves the link and copies its <b>contents</b> into the prompt. Pi still gets no path to the work folder, and the boundary in 9a does not change.</p>
+  <div class="grid2">
+    <div class="panel">
+<pre><code>// pure: agent/harness.ts + markdown/wikilink.ts
+cardWikiLinks(card)        // title + note, ≤ 10,
+                           // no duplicates, code skipped
+LinkedNote {
+  link: WikiLink           // target, heading, alias
+  file: string | null      // null = not found
+  text: string | null      // null = #section is missing
+}
+buildPrompt(card, project, board, notes)</code></pre>
+    </div>
+    <div class="panel">
+<pre><code>// host (window.ts), same rules as Ctrl+click
+linkedNotes(boardFile, links):
+  root  = work folder (or the board's folder)
+  files = listMarkdownFiles(root)  // no dot folders,
+                                   // no symlinks
+  file  = resolveWikiLink(target, files, board)
+  text  = open editor ?? disk
+  text  = heading ? noteSection(text, heading) : text</code></pre>
+    </div>
+  </div>
+  <div class="flow" aria-label="The related notes flow">
+    <span class="node user">Work on it with pi</span><span class="to">→</span>
+    <span class="node pure">cardWikiLinks</span><span class="to">→</span>
+    <span class="node">host.linkedNotes (reads the work folder)</span><span class="to">→</span>
+    <span class="node pure">linkedNotesSection: fence + limits</span><span class="to">→</span>
+    <span class="node ctl">prompt (shown in full in the pi log)</span>
+  </div>
+  <div class="scroll-x">
+  <table class="data cards">
+    <thead><tr><th>Risk</th><th>Safeguard</th></tr></thead>
+    <tbody>
+      <tr><td data-k="Risk">A link is used to read files outside the work folder</td><td data-k="Safeguard">The target is only matched against the <code>listMarkdownFiles()</code> list: Markdown files in the work folder, without dot folders and without following symlinks. No path from Markdown is opened directly.</td></tr>
+      <tr><td data-k="Risk">A long note inflates the prompt and pi's cost</td><td data-k="Safeguard">At most 10 links, 8,000 characters per note, and 24,000 in total. Whatever is cut is marked with the number of characters dropped. <code>#section</code> copies only a single section.</td></tr>
+      <tr><td data-k="Risk">A note's contents hold <code>```</code> and "escape" the block, being read as instructions</td><td data-k="Safeguard">The block fence is made one backtick longer than the longest run of backticks in the contents. The prompt states that the contents are context, not commands.</td></tr>
+      <tr><td data-k="Risk">The user does not know what was sent</td><td data-k="Safeguard">The full prompt, including the note contents, is recorded in the pi log. A link that is not found is mentioned as it is, not silently dropped.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="sim" id="sim8">
+    <h3>Simulation 8: related notes in the prompt <span class="kind">Interactive · real logic</span></h3>
+    <p>Change the card or the contents of the "Specification" note. What runs is a copy of <code>wikiLinksIn()</code>, <code>noteSection()</code>, and <code>linkedNotesSection()</code>. The sample work folder holds <code>specs/Specification.md</code> and <code>Meeting Notes.md</code>. The limit in the simulation is reduced to 300 characters per note so that the truncation is visible.</p>
+    <label for="s8-card" style="display:block;font-size:.85rem;margin-top:8px">Card (first line = title, the rest is the note)</label>
+    <textarea id="s8-card" rows="3" style="min-height:70px" spellcheck="false">Checkout with QRIS [[Specification#Payment]] @pi
+Follow the decisions in [[meeting notes]] and [[Old Design]].</textarea>
+    <label for="s8-note" style="display:block;font-size:.85rem;margin-top:8px">specs/Specification.md</label>
+    <textarea id="s8-note" rows="6" spellcheck="false"># Specification
+
+## Payment
+
+Dynamic QRIS through the official SDK. Example:
+
+```js
+pay({ method: 'qris' })
+```
+
+## Shipping
+
+Not decided yet.</textarea>
+    <pre class="msg" id="s8-out" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+  </div>
+  <div class="caveat"><b>What has been measured and what has not:</b> 4 unit tests (card links, a prompt with a section/missing/truncated note, the total limit) and 1 GUI test with a fake pi check that the prompt reaching the process contains the <code>#Color</code> section but not the other sections, that a missing note is still mentioned, and that clicking a link on the card does not also open the edit dialog. It has not been run with a real pi. It has not been measured whether the model uses that context better than a manual copy. The contents are taken when the run starts. <i>Reply to pi</i> does not copy them again, so a note changed midway is not sent.</div>
+  <div class="lesson"><b>Lesson</b>When a delegated agent needs data from territory that is deliberately closed to it, do not open the access. Send the contents: the host resolves the reference with the same rules as for the user, limits its size, wraps it so it is not read as a command, and records exactly what was sent.</div>
+  <h3>9e. Testing: a real process, a fake harness</h3>
+  <p>The GUI tests run a shell script that pretends to be pi, through the same process path. These tests check the cwd and the prompt, a card moving to <i>In Progress</i> and then <i>Review</i> with a note, a queue that is truly in order (the script records <code>start</code>/<code>end</code>), <i>Stop</i> on a process stuck for 30 seconds, a failure with a message from stderr, a project folder that is asked for once and then remembered, and a closed board that is updated on disk. For RPC mode, the fake script reads <code>get_state</code> and <code>prompt</code> from stdin, sends a permission request or a question, and then records the answer it received. The tests check the exact answer that arrives (<code>{"type":"extension_ui_response","id":"ui-1","confirmed":true}</code>), <i>Later</i> still waiting, <i>End without replying</i>, steering that arrives as <code>steer</code>, and a reply that runs with <code>--session test-session</code> in the same log. The unit tests cover <code>@name</code> assignment (not an email or <code>@{date}</code>), the project, folder rejection, the prompt, <code>PiReader</code>, the result note, and the queue. There are 23 tests, all without a real pi or API.</p>
+  <div class="caveat"><b>What has been measured and what has not:</b> one end-to-end test with a real pi 1.0.3 (DeepSeek, the task "create HALO.txt" in a sample repo) succeeded. The file was created in the project repo without a commit, the work folder stayed empty, the card moved to Review, and the run used 4,248 tokens (±$0.0038). That is a single run, not an evaluation. Parsing <code>@name</code> adds ±0.35 ms per 500 cards in <code>cardMeta()</code> (±0.7 µs per card). Not there yet: the <i>waiting</i> status when the harness asks for permission, an interactive terminal, a worktree per card (cards in the same project queue up), and a diff view of the harness result in Nyerat. The run status only exists while the app is open; what persists is the card position and the <code>↳</code> note.</div>
+  <div class="lesson"><b>Lesson</b>When delegating to another agent, do not pretend to be able to review every step. Move the boundary to a place that can be guarded: <b>where</b> it may work (a name → a folder chosen by the user), <b>how many</b> at a time (a queue per folder), and <b>when to stop</b> (EOF, grace period, SIGKILL). Then make the result visible where the user already works: the card, the note, and the log.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="cost">
+  <div class="chapnum">Cost · <code>bench/AGENTIC.md</code> · <code>npm run bench:agentic</code></div>
+  <h2>What does that safety cost?</h2>
+  <p>Snapshots, verification, and the journal are not free. The following measurements run locally without calling a model: 10 repetitions after 3 warm-ups, a batch of 20 files, at sizes of 30,000 and 480,000 characters per file. The fixture replaces the entire contents of a file, so it is deliberately heavier than ordinary work.</p>
+  <div class="scroll-x">
+  <table class="data cards">
+    <thead><tr><th>Operation (20 files)</th><th class="num">30,000 chars: median</th><th class="num">p95</th><th class="num">480,000 chars: median</th><th class="num">p95</th></tr></thead>
+    <tbody>
+      <tr><td>Plan the batch</td><td class="num" data-k="30k median">8.98 ms</td><td class="num" data-k="p95">12.00 ms</td><td class="num" data-k="480k median">113.94 ms</td><td class="num" data-k="p95">122.10 ms</td></tr>
+      <tr><td>Verify the result</td><td class="num" data-k="30k median">0.25 ms</td><td class="num" data-k="p95">0.33 ms</td><td class="num" data-k="480k median">3.43 ms</td><td class="num" data-k="p95">4.73 ms</td></tr>
+      <tr><td>Checkpoint without the journal</td><td class="num" data-k="30k median">3.52 ms</td><td class="num" data-k="p95">4.51 ms</td><td class="num" data-k="480k median">3.46 ms</td><td class="num" data-k="p95">4.61 ms</td></tr>
+      <tr><td>Checkpoint with the journal</td><td class="num" data-k="30k median">19.46 ms</td><td class="num" data-k="p95">31.58 ms</td><td class="num" data-k="480k median">188.56 ms</td><td class="num" data-k="p95">212.64 ms</td></tr>
+      <tr><td>Structure verification (with a baseline)</td><td class="num" data-k="30k median">10.11 ms</td><td class="num" data-k="p95">10.81 ms</td><td class="num" data-k="480k median">157.35 ms</td><td class="num" data-k="p95">160.57 ms</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>Optimizing the new code in the same piece of work (90c28bb)</h3>
+  <p>The first version of the structure check walked every document three times (frontmatter/code, tables, links) and trimmed whitespace on every line. The <code>"*"</code> check split <em>all</em> files into lines even if the text being looked for was not in that file. Now the three are merged into a single pass with a character filter before the regex, and <code>"*"</code> only splits files that actually contain the text (<code>file.text.includes()</code> first).</p>
+  <div class="legend"><span style="--c:var(--before)">First version</span><span style="--c:var(--after)">After merging (90c28bb)</span></div>
+  <div class="cmp" data-rows='[
+    ["Structure verification, 20 × 480,000 characters", 396.9, 157.345, "ms"],
+    ["Search for leftover text across the folder (*), 20 × 480,000", 66.6, 3.394, "ms"]]'></div>
+  <div class="caveat"><b>Honestly unfinished:</b> a checkpoint with the journal at 20 × 480,000 characters takes ±190 ms on the main thread and is still written synchronously. The 157 ms structure verification is also felt as a pause, although it only happens once per <code>verify_work</code> call, not while typing. Journal snapshots can make the conversation file large. This benchmark does not measure API latency, how accurately the model picks criteria, or how long the user takes to review a diff. An evaluation of a real model is available through <code>npm run test:live -- --agentic</code> (it uses API quota) and has not been run in this measurement session. The editor benchmark (<code>bench:compare</code>) shows no repeated regression.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="lessons">
+  <div class="chapnum">Summary</div>
+  <h2>Patterns that carry over to other agents</h2>
+  <div class="scroll-x">
+  <table class="data cards">
+    <thead><tr><th>Pattern</th><th>Structure</th><th>In Nyerat</th></tr></thead>
+    <tbody>
+      <tr><td data-k="Pattern">Context split by how often it changes</td><td data-k="Structure">stable <code>system</code> + changing <code>note</code></td><td data-k="In Nyerat"><code>buildContext</code>, <code>buildMessages</code></td></tr>
+      <tr><td data-k="Pattern">A loop with hard limits</td><td data-k="Structure"><code>MAX_ROUNDS</code>, <code>toolBudget</code>, the last round without tools</td><td data-k="In Nyerat"><code>ChatSession.ask</code></td></tr>
+      <tr><td data-k="Pattern">Pure tools that do not throw</td><td data-k="Structure"><code>(args, SourceFile[]) → { content, summary }</code></td><td data-k="In Nyerat"><code>runTool</code>, <code>formatGit</code></td></tr>
+      <tr><td data-k="Pattern">Changes as data</td><td data-k="Structure"><code>Change { before, after }</code></td><td data-k="In Nyerat"><code>planChange</code>, <code>onProposal</code></td></tr>
+      <tr><td data-k="Pattern">Re-check right before writing</td><td data-k="Structure"><code>preflight(c, read)</code></td><td data-k="In Nyerat"><code>applyBatch</code>, Undo</td></tr>
+      <tr><td data-k="Pattern">Plan on a virtual copy</td><td data-k="Structure">a copy of <code>SourceFile[]</code> + locks</td><td data-k="In Nyerat"><code>planBatch</code></td></tr>
+      <tr><td data-k="Pattern">Done = passes the checks</td><td data-k="Structure"><code>WorkState.status</code> + <code>Verification</code></td><td data-k="In Nyerat"><code>verifyWork</code>, <code>structureCheck</code></td></tr>
+      <tr><td data-k="Pattern">One state, two readers</td><td data-k="Structure">stored data → text for the model, a widget for humans</td><td data-k="In Nyerat"><code>workText</code>, <code>WorkList</code></td></tr>
+      <tr><td data-k="Pattern">Record the intent before acting</td><td data-k="Structure"><code>ActionEvent</code>, three-outcome reconciliation</td><td data-k="In Nyerat"><code>reconcileEvents</code></td></tr>
+      <tr><td data-k="Pattern">Observability separate from context</td><td data-k="Structure">a bounded in-memory log</td><td data-k="In Nyerat"><code>AgentTrace</code></td></tr>
+      <tr><td data-k="Pattern">Delegation through a process contract</td><td data-k="Structure">arguments → JSONL → exit code, mapped to the same log</td><td data-k="In Nyerat"><code>PiReader</code>, <code>spawnHarness</code></td></tr>
+      <tr><td data-k="Pattern">Names, not paths, for dangerous places</td><td data-k="Structure">a name in the data, the mapping only from the user</td><td data-k="In Nyerat"><code>settings.projects</code>, <code>checkProjectFolder</code></td></tr>
+      <tr><td data-k="Pattern">A return channel for the delegated agent</td><td data-k="Structure">requests with an id are answered exactly; text questions are guessed + a way out</td><td data-k="In Nyerat"><code>HarnessAsk</code>, <code>answer</code>, <code>resume</code></td></tr>
+      <tr><td data-k="Pattern">Context sent as contents, not access</td><td data-k="Structure">links in the data are resolved by the host, the contents copied with limits</td><td data-k="In Nyerat"><code>linkedNotes</code>, <code>linkedNotesSection</code></td></tr>
+      <tr><td data-k="Pattern">One writer per resource</td><td data-k="Structure">a queue per key (folder)</td><td data-k="In Nyerat"><code>RunQueue</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="lesson"><b>Checklist before adding an agent capability</b>
+    1) Does the tool read or change? A tool that changes things must go into <code>CHANGE_TOOLS</code> and only produce a <code>Change</code>.
+    2) What is its limit? Decide the path, the result size, the count, and what happens when the limit is exceeded.
+    3) What does the user see before approving, and how can it be undone?
+    4) How is the result verified, and how does this capability recover after an interruption?
+    5) Write tests with a fake <code>Provider</code>, measure the cost with <code>bench:agentic</code>, and then update this page.
+  </div>
+  <p>Sources: <a href="https://github.com/EkaPutCom/nyerat/blob/main/README.md">README.md</a> (the "How the assistant works" section), <a href="https://github.com/EkaPutCom/nyerat/blob/main/bench/AGENTIC.md">AGENTIC.md</a>, <a href="https://github.com/EkaPutCom/nyerat/tree/main/src/agent">src/agent/</a>, and the git commit history from f6a4cc7 to 90c28bb, plus the harness orchestrator (Chapter 9). See also <a href="learn-performance.html">learning performance from the Nyerat editor</a>.</p>
+</section>
+
+<footer>Simulations 1, 4, 5, 6, 7, 8, and 9 run copies of Nyerat's logic in your browser (WorkList, tokenizer and BM25, preflight and Undo, journal reconciliation, the harness queue, question detection, related notes in the prompt). Simulation 2 is a simple model without provider measurements. Simulation 3 is a walkthrough with a written scenario, not real model output.</footer>
+</div>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const fmt = (v, d) => {
+  if (d === undefined) d = v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  return v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+};
+const int = v => Math.round(v).toLocaleString('en-US');
+const ms = v => (v > 0 && v < 0.01 ? '<0.01' : fmt(v)) + ' ms';
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs = {}, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+
+/* ---------- tooltip ---------- */
+const tip = $('#tip');
+function attachTip(node, html) {
+  node.addEventListener('mousemove', e => {
+    tip.innerHTML = html;
+    tip.style.opacity = 1;
+    const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+    tip.style.left = x + 'px';
+    tip.style.top = (e.clientY + 14) + 'px';
+  });
+  node.addEventListener('mouseleave', () => { tip.style.opacity = 0; });
+}
+
+/* ---------- before/after comparison bars (same as learn-performance) ---------- */
+document.querySelectorAll('.cmp[data-rows]').forEach(box => {
+  const rows = JSON.parse(box.dataset.rows);
+  for (const [label, b, a] of rows) {
+    const max = Math.max(a, b);
+    const lbl = document.createElement('div');
+    lbl.className = 'lbl';
+    lbl.textContent = label;
+    const bars = document.createElement('div');
+    bars.className = 'bars';
+    const change = (a - b) / b * 100;
+    const sign = change > 0 ? '+' : '−';
+    const word = change > 0 ? 'up' : 'down';
+    for (const [cls, v, name] of [['b', b, 'Before'], ['a', a, 'After']]) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const wrap = document.createElement('div');
+      wrap.className = 'barwrap';
+      wrap.style.width = 'calc((100% - 150px) * ' + (v / max).toFixed(4) + ')';
+      const bar = document.createElement('div');
+      bar.className = 'bar ' + cls;
+      bar.style.width = '100%';
+      wrap.appendChild(bar);
+      const val = document.createElement('span');
+      val.className = 'v';
+      const vs = ms(v);
+      val.innerHTML = cls === 'a' ? '<b>' + vs + '</b> <span class="delta">' + sign + fmt(Math.abs(change), 0) + '%</span>' : vs;
+      row.append(wrap, val);
+      bars.appendChild(row);
+      attachTip(row, '<b>' + label + '</b><br>' + name + ': ' + vs + (cls === 'a' ? '<br>' + word + ' ' + fmt(Math.abs(change), 1) + '%' : ''));
+    }
+    box.append(lbl, bars);
+  }
+});
+
+/* the SVG size follows the real width, so 11px text stays 11px */
+function fit(svg, H) {
+  const W = Math.max(260, Math.round(svg.parentNode.clientWidth || 900));
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.setAttribute('height', H);
+  return W;
+}
+
+/* ---------- journey chart: number of tools per commit, stacked by kind ---------- */
+// Taken from `git grep "name: '"` in src/agent per commit; tests = the number of test( calls in the assistant test files.
+// When adding an agent commit, add a row here (see AGENT.md).
+const journey = [
+  { c: 'f6a4cc7', t: 'assistant + 4 read tools', read: 4, propose: 0, control: 0, tests: 65, lines: 1099, files: 8 },
+  { c: '2d0150f', t: 'conversation history', read: 4, propose: 0, control: 0, tests: 82, lines: 1285, files: 10 },
+  { c: '49021f3', t: 'workbench vision', read: 4, propose: 0, control: 0, tests: 82, lines: 1285, files: 10 },
+  { c: '3f387e6', t: 'search_documents', read: 4, propose: 0, control: 0, tests: 82, lines: 1285, files: 10 },
+  { c: '5a64789', t: 'proposals + approval', read: 4, propose: 2, control: 0, tests: 101, lines: 1505, files: 11 },
+  { c: 'c6f71da', t: 'diff window', read: 4, propose: 2, control: 0, tests: 104, lines: 1527, files: 11 },
+  { c: '8db7c55', t: 'panel cut off', read: 4, propose: 2, control: 0, tests: 105, lines: 1527, files: 11 },
+  { c: 'deb8aa5', t: 'edit_kanban', read: 4, propose: 3, control: 0, tests: 111, lines: 1655, files: 11 },
+  { c: '6c47266', t: 'plan, batch, verification', read: 4, propose: 4, control: 2, tests: 132, lines: 2063, files: 17 },
+  { c: '1c90735', t: 'Agent log', read: 4, propose: 4, control: 2, tests: 137, lines: 2186, files: 18 },
+  { c: '90c28bb', t: 'broader actions', read: 7, propose: 7, control: 2, tests: 162, lines: 2619, files: 19 },
+  { c: 'b1ab712', t: 'pi orchestrator', read: 7, propose: 7, control: 2, tests: 178, lines: 2908, files: 20 },
+  { c: '0db63d2', t: 'pi waits for an answer', read: 7, propose: 7, control: 2, tests: 185, lines: 3010, files: 20 },
+  { c: '8d0cdec', t: '[[ ]] notes into the pi prompt', read: 7, propose: 7, control: 2, tests: 189, lines: 3078, files: 20 },
+  { c: 'b31556d', t: 'plan as a checklist', read: 7, propose: 7, control: 2, tests: 189, lines: 3078, files: 20 },
+  { c: 'a8dd69a', t: 'message box + context summary', read: 7, propose: 7, control: 2, tests: 191, lines: 3078, files: 20 },
+];
+function toolsChart() {
+  const svg = $('#chart-tools');
+  svg.innerHTML = '';
+  const parts = [['read', '--after', 'read'], ['propose', '--before', 'proposal'], ['control', '--third', 'control']];
+  const max = 16;
+  const tipOf = d => '<b>' + d.c + '</b>: ' + d.t + '<br>' + (d.read + d.propose + d.control) + ' tools (' + d.read + ' read, ' + d.propose + ' proposal, ' + d.control + ' control)<br><span style="color:var(--text-2)">' + d.tests + ' tests · ' + int(d.lines) + ' lines in ' + d.files + ' src/agent files</span>';
+  // Below ±820 px the commit labels start to overlap; use horizontal bars.
+  const narrow = (svg.parentNode.clientWidth || 900) < 820;
+  if (narrow) {
+    const row = 38, T = 6, H = T + row * journey.length;
+    const W = fit(svg, H), L = 96, R = 30;
+    const x = v => (W - L - R) * v / max;
+    journey.forEach((d, i) => {
+      const g = el('g', {}, svg), y0 = T + row * i, by = y0 + 12, bh = 12;
+      el('text', { x: 0, y: y0 + 16, class: 'mono' }, g).textContent = d.c;
+      el('text', { x: 0, y: y0 + 30 }, g).textContent = d.t.length > 13 ? d.t.slice(0, 12) + '…' : d.t;
+      let acc = L;
+      for (const [k, color] of parts) {
+        if (!d[k]) continue;
+        el('rect', { x: acc, y: by, width: Math.max(1, x(d[k]) - 1), height: bh, fill: css(color), rx: 2 }, g);
+        acc += x(d[k]);
+      }
+      el('text', { x: acc + 6, y: by + 10, class: 'valtxt' }, g).textContent = d.read + d.propose + d.control;
+      el('rect', { x: 0, y: y0, width: W, height: row, fill: 'transparent' }, g);
+      attachTip(g, tipOf(d));
+    });
+    return;
+  }
+  const H = 300, L = 34, R = 10, T = 22, B = 58;
+  const W = fit(svg, H);
+  const y = v => T + (H - T - B) * (1 - v / max);
+  for (const v of [0, 4, 8, 12, 16]) {
+    el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: v ? 'grid' : 'axis' }, svg);
+    el('text', { x: L - 8, y: y(v) + 4, 'text-anchor': 'end' }, svg).textContent = v;
+  }
+  const n = journey.length, slot = (W - L - R) / n, bw = Math.min(46, slot * 0.6);
+  journey.forEach((d, i) => {
+    const cx = L + slot * (i + 0.5), g = el('g', {}, svg);
+    let acc = 0;
+    for (const [k, color] of parts) {
+      if (!d[k]) continue;
+      el('rect', { x: cx - bw / 2, y: y(acc + d[k]), width: bw, height: y(acc) - y(acc + d[k]) - 1, fill: css(color), rx: 2 }, g);
+      acc += d[k];
+    }
+    el('text', { x: cx, y: y(acc) - 7, 'text-anchor': 'middle', class: 'valtxt' }, g).textContent = acc;
+    el('text', { x: cx, y: H - B + 18, 'text-anchor': 'middle', class: 'mono' }, g).textContent = d.c;
+    const words = d.t.split(' ');
+    const half = Math.ceil(words.length / 2);
+    el('text', { x: cx, y: H - B + 33, 'text-anchor': 'middle' }, g).textContent = slot < 90 ? words.slice(0, half).join(' ') : d.t;
+    if (slot < 90 && words.length > 1) el('text', { x: cx, y: H - B + 46, 'text-anchor': 'middle' }, g).textContent = words.slice(half).join(' ');
+    el('rect', { x: cx - slot / 2, y: T - 18, width: slot, height: H - T, fill: 'transparent' }, g);
+    attachTip(g, tipOf(d));
+  });
+}
+
+/* ---------- Simulation 1: BM25 (a copy of the context.ts logic) ---------- */
+const STOPWORDS = new Set((
+  'yang dan di ke dari untuk pada dengan atau ini itu adalah akan juga tidak ada saya aku kamu dia mereka kita kami ' +
+  'apa siapa kapan dimana mana bagaimana kenapa mengapa seperti dalam oleh sebagai karena agar supaya bisa dapat ' +
+  'sudah telah masih lebih sangat saja hanya tapi tetapi namun jika kalau lalu kemudian setelah sebelum ketika saat ' +
+  'bab tolong coba mohon berikan jelaskan cari carikan the and for with what who how chapter please try give explain search find'
+).split(' '));
+const stem = t => { const s = t.replace(/(nya|lah|kah|kan|an|i)$/, ''); return s.length >= 4 ? s : t; };
+const tokenize = s => (s.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
+  .filter(t => (t.length >= 3 || /^\d+$/.test(t)) && !STOPWORDS.has(t)).map(stem);
+
+const CORPUS = {
+  'meetings/2026-10-01.md': '# Launch meeting October 1\n## Decisions\nThe version 2 release is scheduled for Wednesday, October 8. Dina leads the regression tests; Bima prepares the release notes.\n## Follow-ups\nMigrating customer data to the new schema is handled by Raka, targeted to finish before the release. Risk: the old invoice table has no index yet.',
+  'plans/october.md': '# October plan\n## Week 1\nFinalize the PDF export feature and the server load test.\n## Week 2\nRelease version 2 on Wednesday, October 8. After the release, monitor errors for 48 hours.\n## Week 3\nInterview five users for onboarding research.',
+  'research/competitors.md': '# Competitor research\n## Pricing\nThe two main competitors use monthly plans; one offers a free plan for small teams.\n## Migration\nCompetitor A provides an automatic data migration tool from spreadsheets; users call it the main reason for switching services.',
+  'tasks.md': '# Tasks\n## In Progress\n- [ ] Customer data migration (Raka)\n- [ ] Version 2 release notes (Bima)\n## Done\n- [x] Server load test (Dina)',
+  'notes/onboarding.md': '# Onboarding notes\n## New user problems\nNew users are confused choosing their first work folder and cannot find the data import button.\n## Idea\nAdd a sample folder and a short guide when the app is first opened.',
+};
+const chunks = [];
+for (const [file, text] of Object.entries(CORPUS)) {
+  let top = '', heading = '', body = [];
+  const flush = () => { if (body.join('').trim()) chunks.push({ file, heading, text: body.join('\n') }); body = []; };
+  for (const line of text.split('\n')) {
+    const m = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (m) { flush(); if (m[1].length === 1) { top = m[2]; heading = top; } else heading = top + ' › ' + m[2]; }
+    else body.push(line);
+  }
+  flush();
+}
+function rankChunks(query) {
+  const docs = chunks.map(c => tokenize(c.heading + ' ' + c.heading + ' ' + c.text));
+  const avg = docs.reduce((n, d) => n + d.length, 0) / docs.length || 1;
+  const df = new Map();
+  for (const doc of docs) for (const t of new Set(doc)) df.set(t, (df.get(t) || 0) + 1);
+  const k1 = 1.5, b = 0.75;
+  return chunks.map((chunk, i) => {
+    const tf = new Map();
+    for (const t of docs[i]) tf.set(t, (tf.get(t) || 0) + 1);
+    let score = 0;
+    for (const [term, weight] of query) {
+      const f = tf.get(term);
+      if (!f) continue;
+      const n = df.get(term) || 0;
+      const idf = Math.log(1 + (chunks.length - n + 0.5) / (n + 0.5));
+      score += weight * idf * (f * (k1 + 1)) / (f + k1 * (1 - b + b * docs[i].length / avg));
+    }
+    return { chunk, score };
+  }).filter(s => s.score > 0).sort((a, c) => c.score - a.score);
+}
+function sim1() {
+  const query = new Map();
+  const add = (text, w) => { for (const t of tokenize(text)) query.set(t, Math.max(query.get(t) || 0, w)); };
+  add($('#s1-prev').value, 0.4);
+  add($('#s1-q').value, 1);
+  const budget = +$('#s1-b').value;
+  $('#s1-b-out').textContent = int(budget) + ' tokens';
+  const ranked = rankChunks(query);
+  const box = $('#s1-rank');
+  box.innerHTML = '';
+  if (!ranked.length) { box.innerHTML = '<div class="hit out">No excerpts match. The model can still browse with tools.</div>'; return; }
+  let left = budget;
+  const mark = text => text.replace(/[\p{L}\p{N}]+/gu, w => {
+    const t = tokenize(w)[0];
+    return t && query.has(t) ? '\u0001' + w + '\u0002' : w;
+  });
+  for (const { chunk, score } of ranked) {
+    const body = chunk.file + ' › ' + chunk.heading + '\n' + chunk.text;
+    const cost = Math.ceil(body.length / 3);
+    const fits = cost <= left;
+    if (fits) left -= cost;
+    const d = document.createElement('div');
+    d.className = 'hit ' + (fits ? 'in' : 'out');
+    d.innerHTML = '<div class="top"><b>' + esc(chunk.file) + ' › ' + esc(chunk.heading) + '</b><span>score ' + fmt(score, 2) + ' · ±' + cost + ' tokens · ' + (fits ? 'sent' : 'does not fit') + '</span></div>' +
+      '<div class="body">' + esc(mark(chunk.text)).replace(/\u0001/g, '<mark>').replace(/\u0002/g, '</mark>') + '</div>';
+    box.appendChild(d);
+  }
+}
+['#s1-prev', '#s1-q', '#s1-b'].forEach(id => $(id).addEventListener('input', sim1));
+
+/* ---------- Simulation 2: prefix cache (model) ---------- */
+const NOTE = 2500, PER_TURN = 600, INSTR = 1500;
+function sim2() {
+  const n = +$('#s2-n').value, S = +$('#s2-s').value;
+  $('#s2-n-out').textContent = n;
+  $('#s2-s-out').textContent = int(S) + ' tokens';
+  const rows = [];
+  for (let i = 1; i <= n; i++) {
+    const total = S + PER_TURN * (i - 1) + NOTE;
+    // Nyerat: system + the history up to the previous turn is exactly the same as in the previous request.
+    const good = i === 1 ? 0 : S + PER_TURN * (i - 2);
+    // The cursor is written in system after the instructions: only the instructions stay the same.
+    const bad = i === 1 ? 0 : INSTR;
+    rows.push({ i, total, good, bad });
+  }
+  const maxT = rows[rows.length - 1].total;
+  for (const [id, key] of [['#s2-bad', 'bad'], ['#s2-good', 'good']]) {
+    const svg = $(id);
+    svg.innerHTML = '';
+    const H = 160, T = 8, B = 20, L = 4, R = 4;
+    const W = fit(svg, H);
+    const slot = (W - L - R) / n, bw = Math.max(4, slot * 0.7);
+    const h = v => (H - T - B) * v / maxT;
+    rows.forEach(r => {
+      const x = L + slot * (r.i - 1) + (slot - bw) / 2, base = H - B, g = el('g', {}, svg);
+      el('rect', { x, y: base - h(r.total), width: bw, height: h(r.total - r[key]), fill: css('--before'), rx: 2 }, g);
+      if (r[key]) el('rect', { x, y: base - h(r[key]), width: bw, height: h(r[key]), fill: css('--after'), rx: 2 }, g);
+      el('text', { x: x + bw / 2, y: H - 5, 'text-anchor': 'middle' }, g).textContent = r.i;
+      el('rect', { x: x - (slot - bw) / 2, y: 0, width: slot, height: H, fill: 'transparent' }, g);
+      attachTip(g, '<b>Question ' + r.i + '</b><br>' + int(r.total) + ' input tokens<br>' + int(r[key]) + ' from cache (' + fmt(r[key] / r.total * 100, 0) + '%)');
+    });
+  }
+  const sum = k => rows.reduce((a, r) => a + r[k], 0), tot = sum('total');
+  $('#s2-bad-v').textContent = fmt(sum('bad') / tot * 100, 0) + '%';
+  $('#s2-bad-s').textContent = int(sum('bad')) + ' of ' + int(tot) + ' tokens';
+  $('#s2-good-v').textContent = fmt(sum('good') / tot * 100, 0) + '%';
+  $('#s2-good-s').textContent = int(sum('good')) + ' of ' + int(tot) + ' tokens';
+}
+['#s2-n', '#s2-s'].forEach(id => $(id).addEventListener('input', sim2));
+
+/* ---------- Simulation 3: a walkthrough of one turn ---------- */
+const PLAN = CORPUS['plans/october.md'];
+const TASKS = '---\nkanban-plugin: board\n---\n## In Progress\n- [ ] Launch meeting Wednesday, October 8\n- [ ] Customer data migration (Raka)\n## Done\n- [x] Server load test (Dina)';
+const numbered = (name, text) => { const l = text.split('\n'); return '[' + name + ', lines 1–' + l.length + ' of ' + l.length + ']\n' + l.map((x, i) => (i + 1) + '│ ' + x).join('\n'); };
+const BUDGET = 48000, ALL_TOOLS = 16;
+const intro = [
+  { type: 'user', text: 'The launch meeting moved from Wednesday to Thursday, October 9; update all the documents.' },
+  { type: 'round', text: 'The model asks for 2 tools' },
+  { type: 'tool', name: 'set_work', args: '{ "goal": "Move the launch meeting to Thursday, October 9",\n  "steps": [ { "text": "Find every mention of Wednesday, October 8", "status": "pending" },\n             { "text": "Propose the changes", "status": "pending" },\n             { "text": "Verify no old date remains", "status": "pending" } ] }', result: 'Work: Move the launch meeting to Thursday, October 9 (running)', work: 'running', free: true },
+  { type: 'tool', name: 'search_text', args: '{ "text": "Wednesday, October 8" }', result: '2 lines contain "Wednesday, October 8":\nplans/october.md:5: Release version 2 on Wednesday, October 8. After the release, monitor errors for 48 hours.\ntasks.md:5: - [ ] Launch meeting Wednesday, October 8' },
+  { type: 'round', text: 'The model asks for 2 tools' },
+  { type: 'tool', name: 'read_file', args: '{ "name": "plans/october.md" }', result: numbered('plans/october.md', PLAN) },
+  { type: 'tool', name: 'read_file', args: '{ "name": "tasks.md" }', result: numbered('tasks.md', TASKS) },
+  { type: 'round', text: 'The model asks for 1 tool' },
+  { type: 'tool', name: 'propose_batch', args: '{ "actions": [\n  { "tool": "edit_file", "arguments": "{ name: plans/october.md, old_text: Wednesday, October 8, new_text: Thursday, October 9, … }" },\n  { "tool": "edit_kanban", "arguments": "{ name: tasks.md, action: edit, … }" } ] }', wait: true, free: true },
+];
+const verifyArgs = '{ "checks": [ { "file": "*", "kind": "absent", "text": "Wednesday, October 8" },\n              { "file": "plans/october.md", "kind": "present", "text": "Thursday, October 9" } ] }';
+const endings = {
+  all: [
+    { type: 'result', text: 'The whole batch was approved by the user and has been applied.', written: 2 },
+    { type: 'round', text: 'The model asks for 2 tools' },
+    { type: 'tool', name: 'verify_work', args: verifyArgs, result: 'PASS *: absent in the whole folder: Wednesday, October 8\nPASS plans/october.md: present: Thursday, October 9\nPASS plans/october.md: structure: no new problems\nFAIL tasks.md: Changed file not yet checked\nPASS tasks.md: structure: no new problems', ok: false, free: true, note: 'The session adds a check of its own: tasks.md was changed but is not mentioned in the criteria.' },
+    { type: 'tool', name: 'set_work', args: '{ …, all steps "done" }', result: 'Work: … (running)', free: true },
+    { type: 'round', text: 'The model asks for 1 tool' },
+    { type: 'tool', name: 'verify_work', args: '{ …the earlier criteria, + { "file": "tasks.md", "kind": "present", "text": "Thursday, October 9" } }', result: 'PASS *: absent in the whole folder: Wednesday, October 8\nPASS plans/october.md: present: Thursday, October 9\nPASS tasks.md: present: Thursday, October 9\nPASS (structure of both files): no new problems', ok: true, work: 'done and verified', free: true },
+    { type: 'round', text: 'Final answer' },
+    { type: 'answer', text: 'The schedule has been moved to Thursday, October 9 in plans/october.md (line 5) and the card in tasks.md. The check confirmed that "Wednesday, October 8" remains nowhere in the folder.' },
+  ],
+  part: [
+    { type: 'result', text: 'The user applied only part of the batch. Applied: plans/october.md. Rejected (do not repeat without asking): tasks.md.', written: 1 },
+    { type: 'round', text: 'The model asks for 1 tool' },
+    { type: 'tool', name: 'verify_work', args: verifyArgs, result: 'FAIL *: absent in the whole folder: Wednesday, October 8 — still present in tasks.md:5\nPASS plans/october.md: present: Thursday, October 9\nPASS plans/october.md: structure: no new problems', ok: false, free: true },
+    { type: 'round', text: 'Final answer' },
+    { type: 'answer', text: 'plans/october.md has been updated. I did not change the card in tasks.md because you rejected it, so "Wednesday, October 8" is still in tasks.md:5. Let me know if that card needs to be changed too.', work: 'paused' },
+  ],
+  no: [
+    { type: 'result', text: 'The user rejected the whole batch. Do not repeat this proposal.' },
+    { type: 'round', text: 'Final answer' },
+    { type: 'answer', text: 'Understood, I changed no files. What should be adjusted in that proposal?', work: 'paused' },
+  ],
+};
+let s3 = null;
+function s3reset() {
+  s3 = { steps: intro.slice(), i: 0, round: 0, budget: BUDGET, work: '–', written: 0, waiting: false, done: false };
+  $('#s3-log').innerHTML = '<div><span class="k">ready</span><span>Press <b>Next step</b>.</span></div>';
+  s3render();
+}
+function s3add(cls, k, html) {
+  const log = $('#s3-log');
+  if (!s3.started) { log.innerHTML = ''; s3.started = true; }
+  const d = document.createElement('div');
+  d.className = cls;
+  d.innerHTML = '<span class="k">' + k + '</span><span>' + html + '</span>';
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+function s3render() {
+  $('#s3-round').textContent = s3.round + ' / 10';
+  $('#s3-tools').textContent = 'tools offered: ' + (s3.round ? ALL_TOOLS : '–') + ' · round 10: no tools';
+  $('#s3-budget').textContent = int(s3.budget);
+  $('#s3-meter').style.width = (s3.budget / BUDGET * 100) + '%';
+  $('#s3-work').textContent = s3.work;
+  $('#s3-written').textContent = 'files written: ' + s3.written;
+  $('#s3-next').disabled = s3.waiting || s3.done;
+  $('#s3-decide').hidden = !s3.waiting;
+}
+function s3step() {
+  const s = s3.steps[s3.i++];
+  if (!s) return;
+  if (s.type === 'user') s3add('user', 'user', esc(s.text));
+  if (s.type === 'round') { s3.round++; s3add('round', 'round ' + s3.round, esc(s.text)); }
+  if (s.type === 'tool') {
+    let body = '<b>' + s.name + '</b><pre><code>' + esc(s.args) + '</code></pre>';
+    if (s.wait) {
+      body += '<span class="bad">Waiting for the user\'s decision in the review window…</span> No files have been written yet.';
+      s3.waiting = true;
+    } else {
+      const cost = s.free ? 0 : Math.ceil(s.result.length / 3);
+      s3.budget -= cost;
+      body += '<pre><code>' + esc(s.result) + '</code></pre>' + (s.ok === true ? '<span class="ok">passed</span> · ' : s.ok === false ? '<span class="bad">failed</span> · ' : '') +
+        (s.free ? 'does not use the read budget' : '−' + int(cost) + ' tokens of read budget') + (s.note ? '<br>' + esc(s.note) : '');
+    }
+    if (s.work) s3.work = s.work;
+    s3add('tool', 'tool', body);
+  }
+  if (s.type === 'result') {
+    if (s.written) s3.written = s.written;
+    s3add('tool', 'result', esc(s.text) + (s.written ? ' The window wrote the files after the preflight passed.' : ''));
+  }
+  if (s.type === 'answer') {
+    if (s.work) s3.work = s.work;
+    s3add('', 'answer', esc(s.text));
+    s3add('', 'done', 'The turn ends. ' + (s3.work === 'paused' ? 'The work status becomes <b>paused</b> and can be continued later.' : 'The work has the status <b>' + s3.work + '</b> because verification passed and all steps are done.'));
+    s3.done = true;
+  }
+  s3render();
+}
+function s3decide(kind) {
+  if (!s3.waiting) return;
+  s3.waiting = false;
+  s3add('user', 'user', { all: 'Apply all', part: 'Uncheck tasks.md, then Apply 1 of 2', no: 'Reject the batch' }[kind]);
+  s3.steps = s3.steps.slice(0, s3.i).concat(endings[kind]);
+  s3step();
+}
+$('#s3-next').addEventListener('click', s3step);
+$('#s3-reset').addEventListener('click', s3reset);
+$('#s3-all').addEventListener('click', () => s3decide('all'));
+$('#s3-part').addEventListener('click', () => s3decide('part'));
+$('#s3-no').addEventListener('click', () => s3decide('no'));
+
+/* ---------- Simulation 4: preflight and Undo (a copy of changes.ts) ---------- */
+function preflight(c, read) {
+  const at = read(c.file);
+  if (c.kind === 'create') return at === null ? null : c.file + ' already exists';
+  if (at === null) return c.file + ' no longer exists';
+  if (at !== c.before) return c.file + ' changed since it was proposed; ask for a new proposal';
+  if (c.kind === 'move' && c.to && read(c.to) !== null) return c.to + ' already exists';
+  return null;
+}
+function changeState(c, read) {
+  const at = read(c.file);
+  switch (c.kind) {
+    case 'create': return at === c.after ? 'after' : at === null ? 'before' : 'other';
+    case 'delete': return at === null ? 'after' : at === c.before ? 'before' : 'other';
+    case 'move': {
+      const target = c.to ? read(c.to) : null;
+      if (at === null && target === c.after) return 'after';
+      return at === c.before && target === null ? 'before' : 'other';
+    }
+    default: return at === c.after ? 'after' : at === c.before ? 'before' : 'other';
+  }
+}
+function invertChange(c) {
+  const reason = 'Undo: ' + c.reason;
+  switch (c.kind) {
+    case 'create': return { kind: 'delete', file: c.file, before: c.after, after: '', reason };
+    case 'delete': return { kind: 'create', file: c.file, before: '', after: c.before, reason };
+    case 'move': return { kind: 'move', file: c.to || c.file, to: c.file, before: c.after, after: c.before, reason };
+    default: return { kind: 'edit', file: c.file, before: c.after, after: c.before, reason };
+  }
+}
+const s4file = PLAN.replace(/\n## /g, '\n\n## ');
+const s4change = { kind: 'edit', file: 'plans/october.md', before: s4file, after: s4file.replace('Wednesday, October 8', 'Thursday, October 9'), reason: 'The release moves to Thursday as the user requested.' };
+let s4applied = null;
+const s4read = file => file === s4change.file ? $('#s4-file').value : null;
+function s4diff() {
+  const a = s4change.before.split('\n'), b = s4change.after.split('\n');
+  const i = a.findIndex((l, k) => l !== b[k]);
+  const out = [];
+  for (let k = Math.max(0, i - 2); k < i; k++) out.push('<div>  ' + esc(a[k]) + '</div>');
+  out.push('<div class="del">- ' + esc(a[i]) + '</div>', '<div class="add">+ ' + esc(b[i]) + '</div>');
+  for (let k = i + 1; k < Math.min(a.length, i + 2); k++) out.push('<div>  ' + esc(a[k]) + '</div>');
+  $('#s4-diff').innerHTML = out.join('');
+  $('#s4-reason').textContent = 'Reason: ' + s4change.reason;
+}
+function s4msg(text, cls) {
+  const st = changeState(s4change, s4read);
+  const box = $('#s4-msg');
+  box.className = 'msg' + (cls ? ' ' + cls : '');
+  box.innerHTML = (text ? text + '<br>' : '') + 'changeState(proposal) = <code>' + st + '</code>' +
+    { before: ' · the contents are still the same as when it was proposed', after: ' · the contents equal the result of the proposal', other: ' · the contents differ from both, so preflight would reject it' }[st];
+}
+$('#s4-apply').addEventListener('click', () => {
+  const err = preflight(s4change, s4read);
+  if (err) return s4msg('<b>Apply rejected:</b> ' + esc(err) + '. Nothing was written.', 'bad');
+  $('#s4-file').value = s4change.after;
+  s4applied = s4change;
+  $('#s4-undo').disabled = false;
+  s4msg('<b>Applied.</b> Journal: <code>applied</code>.', 'ok');
+});
+$('#s4-undo').addEventListener('click', () => {
+  const inv = invertChange(s4applied);
+  const err = preflight(inv, s4read);
+  if (err) return s4msg('<b>Undo rejected:</b> ' + esc(err) + '. Your edit was not overwritten.', 'bad');
+  $('#s4-file').value = inv.after;
+  s4applied = null;
+  $('#s4-undo').disabled = true;
+  s4msg('<b>Undone</b> through the inverse change. Journal: <code>reverted</code>.', 'ok');
+});
+$('#s4-reset').addEventListener('click', () => { $('#s4-file').value = s4file; s4applied = null; $('#s4-undo').disabled = true; s4msg(''); });
+$('#s4-file').addEventListener('input', () => s4msg(''));
+
+/* ---------- Simulation 5: reconcileEvents (a copy of journal.ts) ---------- */
+const s5changes = [
+  { label: 'edit plans/october.md', opts: { before: 'contents still as before the proposal', after: 'contents already equal the proposal', other: 'contents differ from both' }, def: 'after' },
+  { label: 'create notes/release-v2.md', opts: { before: 'the file does not exist yet', after: 'exists, contents equal the proposal', other: 'exists, contents differ' }, def: 'after' },
+  { label: 'move drafts/idea.md → archive/idea.md', opts: { before: 'still in drafts/, destination empty', after: 'already in archive/, same contents', other: 'both exist or the contents changed' }, def: 'before' },
+];
+const s5files = 'plans/october.md, notes/release-v2.md, drafts/idea.md → archive/idea.md';
+function sim5() {
+  const states = s5changes.map((_, i) => $('#s5-sel-' + i).value);
+  let status, summary, cls;
+  if (states.every(s => s === 'after')) { status = 'applied'; cls = 'ok'; summary = 'The actual result matches the entire proposal; recovered after the interruption.'; }
+  else if (states.every(s => s === 'before')) { status = 'interrupted'; cls = ''; summary = 'The process stopped before applying; a new proposal and approval are needed.'; }
+  else { status = 'failed'; cls = 'bad'; summary = 'The actual contents differ or the batch was only partly applied; check the files before continuing.'; }
+  const label = { applied: 'Applied', interrupted: 'Interrupted', failed: 'Failed' }[status];
+  const out = $('#s5-out');
+  out.className = 'msg ' + cls;
+  out.innerHTML = 'status: <code>proposed</code> → <code>' + status + '</code><br>' + esc(summary);
+  $('#s5-journal').textContent = label + ': propose_batch ' + s5files + ' — ' + summary;
+}
+(() => {
+  const box = $('#s5-states');
+  s5changes.forEach((c, i) => {
+    const l = document.createElement('label');
+    l.innerHTML = '<span>' + esc(c.label) + '</span><select id="s5-sel-' + i + '">' +
+      Object.entries(c.opts).map(([k, v]) => '<option value="' + k + '"' + (k === c.def ? ' selected' : '') + '>' + esc(v) + '</option>').join('') + '</select>';
+    box.appendChild(l);
+    l.querySelector('select').addEventListener('change', sim5);
+  });
+})();
+
+/* ---------- Simulation 6: the harness queue (a copy of RunQueue in agent/harness.ts) ---------- */
+class RunQueue {
+  constructor() { this.runs = []; this.seq = 0; }
+  add(run) {
+    const busy = this.runs.some(r => r.folder === run.folder && (r.status === 'working' || r.status === 'queued'));
+    const added = Object.assign({}, run, { id: ++this.seq, status: busy ? 'queued' : 'working', result: null });
+    this.runs.push(added);
+    return added;
+  }
+  end(run, status) {
+    const wasWorking = run.status === 'working';
+    run.status = status;
+    if (!wasWorking) return null;
+    const next = this.runs.find(r => r.folder === run.folder && r.status === 'queued');
+    if (next) next.status = 'working';
+    return next || null;
+  }
+}
+let s6q = new RunQueue();
+const s6names = { working: 'working', queued: 'queued', done: 'done', failed: 'failed', stopped: 'cancelled' };
+const s6tasks = ['QRIS checkout', 'Cart tests', 'Tidy the README', 'Fix shipping costs', 'Export the report', 'Validate stock'];
+function s6render(text) {
+  const box = $('#s6-runs');
+  box.innerHTML = '';
+  for (const r of s6q.runs) {
+    const row = document.createElement('div');
+    row.className = 'run';
+    row.innerHTML = '<span><b>#' + r.id + '</b> ' + esc(r.card) + ' <span style="color:var(--text-3)">· ' + esc(r.project) + '</span></span><span class="st ' + r.status + '">' + s6names[r.status] + '</span><span class="acts"></span>';
+    const acts = row.querySelector('.acts');
+    const act = (label, status) => {
+      const b = document.createElement('button');
+      b.className = 'ghost';
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        const next = s6q.end(r, status);
+        s6render('end(#' + r.id + ', <code>' + status + '</code>)' + (next ? ' → the turn of <b>#' + next.id + '</b> in ' + esc(next.project) + ' starts working.' : ' → no new turn' + (status === 'stopped' ? ' (cancelling a queued run gives nobody a turn).' : '.')));
+      });
+      acts.appendChild(b);
+    };
+    if (r.status === 'working') { act('Done', 'done'); act('Fail', 'failed'); }
+    if (r.status === 'queued') act('Cancel', 'stopped');
+    box.appendChild(row);
+  }
+  const msg = $('#s6-msg');
+  msg.className = 'msg';
+  msg.innerHTML = text || 'No cards have been assigned yet.';
+}
+function s6add(project) {
+  const r = s6q.add({ card: s6tasks[s6q.seq % s6tasks.length], project, folder: '/home/eka/' + project });
+  s6render('add(#' + r.id + ') in ' + esc(project) + ' → <code>' + r.status + '</code>' + (r.status === 'queued' ? ': another run is working in this folder.' : '.'));
+}
+$('#s6-a').addEventListener('click', () => s6add('web-ecommerce'));
+$('#s6-b').addEventListener('click', () => s6add('shop-admin'));
+$('#s6-reset').addEventListener('click', () => { s6q = new RunQueue(); s6render(''); });
+
+/* ---------- Simulation 7: endsWithQuestion (a copy of agent/harness.ts) ---------- */
+function endsWithQuestion(text) {
+  const last = text.trim().split('\n').map(l => l.trim()).filter(Boolean).pop() || '';
+  return /\?[\s*_`)"'»”]*$/u.test(last.replace(/\p{Extended_Pictographic}/gu, '').trim());
+}
+function sim7() {
+  const text = $('#s7-text').value;
+  const q = endsWithQuestion(text);
+  const out = $('#s7-out');
+  out.className = 'msg' + (q ? ' ok' : '');
+  out.innerHTML = 'endsWithQuestion() = <code>' + q + '</code> → ' + (q
+    ? 'status <code>waiting</code>: the card is ⏸ waiting, your reply is sent as a <code>prompt</code> to the same process.'
+    : 'stdin is closed, pi exits, the card goes to <i>Review</i>. If pi was in fact asking, there is still <i>Reply to pi…</i> (<code>--session</code>).');
+}
+$('#s7-text').addEventListener('input', sim7);
+
+/* ---------- Simulation 8: related notes (a copy of markdown/wikilink.ts and agent/harness.ts) ---------- */
+const S8_NOTE_CHARS = 300, S8_CONTEXT_CHARS = 24000;
+const s8fold = s => s.normalize('NFC').toLowerCase();
+function s8parse(inner) {
+  const bar = inner.indexOf('|');
+  const ref = bar < 0 ? inner : inner.slice(0, bar);
+  const hash = ref.indexOf('#');
+  return { target: (hash < 0 ? ref : ref.slice(0, hash)).trim(), heading: hash < 0 ? '' : ref.slice(hash + 1).trim(), alias: bar < 0 ? '' : inner.slice(bar + 1).trim() };
+}
+function s8links(text) {
+  const seen = new Set(), out = [];
+  const plain = text.replace(/\\([\\`*_{}[\]()#+\-.!~=|<>])|(`+)([^`]|[^`][\s\S]*?[^`])\2(?!`)/g, m => ' '.repeat(m.length));
+  for (const m of plain.matchAll(/\[\[([^[\]\0\n|]+)(?:\|([^[\]\0\n]*))?\]\]/g)) {
+    const link = s8parse(m[0].slice(2, -2));
+    const key = s8fold(link.target) + '#' + s8fold(link.heading);
+    if (!link.target || seen.has(key)) continue;
+    seen.add(key);
+    out.push(link);
+  }
+  return out.slice(0, 10);
+}
+function s8section(text, heading) {
+  const want = s8fold(heading.trim()), lines = text.split('\n');
+  let fence = '', start = -1, level = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const f = /^(\s{0,3})(`{3,}|~{3,})(.*)$/.exec(lines[i]);
+    if (f && (!fence || f[2].startsWith(fence))) { fence = fence ? '' : f[2][0].repeat(3); continue; }
+    if (fence) continue;
+    const h = /^(#{1,6})([ \t]+|$)/.exec(lines[i]);
+    if (!h) continue;
+    const n = h[1].length;
+    if (start >= 0 && n <= level) return lines.slice(start, i).join('\n').trimEnd();
+    if (start < 0 && s8fold(lines[i].slice(h[0].length).replace(/\s+#+\s*$/, '').trim()) === want) { start = i; level = n; }
+  }
+  return start < 0 ? null : lines.slice(start).join('\n').trimEnd();
+}
+function s8fenced(text) {
+  const longest = Math.max(2, ...[...text.matchAll(/`+/g)].map(m => m[0].length));
+  const fence = '`'.repeat(longest + 1);
+  return fence + 'markdown\n' + text + '\n' + fence;
+}
+function s8sectionText(notes) {
+  if (!notes.length) return ['(the card links no notes: the prompt has no context section)'];
+  const name = l => '[[' + l.target + (l.heading ? '#' + l.heading : '') + ']]';
+  const lines = ['## Related notes from Nyerat', '', 'This card links the following notes. Their contents are copied from the Nyerat work folder …'];
+  let budget = S8_CONTEXT_CHARS;
+  for (const note of notes) {
+    if (!note.file) { lines.push('', '### ' + name(note.link), '', '(not found in the Nyerat work folder)'); continue; }
+    const title = '### ' + name(note.link) + ' — ' + note.file;
+    if (note.text === null) { lines.push('', title, '', '(the section "' + note.link.heading + '" was not found in this file)'); continue; }
+    if (budget <= 0) { lines.push('', title, '', '(skipped: the related notes context limit has been reached)'); continue; }
+    const limit = Math.min(S8_NOTE_CHARS, budget), body = note.text.trim();
+    const cut = body.length > limit ? body.slice(0, limit) + '\n…(truncated, ' + (body.length - limit) + ' more characters)' : body;
+    budget -= Math.min(body.length, limit);
+    lines.push('', title, '', s8fenced(cut));
+  }
+  return lines;
+}
+function sim8() {
+  const files = { 'specs/Specification.md': $('#s8-note').value, 'Meeting Notes.md': 'The client asked for dynamic QRIS, not static.' };
+  // resolveWikiLink simplified: the file name without its extension, case-insensitive.
+  const find = target => Object.keys(files).find(f => s8fold(f.split('/').pop().replace(/\.md$/, '')) === s8fold(target)) || null;
+  const notes = s8links($('#s8-card').value).map(link => {
+    const file = find(link.target);
+    if (!file) return { link, file: null, text: null };
+    return { link, file, text: link.heading ? s8section(files[file], link.heading) : files[file] };
+  });
+  $('#s8-out').textContent = s8sectionText(notes).join('\n');
+}
+$('#s8-card').addEventListener('input', sim8);
+$('#s8-note').addEventListener('input', sim8);
+
+/* ---------- simulation 9: WorkList (a copy of the rules in ui/worklist.ts and workText in agent/work.ts) ---------- */
+const s9 = {
+  goal: 'Sync the release schedule with the October 1 meeting decisions',
+  note: 'The public release is postponed to November 22.',
+  steps: [
+    { text: 'Find the meeting decisions that are not in the plan yet', status: 'done' },
+    { text: 'Update the plan, the board, and the meeting notes', status: 'pending' },
+    { text: 'Check the result', status: 'pending' },
+  ],
+};
+const S9_STATUS = { running: 'running', paused: 'paused', failed: 'failed', complete: 'finished and verified' };
+function sim9() {
+  const running = $('#s9-running').checked, status = $('#s9-status').value;
+  const done = s9.steps.filter(s => s.status === 'done').length;
+  const meta = [done + '/' + s9.steps.length + ' steps', running ? 'working' : S9_STATUS[status]];
+  const current = running && status === 'running' ? s9.steps.findIndex(s => s.status === 'pending') : -1;
+  const rows = s9.steps.map((st, i) => {
+    const cur = i === current;
+    const mk = cur ? '<span class="mk spin"></span>' : st.status === 'done' ? '<span class="mk done">✓</span>'
+      : st.status === 'blocked' ? '<span class="mk blocked">⚠</span>' : '<span class="mk pending"></span>';
+    const state = { pending: cur ? 'in progress' : 'not yet', done: 'done', blocked: 'blocked' }[st.status];
+    return '<li class="' + st.status + '" aria-label="' + esc(st.text + ' — ' + state) + '">' + mk + '<span>' + esc(st.text) + '</span></li>';
+  });
+  $('#s9-view').innerHTML = '<div class="goal">' + esc(s9.goal) + '</div><div class="meta">' + meta.join(' · ') + '</div><ul>' + rows.join('') + '</ul><div class="meta" style="margin:6px 0 0">' + esc(s9.note) + '</div>';
+  $('#s9-text').textContent = 'Work: ' + s9.goal + ' (' + S9_STATUS[status] + ')\n' +
+    s9.steps.map(st => '- [' + (st.status === 'done' ? 'x' : ' ') + '] ' + st.text + (st.status === 'blocked' ? ' — blocked' : '')).join('\n') + '\n' + s9.note;
+}
+$('#s9-steps').innerHTML = s9.steps.map((st, i) => '<label><select data-i="' + i + '" aria-label="Status of step ' + (i + 1) + '">' +
+  ['pending', 'done', 'blocked'].map(v => '<option' + (v === st.status ? ' selected' : '') + '>' + v + '</option>').join('') + '</select>' + esc(st.text) + '</label>').join('');
+$('#s9-steps').addEventListener('change', e => { const i = +e.target.dataset.i; if (s9.steps[i]) { s9.steps[i].status = e.target.value; sim9(); } });
+$('#s9-running').addEventListener('change', sim9);
+$('#s9-status').addEventListener('change', sim9);
+
+/* ---------- start ---------- */
+function drawAll() { toolsChart(); sim2(); }
+drawAll();
+sim1();
+s3reset();
+$('#s4-file').value = s4file;
+s4diff();
+s4msg('');
+sim5();
+sim7();
+sim8();
+sim9();
+let resizeTimer = 0;
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawAll, 120); });
+/* redraw when the theme changes so the SVG colors follow */
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAll);
+})();
+</script>
+</body>
+</html>

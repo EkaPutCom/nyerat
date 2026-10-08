@@ -1,25 +1,25 @@
-// Log aktivitas harian untuk jurnal: satu berkas JSONL per hari di <folder kerja>/.nyerat/aktivitas/.
-// Hanya ditambah (append), jadi tidak ada indeks yang bisa basi dan tulisan yang terputus paling banyak
-// merusak satu baris (dilewati saat dibaca). Folder bertitik tidak dibaca readProject, jadi agent tidak
-// menelusurinya; isinya sampai ke agent hanya lewat bagian Aktivitas di berkas jurnal.
+// Daily activity log for the journal: one JSONL file per day in <work folder>/.nyerat/activity/.
+// Append-only, so no index can go stale and an interrupted write corrupts at most
+// one line (skipped when read). Dot folders are not read by readProject, so the agent does not
+// traverse them; their contents reach the agent only through the Activity section of the journal file.
 
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import { readTextFile, writeTextFile } from './files.js';
-import { parseActivity, serializeActivity, type Activity } from './markdown/jurnal.js';
+import { parseActivity, serializeActivity, type Activity } from './markdown/journal.js';
 import { localDate } from './markdown/home.js';
 
 const enc = new TextEncoder();
 
-export const activityDir = (root: string): string => GLib.build_filenamev([root, '.nyerat', 'aktivitas']);
+export const activityDir = (root: string): string => GLib.build_filenamev([root, '.nyerat', 'activity']);
 const logPath = (root: string, date: string) => GLib.build_filenamev([activityDir(root), `${date}.jsonl`]);
 
-// Catat satu aktivitas ke log hari itu (menurut waktunya). Gagal menulis tidak boleh mengganggu pekerjaan
-// yang memicunya, jadi galat ditelan dan dilaporkan sebagai false.
+// Record one activity in that day's log (by its time). A failed write must not disturb the work
+// that triggered it, so the error is swallowed and reported as false.
 export function recordActivity(root: string, activity: Activity): boolean {
     try {
         GLib.mkdir_with_parents(activityDir(root), 0o755);
-        // Sama seperti riwayat percakapan: jangan ikut ter-commit tanpa disengaja.
+        // Same as conversation history: do not get committed by accident.
         const ignore = GLib.build_filenamev([root, '.nyerat', '.gitignore']);
         if (!GLib.file_test(ignore, GLib.FileTest.EXISTS)) writeTextFile(ignore, '*\n');
         const file = Gio.File.new_for_path(logPath(root, localDate(new Date(activity.time * 1000))));

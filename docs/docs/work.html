@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plans and verification · Nyerat Documentation</title>
+<meta name="description" content="Multi-step work in Nyerat: the agent records a plan with set_work and then checks the actual result with verify_work before declaring it finished.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
+<main class="doc">
+<p class="eyebrow">Agent</p>
+<h1>Plans and verification</h1>
+<p class="lead">For a request that needs several steps, the agent writes a plan that is visible in the panel, works through it with proposals, and then checks the real result before declaring it finished.</p>
+
+<figure><img src="../assets/work.gif" width="900" height="548" loading="lazy" alt="Animation of the agent recording a three-step plan, proposing a change batch, then verifying the result and marking every step done"><figcaption>The plan, the change batch, the verification, and then done and verified</figcaption></figure>
+
+
+<h2 id="plan">The work plan</h2>
+<p>The agent calls <code>set_work</code> to record the goal and up to 20 steps, each with the status <code>pending</code>, <code>done</code>, or <code>blocked</code>. The plan appears in the panel and is updated as there is progress.</p>
+<p>The work status: <em>running</em>, <em>pending</em>, <em>failed</em>, or <em>done and verified</em>. The finished status can only be reached when every step is <code>done</code> and the verification passes.</p>
+
+<h2 id="verification">Verifying the result</h2>
+<p>After changes are applied, the agent calls <code>verify_work</code> with criteria from your request. The verification rereads the contents on disk or in the editor (not a cache), and then checks:</p>
+<div class="table-wrap"><table>
+  <tr><th>Kind</th><th>Checks</th></tr>
+  <tr><td><code>present</code> / <code>absent</code></td><td>Exact text must be present or absent in a file, or in the whole folder with the file <code>"*"</code>, e.g. making sure the old date is left nowhere</td></tr>
+  <tr><td><code>kanban</code></td><td>A card is in a given list with a given done/not done status</td></tr>
+  <tr><td><code>structure</code></td><td>The number of table cells, empty headings or headings that skip a level, unclosed code blocks, and links to Markdown files that do not exist</td></tr>
+</table></div>
+<p>For every changed file, the verification automatically adds a structure check, makes sure that a deleted or moved file is really not at its old place, and requires at least one criterion from the agent.</p>
+<figure><img src="../assets/work.png" width="1280" height="780" loading="lazy" alt="The Assistant panel with the PASSED verification result per check, a plan with every step checked, and a batch card with the Undo button"><figcaption>The verification result per check, the finished plan, and the Undo button on the batch</figcaption></figure>
+<div class="callout"><strong>Only new problems fail it</strong><p>The structure is compared with the contents from before the work started. Old problems are named in the result, but do not fail the work.</p></div>
+
+<h2 id="resume">Resuming work</h2>
+<p>The plan, the action journal, and the verification result are saved together with the conversation. If the app is closed or the connection drops halfway, open the conversation again: the <em>Resume work</em> button appears and the agent continues from the last step. See <a href="history.html#recovery">Recovery</a>.</p>
+
+<h2 id="limits">What is not proven yet</h2>
+<p>The verification proves concrete criteria, not the whole semantic consistency of a document. The quality of the check still depends on the criteria the agent chooses; there is no automatic contradiction check yet.</p>
+</main>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

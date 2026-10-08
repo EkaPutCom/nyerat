@@ -1,4 +1,4 @@
-// Tes orkestrasi harness eksternal (murni): penugasan kartu, proyek, prompt, pembaca JSON pi, dan antrean.
+// External harness orchestration tests (pure): card assignment, project, prompt, the pi JSON reader, and the queue.
 
 import { assignCard, cardMeta, composeCard, parseBoard, splitCard } from '../../src/markdown/kanban.js';
 import {
@@ -8,228 +8,228 @@ import {
 import { AgentTrace } from '../../src/agent/trace.js';
 import { section, test, eq, ok, contains } from '../framework.js';
 
-const PAPAN = `---
+const BOARD = `---
 kanban: true
-proyek: web-ecommerce
+project: web-ecommerce
 ---
 
-## Rencana
+## Plan
 
-- [ ] Checkout pakai QRIS @pi #fitur
-  Pakai SDK resmi.
-- [ ] Tes keranjang @pi #proyek/toko-admin @{2026-10-20}
+- [ ] Checkout with QRIS @pi #feature
+  Use the official SDK.
+- [ ] Cart test @pi #project/shop-admin @{2026-10-20}
 
-## Dikerjakan
+## In Progress
 
 ## Review
 
-## Selesai
+## Done
 `;
 
 const lines = (...events: object[]) => events.map(e => JSON.stringify(e));
 
 export function harnessTests(): void {
-    section('Harness eksternal (model)');
+    section('External harness (model)');
 
-    test('cardMeta: @nama adalah penugasan, bukan email atau @{tanggal}', () => {
-        eq(cardMeta('Checkout QRIS @pi #fitur @{2026-10-20}'), { title: 'Checkout QRIS', tags: ['fitur'], due: '2026-10-20', agent: 'pi' });
-        eq(cardMeta('Kirim ke budi@contoh.id').agent, null, 'alamat email');
-        eq(cardMeta('Kirim ke budi@contoh.id').title, 'Kirim ke budi@contoh.id');
-        eq(cardMeta('@pi').title, '@pi', 'teks yang hanya penugasan tetap tampil');
-        eq(cardMeta('A @pi @claude').agent, 'pi', 'yang pertama dipakai');
+    test('cardMeta: @name is an assignment, not an email or @{date}', () => {
+        eq(cardMeta('Checkout QRIS @pi #feature @{2026-10-20}'), { title: 'Checkout QRIS', tags: ['feature'], due: '2026-10-20', agent: 'pi' });
+        eq(cardMeta('Send to budi@example.com').agent, null, 'email address');
+        eq(cardMeta('Send to budi@example.com').title, 'Send to budi@example.com');
+        eq(cardMeta('@pi').title, '@pi', 'text that is only an assignment is still shown');
+        eq(cardMeta('A @pi @claude').agent, 'pi', 'the first one is used');
     });
 
-    test('assignCard dan composeCard menjaga bagian lain kartu', () => {
-        eq(assignCard('Checkout #fitur @{2026-10-20}', 'pi'), 'Checkout @pi #fitur @{2026-10-20}');
-        eq(assignCard('Checkout @pi #fitur', 'pi'), 'Checkout @pi #fitur', 'sudah ditugaskan');
-        eq(assignCard('Checkout @pi #fitur', null), 'Checkout #fitur', 'lepas penugasan');
-        eq(composeCard({ title: 'Checkout', tags: ['fitur'], due: '', agent: '@Pi' }), 'Checkout @pi #fitur');
-        eq(composeCard({ title: 'Checkout', tags: [], due: '', agent: 'bukan nama!' }), 'Checkout', 'nama tidak valid dibuang');
-        const parts = splitCard('Checkout @pi #fitur @{2026-10-20 09:00}');
-        eq(parts, { title: 'Checkout', tags: ['fitur'], due: '2026-10-20 09:00', agent: 'pi' });
-        eq(composeCard(parts), 'Checkout @pi #fitur @{2026-10-20 09:00}', 'pulang-pergi lewat dialog sunting');
+    test('assignCard and composeCard keep the other parts of the card', () => {
+        eq(assignCard('Checkout #feature @{2026-10-20}', 'pi'), 'Checkout @pi #feature @{2026-10-20}');
+        eq(assignCard('Checkout @pi #feature', 'pi'), 'Checkout @pi #feature', 'already assigned');
+        eq(assignCard('Checkout @pi #feature', null), 'Checkout #feature', 'remove the assignment');
+        eq(composeCard({ title: 'Checkout', tags: ['feature'], due: '', agent: '@Pi' }), 'Checkout @pi #feature');
+        eq(composeCard({ title: 'Checkout', tags: [], due: '', agent: 'not a name!' }), 'Checkout', 'an invalid name is dropped');
+        const parts = splitCard('Checkout @pi #feature @{2026-10-20 09:00}');
+        eq(parts, { title: 'Checkout', tags: ['feature'], due: '2026-10-20 09:00', agent: 'pi' });
+        eq(composeCard(parts), 'Checkout @pi #feature @{2026-10-20 09:00}', 'round trip through the edit dialog');
     });
 
-    test('proyek dari frontmatter papan, tag #proyek/… pada kartu menang', () => {
-        const b = parseBoard(PAPAN);
+    test('project from the board frontmatter, a #project/… tag on the card wins', () => {
+        const b = parseBoard(BOARD);
         eq(boardProject(b), 'web-ecommerce');
         eq(cardProject(b, b.columns[0].cards[0]), 'web-ecommerce');
-        eq(cardProject(b, b.columns[0].cards[1]), 'toko-admin');
-        eq(boardProject(parseBoard('---\nkanban: true\nproyek: "toko"\n---\n\n## A\n')), 'toko', 'nilai dikutip');
-        eq(boardProject(parseBoard('---\nkanban: true\n---\n\nproyek: luar\n\n## A\n')), null, 'di luar frontmatter diabaikan');
+        eq(cardProject(b, b.columns[0].cards[1]), 'shop-admin');
+        eq(boardProject(parseBoard('---\nkanban: true\nproject: "shop"\n---\n\n## A\n')), 'shop', 'quoted value');
+        eq(boardProject(parseBoard('---\nkanban: true\n---\n\nproject: outside\n\n## A\n')), null, 'outside the frontmatter is ignored');
     });
 
-    test('folder proyek tidak boleh folder kerja Nyerat, isinya, atau induknya', () => {
+    test('the project folder must not be the Nyerat work folder, its contents, or its parent', () => {
         eq(checkProjectFolder('/home/eka/web', '/home/eka/nyerat'), null);
-        eq(checkProjectFolder('/home/eka/nyerat-lain', '/home/eka/nyerat'), null, 'awalan nama sama bukan berarti di dalam');
-        ok(checkProjectFolder('/home/eka/nyerat', '/home/eka/nyerat/'), 'folder kerja sendiri');
-        ok(checkProjectFolder('/home/eka/nyerat/kode', '/home/eka/nyerat'), 'di dalam folder kerja');
-        ok(checkProjectFolder('/home/eka', '/home/eka/nyerat'), 'induk folder kerja');
-        ok(checkProjectFolder('relatif/web', null), 'path relatif');
+        eq(checkProjectFolder('/home/eka/nyerat-other', '/home/eka/nyerat'), null, 'the same name prefix does not mean inside');
+        ok(checkProjectFolder('/home/eka/nyerat', '/home/eka/nyerat/'), 'the work folder itself');
+        ok(checkProjectFolder('/home/eka/nyerat/code', '/home/eka/nyerat'), 'inside the work folder');
+        ok(checkProjectFolder('/home/eka', '/home/eka/nyerat'), 'the parent of the work folder');
+        ok(checkProjectFolder('relative/web', null), 'relative path');
         ok(checkProjectFolder('/', null), 'root');
     });
 
-    test('prompt memuat judul, catatan, tag (tanpa tag proyek), tenggat, dan batas tugas', () => {
-        const b = parseBoard(PAPAN);
-        const p1 = buildPrompt(b.columns[0].cards[0], 'web-ecommerce', 'papan.md');
-        contains(p1, '# Checkout pakai QRIS');
-        contains(p1, 'Pakai SDK resmi.');
-        contains(p1, 'Tag: #fitur');
-        contains(p1, 'proyek "web-ecommerce"');
-        contains(p1, 'Jangan membuat commit');
-        const p2 = buildPrompt(b.columns[0].cards[1], 'toko-admin', 'papan.md');
-        ok(!p2.includes('#proyek/'), 'tag proyek tidak ikut prompt');
-        contains(p2, 'Tenggat: 2026-10-20');
-        ok(!p2.includes('@pi'), 'penugasan tidak ikut judul');
+    test('the prompt contains the title, notes, tags (without the project tag), due date, and task boundaries', () => {
+        const b = parseBoard(BOARD);
+        const p1 = buildPrompt(b.columns[0].cards[0], 'web-ecommerce', 'board.md');
+        contains(p1, '# Checkout with QRIS');
+        contains(p1, 'Use the official SDK.');
+        contains(p1, 'Tags: #feature');
+        contains(p1, 'project "web-ecommerce"');
+        contains(p1, 'Do not make commits');
+        const p2 = buildPrompt(b.columns[0].cards[1], 'shop-admin', 'board.md');
+        ok(!p2.includes('#project/'), 'the project tag is not in the prompt');
+        contains(p2, 'Due: 2026-10-20');
+        ok(!p2.includes('@pi'), 'the assignment is not part of the title');
     });
 
-    test('[[catatan]] di judul dan catatan kartu menjadi daftar tautan konteks tanpa duplikat', () => {
-        const card = { done: false, text: 'Rapikan checkout [[Spesifikasi]] @pi', notes: ['Lihat [[spesifikasi]] dan [[Desain#Warna|warna]].', '`[[bukan]]`'] };
-        eq(cardWikiLinks(card).map(l => [l.target, l.heading]), [['Spesifikasi', ''], ['Desain', 'Warna']]);
+    test('[[note]] links in the card title and notes become a list of context links without duplicates', () => {
+        const card = { done: false, text: 'Tidy up checkout [[Specification]] @pi', notes: ['See [[specification]] and [[Design#Color|color]].', '`[[not]]`'] };
+        eq(cardWikiLinks(card).map(l => [l.target, l.heading]), [['Specification', ''], ['Design', 'Color']]);
         const many = { done: false, text: 'x', notes: Array.from({ length: 15 }, (_, i) => `[[n${i}]]`) };
-        eq(cardWikiLinks(many).length, MAX_LINKED_NOTES, 'batas jumlah tautan');
+        eq(cardWikiLinks(many).length, MAX_LINKED_NOTES, 'link count limit');
     });
 
-    test('prompt menyalin isi catatan terkait dalam blok kode, menandai yang hilang, dan memotong yang panjang', () => {
-        const card = { done: false, text: 'Rapikan checkout [[Spesifikasi]] @pi', notes: [] };
+    test('the prompt copies the contents of related notes in a code block, marks missing ones, and truncates long ones', () => {
+        const card = { done: false, text: 'Tidy up checkout [[Specification]] @pi', notes: [] };
         const link = (target: string, heading = '') => ({ target, heading, alias: '' });
-        const p = buildPrompt(card, 'web', 'papan.md', [
-            { link: link('Spesifikasi'), file: 'docs/Spesifikasi.md', text: '# Spek\n\nPakai ```js``` di contoh.' },
-            { link: link('Hilang'), file: null, text: null },
-            { link: link('Desain', 'Warna'), file: 'Desain.md', text: null },
-            { link: link('Panjang'), file: 'Panjang.md', text: 'x'.repeat(NOTE_CHARS + 50) },
+        const p = buildPrompt(card, 'web', 'board.md', [
+            { link: link('Specification'), file: 'docs/Specification.md', text: '# Spec\n\nUse ```js``` in the example.' },
+            { link: link('Missing'), file: null, text: null },
+            { link: link('Design', 'Color'), file: 'Design.md', text: null },
+            { link: link('Long'), file: 'Long.md', text: 'x'.repeat(NOTE_CHARS + 50) },
         ]);
-        contains(p, '## Catatan terkait dari Nyerat');
-        contains(p, '### [[Spesifikasi]] — docs/Spesifikasi.md');
-        contains(p, '````markdown\n# Spek\n\nPakai ```js``` di contoh.\n````');
-        contains(p, '### [[Hilang]]\n\n(tidak ditemukan di folder kerja Nyerat)');
-        contains(p, '(bagian "Warna" tidak ditemukan di berkas ini)');
-        contains(p, '…(dipotong, 50 karakter lagi)');
-        ok(p.indexOf('## Catatan terkait') < p.indexOf('Kerjakan tugas ini'), 'konteks sebelum batas tugas');
-        ok(!buildPrompt(card, 'web', 'papan.md').includes('Catatan terkait'), 'tanpa catatan tidak ada bagian konteks');
+        contains(p, '## Related notes from Nyerat');
+        contains(p, '### [[Specification]] — docs/Specification.md');
+        contains(p, '````markdown\n# Spec\n\nUse ```js``` in the example.\n````');
+        contains(p, '### [[Missing]]\n\n(not found in the Nyerat work folder)');
+        contains(p, '(the section "Color" was not found in this file)');
+        contains(p, '…(truncated, 50 more characters)');
+        ok(p.indexOf('## Related notes') < p.indexOf('Do this task'), 'context before the task boundary');
+        ok(!buildPrompt(card, 'web', 'board.md').includes('Related notes'), 'without notes there is no context section');
     });
 
-    test('isi catatan terkait dibatasi total', () => {
+    test('the contents of related notes are limited in total', () => {
         const card = { done: false, text: 'x', notes: [] };
         const notes = Array.from({ length: 5 }, (_, i) => ({ link: { target: `n${i}`, heading: '', alias: '' }, file: `n${i}.md`, text: 'y'.repeat(NOTE_CHARS) }));
-        const p = buildPrompt(card, 'web', 'papan.md', notes);
-        ok((p.match(/y{100,}/g) ?? []).reduce((n, m) => n + m.length, 0) <= CONTEXT_CHARS, 'melewati batas total');
-        contains(p, '(dilewati: batas konteks catatan terkait sudah tercapai)');
+        const p = buildPrompt(card, 'web', 'board.md', notes);
+        ok((p.match(/y{100,}/g) ?? []).reduce((n, m) => n + m.length, 0) <= CONTEXT_CHARS, 'exceeded the total limit');
+        contains(p, '(skipped: the related notes context limit has been reached)');
     });
 
-    test('stageColumn dan locateCard', () => {
-        const b = parseBoard(PAPAN);
+    test('stageColumn and locateCard', () => {
+        const b = parseBoard(BOARD);
         eq([stageColumn(b, 'doing'), stageColumn(b, 'review')], [1, 2]);
         eq(stageColumn(parseBoard('---\nkanban: true\n---\n\n## A\n\n## B\n'), 'review'), -1);
-        eq(locateCard(b, 'Checkout pakai QRIS @pi #fitur'), { column: 0, index: 0 });
-        eq(locateCard(b, 'tidak ada'), null);
+        eq(locateCard(b, 'Checkout with QRIS @pi #feature'), { column: 0, index: 0 });
+        eq(locateCard(b, 'nonexistent'), null);
         const dup = parseBoard('---\nkanban: true\n---\n\n## A\n\n- [ ] X\n- [ ] X\n');
-        eq(locateCard(dup, 'X'), null, 'kartu kembar tidak dipilih sembarang');
+        eq(locateCard(dup, 'X'), null, 'duplicate cards are not picked arbitrarily');
     });
 
-    test('PiReader: alat, jawaban, biaya, dan sesi menjadi log dan hasil', () => {
+    test('PiReader: tools, answers, cost, and session become the log and the result', () => {
         const trace = new AgentTrace(() => 0, () => '2026-10-05T10:00:00');
         const r = new PiReader(trace);
         for (const l of lines(
-            { type: 'session', version: 3, id: 'sesi-1', cwd: '/x' },
+            { type: 'session', version: 3, id: 'session-1', cwd: '/x' },
             { type: 'agent_start' },
             { type: 'turn_start' },
-            { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'Cek dulu.' } },
+            { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'Check first.' } },
             { type: 'tool_execution_start', toolCallId: 't1', toolName: 'bash', args: { command: 'ls' } },
             { type: 'tool_execution_end', toolCallId: 't1', toolName: 'bash', result: { content: [{ type: 'text', text: 'a.ts' }] }, isError: false },
             { type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: '' }], stopReason: 'toolUse', usage: { totalTokens: 100, cost: { total: 0.001 } } } },
             { type: 'turn_start' },
-            { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'Selesai: ' } },
-            { type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Selesai: ubah a.ts\nDetail lain' }], stopReason: 'stop', usage: { totalTokens: 50, cost: { total: 0.0005 } } } },
+            { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'Done: ' } },
+            { type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Done: changed a.ts\nOther details' }], stopReason: 'stop', usage: { totalTokens: 50, cost: { total: 0.0005 } } } },
             { type: 'agent_end', messages: [], willRetry: false },
             { type: 'agent_settled' },
         )) r.line(l);
-        r.line('bukan json');
+        r.line('not json');
         const result = r.finish(0, '');
         eq(result.ok, true);
-        eq(result.summary, 'Selesai: ubah a.ts\nDetail lain');
-        eq(result.sessionId, 'sesi-1');
+        eq(result.summary, 'Done: changed a.ts\nOther details');
+        eq(result.sessionId, 'session-1');
         eq(result.tokens, 150);
-        ok(Math.abs(result.cost - 0.0015) < 1e-9, `biaya ${result.cost}`);
+        ok(Math.abs(result.cost - 0.0015) < 1e-9, `cost ${result.cost}`);
         const tool = trace.events.find(e => e.kind === 'tool')!;
         eq([tool.title, tool.status], ['bash', 'ok']);
         contains(tool.detail, '"command": "ls"');
         contains(tool.detail, 'a.ts');
-        ok(trace.events.some(e => e.kind === 'reasoning' && e.detail === 'Cek dulu.'), 'penalaran tercatat');
-        ok(trace.events.some(e => e.kind === 'note' && e.detail === 'bukan json'), 'baris bukan JSON dicatat');
-        contains(trace.events.find(e => e.title === 'Sesi pi')!.detail, 'pi --session sesi-1');
+        ok(trace.events.some(e => e.kind === 'reasoning' && e.detail === 'Check first.'), 'reasoning recorded');
+        ok(trace.events.some(e => e.kind === 'note' && e.detail === 'not json'), 'a non-JSON line is recorded');
+        contains(trace.events.find(e => e.title === 'pi session')!.detail, 'pi --session session-1');
     });
 
-    test('PiReader: galat model, kode keluar, dan dihentikan', () => {
+    test('PiReader: model error, exit code, and stopped', () => {
         const fail = new PiReader(new AgentTrace());
-        fail.line(JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [], stopReason: 'error', errorMessage: 'kunci API tidak valid' } }));
-        eq(fail.finish(1, '').error, 'kunci API tidak valid');
-        eq(new PiReader(new AgentTrace()).finish(2, 'peringatan\nNo API key found\n').error, 'No API key found', 'baris stderr terakhir');
-        eq(new PiReader(new AgentTrace()).finish(0, '').error, 'pi selesai tanpa jawaban');
-        eq(new PiReader(new AgentTrace()).finish(143, '', true).error, 'dihentikan pengguna');
+        fail.line(JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [], stopReason: 'error', errorMessage: 'invalid API key' } }));
+        eq(fail.finish(1, '').error, 'invalid API key');
+        eq(new PiReader(new AgentTrace()).finish(2, 'warning\nNo API key found\n').error, 'No API key found', 'the last stderr line');
+        eq(new PiReader(new AgentTrace()).finish(0, '').error, 'pi finished without an answer');
+        eq(new PiReader(new AgentTrace()).finish(143, '', true).error, 'stopped by the user');
     });
 
-    test('mode RPC: argumen, perintah stdin, dan id sesi dari get_state', () => {
+    test('RPC mode: arguments, stdin commands, and the session id from get_state', () => {
         eq(HARNESSES.pi.args('Checkout', null), ['--mode', 'rpc', '--name', 'Checkout']);
-        eq(HARNESSES.pi.args('Checkout', 'sesi-1'), ['--mode', 'rpc', '--name', 'Checkout', '--session', 'sesi-1']);
-        eq(JSON.parse(rpcPrompt('Halo\n"kutip"', 'p1')), { id: 'p1', type: 'prompt', message: 'Halo\n"kutip"' });
-        ok(!rpcPrompt('a\nb', 'p').includes('\n'), 'satu perintah = satu baris');
-        eq(JSON.parse(rpcSteer('belok')).type, 'steer');
+        eq(HARNESSES.pi.args('Checkout', 'session-1'), ['--mode', 'rpc', '--name', 'Checkout', '--session', 'session-1']);
+        eq(JSON.parse(rpcPrompt('Hello\n"quote"', 'p1')), { id: 'p1', type: 'prompt', message: 'Hello\n"quote"' });
+        ok(!rpcPrompt('a\nb', 'p').includes('\n'), 'one command = one line');
+        eq(JSON.parse(rpcSteer('turn')).type, 'steer');
         eq(JSON.parse(rpcUiResponse('u1', { confirmed: false })), { type: 'extension_ui_response', id: 'u1', confirmed: false });
         eq(JSON.parse(rpcUiResponse('u2', { cancelled: true })), { type: 'extension_ui_response', id: 'u2', cancelled: true });
         const r = new PiReader(new AgentTrace());
         eq(r.line(JSON.stringify({ id: 'nyerat-state', type: 'response', command: 'get_state', success: true, data: { sessionId: 's-9' } })), null);
         eq(r.session, 's-9');
-        eq(r.line(JSON.stringify({ id: 'p', type: 'response', command: 'prompt', success: false, error: 'model tidak ada' })), { type: 'rejected', error: 'model tidak ada' });
+        eq(r.line(JSON.stringify({ id: 'p', type: 'response', command: 'prompt', success: false, error: 'no such model' })), { type: 'rejected', error: 'no such model' });
         eq(r.line(JSON.stringify({ type: 'agent_settled' })), { type: 'settled' });
     });
 
-    test('permintaan extension menjadi ask; notify dan status TUI tidak menunggu', () => {
+    test('an extension request becomes ask; notify and TUI status do not wait', () => {
         const trace = new AgentTrace();
         const r = new PiReader(trace);
-        const sig = r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u1', method: 'select', title: 'Izinkan?', options: ['Ya', 'Tidak'], timeout: 10000 }));
-        eq(sig, { type: 'ask', ask: { kind: 'select', id: 'u1', title: 'Izinkan?', message: '', options: ['Ya', 'Tidak'], prefill: '', timeout: 10000 } });
-        const confirm = r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u2', method: 'confirm', title: 'Hapus?', message: 'rm -rf build' }));
+        const sig = r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u1', method: 'select', title: 'Allow?', options: ['Yes', 'No'], timeout: 10000 }));
+        eq(sig, { type: 'ask', ask: { kind: 'select', id: 'u1', title: 'Allow?', message: '', options: ['Yes', 'No'], prefill: '', timeout: 10000 } });
+        const confirm = r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u2', method: 'confirm', title: 'Delete?', message: 'rm -rf build' }));
         eq(confirm?.type === 'ask' && confirm.ask.message, 'rm -rf build');
-        const input = r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u3', method: 'input', title: 'Nama cabang', placeholder: 'fitur/…' }));
-        eq(input?.type === 'ask' && input.ask.message, 'fitur/…', 'placeholder jadi petunjuk');
-        eq(r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u4', method: 'notify', message: 'Diblokir', notifyType: 'warning' })), null);
+        const input = r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u3', method: 'input', title: 'Branch name', placeholder: 'feature/…' }));
+        eq(input?.type === 'ask' && input.ask.message, 'feature/…', 'the placeholder becomes a hint');
+        eq(r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u4', method: 'notify', message: 'Blocked', notifyType: 'warning' })), null);
         eq(r.line(JSON.stringify({ type: 'extension_ui_request', id: 'u5', method: 'setStatus', statusKey: 'x', statusText: 'y' })), null);
-        ok(trace.events.some(e => e.title === 'Pesan pi' && e.detail === 'Diblokir'), 'notify dicatat');
-        ok(trace.events.some(e => e.title === 'pi menunggu: Izinkan?' && e.detail.includes('Ya / Tidak')), 'permintaan dicatat');
+        ok(trace.events.some(e => e.title === 'pi message' && e.detail === 'Blocked'), 'notify recorded');
+        ok(trace.events.some(e => e.title === 'pi is waiting: Allow?' && e.detail.includes('Yes / No')), 'request recorded');
     });
 
-    test('pertanyaan di akhir jawaban dan ringkasan jawaban pengguna', () => {
-        eq(['Mau pakai SDK A atau B?', 'Selesai.\n\nLanjutkan ke tes? 🙂', 'Pakai **A** atau **B?**', 'Sudah ditambahkan.', 'Apa? Sudah beres.', ''].map(endsWithQuestion),
+    test('a question at the end of an answer and a summary of the answer given by the user', () => {
+        eq(['Use SDK A or B?', 'Done.\n\nContinue to the tests? 🙂', 'Use **A** or **B?**', 'Already added.', 'What? All done.', ''].map(endsWithQuestion),
             [true, true, true, false, false, false]);
         const ask: HarnessAsk = { kind: 'confirm', id: 'u', title: 't', message: '', options: [], prefill: '', timeout: null };
         eq([describeReply(ask, { confirmed: true }), describeReply(ask, { confirmed: false }), describeReply(ask, { cancelled: true }),
-            describeReply({ ...ask, kind: 'question' }, { cancelled: true }), describeReply(ask, { value: 'Ya' })],
-        ['diizinkan', 'ditolak', 'dilewati', 'diakhiri tanpa membalas', 'Ya']);
+            describeReply({ ...ask, kind: 'question' }, { cancelled: true }), describeReply(ask, { value: 'Yes' })],
+        ['allowed', 'denied', 'skipped', 'ended without replying', 'Yes']);
     });
 
-    test('PiReader.restart: galat dan status giliran lama tidak terbawa ke prompt berikutnya', () => {
+    test('PiReader.restart: the error and status of the old turn do not carry over to the next prompt', () => {
         const r = new PiReader(new AgentTrace());
-        r.line(JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Pilih A?' }], stopReason: 'stop' } }));
+        r.line(JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Choose A?' }], stopReason: 'stop' } }));
         r.line(JSON.stringify({ type: 'agent_settled' }));
         r.restart();
         eq(r.settled, false);
-        r.line(JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Selesai pakai A' }], stopReason: 'stop' } }));
+        r.line(JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Done using A' }], stopReason: 'stop' } }));
         r.line(JSON.stringify({ type: 'agent_settled' }));
         const result = r.finish(0, '');
-        eq([result.ok, result.summary], [true, 'Selesai pakai A']);
+        eq([result.ok, result.summary], [true, 'Done using A']);
     });
 
-    test('resultNote: satu baris ringkas', () => {
+    test('resultNote: one compact line', () => {
         const base = { cost: 0, tokens: 0, sessionId: null };
-        eq(resultNote('pi', { ...base, ok: true, summary: '## Ringkasan\n- Ubah a.ts', error: null }, '05/10 10:00'), '↳ pi selesai 05/10 10:00: Ringkasan');
-        eq(resultNote('pi', { ...base, ok: false, summary: '', error: 'galat' }, '05/10 10:00'), '↳ pi gagal 05/10 10:00: galat');
-        eq(resultNote('pi', { ...base, ok: true, summary: 'Selesai.\n\n**Yang diubah:**\n- Membuat berkas baru `HALO.txt`.', error: null }, 's'), '↳ pi selesai s: Membuat berkas baru `HALO.txt`.', 'pembuka dan judul bagian dilewati');
-        eq(resultNote('pi', { ...base, ok: true, summary: '1. 2 berkas diubah', error: null }, 's'), '↳ pi selesai s: 2 berkas diubah', 'angka di isi tidak dibuang');
-        ok(resultNote('pi', { ...base, ok: true, summary: 'x'.repeat(400), error: null }, 's').length < 200, 'dipotong');
+        eq(resultNote('pi', { ...base, ok: true, summary: '## Summary\n- Change a.ts', error: null }, '05/10 10:00'), '↳ pi done 05/10 10:00: Summary');
+        eq(resultNote('pi', { ...base, ok: false, summary: '', error: 'error' }, '05/10 10:00'), '↳ pi failed 05/10 10:00: error');
+        eq(resultNote('pi', { ...base, ok: true, summary: 'Done.\n\n**What changed:**\n- Created a new file `HELLO.txt`.', error: null }, 's'), '↳ pi done s: Created a new file `HELLO.txt`.', 'the opener and section heading are skipped');
+        eq(resultNote('pi', { ...base, ok: true, summary: '1. 2 files changed', error: null }, 's'), '↳ pi done s: 2 files changed', 'numbers in the content are not dropped');
+        ok(resultNote('pi', { ...base, ok: true, summary: 'x'.repeat(400), error: null }, 's').length < 200, 'truncated');
     });
 
-    test('RunQueue: satu run per folder, sisanya antre berurutan', () => {
+    test('RunQueue: one run per folder, the rest queue in order', () => {
         const q = new RunQueue();
         const base = { board: '/p.md', title: 't', agent: 'pi', project: 'a', prompt: '', session: null };
         const a = q.add({ ...base, card: 'A', folder: '/a' });
@@ -237,18 +237,18 @@ export function harnessTests(): void {
         const c = q.add({ ...base, card: 'C', folder: '/b' });
         const d = q.add({ ...base, card: 'D', folder: '/a' });
         eq([a.status, b.status, c.status, d.status], ['working', 'queued', 'working', 'queued']);
-        eq(q.end(d, 'stopped'), null, 'membatalkan antrean tidak memberi giliran');
+        eq(q.end(d, 'stopped'), null, 'cancelling from the queue does not give a turn');
         eq(q.end(a, 'done'), b);
         eq(b.status, 'working');
         eq(q.end(b, 'failed'), null);
         eq(q.active('/p.md', 'B'), null);
         eq(q.find('/p.md', 'B')?.status, 'failed');
         const again = q.add({ ...base, card: 'B', folder: '/a' });
-        eq(q.find('/p.md', 'B'), again, 'run aktif didahulukan');
+        eq(q.find('/p.md', 'B'), again, 'an active run takes precedence');
         again.status = 'waiting';
-        eq(q.add({ ...base, card: 'E', folder: '/a' }).status, 'queued', 'run yang menunggu jawaban tetap memegang folder');
+        eq(q.add({ ...base, card: 'E', folder: '/a' }).status, 'queued', 'a run waiting for an answer still holds the folder');
         eq(q.active('/p.md', 'B'), again);
-        eq(q.end(again, 'done')?.card, 'E', 'selesai menunggu → giliran berikutnya');
+        eq(q.end(again, 'done')?.card, 'E', 'finishing the wait → the next turn');
         eq(again.ask, null);
     });
 }

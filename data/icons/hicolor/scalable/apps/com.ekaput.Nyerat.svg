@@ -9,15 +9,15 @@
       <stop offset="1" stop-color="#62a0ea"/>
     </linearGradient>
   </defs>
-  <!-- bayangan dasar ala ikon GNOME -->
+  <!-- base shadow in the style of GNOME icons -->
   <rect x="20" y="16" width="80" height="100" rx="8" fill="#9a9996"/>
   <rect x="20" y="12" width="80" height="100" rx="8" fill="url(#page)"/>
-  <!-- baris teks Markdown: judul dan paragraf -->
+  <!-- lines of Markdown text: heading and paragraph -->
   <rect x="32" y="28" width="40" height="8" rx="4" fill="#3d3846"/>
   <rect x="32" y="46" width="56" height="5" rx="2.5" fill="#9a9996"/>
   <rect x="32" y="58" width="50" height="5" rx="2.5" fill="#9a9996"/>
   <rect x="32" y="70" width="34" height="5" rx="2.5" fill="#9a9996"/>
-  <!-- kotak centang tugas -->
+  <!-- task checkbox -->
   <rect x="32" y="84" width="10" height="10" rx="2" fill="none" stroke="#2ec27e" stroke-width="3"/>
   <rect x="48" y="86.5" width="24" height="5" rx="2.5" fill="#9a9996"/>
   <!-- pena -->

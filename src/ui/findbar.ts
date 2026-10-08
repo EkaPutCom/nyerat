@@ -1,5 +1,5 @@
-// Bilah pencarian (Ctrl+F) memakai GtkSource.SearchContext, yang juga menyorot
-// semua hasil di editor.
+// Search bar (Ctrl+F) using GtkSource.SearchContext, which also highlights
+// all results in the editor.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GtkSource from 'gi://GtkSource?version=5';
@@ -45,13 +45,13 @@ export class FindBar extends Gtk.SearchBar {
         this._next.connect('clicked', () => this.findNext());
 
         this.connect_entry(entry);
-        // Sorotan hasil hilang saat bilah ditutup.
+        // Result highlights disappear when the bar is closed.
         this.connect('notify::search-mode-enabled', () => {
             this.settings.search_text = this.search_mode_enabled ? (entry.text || null) : null;
         });
     }
 
-    // Pindah ke editor lain (berganti tab). Teks pencarian tetap; sorotan hasil di buffer lama dilepas.
+    // Switch to another editor (changing tabs). The search text stays; the result highlights in the old buffer are released.
     setTarget(buffer: GtkSource.Buffer, view: Gtk.TextView): void {
         if (buffer === this.buffer) return;
         this.buffer = buffer;
@@ -69,8 +69,8 @@ export class FindBar extends Gtk.SearchBar {
         this.view.grab_focus();
     }
 
-    // fromSelectionStart: saat teks pencarian berubah, cari mulai dari awal seleksi
-    // supaya hasil yang sedang terpilih tetap dipakai jika masih cocok.
+    // fromSelectionStart: when the search text changes, search starting from the start of the selection
+    // so the currently selected result is kept if it still matches.
     findNext(fromSelectionStart = false): void {
         if (!this.settings.search_text) return;
         const [has, s, e] = this.buffer.get_selection_bounds();

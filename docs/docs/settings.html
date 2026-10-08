@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings · Nyerat Documentation</title>
+<meta name="description" content="Where Nyerat stores its settings, the API key, the harness project folders, and the conversation history, with their default values.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
+<main class="doc">
+<p class="eyebrow">Reference</p>
+<h1>Settings</h1>
+<p class="lead">Settings are saved automatically when you change them from the menu or a panel. There is no account and no syncing to a server.</p>
+
+<h2 id="locations">File locations</h2>
+<div class="table-wrap"><table>
+  <tr><th>File</th><th>Contents</th></tr>
+  <tr><td>GSettings (<code>com.ekaput.Nyerat</code>)</td><td>The app settings, stored in dconf. A previous version used <code>id.eka.Nyerat</code>; the old settings are not migrated</td></tr>
+  <tr><td>The system keyring</td><td>The DeepSeek API key</td></tr>
+  <tr><td><code>~/.config/nyerat/deepseek.key</code></td><td>The API key when the keyring is not available (mode 0600)</td></tr>
+  <tr><td><code>&lt;work folder&gt;/.nyerat/chats/</code></td><td>Conversation history, plans, and the action journal</td></tr>
+</table></div>
+
+<h2 id="settings">What the settings hold</h2>
+<p>Open the <strong>Preferences</strong> dialog (Ctrl+,) for the color scheme, focus and typewriter modes, autosave, and the assistant model. Any command can also be searched with the <strong>Command Palette</strong> (Ctrl+Shift+P).</p>
+<ul>
+  <li>The color scheme (follow the system, light, or dark), and the sidebar and the sidebar tab that was last chosen</li>
+  <li>The last folder and the tabs with files that are open (order, active tab, cursor position), including the Home tab</li>
+  <li><code>home</code>: show <a href="home.html">Home</a> when no document is open; <code>recent-files</code>: the 30 files that were opened last</li>
+  <li>Focus mode, typewriter mode, and autosave; the window size</li>
+  <li>The Assistant panel: open or not, the model, and thinking mode</li>
+  <li><code>projects</code>: the mapping of project name → folder for external harnesses</li>
+</ul>
+<p>The API key is never written to the settings.</p>
+<p>In a narrow window (below about 900 pixels), the Assistant panel floats over the editor instead of docking on the right; below about 600 pixels the sidebar does too. The panels are closed when the window narrows, and your panel choices are restored when the window is widened again.</p>
+
+<h2 id="defaults">Default values</h2>
+<div class="table-wrap"><table>
+  <tr><th>Setting</th><th>Default</th></tr>
+  <tr><td>Model</td><td><code>deepseek-flash</code>, without thinking mode</td></tr>
+  <tr><td>The Assistant panel</td><td>Closed</td></tr>
+  <tr><td>Save conversation history</td><td>On (when a folder is open)</td></tr>
+  <tr><td>Sidebar</td><td>Open on the Outline tab</td></tr>
+  <tr><td>Dark mode</td><td>Follows the system theme</td></tr>
+  <tr><td>Focus / typewriter</td><td>Off</td></tr>
+  <tr><td>Autosave</td><td>On</td></tr>
+  <tr><td>Home</td><td>On</td></tr>
+  <tr><td>Window size</td><td>1100 × 760 pixels</td></tr>
+</table></div>
+
+<h2 id="api-key">The API key</h2>
+<p>Nyerat looks for the API key in the <code>DEEPSEEK_API_KEY</code> environment variable, then in the keyring, then in the fallback file. Enter or replace the key from the gear icon in the Assistant panel.</p>
+</main>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

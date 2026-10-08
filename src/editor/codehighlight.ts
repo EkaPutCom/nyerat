@@ -1,17 +1,17 @@
-// Mewarnai isi blok kode sesuai bahasanya (```js, ```python, ...).
+// Colors the contents of code blocks according to their language (```js, ```python, ...).
 //
-// Pewarnaannya dikerjakan GtkSourceView sendiri, yang sudah punya definisi untuk
-// ratusan bahasa dan beberapa skema warna:
+// The coloring is done by GtkSourceView itself, which already has definitions for
+// hundreds of languages and several color schemes:
 //
-//   1. Isi blok disalin ke GtkSource.Buffer tersembunyi (satu per bahasa) yang
-//      bahasanya sudah diset, lalu ensure_highlight() menyorotinya saat itu juga.
-//   2. Tag hasil sorotan dibaca rentang demi rentang, lalu gayanya (warna, tebal,
-//      miring, ...) diringkas menjadi "segmen".
-//   3. Setiap gaya yang berbeda mendapat satu tag "syntax:..." di buffer editor,
-//      dan segmen dipasang dengan tag itu.
+//   1. The block contents are copied into a hidden GtkSource.Buffer (one per language) whose
+//      language is already set, then ensure_highlight() highlights it right away.
+//   2. The highlight tags are read range by range, then their style (color, bold,
+//      italic, ...) is condensed into "segments".
+//   3. Each distinct style gets one "syntax:..." tag in the editor buffer,
+//      and the segments are applied with that tag.
 //
-// Segmen disimpan di cache per (skema, bahasa, isi blok). Mengetik di luar blok
-// kode, atau di blok lain, tidak membuat blok ini disorot ulang.
+// Segments are stored in a cache per (scheme, language, block contents). Typing outside a code
+// block, or in another block, does not make this block get highlighted again.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GtkSource from 'gi://GtkSource?version=5';
@@ -21,10 +21,10 @@ import GLib from 'gi://GLib';
 import type { CodeBlock } from './highlighter.js';
 import { setTagGroup, type Range } from './tagsync.js';
 
-const CACHE_LIMIT = 300;  // jumlah blok yang disimpan; cache dikosongkan jika lebih
+const CACHE_LIMIT = 300;  // number of blocks kept; the cache is cleared if exceeded
 
-// Nama bahasa yang lazim ditulis setelah ``` → id bahasa GtkSourceView.
-// Nama lain dicoba langsung sebagai id, lalu sebagai ekstensi file (rs, kt, ...).
+// Language names commonly written after ``` → GtkSourceView language id.
+// Other names are tried directly as an id, then as a file extension (rs, kt, ...).
 const ALIASES: Record<string, string> = {
     javascript: 'js', mjs: 'js', cjs: 'js', node: 'js',
     ts: 'typescript', tsx: 'typescript-jsx',
@@ -41,14 +41,14 @@ export function resolveLanguage(name: string): GtkSource.Language | null {
     if (!name) return null;
     const manager = GtkSource.LanguageManager.get_default();
     const id = name.toLowerCase();
-    return manager.get_language(ALIASES[id] ?? id) ?? manager.guess_language(`berkas.${id}`, null);
+    return manager.get_language(ALIASES[id] ?? id) ?? manager.guess_language(`file.${id}`, null);
 }
 
-// Rentang bergaya di dalam satu blok: [awal, akhir, kunci gaya] (offset code point).
+// Styled range inside one block: [start, end, style key] (code point offsets).
 type Segment = [start: number, end: number, style: string];
 
-// Gaya yang disalin dari tag GtkSourceView. Latar belakang sengaja tidak disalin,
-// supaya blok kode tetap memakai latar dari tema aplikasi.
+// Styles copied from GtkSourceView tags. The background is deliberately not copied,
+// so code blocks keep using the background from the app theme.
 interface Style {
     foreground?: string;
     weight?: Pango.Weight;
@@ -59,7 +59,7 @@ interface Style {
 
 function styleOf(tags: Gtk.TextTag[]): Style {
     const style: Style = {};
-    // Tag dengan prioritas lebih tinggi menimpa yang lebih rendah.
+    // A tag with higher priority overrides one with lower priority.
     for (const tag of [...tags].sort((a, b) => a.get_priority() - b.get_priority())) {
         if (tag.foreground_set && tag.foreground_rgba) style.foreground = tag.foreground_rgba.to_string() ?? undefined;
         if (tag.weight_set) style.weight = tag.weight;
@@ -90,19 +90,19 @@ function spanAttributes(style: Style): string {
 }
 
 export class CodeHighlighter {
-    // Dipanggil setiap tag gaya baru dibuat, supaya pemanggil bisa menaikkan
-    // prioritas tag yang harus tetap di atas (misalnya 'dim' dan 'hidden').
+    // Called every time a new style tag is created, so the caller can raise
+    // the priority of tags that must stay on top (e.g. 'dim' and 'hidden').
     onTagAdded: () => void = () => {};
 
     private applied: CodeBlock[] | null = null;
     private scheme: GtkSource.StyleScheme | null = null;
-    private scratch = new Map<string, GtkSource.Buffer>();   // id bahasa → buffer tersembunyi
+    private scratch = new Map<string, GtkSource.Buffer>();   // language id → hidden buffer
     private cache = new Map<string, Segment[]>();
-    private styleTags = new Map<string, Gtk.TextTag>();      // kunci gaya → tag
+    private styleTags = new Map<string, Gtk.TextTag>();      // style key → tag
 
     constructor(private readonly buffer: Gtk.TextBuffer) {}
 
-    // Ganti skema warna (dipanggil saat tema terang/gelap berubah).
+    // Change the color scheme (called when the light/dark theme changes).
     setScheme(id: string): void {
         const scheme = GtkSource.StyleSchemeManager.get_default().get_scheme(id);
         if (scheme === this.scheme) return;
@@ -110,16 +110,16 @@ export class CodeHighlighter {
         for (const scratch of this.scratch.values()) scratch.set_style_scheme(scheme);
         this.applied = null;
         this.cache.clear();
-        // Tag lama memakai warna skema lama; buang dari buffer.
+        // Old tags use the old scheme's colors; remove them from the buffer.
         const table = this.buffer.get_tag_table();
         for (const tag of this.styleTags.values()) table.remove(tag);
         this.styleTags.clear();
     }
 
-    // Warnai semua blok kode. Dipanggil setelah highlighter.ts selesai.
+    // Color all code blocks. Called after highlighter.ts finishes.
     apply(blocks: CodeBlock[], force = true): void {
-        // GTK mempertahankan tag saat teks di luar blok berubah. Hindari membaca
-        // semua rentang tag lagi jika isi blok tetap sama, meski offset bergeser.
+        // GTK keeps tags when text outside the block changes. Avoid reading
+        // all tag ranges again if the block contents are the same, even if the offset shifts.
         if (!force && this.applied && blocks.length === this.applied.length && blocks.every((b, i) => {
             const old = this.applied![i];
             return b.lang === old.lang && b.text === old.text;
@@ -139,8 +139,8 @@ export class CodeHighlighter {
         setTagGroup(this.buffer, this.styleTags.values(), wanted);
     }
 
-    // Isi blok sebagai markup Pango berwarna, untuk blok kode yang dirender sebagai widget
-    // (codelayer.ts). Memakai segmen dan cache yang sama dengan apply().
+    // Block contents as colored Pango markup, for code blocks rendered as a widget
+    // (codelayer.ts). Uses the same segments and cache as apply().
     markup(lang: string, code: string): string {
         const chars = Array.from(code);
         const text = (a: number, b: number) => GLib.markup_escape_text(chars.slice(a, b).join(''), -1);
@@ -175,7 +175,7 @@ export class CodeHighlighter {
             const key = JSON.stringify(styleOf(tags));
             if (key === '{}') continue;
             const last = segments[segments.length - 1];
-            if (last && last[1] === from && last[2] === key) last[1] = iter.get_offset();  // gabungkan yang bersambung
+            if (last && last[1] === from && last[2] === key) last[1] = iter.get_offset();  // merge adjacent ones
             else segments.push([from, iter.get_offset(), key]);
         }
 

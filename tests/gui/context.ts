@@ -1,4 +1,4 @@
-// Jendela dan alat bantu bersama untuk semua tes GUI.
+// The window and helpers shared by all GUI tests.
 
 import GLib from 'gi://GLib';
 import Adw from 'gi://Adw?version=1';
@@ -35,7 +35,7 @@ export interface GuiContext {
 }
 
 export function createContext(app: Adw.Application): GuiContext {
-    // Auto save mati: banyak tes membuka file sungguhan (dokumen contoh, README) lalu mengeditnya.
+    // Autosave off: many tests open real files (the sample document, README) and then edit them.
     const settings = AppSettings.inMemory({ welcomed: true, home: false, dark: false, autosave: false });
     const w = new MainWindow(app, settings, null);
     const ed = w.editor;
@@ -50,10 +50,10 @@ export function createContext(app: Adw.Application): GuiContext {
         buf.place_cursor(it);
         pump();
     };
-    // Posisi (code point) teks needle di dalam s.
+    // Position (code points) of the needle text inside s.
     const offsetIn = (s: string, needle: string) => {
         const i = s.indexOf(needle);
-        if (i < 0) throw new Error(`teks ${JSON.stringify(needle)} tidak ditemukan`);
+        if (i < 0) throw new Error(`text ${JSON.stringify(needle)} not found`);
         return Array.from(s.slice(0, i)).length;
     };
     const hidden = (off: number) => buf.get_iter_at_offset(off).has_tag(ed.tags.hidden);
@@ -73,11 +73,11 @@ export function createContext(app: Adw.Application): GuiContext {
     };
 
     pump();
-    // Folder gambar uji (dibuat oleh tes Gambar) dan dokumen contoh.
-    const imgDir = GLib.build_filenamev([tmp, 'gambar']);
-    const samplePath = GLib.build_filenamev([ROOT, 'tests', 'samples', 'semua-format.md']);
+    // The test image folder (created by the Image tests) and the sample document.
+    const imgDir = GLib.build_filenamev([tmp, 'images']);
+    const samplePath = GLib.build_filenamev([ROOT, 'tests', 'samples', 'all-formats.md']);
     const images = () => ed.images.blocks;
-    // Tunggu sampai semua gambar selesai dimuat.
+    // Wait until all images have finished loading.
     const waitImages = () => {
         for (let i = 0; i < 200 && images().some(b => b.items.some(it => !it.entry || it.entry.status === 'loading')); i++) {
             pump();
@@ -87,7 +87,7 @@ export function createContext(app: Adw.Application): GuiContext {
     };
 
     const diagrams = () => ed.mermaid.blocks;
-    // Tunggu sampai semua diagram selesai dirender (pertama kali bisa beberapa detik: WebKit dijalankan).
+    // Wait until all diagrams have finished rendering (the first time can take a few seconds: WebKit is started).
     const waitMermaid = () => {
         for (let i = 0; i < 3000 && diagrams().some(b => b.busy || b.timer); i++) {
             pump();

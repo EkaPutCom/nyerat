@@ -1,144 +1,144 @@
 # Nyerat
 
-Nyerat adalah **personal workbench for humans and AI agents** di desktop Linux: ruang kerja pribadi tempat Anda dan agent AI mengerjakan catatan, dokumen, riset, rencana, dan tugas dengan konteks yang sama. Agent tidak berhenti pada jawaban: ia menelusuri berkas Anda, lalu mengusulkan tindakan nyata (membuat berkas, mengubah teks, memindahkan kartu tugas) sebagai selisih yang Anda tinjau dan setujui dulu. Fondasinya editor Markdown dengan tampilan langsung terformat, papan kanban, dan riwayat Git. Dibuat dengan **GTK 4**, **GtkSourceView 5**, dan **GJS** (JavaScript untuk GNOME). Kodenya ditulis dalam **TypeScript** dan dibundel dengan **Vite**.
+Nyerat is a **personal workbench for humans and AI agents** on the Linux desktop: a personal workspace where you and an AI agent work on notes, documents, research, plans, and tasks with the same context. The agent does not stop at an answer: it browses your files, then proposes real actions (creating a file, changing text, moving a task card) as a diff that you review and approve first. Its foundation is a Markdown editor with a live formatted view, a kanban board, and Git history. Built with **GTK 4**, **GtkSourceView 5**, and **GJS** (JavaScript for GNOME). The code is written in **TypeScript** and bundled with **Vite**.
 
-Tidak ada panel pratinjau terpisah: teks langsung tampil terformat. Sintaks Markdown seperti `#`, `**`, `` ` `` dan `[](url)` disembunyikan, lalu muncul lagi saat kursor berada di baris tersebut.
+There is no separate preview panel: the text is shown formatted right away. Markdown syntax such as `#`, `**`, `` ` `` and `[](url)` is hidden, and appears again when the cursor is on that line.
 
-Landing page-nya ada di [`docs/`](docs/index.html) dan hanya menampilkan fitur agent; dokumentasi fitur lengkap per topik ada di [`docs/docs/`](docs/docs/index.html) (HTML statis; aktifkan GitHub Pages dari folder `/docs` pada branch `main` untuk menayangkannya). Tangkapan layar dibuat oleh [`scripts/capture.ts`](scripts/capture.ts).
+Its landing page is in [`docs/`](docs/index.html) and only shows the agent features; the complete feature documentation per topic is in [`docs/docs/`](docs/docs/index.html) (static HTML; enable GitHub Pages from the `/docs` folder of the `main` branch to publish it). The screenshots are made by [`scripts/capture.ts`](scripts/capture.ts).
 
 ## Goal: personal workbench for humans and AI agents
 
-Tujuan Nyerat adalah menjadi ruang kerja pribadi tempat pengguna dan agent AI bekerja dengan konteks yang sama: catatan, dokumen, riset, keputusan, rencana, dan tugas dalam satu folder kerja. Agent membantu memahami informasi, menyusun rencana, dan menuntaskan pekerjaan dengan hasil yang dapat diperiksa pengguna. Menulis tetap menjadi salah satu alur kerja utama. Prinsip pengembangannya:
+The goal of Nyerat is to be a personal workspace where the user and an AI agent work with the same context: notes, documents, research, decisions, plans, and tasks in one work folder. The agent helps to understand information, make plans, and finish work with results that the user can check. Writing remains one of the main workflows. The principles of its development:
 
-- **Konteks datang dari ruang kerja.** Dokumen yang terbuka (termasuk yang belum disimpan), pilihan, posisi kursor, dan peta seluruh folder disusun otomatis; model juga menelusuri berkas sendiri dengan alat baca-saja
-- **Transparan.** Setiap jawaban memperlihatkan konteks apa yang dikirim, penelusuran apa yang dilakukan, dan berapa token yang terpakai
-- **Pengguna memegang kendali.** Agent membaca bebas, tetapi tidak pernah menulis sendiri: ia hanya bisa mengusulkan berkas baru atau perubahan, dan berkas baru tersentuh setelah Anda menekan *Terapkan* pada selisihnya. Kemampuan tindakan berikutnya harus menyediakan batas akses yang jelas dan hasil yang dapat ditinjau; tindakan yang membutuhkan persetujuan menunggu persetujuan pengguna. Dokumen yang dikirim ke penyedia model bisa dibatasi lewat saklar, dan API key milik Anda sendiri
-- **Teks tetap milik Anda.** Semua berupa Markdown biasa di berkas biasa (bisa di-diff dan di-commit ke Git); tanpa format tertutup dan tanpa akun
+- **The context comes from the workspace.** The open documents (including unsaved ones), the selection, the cursor position, and a map of the whole folder are assembled automatically; the model also browses files by itself with read-only tools
+- **Transparent.** Every answer shows what context was sent, what lookups were made, and how many tokens were used
+- **The user stays in control.** The agent reads freely, but never writes by itself: it can only propose new files or changes, and files are only touched after you press *Apply* on the diff. Later action capabilities must provide a clear access boundary and a result that can be reviewed; an action that needs approval waits for the user's approval. The documents sent to the model provider can be limited through switches, and the API key is your own
+- **The text stays yours.** Everything is plain Markdown in plain files (they can be diffed and committed to Git); no closed format and no account
 
-Keadaan sekarang: editor Markdown, kanban, riwayat Git, dan agent berbasis DeepSeek yang menelusuri dokumen, menjawab dengan kutipan berkas dan nomor baris, membaca riwayat Git folder kerja (`riwayat_git`, `lihat_commit`, `isi_versi`), serta mengusulkan tindakan yang disetujui lewat jendela tinjau: berkas baru (`buat_berkas`), penggantian teks (`ubah_berkas`, satu kemunculan atau semuanya), sisipan teks (`sisip_teks`), membuang dan memindah berkas (`hapus_berkas`, `pindah_berkas`), dan perubahan papan kanban (`ubah_kanban`: kartu dan daftar). Agent tidak menulis berkas kerja tanpa persetujuan Anda; paket boleh diterapkan sebagian, keputusan bisa disertai catatan untuk agent, dan perubahan yang sudah diterapkan bisa diurungkan dari panel. Rencana pekerjaan (`atur_pekerjaan`), paket perubahan (`usulkan_paket`), pemeriksaan hasil (`verifikasi_pekerjaan`), dan journal tindakan tersimpan bersama percakapan. Pekerjaan tertunda dapat dilanjutkan setelah aplikasi dibuka lagi.
+The current state: a Markdown editor, kanban, Git history, and a DeepSeek-based agent that browses documents, answers with quotes of the file and the line number, reads the Git history of the work folder (`git_log`, `show_commit`, `file_at_commit`), and proposes actions that are approved through the review window: new files (`create_file`), text replacement (`edit_file`, one occurrence or all of them), text insertion (`insert_text`), removing and moving files (`delete_file`, `move_file`), and changes to a kanban board (`edit_kanban`: cards and lists). The agent does not write work files without your approval; a batch may be applied partially, a decision can come with a note for the agent, and a change that has been applied can be undone from the panel. The work plan (`set_work`), change batches (`propose_batch`), the check of the result (`verify_work`), and the action journal are stored together with the conversation. Pending work can be resumed after the app is opened again.
 
-Nyerat juga bisa menjadi **orkestrator harness eksternal**: kartu kanban yang ditugaskan ke `@pi` dikerjakan [pi](https://pi.dev) di folder proyek lain (misalnya repo `~/web-ecommerce`), bukan di folder kerja Nyerat. Nyerat menyusun prompt dari kartu, menjalankan harness, memindahkan kartu ke *Dikerjakan* lalu *Review*, mencatat ringkasan hasilnya di kartu, dan menampilkan log alat yang dipanggil. Saat pi bertanya atau meminta izin, kartunya berstatus *menunggu* dan Anda menjawab langsung dari Nyerat. Satu proyek dikerjakan satu harness sekaligus; kartu lain mengantre.
+Nyerat can also be an **orchestrator of external harnesses**: a kanban card assigned to `@pi` is worked on by [pi](https://pi.dev) in another project folder (for example the repo `~/web-ecommerce`), not in the Nyerat work folder. Nyerat builds the prompt from the card, runs the harness, moves the card to *In Progress* and then *Review*, records a summary of the result on the card, and shows the log of the tools that were called. When pi asks a question or asks for permission, the card gets the status *waiting* and you answer straight from Nyerat. One project is worked on by one harness at a time; other cards queue.
 
-Arah pengembangan berikutnya: memperluas sumber konteks dan menambah tindakan lain yang tetap dapat ditinjau dan dikendalikan. Belum tersedia: pemeriksaan konsistensi otomatis, tindakan agent Nyerat sendiri di luar Markdown (misalnya menjalankan perintah; itu hanya dilakukan harness eksternal yang dijalankan pengguna dari kartu), dan penyedia model selain DeepSeek (lihat *Keterbatasan*).
+The next direction of development: expanding the context sources and adding other actions that stay reviewable and controllable. Not available yet: an automatic consistency check, actions by the Nyerat agent itself outside Markdown (for example running commands; that is only done by an external harness that the user runs from a card), and model providers other than DeepSeek (see *Limitations*).
 
-### Contoh alur kerja
+### An example workflow
 
-Folder kerja contoh: proyek peluncuran produk dengan `rencana/peluncuran.md`, `catatan/rapat-1-okt.md`, folder `riset/`, dan papan `tugas.md`.
+A sample work folder: a product launch project with `plans/launch.md`, `notes/meeting-1-oct.md`, a `research/` folder, and a `tasks.md` board.
 
-1. **Tanya.** *"Adakah keputusan rapat yang belum masuk ke rencana peluncuran?"* Agent menelusuri berkas, lalu menjawab dengan kutipan berkas dan nomor baris: rapat 1 Oktober mengundur rilis ke 22 November, sedangkan rencana masih 15 November.
-2. **Minta bertindak.** *"Perbarui tanggal rilisnya dan pindahkan kartu materi rilis ke Dikerjakan."* Agent mengusulkan dua perubahan: satu penggantian teks di rencana dan satu pemindahan kartu di papan.
-3. **Tinjau dan putuskan.** Tiap usulan membuka jendela tinjau berisi selisih bergaya diff Git. Tekan *Terapkan* atau *Tolak*; perubahan di editor bisa di-undo, dan berkas yang berubah sejak diusulkan ditolak.
+1. **Ask.** *"Is there a meeting decision that has not made it into the launch plan yet?"* The agent browses the files, then answers with quotes of the file and the line number: the 1 October meeting postponed the release to 22 November, while the plan still says 15 November.
+2. **Ask it to act.** *"Update the release date and move the release material card to In Progress."* The agent proposes two changes: one text replacement in the plan and one card move on the board.
+3. **Review and decide.** Every proposal opens a review window with a diff in the style of a Git diff. Press *Apply* or *Reject*; a change in the editor can be undone, and a file that changed since it was proposed is rejected.
 
-![Agent memperbarui rencana dan papan tugas setelah disetujui](docs/assets/agent-selesai.png)
+![The agent updates the plan and the task board after approval](docs/assets/agent-done.png)
 
-![Jendela tinjau usulan memindahkan kartu kanban](docs/assets/usulan-kanban.png)
+![The proposal review window moving a kanban card](docs/assets/proposal-kanban.png)
 
-## Arti nama
+## The meaning of the name
 
-**Nyerat** berasal dari kata dalam bahasa Sunda dan Jawa yang berarti *menulis*. Menulis menjadi fondasi ruang kerja ini: catatan, rencana, dan hasil kerja tetap tersimpan sebagai dokumen yang mudah dibaca dan disunting, dengan tampilan bersih agar pengguna bisa fokus pada pekerjaannya.
+**Nyerat** comes from a word in Sundanese and Javanese that means *to write*. Writing is the foundation of this workspace: notes, plans, and work results stay stored as documents that are easy to read and edit, with a clean appearance so that the user can focus on their work.
 
-## Kebutuhan
+## Requirements
 
-- Linux dengan desktop X11 atau Wayland
-- GJS (diuji dengan versi 1.80)
-- libadwaita 1 (diuji dengan 1.5) untuk tampilan GNOME native: header bar, tema terang/gelap mengikuti Gaya Gelap sistem, tata letak adaptif, dan dialog Tentang. Di libadwaita yang lebih baru Nyerat memakai fiturnya bila ada: warna aksen sistem (≥ 1.6) dan `Adw.ShortcutsDialog` (≥ 1.8, GNOME 49+). Jalur itu belum diuji di mesin pengembangan (Ubuntu 24.04, libadwaita 1.5); untuk memakainya, jalankan lewat Flatpak dengan runtime GNOME 50 (lihat [Memasang](#memasang)).
-- GTK 4 (diuji dengan 4.14) dan GtkSourceView 5. Pustaka GTK 4 biasanya sudah ada di desktop modern (juga di XFCE, yang sendiri memakai GTK 3); yang perlu dipasang hanya binding GObject Introspection-nya. GTK 3 dan GTK 4 terpasang berdampingan tanpa saling mengganti.
-- WebKitGTK 6.0 dengan binding GObject Introspection (`gir1.2-webkit-6.0` di Debian/Ubuntu), **hanya untuk diagram Mermaid dan DBML**; tanpanya aplikasi tetap berjalan dan diagram menampilkan pesan galat
-- Node.js 20.19+ pada seri 20, atau 22.12+ (syarat Vite), **hanya untuk build** (diuji dengan Node.js 24). Aplikasinya sendiri dijalankan GJS, bukan Node.js.
+- Linux with an X11 or Wayland desktop
+- GJS (tested with version 1.80)
+- libadwaita 1 (tested with 1.5) for the native GNOME appearance: the header bar, a light/dark theme that follows the system Dark Style, an adaptive layout, and the About dialog. On a newer libadwaita Nyerat uses its features if they exist: the system accent color (≥ 1.6) and `Adw.ShortcutsDialog` (≥ 1.8, GNOME 49+). That path has not been tested on the development machine (Ubuntu 24.04, libadwaita 1.5); to use it, run through Flatpak with the GNOME 50 runtime (see [Installing](#installing)).
+- GTK 4 (tested with 4.14) and GtkSourceView 5. The GTK 4 libraries are usually already on a modern desktop (also on XFCE, which itself uses GTK 3); only its GObject Introspection bindings need to be installed. GTK 3 and GTK 4 are installed side by side without replacing each other.
+- WebKitGTK 6.0 with the GObject Introspection bindings (`gir1.2-webkit-6.0` on Debian/Ubuntu), **only for Mermaid and DBML diagrams**; without it the app keeps running and diagrams show an error message
+- Node.js 20.19+ on the 20 series, or 22.12+ (a requirement of Vite), **only for the build** (tested with Node.js 24). The app itself is run by GJS, not Node.js.
 
-Di Ubuntu/Debian:
+On Ubuntu/Debian:
 
 ```bash
 sudo apt install gjs gir1.2-gtk-4.0 gir1.2-gtksource-5 gir1.2-adw-1
 ```
 
-Untuk diagram, tambahkan dependensi opsional:
+For diagrams, add the optional dependency:
 
 ```bash
 sudo apt install gir1.2-webkit-6.0
 ```
 
-Untuk **asisten (chat dengan AI)**, tambahkan libsoup 3 (hampir pasti sudah ada karena dipakai WebKitGTK) dan, opsional, libsecret untuk menyimpan API key di keyring:
+For the **assistant (chat with the AI)**, add libsoup 3 (almost certainly already there because WebKitGTK uses it) and, optionally, libsecret to store the API key in the keyring:
 
 ```bash
 sudo apt install gir1.2-soup-3.0 gir1.2-secret-1
 ```
 
-Tanpa libsoup hanya asisten yang tidak berfungsi; tanpa libsecret, key disimpan di file berizin 0600.
+Without libsoup only the assistant does not work; without libsecret, the key is stored in a file with 0600 permissions.
 
-Gambar dari internet dimuat melalui GIO dan memerlukan backend HTTP/HTTPS GVfs yang tersedia pada sistem.
+Images from the internet are loaded through GIO and need the GVfs HTTP/HTTPS backend that is available on the system.
 
-## Menjalankan
+## Running
 
-Sekali saja, pasang dependensi pengembangan (Vite, TypeScript, dan tipe GJS/GTK):
+Just once, install the development dependencies (Vite, TypeScript, and the GJS/GTK types):
 
 ```bash
 npm install
 ```
 
-Build lalu jalankan:
+Build and then run:
 
 ```bash
 npm start
 ```
 
-Setelah di-build, aplikasi bisa dijalankan langsung tanpa npm, termasuk untuk membuka file tertentu (file yang belum ada akan dibuat saat disimpan):
+After it is built, the app can be run directly without npm, including to open a specific file (a file that does not exist yet will be created when it is saved):
 
 ```bash
-gjs -m dist/nyerat.js rencana.md
+gjs -m dist/nyerat.js plan.md
 ```
 
-Aplikasi memakai argumen pertama yang bukan opsi sebagai path file atau folder. Setiap pemanggilan membuka proses dan jendela sendiri; di dalam jendela itu file lain dibuka sebagai tab. Tanpa argumen, tab berfile yang terbuka saat jendela terakhir ditutup dibuka lagi. Pada pembukaan pertama tanpa file, editor menampilkan dokumen contoh; jika tidak ada tab untuk dipulihkan, pembukaan berikutnya dimulai dengan dokumen kosong.
+The app uses the first argument that is not an option as a file or folder path. Every invocation opens its own process and window; inside that window other files are opened as tabs. Without an argument, the tabs with files that were open when the last window was closed are opened again. On the first opening without a file, the editor shows a sample document; if there are no tabs to restore, the next openings start with an empty document.
 
-Atau membuka sebuah folder, yang isinya tampil di tab Berkas:
+Or open a folder, whose contents appear in the Files tab:
 
 ```bash
-gjs -m dist/nyerat.js ~/catatan
+gjs -m dist/nyerat.js ~/notes
 ```
 
-| Perintah | Fungsi |
+| Command | Function |
 | --- | --- |
-| `npm run build` | Periksa tipe (`tsc --noEmit`), lalu bundel dengan Vite ke `dist/` |
-| `npm run dev` | Mode pengembangan: build ulang, periksa tipe, dan buka ulang aplikasi setiap file disimpan |
-| `npm run watch` | Hanya build ulang otomatis setiap file disimpan, tanpa membuka aplikasi dan tanpa pemeriksaan tipe |
-| `npm run typecheck` | Hanya periksa tipe |
-| `npm start` | Build, lalu jalankan aplikasi |
-| `npm test` | Build, lalu jalankan semua tes unit, GUI, dan mouse kanban di Xvfb |
-| `npm run test:ui` | Build, lalu jalankan rangkaian tes yang sama di desktop X11 |
-| `npm run test:live` | Build, lalu jalankan tes langsung ke API DeepSeek atas naskah contoh (butuh `DEEPSEEK_API_KEY` di `.env`, lihat `.env.example`; tidak ikut `npm test`) |
-| `npm run bench` | Build, lalu ukur performa modul Markdown dan editor (setText, penyorotan, mengetik) di Xvfb; opsi: `--size=`, `--runs=`, `--budget=`, `--no-gui` |
-| `npm run bench:save` | Jalankan benchmark dan simpan hasilnya ke `bench/<tanggal-waktu>.json` |
-| `npm run bench:compare` | Jalankan benchmark dan tampilkan selisih terhadap [`bench/baseline.json`](bench/baseline.json) (hijau = lebih cepat, merah = lebih lambat, abu-abu = selisih < 25%, derau pengukuran) |
-| `npm run docs` | Potret aplikasi sungguhan (jendela akan terbuka sebentar), lalu perbarui PNG dan GIF di `docs/assets/` untuk landing page |
-| `npm run pot` | Buat templat terjemahan `po/nyerat.pot` dari berkas di `po/POTFILES.in` |
+| `npm run build` | Check the types (`tsc --noEmit`), then bundle with Vite into `dist/` |
+| `npm run dev` | Development mode: rebuild, check the types, and reopen the app every time a file is saved |
+| `npm run watch` | Only rebuild automatically every time a file is saved, without opening the app and without the type check |
+| `npm run typecheck` | Only check the types |
+| `npm start` | Build, then run the app |
+| `npm test` | Build, then run all the unit, GUI, and kanban mouse tests on Xvfb |
+| `npm run test:ui` | Build, then run the same test suite on the X11 desktop |
+| `npm run test:live` | Build, then run live tests against the DeepSeek API on the sample manuscript (needs `DEEPSEEK_API_KEY` in `.env`, see `.env.example`; not part of `npm test`) |
+| `npm run bench` | Build, then measure the performance of the Markdown module and the editor (setText, highlighting, typing) on Xvfb; options: `--size=`, `--runs=`, `--budget=`, `--no-gui` |
+| `npm run bench:save` | Run the benchmark and save the result to `bench/<date-time>.json` |
+| `npm run bench:compare` | Run the benchmark and show the difference against [`bench/baseline.json`](bench/baseline.json) (green = faster, red = slower, gray = a difference < 25%, measurement noise) |
+| `npm run docs` | Take screenshots of the real app (a window opens briefly), then update the PNGs and GIFs in `docs/assets/` for the landing page |
+| `npm run pot` | Make the translation template `po/nyerat.pot` from the files in `po/POTFILES.in` |
 
-Hasil optimasi dan batas cakupannya dicatat di [laporan performa](bench/PERFORMANCE.md). Biaya paket, verifikasi, dan checkpoint dicatat di [pemeriksaan performa agentic](bench/AGENTIC.md).
+The results of the optimizations and the limits of their coverage are recorded in the [performance report](bench/PERFORMANCE.md). The cost of batches, verification, and checkpoints is recorded in the [agentic performance check](bench/AGENTIC.md).
 
-Benchmark memakai 10 pengulangan setelah pemanasan. Hasil menampilkan median, p95,
-dan maksimum dalam milidetik; `--save=...` menyimpan sampel mentah, commit, serta versi
-GJS/GLib/GTK dan lingkungan. `--compare=...` hanya membandingkan format, ukuran,
-pengulangan, jenis dokumen, mode, dan lingkungan yang setara. Baseline format lama perlu dibuat ulang.
+The benchmark uses 10 repetitions after warm-up. The results show the median, p95,
+and maximum in milliseconds; `--save=...` stores the raw samples, the commit, and the versions of
+GJS/GLib/GTK and the environment. `--compare=...` only compares an equivalent format, size,
+repetitions, kind of document, mode, and environment. A baseline in an old format needs to be made again.
 
-Skenario GUI mencakup membuka teks (total sampai tata letak selesai dan jeda terpanjang
-main loop, yaitu yang terasa sebagai "membeku"), penyorotan ulang, mengetik (total 20
-karakter, latensi per karakter, dan lewat sinyal keybinding TextView di akhir paragraf
-panjang), Enter, perpindahan kursor, paste besar dengan emoji dan baris panjang,
-hapus, undo, redo, serta auto save (tulis sinkron dan bagian thread utama auto save latar). Setiap suntingan diverifikasi melalui callback penyorotan.
-`--budget=...` berlaku pada median operasi GUI; untuk mengetik, budget berlaku per
-karakter. Kegagalan pengukuran mengembalikan kode 1 dan mencegah penyimpanan hasil
-parsial; hasil lengkap yang melampaui budget tetap dapat disimpan untuk diagnosis.
-Tiap proses GUI dibatasi 120 detik (`--timeout=...`), menggunakan `timeout` dari
-GNU coreutils, agar callback yang terblokir GC tidak membuat runner menunggu tanpa batas.
-Ukuran GUI dapat diatur dengan `--sizes=25,50,100`; `--size` mengatur ukuran modul
-Markdown. `--fixture=long --size=2000 --sizes=2000` menguji dokumen 20.000 baris
-tanpa grid tabel, dan `--fixture=buku --size=400 --sizes=50,200,400` menguji naskah buku
-(paragraf panjang yang dibungkus, dialog, *miring*/**tebal**, ±1,6 KB per blok; 400 blok ≈ 650 KB,
-sekitar 100.000 kata); jenis dokumen bawaan adalah `mixed`. Rendering gambar/diagram asinkron dan interaksi papan kanban belum diukur;
-kanban saat ini mencakup parsing dan serialisasi model.
+The GUI scenarios cover opening text (the total until the layout finishes and the longest main
+loop pause, which is what feels like "freezing"), re-highlighting, typing (the total of 20
+characters, the latency per character, and through the TextView keybinding signal at the end of a long
+paragraph), Enter, moving the cursor, a large paste with emoji and a long line,
+delete, undo, redo, and autosave (the synchronous write and the main thread part of the background autosave). Every edit is verified through the highlighting callback.
+`--budget=...` applies to the median of GUI operations; for typing, the budget applies per
+character. A failed measurement returns exit code 1 and prevents saving a
+partial result; a complete result that exceeds the budget can still be saved for diagnosis.
+Every GUI process is limited to 120 seconds (`--timeout=...`), using `timeout` from
+GNU coreutils, so that a callback blocked by GC does not make the runner wait without limit.
+The GUI sizes can be set with `--sizes=25,50,100`; `--size` sets the size of the Markdown
+module. `--fixture=long --size=2000 --sizes=2000` tests a document of 20,000 lines
+without table grids, and `--fixture=book --size=400 --sizes=50,200,400` tests a book manuscript
+(long wrapped paragraphs, dialogue, *italic*/**bold**, ±1.6 KB per block; 400 blocks ≈ 650 KB,
+about 100,000 words); the default kind of document is `mixed`. Asynchronous image/diagram rendering and kanban board interactions have not been measured;
+kanban currently covers the parsing and serialization of the model.
 
-### Memasang
+### Installing
 
-`npm start` menjalankan aplikasi langsung dari `dist/` tanpa dipasang (schema GSettings dan ikon dibaca dari folder bundel). Untuk memasangnya ke sistem bersama berkas desktop, metainfo AppStream, ikon, schema, dan terjemahan, pakai Meson setelah build:
+`npm start` runs the app straight from `dist/` without installing it (the GSettings schema and the icons are read from the bundle folder). To install it on the system together with the desktop file, the AppStream metainfo, the icons, the schema, and the translations, use Meson after the build:
 
 ```bash
 npm ci && npm run build
@@ -146,664 +146,664 @@ meson setup _build --prefix=/usr
 meson install -C _build
 ```
 
-Manifest Flatpak dengan runtime GNOME 50 ada di [`build-aux/flatpak/com.ekaput.Nyerat.json`](build-aux/flatpak/com.ekaput.Nyerat.json):
+The Flatpak manifest with the GNOME 50 runtime is in [`build-aux/flatpak/com.ekaput.Nyerat.json`](build-aux/flatpak/com.ekaput.Nyerat.json):
 
 ```bash
 flatpak-builder --user --install --force-clean _flatpak build-aux/flatpak/com.ekaput.Nyerat.json
 ```
 
-Manifest ini mengunduh dependensi npm saat build (`--share=network`), jadi cocok untuk build lokal; Flathub membutuhkan sumber npm yang dibangkitkan (`flatpak-node-generator`). Meson dan Flatpak belum diuji di mesin pengembangan (keduanya tidak terpasang); `desktop-file-validate` dan `appstreamcli validate` sudah lulus.
+This manifest downloads the npm dependencies during the build (`--share=network`), so it is suitable for a local build; Flathub needs generated npm sources (`flatpak-node-generator`). Meson and Flatpak have not been tested on the development machine (neither is installed); `desktop-file-validate` and `appstreamcli validate` have passed.
 
-### Terjemahan
+### Translations
 
-Bahasa sumber antarmuka adalah Indonesia. Teks di kode dibungkus `_()` (atau `fmt(_('… {nama} …'), { nama })` untuk teks berisi nilai, `pgettext()` bila perlu konteks) dari `src/i18n.ts`; teks di berkas `.ui` diberi `translatable="yes"`. Untuk menambah bahasa: `npm run pot`, salin `po/nyerat.pot` menjadi `po/<kode>.po`, terjemahkan, lalu tambahkan kodenya ke `po/LINGUAS`. Meson mengompilasi terjemahan ke `<prefix>/share/locale`; dari `dist/`, katalog dicari di `locale/` di akar repo.
+The source language of the interface is English. Text in the code is wrapped in `_()` (or `fmt(_('… {name} …'), { name })` for text that contains values, `pgettext()` when a context is needed) from `src/i18n.ts`; text in `.ui` files is given `translatable="yes"`. To add a language: `npm run pot`, copy `po/nyerat.pot` to `po/<code>.po`, translate it, and then add its code to `po/LINGUAS`. Meson compiles the translations into `<prefix>/share/locale`; from `dist/`, the catalogs are looked up in `locale/` at the root of the repo.
 
-### Mode pengembangan
+### Development mode
 
 ```bash
 npm run dev
 ```
 
-Setiap ada file di `src/` atau `tests/` yang disimpan, `npm run dev` mem-build ulang lalu menutup dan membuka lagi aplikasinya. GJS tidak bisa memuat ulang kode yang sedang berjalan (tidak ada HMR seperti di browser), jadi membuka ulang aplikasi adalah cara untuk melihat perubahan. Bersamaan dengan itu, `tsc --watch` memeriksa tipe dan melaporkan kesalahannya di terminal yang sama dengan label `[tipe]`.
+Every time a file in `src/` or `tests/` is saved, `npm run dev` rebuilds and then closes and reopens the app. GJS cannot reload code that is running (there is no HMR like in a browser), so reopening the app is the way to see a change. At the same time, `tsc --watch` checks the types and reports its errors in the same terminal with the label `[types]`.
 
-- Jika build gagal (misalnya ada kesalahan sintaks), aplikasi yang lama tetap berjalan sampai kesalahannya diperbaiki.
-- Kesalahan tipe hanya dilaporkan, tidak menghentikan build. Vite tetap bisa mem-build kode yang tipenya salah, jadi aplikasi tetap dibuka ulang. Perhatikan baris `[tipe]` di terminal.
-- Argumen setelah `--` diteruskan ke aplikasi, misalnya `npm run dev -- catatan.md` atau `npm run dev -- ~/catatan`.
-- **Perubahan di editor yang belum disimpan hilang** setiap kali aplikasi dibuka ulang.
-- `Ctrl+C` menghentikan semuanya (build, pemeriksaan tipe, dan aplikasi).
+- If the build fails (for example there is a syntax error), the old app keeps running until the error is fixed.
+- A type error is only reported, it does not stop the build. Vite can still build code whose types are wrong, so the app is still reopened. Watch the `[types]` lines in the terminal.
+- Arguments after `--` are passed on to the app, for example `npm run dev -- notes.md` or `npm run dev -- ~/notes`.
+- **Unsaved changes in the editor are lost** every time the app is reopened.
+- `Ctrl+C` stops everything (the build, the type check, and the app).
 
-Script-nya ada di [`scripts/dev.mjs`](scripts/dev.mjs). Script ini memakai API `build()` milik Vite dalam mode watch, lalu membuka ulang aplikasi setiap event `END`, kecuali jika putaran build itu gagal.
+The script is in [`scripts/dev.mjs`](scripts/dev.mjs). This script uses the `build()` API of Vite in watch mode, and then reopens the app on every `END` event, unless that build round failed.
 
-## Fitur
+## Features
 
-**Penulisan langsung terformat**
-- Heading, **tebal**, *miring*, ~~coret~~, ==stabilo==, `kode inline`, tautan, dan gambar langsung tampil terformat
-- Blok kode, kutipan, dan garis pemisah diberi gaya (kutipan bersarang `>>` makin menjorok, sampai tiga tingkat); baris pembatas ```` ``` ```` disembunyikan di luar blok
-- **Beranda.** Tab khusus (ikon rumah) yang merangkum apa yang bisa dilanjutkan: salam menurut jam, kartu *Lanjutkan* (berkas terakhir dari folder yang berbeda-beda), *Jurnal hari ini* (jumlah catatan dan aktivitas, dengan tombol catat cepat), *Agent* yang sedang bekerja, antre, atau menunggu jawabanmu (klik untuk menjawab, melihat log, atau membuka papannya), *Tenggat* dari semua papan kanban di folder kerja (kartu belum selesai yang terlambat, jatuh tempo hari ini, besok, atau lusa, dengan nama proyek dari `#proyek/…`; kotak centang langsung menulis `[x]` ke papannya), *Inbox* yang masih punya item belum diproses, dan *Berkas terbaru*. Beranda terbuka saat aplikasi dimulai tanpa tab tersimpan dan saat tab terakhir ditutup (bisa dimatikan di Preferensi), dan lewat `Alt+Home` atau menu ☰ → *Beranda*. Datanya dihitung ulang dari berkas Markdown setiap kali Beranda ditampilkan atau jendela kembali aktif, tanpa database.
-- **Jurnal harian.** `Ctrl+Alt+J` (atau menu ☰ → *Jurnal Hari Ini*, atau baris *Jurnal hari ini* di Beranda) membuka `jurnal/YYYY-MM-DD.md` di folder kerja, dibuat dari template (*Fokus hari ini*, *Catatan*, *Aktivitas*, *Ringkasan*) bila belum ada. `Ctrl+Shift+J` mencatat satu baris berstempel jam ke bagian *Catatan* tanpa meninggalkan dokumen yang sedang dikerjakan (lewat editor bila jurnalnya terbuka, satu langkah undo). Sepanjang hari Nyerat mencatat aktivitas kerja ke `.nyerat/aktivitas/YYYY-MM-DD.jsonl`: kartu kanban yang pindah daftar, dicentang selesai, atau ditambahkan; perubahan agent yang diterapkan; dan hasil harness. Saat jurnal dibuka, aktivitas itu beserta commit Git hari itu digabung ke bagian *Aktivitas* sebagai butir berstempel jam dengan tautan `[[…]]`; penggabungan hanya menambah baris yang belum ada, jadi suntingan pengguna tidak tertimpa. Palet perintah → *Ringkas Jurnal dengan Asisten* meminta agent mengusulkan ringkasan akhir hari lewat jendela tinjau biasa
-- **Inbox.** File Markdown yang frontmatter-nya memuat `inbox: true` dibuka sebagai inbox, tempat menangkap ide, tautan, dan catatan cepat: judul `#` dan paragraf sebelum butir pertama menjadi judul dan deskripsi, setiap butir daftar menjadi satu catatan dengan `#tag` sebagai chip dan `➕ 2026-10-07 14:32` sebagai waktu tangkap (label usia "10 menit lalu", "1 jam lalu", "3 hari lalu"). Ketik di isian paling atas lalu Enter untuk menangkap cepat (catatan masuk di paling atas), *Catatan Baru* membuka dialog dengan judul, tag, dan catatan, klik catatan untuk menyunting (waktu tangkap dipertahankan), dan ✕ membuangnya. Semua perubahan ditulis ke teks Markdown (satu langkah undo); `Ctrl+Shift+B` beralih ke tampilan teks, menu ☰ → *Inbox Baru* dan klik kanan di pohon berkas → *Inbox Baru…* membuat inbox.
-- **Papan kanban ala Trello.** File Markdown yang frontmatter-nya memuat `kanban: true` dibuka sebagai papan: heading `##` menjadi daftar, item `- [ ]` menjadi kartu. Seret kartu antar daftar (atau ke posisi lain di daftar yang sama), klik kartu untuk menyunting judul dan catatannya, klik kanan untuk menu (pindahkan, naik/turun, hapus), centang untuk menandai selesai, dan tambah kartu/daftar langsung di papan. `#tag` tampil sebagai label berwarna dan `@{2026-10-20}` sebagai tanggal (merah jika lewat batas). Di dialog kartu, tenggat bisa diketik (boleh dengan jam, mis. `2026-10-20 09:00`) atau dipilih lewat tombol kalender di sebelah kolomnya (ada *Hari ini* dan *Kosongkan*); memilih tanggal mempertahankan jam yang sudah diketik. Semua perubahan ditulis ke teks Markdown-nya, dan penanda lama `kanban-plugin:` dari plugin Kanban Obsidian tetap dikenali. `Ctrl+Shift+B` beralih ke tampilan teks dan kembali; menu ☰ → *Papan Kanban Baru* membuat papan kosong (belum bernama), dan klik kanan di pohon berkas → *Papan Kanban Baru…* langsung membuatnya sebagai file di folder itu
-- **Tautan `[[catatan]]` di kartu.** Di judul kartu tampil sebagai tautan yang bisa diklik; di catatan kartu tampil sebagai baris `↗ nama` di bawah chip. Kolom catatan di dialog kartu memberi saran nama saat mengetik `[[`. Saat kartu dikerjakan pi, isi catatan yang ditautkan (atau bagian `#heading`-nya saja) disalin ke prompt sebagai konteks
-- **Kartu dikerjakan harness eksternal (pi).** Tulis `@pi` di judul kartu (atau isi *Dikerjakan oleh* di dialog sunting), lalu klik kanan → *Kerjakan dengan pi*. Proyeknya diambil dari tag kartu `#proyek/nama` atau frontmatter papan `proyek: nama`; folder proyek ditanyakan sekali lalu diingat di pengaturan (kartu tanpa proyek diberi tag dari nama foldernya). Chip kartu menunjukkan status: ◇ ditugaskan, ◌ antre, ● bekerja, ⏸ menunggu jawaban, ✓ selesai, ✕ gagal, ■ dihentikan. Saat mulai, kartu pindah ke daftar *Dikerjakan*; saat selesai, ke *Review* dengan catatan `↳ pi selesai …: ringkasan` (gagal: `↳ pi gagal …: alasan`, kartu tetap). **Menjawab pi:** bila pi mengakhiri gilirannya dengan pertanyaan (jawaban diakhiri `?`) atau sebuah extension pi meminta izin/masukan (mis. konfirmasi sebelum `rm -rf`), kartu menjadi ⏸ *menunggu jawaban* dan tetap di *Dikerjakan*; klik kanan → *Jawab pi…* membuka pertanyaannya beserta kotak jawaban (izin: *Izinkan*/*Tolak*; pilihan; isian; atau *Akhiri tanpa membalas*). *Nanti* membiarkan pi tetap menunggu. Selagi pi bekerja ada *Beri Arahan pi…* (diterima sebelum langkah berikutnya, tanpa menghentikan pekerjaan), dan setelah selesai ada *Balas pi…* yang melanjutkan sesi pi yang sama sehingga kartu dikerjakan lagi. Menu kartu juga punya *Lihat Log pi* (alat, penalaran, jawaban, permintaan dan jawaban Anda, token, biaya, dan id sesi untuk `pi --session <id>`), *Hentikan pi*/*Batalkan Antrean*, *Lepas Penugasan*, dan *Ganti Folder Proyek…*. Pi sendiri tidak meminta izin alat; permintaan izin datang dari extension pi yang Anda pasang. Nyerat tidak menulis ke folder proyek; perubahannya ditinjau di repo itu sendiri (pi diminta tidak commit)
-- **Tabel dirender sebagai grid** (garis sel, header tebal, rata kiri/tengah/kanan, dan **tebal**/*miring*/`kode`/tautan di dalam sel). Saat kursor masuk ke tabel, teks mentahnya muncul untuk disunting; klik sebuah sel di grid untuk langsung menyunting sel itu. Tabel yang lebih lebar dari kolom teks dipersempit dan teks yang terpotong diberi "…" (isi lengkapnya muncul sebagai tooltip)
-- Di dalam tabel: `Tab` / `Shift+Tab` pindah antar sel (di sel terakhir, `Tab` menambah baris), `Enter` pindah ke baris berikutnya (di baris kosong terakhir, `Enter` keluar dari tabel). Menu ☰ → **Edit Tabel** untuk tambah/hapus baris dan kolom, rata kiri/tengah/kanan, dan merapikan kolom
-- Isi blok kode diwarnai sesuai bahasanya (```` ```js ````, ```` ```python ````, ```` ```rust ````, dan ratusan bahasa lain dari GtkSourceView), dengan skema warna yang mengikuti mode terang/gelap
-- **Diagram Mermaid.** Blok ```` ```mermaid ```` dirender sebagai diagram (flowchart, sequence, class, state, ER, gantt, pie, dan jenis lain yang didukung Mermaid). Saat kursor di luar blok hanya diagramnya yang terlihat; saat kursor masuk, kodenya muncul dan diagram menjadi pratinjau di bawahnya yang ikut berubah selagi mengetik. Kode yang salah tidak disembunyikan, pesan galatnya muncul di bawah blok. Klik ganda memperbesar diagram, dan warnanya mengikuti mode terang/gelap. Diagram dirender secara lokal (tanpa internet); ekspor HTML memuat Mermaid dari CDN sehingga diagram di file hasil ekspor butuh internet
-- **Diagram DBML (dbdiagram).** Blok ```` ```dbml ```` (bahasa skema dbdiagram.io) digambar sebagai diagram ER dengan perilaku yang sama seperti Mermaid. Yang didukung: `Table` (alias, `pk`, `unique`, `note`, `ref:` di dalam kolom, `indexes`), `Ref` satu baris maupun blok dengan relasi `>` `<` `-` `<>`, dan `Enum`/`TableGroup`/`Project`/`Note` yang dilewati. Kolom di sisi "banyak" suatu relasi otomatis bertanda FK. Galat sintaks muncul seketika beserta nomor barisnya. Ekspor HTML menulisnya sebagai diagram ER Mermaid
-- Daftar tugas `- [ ]` bisa dicentang dengan mengklik kotaknya
-- Tautan dibuka dengan **Ctrl+klik** (path relatif dihitung dari folder file); tautan ke berkas Markdown dibuka di tab Nyerat sendiri
-- **Tautan antardokumen gaya Obsidian.** `[[Nama Catatan]]` menautkan berkas Markdown lain di folder kerja menurut namanya (tanpa ekstensi, huruf besar/kecil tidak dibedakan, di subfolder mana pun); `[[Catatan|teks lain]]` menampilkan teks lain dan `[[Catatan#Bagian]]` melompat ke heading. Di baris lain hanya nama atau teksnya yang tampil sebagai tautan. **Ctrl+klik** membuka catatannya di tab; catatan yang belum ada dibuka sebagai dokumen kosong di samping dokumen asal dan baru tertulis ke disk setelah disimpan. Mengetik `[[` memunculkan saran nama berkas (↑/↓ memilih, Enter/Tab menyisipkan beserta `]]`, Esc menutup). Bila ada beberapa berkas bernama sama, yang satu folder dengan dokumen asal dipakai, lalu yang path-nya paling pendek; tulis `[[folder/Nama]]` untuk memilih yang lain. Ekspor HTML menuliskannya sebagai tautan ke `Nama.md`
-- Gambar `![alt](url)` ditampilkan langsung di bawah barisnya, dari file lokal (path relatif dihitung dari folder dokumen) maupun dari internet. Klik gambar untuk memunculkan sintaksnya; **klik ganda** (atau menu ☰ → *Perbesar Gambar* untuk gambar di baris kursor) membuka penampil dengan zoom: roda mouse memperbesar di titik penunjuk, `+`/`−`, `0` untuk 100%, `F` atau tombol *Pas* untuk pas layar, geser dengan drag, `Esc` menutup
-- Enter melanjutkan daftar, daftar bernomor, daftar tugas, dan kutipan secara otomatis; Enter di item kosong mengakhirinya
-- Tab / Shift+Tab mengatur indentasi item daftar
+**Live formatted writing**
+- Headings, **bold**, *italic*, ~~strikethrough~~, ==highlight==, `inline code`, links, and images are formatted right away
+- Code blocks, quotes, and horizontal rules are styled (nested quotes `>>` are indented further, up to three levels); the ```` ``` ```` fence lines are hidden outside the block
+- **Home.** A special tab (a house icon) that summarizes what you can continue: a greeting according to the time, *Continue* cards (the latest files from different folders), *Today's journal* (the number of notes and activities, with a quick capture button), *Agent* that is working, queued, or waiting for your answer (click to answer, see the log, or open its board), *Due dates* from all the kanban boards in the work folder (unfinished cards that are overdue or due today, tomorrow, or the day after, with the project name from `#project/…`; the checkbox writes `[x]` straight to its board), an *Inbox* that still has unprocessed items, and *Recent files*. Home opens when the app starts without saved tabs and when the last tab is closed (it can be turned off in Preferences), and through `Alt+Home` or the ☰ menu → *Home*. Its data is recalculated from the Markdown files every time Home is shown or the window becomes active again, without a database.
+- **The daily journal.** `Ctrl+Alt+J` (or the ☰ menu → *Today's Journal*, or the *Today's journal* row on Home) opens `journal/YYYY-MM-DD.md` in the work folder, made from a template (*Today's focus*, *Notes*, *Activity*, *Summary*) if it does not exist yet. `Ctrl+Shift+J` records one time-stamped line in the *Notes* section without leaving the document you are working on (through the editor if the journal is open, one undo step). Throughout the day Nyerat records work activity to `.nyerat/activity/YYYY-MM-DD.jsonl`: kanban cards that move to another list, are checked as done, or are added; agent changes that are applied; and harness results. When the journal is opened, that activity together with the Git commits of that day is merged into the *Activity* section as time-stamped items with `[[…]]` links; the merge only adds lines that are not there yet, so the user's edits are not overwritten. The command palette → *Summarize Journal with Assistant* asks the agent to propose an end-of-day summary through the normal review window
+- **Inbox.** A Markdown file whose frontmatter contains `inbox: true` opens as an inbox, a place to capture ideas, links, and quick notes: the `#` heading and the paragraph before the first item become the title and the description, every list item becomes one note with `#tag` as a chip and `➕ 2026-10-07 14:32` as the capture time (the age label "10 minutes ago", "1 hour ago", "3 days ago"). Type in the topmost field and press Enter for a quick capture (the note goes in at the top), *New Note* opens a dialog with a title, tags, and notes, click a note to edit it (the capture time is kept), and ✕ removes it. Every change is written to the Markdown text (one undo step); `Ctrl+Shift+B` switches to the text view, the ☰ menu → *New Inbox* and right-click in the file tree → *New Inbox…* create an inbox.
+- **A Trello-style kanban board.** A Markdown file whose frontmatter contains `kanban: true` opens as a board: a `##` heading becomes a list, a `- [ ]` item becomes a card. Drag a card between lists (or to another position in the same list), click a card to edit its title and notes, right-click for a menu (move, up/down, delete), check the box to mark it done, and add cards/lists right on the board. `#tag` is shown as a colored label and `@{2026-10-20}` as a date (red if overdue). In the card dialog, the due date can be typed (with a time if you like, e.g. `2026-10-20 09:00`) or chosen with the calendar button next to its field (with *Today* and *Clear*); choosing a date keeps the time that was already typed. Every change is written to its Markdown text, and the old `kanban-plugin:` marker of the Obsidian Kanban plugin is still recognized. `Ctrl+Shift+B` switches to the text view and back; the ☰ menu → *New Kanban Board* creates an empty board (without a name yet), and right-click in the file tree → *New Kanban Board…* creates it right away as a file in that folder
+- **`[[note]]` links on cards.** In a card title they are shown as links that can be clicked; in the notes of a card they are shown as a `↗ name` row below the chip. The notes field in the card dialog suggests names when you type `[[`. When a card is worked on by pi, the contents of the linked note (or only its `#heading` section) are copied into the prompt as context
+- **Cards worked on by an external harness (pi).** Write `@pi` in a card title (or fill in *Assigned to* in the edit dialog), then right-click → *Work on it with pi*. The project is taken from the card tag `#project/name` or the board frontmatter `project: name`; the project folder is asked for once and then remembered in the settings (a card without a project is given a tag from the name of its folder). The card chip shows the status: ◇ assigned, ◌ queued, ● working, ⏸ waiting for an answer, ✓ done, ✕ failed, ■ stopped. When it starts, the card moves to the *In Progress* list; when it finishes, to *Review* with the note `↳ pi done …: summary` (failed: `↳ pi failed …: reason`, the card stays). **Answering pi:** if pi ends its turn with a question (the answer ends with `?`) or a pi extension asks for permission/input (e.g. a confirmation before `rm -rf`), the card becomes ⏸ *waiting for an answer* and stays in *In Progress*; right-click → *Answer pi…* opens its question with an answer box (permission: *Allow*/*Deny*; a choice; an input; or *End without replying*). *Later* leaves pi waiting. While pi works there is *Steer pi…* (received before the next step, without stopping the work), and after it finishes there is *Reply to pi…* which continues the same pi session so the card is worked on again. The card menu also has *View pi Log* (tools, reasoning, answers, your requests and answers, tokens, cost, and the session id for `pi --session <id>`), *Stop pi*/*Cancel Queue*, *Remove Assignment*, and *Change Project Folder…*. Pi itself does not ask for tool permission; permission requests come from the pi extensions you install. Nyerat does not write to the project folder; its changes are reviewed in that repo itself (pi is asked not to commit)
+- **Tables are rendered as a grid** (cell lines, a bold header, left/center/right alignment, and **bold**/*italic*/`code`/links inside cells). When the cursor enters a table, its raw text appears for editing; click a cell in the grid to edit that cell right away. A table that is wider than the text column is narrowed and cut-off text is given "…" (its full contents appear as a tooltip)
+- Inside a table: `Tab` / `Shift+Tab` move between cells (in the last cell, `Tab` adds a row), `Enter` moves to the next row (on the last empty row, `Enter` leaves the table). The ☰ menu → **Edit Table** to add/delete rows and columns, align left/center/right, and tidy up the columns
+- The contents of a code block are colored according to its language (```` ```js ````, ```` ```python ````, ```` ```rust ````, and hundreds of other languages from GtkSourceView), with a color scheme that follows light/dark mode
+- **Mermaid diagrams.** A ```` ```mermaid ```` block is rendered as a diagram (flowchart, sequence, class, state, ER, gantt, pie, and the other kinds that Mermaid supports). When the cursor is outside the block only the diagram is visible; when the cursor enters, the code appears and the diagram becomes a preview below it that changes as you type. Wrong code is not hidden, its error message appears below the block. A double click enlarges the diagram, and its colors follow light/dark mode. Diagrams are rendered locally (without the internet); the HTML export loads Mermaid from a CDN so the diagrams in the exported file need the internet
+- **DBML diagrams (dbdiagram).** A ```` ```dbml ```` block (the schema language of dbdiagram.io) is drawn as an ER diagram with the same behavior as Mermaid. Supported: `Table` (alias, `pk`, `unique`, `note`, `ref:` inside a column, `indexes`), `Ref` both as a single line and as a block with the relations `>` `<` `-` `<>`, and `Enum`/`TableGroup`/`Project`/`Note` that are skipped. The column on the "many" side of a relation is automatically marked FK. A syntax error appears immediately with its line number. The HTML export writes it as a Mermaid ER diagram
+- A `- [ ]` task list can be checked by clicking its box
+- Links are opened with **Ctrl+click** (relative paths are computed from the folder of the file); a link to a Markdown file opens in a Nyerat tab itself
+- **Obsidian-style links between documents.** `[[Note Name]]` links to another Markdown file in the work folder by its name (without the extension, case-insensitive, in any subfolder); `[[Note|other text]]` shows other text and `[[Note#Section]]` jumps to a heading. On other lines only the name or its text is shown as a link. **Ctrl+click** opens the note in a tab; a note that does not exist yet is opened as an empty document next to the source document and is only written to disk after it is saved. Typing `[[` shows file name suggestions (↑/↓ choose, Enter/Tab insert together with `]]`, Esc closes). When several files have the same name, the one in the same folder as the source document is used, then the one with the shortest path; write `[[folder/Name]]` to choose another. The HTML export writes it as a link to `Name.md`
+- An image `![alt](url)` is shown right below its line, from a local file (relative paths are computed from the folder of the document) or from the internet. Click the image to bring up its syntax; a **double click** (or the ☰ menu → *Zoom Image* for the image on the cursor line) opens a viewer with zoom: the mouse wheel zooms at the pointer, `+`/`−`, `0` for 100%, `F` or the *Fit* button to fit the screen, drag to pan, `Esc` closes
+- Enter continues a list, a numbered list, a task list, and a quote automatically; Enter on an empty item ends it
+- Tab / Shift+Tab set the indentation of a list item
 
-**Tampilan**
-- **Banyak dokumen dalam satu jendela (tab).** Baris tab muncul di atas editor begitu ada dua dokumen atau lebih. Mengklik file di pohon Berkas atau memilihnya di dialog *Buka File* membuka tab baru (atau pindah ke tabnya jika file itu sudah terbuka; dokumen kosong yang belum disimpan dipakai ulang), dan *Baru* (`Ctrl+N`) membuat tab kosong. Tiap tab punya riwayat undo, kursor, dan posisi gulirnya sendiri; mode Fokus/Typewriter/Source dan tema berlaku untuk semua tab. Tanda `•` pada judul tab berarti belum disimpan, `Ctrl+W` menutup tab (bertanya jika ada perubahan; menutup tab terakhir mengosongkan dokumennya), dan `Ctrl+Tab` / `Ctrl+Shift+Tab` (atau `Ctrl+PgDn` / `Ctrl+PgUp`) berpindah tab. Dengan auto save aktif, meninggalkan tab langsung menyimpannya. Outline, hitungan kata, pencarian, dan tab Riwayat mengikuti tab aktif, dan asisten membaca isi tab lain yang belum disimpan, bukan versi di disk. **Tab dipulihkan**: saat aplikasi dibuka lagi tanpa argumen, tab berfile dari sesi terakhir dibuka kembali dengan urutan, tab aktif, dan posisi kursornya; file yang sudah tidak ada dilewati (dengan pesan di status bar). Membuka file atau folder dari baris perintah tidak memulihkan tab
-- Sidebar dengan tiga tab:
-  - **Berkas**: pohon folder yang dibuka (lewat tombol folder di header bar, `Ctrl+Shift+O`, atau dengan memilih folder di dialog Buka File), berisi subfolder dan file Markdown (`.md`, `.markdown`, `.mdown`, `.mkd`). Klik file untuk membukanya; file yang sedang dibuka ikut disorot. File/folder tersembunyi dan `node_modules` tidak ditampilkan. **Klik kanan** pada folder, file, atau area kosong membuka menu *File Baru…*, *Folder Baru…*, *Papan Kanban Baru…*, dan *Inbox Baru…* (pada folder/file ditambah *Ganti Nama…* dan *Hapus*; hapus meminta konfirmasi dan memindahkan ke Tempat Sampah, bukan menghapus permanen; jika dokumen yang terbuka dihapus, isinya tetap di editor dan ditandai belum disimpan; ganti nama file tetap berekstensi Markdown, dan dokumen yang terbuka mengikuti nama barunya): item dibuat di folder yang diklik (untuk file: di folder induknya; untuk area kosong: di folder root). Nama file tanpa ekstensi Markdown diberi `.md`, nama yang kosong, memuat `/`, diawali titik, atau sudah ada ditolak dengan pesan galat; file baru langsung dibuka di editor. *Papan Kanban Baru…* membuat file berisi papan kosong (`kanban: true`, daftar *Rencana*, *Dikerjakan*, *Selesai*) yang langsung tersimpan dan terbuka sebagai papan. **Seret dan lepas** memindahkan file atau folder: lepas di sebuah folder untuk memasukkannya ke sana (folder tertutup yang ditahan sebentar terbuka sendiri), lepas di file untuk memindahkannya ke folder file itu, atau lepas di judul pohon/area kosong untuk mengeluarkannya ke folder root. Folder tidak bisa dipindah ke dalam dirinya sendiri, dan nama yang bentrok di folder tujuan ditolak tanpa menimpa. Jika dokumen yang terbuka (atau folder induknya) dipindah, dokumen tetap terbuka dengan path barunya. Pohon diperbarui otomatis saat ada file yang ditambah atau dihapus di disk, dan folder terakhir dibuka lagi saat aplikasi dijalankan
-  - **Outline**: daftar heading dokumen; klik untuk melompat
-  - **Riwayat**: commit git yang menyentuh file yang sedang dibuka, terbaru dulu (hash pendek, pesan, penulis, waktu relatif; riwayat mengikuti file yang di-rename). Jika file berbeda dari commit terakhir (atau belum dilacak), tombol *Perubahan belum di-commit* muncul di atas daftar dan membuka diff terhadap HEAD (file baru ditampilkan seluruhnya sebagai tambahan). Di bawahnya, daftar *Belum di-commit (N)* memuat semua file di repositori yang sedang berubah (M diubah, A baru di-stage, D dihapus, R diganti nama, U belum dilacak); klik salah satu untuk membuka diff-nya di jendela yang sama (juga bisa di-commit dari sana). Tiap baris punya kotak centang (semua tercentang awalnya); isi pesan lalu tekan *Commit N file* untuk meng-commit beberapa file sekaligus (`git add --all` + `git commit --only` pada file terpilih; dokumen yang terbuka disimpan dulu). Daftar ini juga tampil saat belum ada file terbuka tetapi sebuah folder sudah dibuka. Klik commit untuk membuka jendela baca dengan dua tab: *Perubahan* (diff terhadap commit sebelumnya, baris tambah/hapus berwarna) dan *Isi versi ini* (file lengkap pada commit itu). Jendela perubahan belum di-commit juga punya kolom pesan dan tombol *Commit file ini*: dokumen disimpan dulu, lalu hanya file itu yang di-commit (`git add` + `git commit --only`; file lain tidak ikut, hook git tidak dijalankan). Selain itu aplikasi tidak pernah mengubah repositori. Riwayat dimuat saat tab terlihat, 100 commit sekali muat (tombol *Muat lebih banyak*), dan dimuat ulang saat berganti file, saat jendela kembali aktif, atau lewat tombol muat ulang. Butuh `git` terpasang; file di luar repositori atau yang belum di-commit menampilkan pesan di tab
-- Mode fokus: paragraf selain yang sedang disunting diredupkan
-- Mode typewriter: baris aktif selalu di tengah layar
-- Mode source: semua sintaks Markdown ditampilkan; widget gambar, grid tabel, dan diagram disembunyikan
-- Mode gelap, otomatis mengikuti tema sistem saat pertama dibuka
-- Kolom teks dibuat di tengah dengan lebar baca yang nyaman
+**View**
+- **Many documents in one window (tabs).** The tab bar appears above the editor as soon as there are two or more documents. Clicking a file in the Files tree or choosing it in the *Open File* dialog opens a new tab (or switches to its tab if that file is already open; an empty unsaved document is reused), and *New* (`Ctrl+N`) makes an empty tab. Every tab has its own undo history, cursor, and scroll position; the Focus/Typewriter/Source modes and the theme apply to all tabs. The `•` mark on a tab title means it is not saved, `Ctrl+W` closes a tab (asking if there are changes; closing the last tab empties its document), and `Ctrl+Tab` / `Ctrl+Shift+Tab` (or `Ctrl+PgDn` / `Ctrl+PgUp`) switch tabs. With autosave on, leaving a tab saves it right away. The outline, the word count, the search, and the History tab follow the active tab, and the assistant reads the contents of other unsaved tabs, not the version on disk. **Tabs are restored**: when the app is opened again without arguments, the tabs with files of the last session are opened again with their order, the active tab, and their cursor positions; files that no longer exist are skipped (with a message in the status bar). Opening a file or folder from the command line does not restore tabs
+- A sidebar with three tabs:
+  - **Files**: the tree of the opened folder (through the folder button in the header bar, `Ctrl+Shift+O`, or by choosing a folder in the Open File dialog), with subfolders and Markdown files (`.md`, `.markdown`, `.mdown`, `.mkd`). Click a file to open it; the file that is open is also highlighted. Hidden files/folders and `node_modules` are not shown. **Right-clicking** a folder, a file, or an empty area opens a menu with *New File…*, *New Folder…*, *New Kanban Board…*, and *New Inbox…* (for a folder/file, *Rename…* and *Delete* are added; delete asks for a confirmation and moves to the Trash, not a permanent delete; if the open document is deleted, its contents stay in the editor and are marked as unsaved; a renamed file keeps a Markdown extension, and the open document follows its new name): the item is created in the folder that was clicked (for a file: in its parent folder; for an empty area: in the root folder). A file name without a Markdown extension is given `.md`, a name that is empty, contains `/`, starts with a dot, or already exists is rejected with an error message; a new file is opened in the editor right away. *New Kanban Board…* makes a file with an empty board (`kanban: true`, the lists *Plan*, *In Progress*, *Done*) that is saved right away and opened as a board. **Drag and drop** moves a file or a folder: drop it on a folder to put it there (a closed folder that is hovered over for a moment opens by itself), drop it on a file to move it to that file's folder, or drop it on the tree title/an empty area to move it out to the root folder. A folder cannot be moved into itself, and a conflicting name in the target folder is rejected without overwriting. If the open document (or its parent folder) is moved, the document stays open with its new path. The tree updates automatically when a file is added or deleted on disk, and the last folder is opened again when the app starts
+  - **Outline**: the list of headings of the document; click to jump
+  - **History**: the git commits that touched the open file, newest first (short hash, message, author, relative time; the history follows a file that is renamed). If the file differs from the last commit (or is untracked), the *Uncommitted changes* button appears above the list and opens the diff against HEAD (a new file is shown entirely as additions). Below it, the *Uncommitted (N)* list holds all the files in the repository that are changing (M modified, A newly staged, D deleted, R renamed, U untracked); click one to open its diff in the same window (it can also be committed from there). Every row has a checkbox (all checked at first); write a message and press *Commit N files* to commit several files at once (`git add --all` + `git commit --only` on the chosen files; open documents are saved first). This list is also shown when no file is open but a folder is open. Click a commit to open a reading window with two tabs: *Changes* (a diff against the previous commit, added/removed lines colored) and *Contents of this version* (the complete file at that commit). The window of uncommitted changes also has a message field and the *Commit this file* button: the document is saved first, and then only that file is committed (`git add` + `git commit --only`; other files are not included, git hooks are not run). Apart from that the app never changes the repository. The history is loaded when the tab is visible, 100 commits at a time (the *Load more* button), and reloaded when switching files, when the window becomes active again, or through the reload button. It needs `git` installed; a file outside a repository or one that is not committed yet shows a message in the tab
+- Focus mode: paragraphs other than the one being edited are dimmed
+- Typewriter mode: the active line is always in the middle of the screen
+- Source mode: all the Markdown syntax is shown; image widgets, table grids, and diagrams are hidden
+- Dark mode, automatically following the system theme the first time it is opened
+- The text column is centered with a comfortable reading width
 
-**Agent AI (chat dan tindakan dengan persetujuan)**
-- Panel di sisi kanan (`Ctrl+Shift+A` atau tombol gelembung di header bar) untuk bekerja dengan agent berbasis model **DeepSeek** (bertanya, meminta rencana, atau meminta perubahan) (`deepseek-flash` atau `deepseek-v4-pro`, dipilih di pengaturan panel; kotak *Berpikir mendalam* menyalakan mode berpikir yang lebih teliti tetapi lebih lambat dan mahal). Jawaban mengalir saat dibuat, tampil dengan format Markdown, dan proses berpikir model bisa dibuka terpisah. Asisten menelusuri dokumen dan mengusulkan perubahan lewat jendela diff; pengguna memilih Terapkan atau Tolak
-- **Konteks disusun otomatis dari ruang kerja**: dokumen yang terbuka (isi editor, termasuk yang belum disimpan; jika terlalu panjang, bagian di sekitar kursor), teks yang sedang dipilih, posisi kursor, peta seluruh berkas Markdown di folder yang dibuka (nama, jumlah kata, heading), dan potongan paling relevan dari berkas lain (dicari dari pertanyaan, pilihan, dan dua pertanyaan sebelumnya). `@namaberkas` di pesan (opsional) langsung melampirkan berkas utuh di pesan pertama, jadi model tidak perlu satu putaran penelusuran untuk membacanya; tanpa itu pun model mencari dan membaca berkas lain sendiri lewat alat Tombol **Konteks** di bawah panel merinci apa yang akan dikirim beserta perkiraan tokennya dan punya tiga saklar (dokumen aktif, pilihan, berkas lain)
-- **Agent menelusuri ruang kerja sendiri (function calling).** Konteks awal hanya bagian yang dipilih otomatis, jadi model juga diberi empat alat baca-saja: `daftar_berkas`, `cari_dokumen` (topik), `cari_teks` (teks persis, mis. nama, tanggal, atau angka), dan `baca_berkas` (isi berkas per rentang baris). Untuk pertanyaan seperti "adakah keputusan rapat yang belum masuk ke rencana peluncuran?", model mencari semua kemunculan topiknya sendiri, membaca bagian sekitarnya, lalu menjawab dengan kutipan berkas dan nomor baris. Tiap penelusuran tampil sebagai baris kecil di atas jawaban (mis. *Mencari teks “Raka” → 3 baris*). Alat memakai isi editor untuk dokumen yang terbuka, hanya membaca berkas Markdown di folder yang dibuka, dan ikut saklar *Berkas lain di folder*: dimatikan, tidak ada alat sama sekali
-- **Riwayat Git untuk agent.** Bila folder kerja adalah repositori Git, agent juga punya tiga alat baca-saja: `riwayat_git` (commit terbaru, untuk seluruh folder atau satu berkas mengikuti ganti nama, beserta berkas yang berubah), `lihat_commit` (diff satu commit), dan `isi_versi` (isi berkas pada commit lama, termasuk berkas yang sudah dihapus). Pertanyaan seperti *"kapan tanggal rilis diubah dan oleh siapa?"* dijawab dari riwayat. git dijalankan di folder kerja dengan pathspec yang hanya mencakup berkas Markdown tidak tersembunyi; commit hanya boleh berupa hash atau `HEAD~n`, dan tidak ada perintah git yang mengubah repositori
-- **Usulan perubahan dengan persetujuan.** Bila Anda memintanya, model juga bisa memanggil `buat_berkas` (berkas Markdown baru), `ubah_berkas` (ganti potongan teks persis yang muncul tepat sekali, atau setiap kemunculan dengan `semua: true`), `sisip_teks` (sisipkan teks di awal berkas setelah frontmatter, di akhir, atau setelah baris tertentu; nomor baris harus disertai isi baris itu sehingga salah hitung ditolak), `hapus_berkas` (buang ke Tempat Sampah), dan `pindah_berkas` (ganti nama atau pindah folder; dokumen yang terbuka mengikuti path barunya). Alat ini tidak menulis apa pun: jendela tinjau terbuka otomatis dengan tampilan seperti diff riwayat Git (alasan di atas, selisih berwarna dengan nomor baris dan tiga baris konteks) dan tombol *Tolak* serta *Terapkan*; di panel tertinggal kartu ringkas berstatus dengan tombol *Tinjau perubahan* untuk membukanya lagi. Menutup jendela sama dengan menolak. Terapkan pada berkas yang terbuka mengubah editornya dalam satu langkah undo (`Ctrl+Z`); pada berkas lain, atau berkas baru, langsung ditulis ke disk (berkas baru dibuka di tab). Penerapan dibatalkan dengan galat bila isi berkas sudah berubah sejak diusulkan, dan nama di luar folder kerja, bertitik, atau berisi `..` ditolak. Hasil Tolak, galat, atau Hentikan dikirim balik ke model supaya tidak memaksa. Untuk papan kanban ada `ubah_kanban` (aksi kartu `tambah`, `pindah`, `tandai` selesai/belum, `ubah` teks, `hapus`; aksi daftar `tambah_daftar`, `ganti_nama_daftar`, `hapus_daftar` yang hanya berlaku untuk daftar kosong supaya kartu tidak ikut hilang): ia bekerja lewat model papan (`markdown/kanban.ts`), mencocokkan daftar dan kartu berdasarkan teks (harus tepat satu cocok, kalau tidak model diberi daftar kandidat), dan hasilnya tetap lewat jendela tinjau. Selisih memakai diff baris sungguhan dengan beberapa hunk, jadi memindahkan kartu hanya menandai kartu itu, bukan seluruh papan. Alat ini hanya ada bila saklar *Berkas lain di folder* menyala.
-- **Persetujuan sebagian, catatan, dan Urungkan.** Jendela tinjau paket punya kotak centang per berkas: hapus centang untuk menolak sebagian (tombol menjadi *Terapkan 2 dari 3*); agent diberi tahu berkas mana yang diterapkan dan mana yang ditolak, dan journal mencatat keduanya terpisah. Kotak *Catatan untuk agent* di bawah diff diteruskan bersama keputusan, mis. alasan menolak, supaya agent bisa memperbaiki usulannya. Kartu usulan yang sudah diterapkan punya tombol *Urungkan* (juga pada percakapan yang dibuka lagi): ia menerapkan kebalikan perubahan lewat pemeriksaan yang sama, sehingga gagal tanpa menimpa apa pun bila berkasnya sudah disunting lagi; berkas yang dihapus dipulihkan dari snapshot dan pemindahan dikembalikan. Journal menandainya *Diurungkan* agar agent tidak menganggapnya berlaku
-- Tiap jawaban diberi rincian konteks yang dikirim dan pemakaian token (termasuk bagian yang dilayani dari cache, dan jumlah penelusuran). **Dokumen yang disertakan dikirim ke server DeepSeek**; matikan saklar *Berkas lain di folder* dan *Dokumen yang sedang dibuka* untuk bertanya tanpa mengirim dokumen
-- **Log agent (pemantauan).** Tombol terminal di kepala panel Asisten membuka jendela *Log agent*: lini masa tiap giliran yang diperbarui langsung selagi agent bekerja, berisi putaran model (jumlah pesan dan alat yang ditawarkan, token masuk/cache/keluar), proses berpikir model per putaran, tiap panggilan alat dengan argumen JSON, hasil yang dikembalikan ke model, status, dan lamanya, serta galat dan penghentian. Filter Semua/Alat/Penalaran/Model, *Salin semua*, dan *Bersihkan*. Log hanya ada di memori selama aplikasi berjalan (maks. 2000 kejadian, detail dipotong 20 rb karakter), tidak dikirim ke model, tidak ditulis ke berkas percakapan, dan dikosongkan oleh *Percakapan baru*
-- **Riwayat percakapan tersimpan per folder.** Tiap percakapan ditulis sebagai satu berkas Markdown di `<folder kerja>/.nyerat/chats/` (mis. `2026-10-04-adakah-keputusan-rapat-yang-belum-masuk-rencana.md`, berisi frontmatter `judul`/`model`/`dibuat` lalu giliran `## Anda` dan `## Asisten`), diperbarui setelah tiap giliran dan pada checkpoint tindakan. Frontmatter `pekerjaan` dan `tindakan` menyimpan tujuan, langkah, verifikasi, keputusan, serta snapshot sebelum/sesudah untuk melihat diff lagi. Proses berpikir model tidak disimpan. Tombol jam di kepala panel membuka daftar percakapan di folder itu (terbaru dulu): klik untuk memulihkannya dan melanjutkan di berkas yang sama (riwayatnya ikut dikirim ke model), atau ikon sampah untuk membuangnya ke Tempat Sampah. *Percakapan baru* (ikon sapu) memulai berkas baru. Riwayat berisi kutipan naskah, jadi `.nyerat/` otomatis diberi `.gitignore` berisi `*` (hapus berkas itu bila ingin meng-commit-nya); folder bertitik tidak tampil di pohon Berkas dan tidak dibaca asisten sebagai naskah. Saklar *Simpan riwayat percakapan di folder* di pengaturan panel (roda gigi) mematikannya; tanpa folder yang dibuka tidak ada yang disimpan
-- API key diambil dari variabel lingkungan `DEEPSEEK_API_KEY`, atau diisi di pengaturan panel (ikon roda gigi) dan disimpan di keyring sistem; jika keyring tidak tersedia, di `~/.config/nyerat/deepseek.key` (mode 0600). Key tidak ditulis ke pengaturan
+**The AI agent (chat and actions with approval)**
+- A panel on the right side (`Ctrl+Shift+A` or the bubble button in the header bar) to work with an agent based on a **DeepSeek** model (ask, request a plan, or request changes) (`deepseek-flash` or `deepseek-v4-pro`, chosen in the panel settings; the *Deep thinking* checkbox turns on a thinking mode that is more thorough but slower and more expensive). Answers stream as they are made, are shown with Markdown formatting, and the thinking process of the model can be opened separately. The assistant browses documents and proposes changes through a diff window; the user chooses Apply or Reject
+- **The context is assembled automatically from the workspace**: the open documents (the editor contents, including unsaved ones; if too long, the part around the cursor), the selected text, the cursor position, a map of all the Markdown files in the opened folder (name, word count, headings), and the most relevant excerpts of other files (searched from the question, the selection, and the two previous questions). `@filename` in a message (optional) attaches a whole file right in the first message, so the model does not need a browsing round to read it; even without it the model searches and reads other files by itself through tools. The **Context** button below the panel details what will be sent together with its estimated tokens and has three switches (the active document, the selection, other files)
+- **The agent browses the workspace by itself (function calling).** The initial context only holds the parts that are chosen automatically, so the model is also given four read-only tools: `list_files`, `search_documents` (a topic), `search_text` (exact text, e.g. a name, a date, or a number), and `read_file` (the contents of a file by line range). For a question like "is there a meeting decision that has not made it into the launch plan?", the model searches for every occurrence of the topic by itself, reads the surrounding parts, and then answers with quotes of the file and the line number. Every lookup is shown as a small line above the answer (e.g. *Searching text “Raka” → 3 lines*). The tools use the editor contents for open documents, only read Markdown files in the opened folder, and follow the *Other files in the folder* switch: turned off, there are no tools at all
+- **Git history for the agent.** When the work folder is a Git repository, the agent also has three read-only tools: `git_log` (the latest commits, for the whole folder or one file following renames, together with the files that changed), `show_commit` (the diff of one commit), and `file_at_commit` (the contents of a file at an old commit, including files that were deleted). A question like *"when was the release date changed and by whom?"* is answered from the history. git is run in the work folder with a pathspec that only covers non-hidden Markdown files; a commit may only be a hash or `HEAD~n`, and no git command that changes the repository is available
+- **Change proposals with approval.** If you ask for it, the model can also call `create_file` (a new Markdown file), `edit_file` (replace an exact piece of text that appears exactly once, or every occurrence with `all: true`), `insert_text` (insert text at the start of a file after the frontmatter, at the end, or after a given line; a line number must come with the contents of that line so a miscount is rejected), `delete_file` (move to the Trash), and `move_file` (rename or move to another folder; an open document follows its new path). These tools do not write anything: the review window opens automatically with a view like a Git history diff (the reason at the top, a colored diff with line numbers and three lines of context) and the *Reject* and *Apply* buttons; a compact status card remains in the panel with a *Review changes* button to open it again. Closing the window is the same as rejecting. Apply on an open file changes its editor in one undo step (`Ctrl+Z`); on another file, or a new file, it is written to disk right away (a new file is opened in a tab). The application is cancelled with an error if the contents of the file have already changed since it was proposed, and names outside the work folder, starting with a dot, or containing `..` are rejected. The result of Reject, an error, or Stop is sent back to the model so that it does not insist. For kanban boards there is `edit_kanban` (the card actions `add`, `move`, `mark` done/not done, `edit` the text, `delete`; the list actions `add_list`, `rename_list`, `delete_list` that only applies to an empty list so that cards do not disappear with it): it works through the board model (`markdown/kanban.ts`), matches lists and cards by their text (exactly one must match, otherwise the model is given a list of candidates), and its result still goes through the review window. The diff uses a real line diff with several hunks, so moving a card only marks that card, not the whole board. This tool only exists when the *Other files in the folder* switch is on.
+- **Partial approval, notes, and Undo.** The review window of a batch has a checkbox per file: uncheck to reject part of it (the button becomes *Apply 2 of 3*); the agent is told which files were applied and which were rejected, and the journal records both separately. The *Note for the agent* box below the diff is passed on together with the decision, e.g. the reason for rejecting, so that the agent can fix its proposal. A proposal card that has been applied has an *Undo* button (also in a conversation that is opened again): it applies the reverse of the change through the same checks, so it fails without overwriting anything if the file has been edited again; a deleted file is restored from a snapshot and a move is reversed. The journal marks it *Undone* so that the agent does not consider it still applicable
+- Every answer is given the details of the context that was sent and the token usage (including the part served from the cache, and the number of lookups). **The documents that are included are sent to the DeepSeek server**; turn off the *Other files in the folder* and *The currently open document* switches to ask without sending documents
+- **The agent log (monitoring).** The terminal button in the header of the Assistant panel opens the *Agent log* window: a timeline of every turn that updates live while the agent works, holding the model rounds (the number of messages and tools offered, the tokens in/cached/out), the thinking process of the model per round, every tool call with its JSON arguments, the result returned to the model, the status, and the duration, as well as errors and stops. The filters All/Tools/Reasoning/Model, *Copy all*, and *Clear*. The log only exists in memory while the app runs (at most 2,000 events, the details cut at 20k characters), is not sent to the model, is not written to the conversation file, and is emptied by *New conversation*
+- **Conversation history saved per folder.** Every conversation is written as one Markdown file in `<work folder>/.nyerat/chats/` (e.g. `2026-10-04-is-there-a-meeting-decision-not-yet-in-the-plan.md`, holding the frontmatter `title`/`model`/`created` and then the turns `## You` and `## Assistant`), updated after every turn and at action checkpoints. The frontmatter `work` and `actions` store the goal, steps, verification, decisions, and the before/after snapshots to see the diff again. The thinking process of the model is not saved. The clock button in the panel header opens the list of conversations in that folder (newest first): click to restore one and continue in the same file (its history is sent to the model too), or the trash icon to move it to the Trash. *New conversation* (the broom icon) starts a new file. The history holds quotes from the manuscript, so `.nyerat/` is automatically given a `.gitignore` containing `*` (delete that file if you want to commit it); dot folders are not shown in the Files tree and are not read by the assistant as manuscript. The *Save conversation history in the folder* switch in the panel settings (the gear) turns it off; without an open folder nothing is saved
+- The API key is taken from the `DEEPSEEK_API_KEY` environment variable, or entered in the panel settings (the gear icon) and stored in the system keyring; if the keyring is not available, in `~/.config/nyerat/deepseek.key` (mode 0600). The key is not written to the settings
 
-**Lainnya**
-- Cari teks, undo/redo, hitungan kata dan karakter, posisi kursor
-- Ekspor ke HTML dengan CSS disertakan. Gambar dan tautan tetap memakai URL/path aslinya; diagram Mermaid/DBML memerlukan internet untuk memuat Mermaid dari CDN
-- **Auto save** (menu ☰ → *Auto Save*, aktif bawaan): dokumen yang sudah punya file disimpan otomatis 1 detik setelah berhenti mengetik (penulisan ke disk berjalan di latar, jadi tidak menahan ketikan), dan disimpan tanpa bertanya saat menutup, membuat dokumen baru, atau membuka file lain. Dokumen yang belum pernah disimpan tetap butuh Ctrl+S
-- Peringatan sebelum menutup, membuat dokumen baru, atau membuka file lain jika ada perubahan yang belum disimpan (saat auto save mati atau dokumen belum punya file)
+**Other**
+- Find text, undo/redo, the word and character count, the cursor position
+- Export to HTML with the CSS included. Images and links keep their original URL/path; Mermaid/DBML diagrams need the internet to load Mermaid from a CDN
+- **Autosave** (the ☰ menu → *Autosave*, on by default): a document that already has a file is saved automatically 1 second after you stop typing (the write to disk runs in the background, so it does not hold up typing), and is saved without asking when closing, making a new document, or opening another file. A document that has never been saved still needs Ctrl+S
+- A warning before closing, making a new document, or opening another file if there are unsaved changes (when autosave is off or the document does not have a file yet)
 
-## Shortcut
+## Shortcuts
 
-| Shortcut | Fungsi |
+| Shortcut | Function |
 | --- | --- |
-| Ctrl+N / Ctrl+O | Dokumen baru / buka file (keduanya di tab baru) |
-| Ctrl+W | Tutup tab |
-| Alt+Home | Beranda |
-| Ctrl+Alt+J | Jurnal hari ini |
-| Ctrl+Shift+J | Catat ke jurnal (catat cepat) |
-| Ctrl+Tab / Ctrl+Shift+Tab atau Ctrl+PgDn / Ctrl+PgUp | Tab berikutnya / sebelumnya |
-| Ctrl+Shift+O | Buka folder |
-| Ctrl+S / Ctrl+Shift+S | Simpan / simpan sebagai |
-| Ctrl+Shift+E | Ekspor HTML |
-| Ctrl+F | Cari |
-| Ctrl+Z / Ctrl+Shift+Z atau Ctrl+Y | Undo / redo (juga untuk perubahan di papan kanban) |
-| Ctrl+Shift+B | Papan kanban atau inbox: beralih antara tampilan papan/inbox dan teks |
-| Ctrl+Q | Keluar |
-| Ctrl+B | Tebal |
-| Ctrl+I | Miring |
-| Ctrl+Shift+X atau Alt+Shift+5 | Coret |
-| Ctrl+Shift+H | Stabilo |
-| Ctrl+` | Kode inline |
-| Ctrl+K | Tautan |
-| Ctrl+Shift+I | Sisipkan gambar |
-| Ctrl+Shift+K | Sisipkan blok kode |
-| Ctrl+T | Sisipkan tabel |
-| Tab / Shift+Tab | Pindah sel (di dalam tabel) |
-| Enter | Pindah ke baris berikutnya (di dalam tabel) |
-| Ctrl+Shift+T | Rapikan tabel |
+| Ctrl+N / Ctrl+O | New document / open a file (both in a new tab) |
+| Ctrl+W | Close the tab |
+| Alt+Home | Home |
+| Ctrl+Alt+J | Today's journal |
+| Ctrl+Shift+J | Add to the journal (quick capture) |
+| Ctrl+Tab / Ctrl+Shift+Tab or Ctrl+PgDn / Ctrl+PgUp | Next / previous tab |
+| Ctrl+Shift+O | Open a folder |
+| Ctrl+S / Ctrl+Shift+S | Save / save as |
+| Ctrl+Shift+E | Export HTML |
+| Ctrl+F | Find |
+| Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y | Undo / redo (also for changes on a kanban board) |
+| Ctrl+Shift+B | Kanban board or inbox: switch between the board/inbox view and the text |
+| Ctrl+Q | Quit |
+| Ctrl+B | Bold |
+| Ctrl+I | Italic |
+| Ctrl+Shift+X or Alt+Shift+5 | Strikethrough |
+| Ctrl+Shift+H | Highlight |
+| Ctrl+` | Inline code |
+| Ctrl+K | Link |
+| Ctrl+Shift+I | Insert an image |
+| Ctrl+Shift+K | Insert a code block |
+| Ctrl+T | Insert a table |
+| Tab / Shift+Tab | Move between cells (inside a table) |
+| Enter | Move to the next row (inside a table) |
+| Ctrl+Shift+T | Tidy up the table |
 | Ctrl+1 … Ctrl+6 | Heading 1–6 |
-| Ctrl+0 | Kembalikan ke paragraf |
-| Ctrl+Shift+Q | Kutipan |
-| Ctrl+Shift+] / Ctrl+Shift+[ | Daftar biasa / daftar bernomor |
-| Ctrl+\ atau Ctrl+Shift+1 | Tampilkan/sembunyikan sidebar |
-| Ctrl+/ | Mode source |
-| F8 | Mode fokus |
-| F9 | Mode typewriter |
-| Ctrl+Shift+D | Mode gelap |
-| Ctrl+Shift+A | Tampilkan/sembunyikan panel Asisten |
-| Ctrl+Shift+P | Palet perintah: cari dan jalankan perintah apa pun |
-| Ctrl+, | Preferensi |
-| Ctrl+? | Daftar pintasan keyboard |
-| Enter / Shift+Enter | Di kotak pesan Asisten: kirim / baris baru |
+| Ctrl+0 | Back to a paragraph |
+| Ctrl+Shift+Q | Quote |
+| Ctrl+Shift+] / Ctrl+Shift+[ | Bulleted list / numbered list |
+| Ctrl+\ or Ctrl+Shift+1 | Show/hide the sidebar |
+| Ctrl+/ | Source mode |
+| F8 | Focus mode |
+| F9 | Typewriter mode |
+| Ctrl+Shift+D | Dark mode |
+| Ctrl+Shift+A | Show/hide the Assistant panel |
+| Ctrl+Shift+P | The command palette: search for and run any command |
+| Ctrl+, | Preferences |
+| Ctrl+? | The list of keyboard shortcuts |
+| Enter / Shift+Enter | In the Assistant message box: send / new line |
 
-## Tes
+## Tests
 
-Pasang dependensi display virtual sekali (Debian/Ubuntu):
+Install the virtual display dependencies once (Debian/Ubuntu):
 
 ```bash
 sudo apt install xvfb xauth
 ```
 
-Ada dua mode untuk menjalankan seluruh tes, termasuk lima tes mouse kanban:
+There are two modes to run all the tests, including the five kanban mouse tests:
 
 ```bash
-npm test          # tanpa menampilkan jendela, memakai Xvfb
-npm run test:ui   # tampilkan jendela dan drag kartu di desktop
+npm test          # without showing windows, using Xvfb
+npm run test:ui   # show the windows and the card drags on the desktop
 ```
 
-`npm test` menjalankan seluruh tes unit, GUI, dan lima tes input mouse kanban di display **Xvfb terpisah**. Tidak membutuhkan sesi desktop; pointer desktop tidak bergerak. Jika Xvfb belum terpasang, perintah gagal dan tes mouse tidak diam-diam dilewati. `npm run docs` tetap memakai jalur capture desktop seperti sebelumnya.
+`npm test` runs all the unit and GUI tests and the five kanban mouse input tests on a **separate Xvfb display**. It does not need a desktop session; the desktop pointer does not move. If Xvfb is not installed, the command fails and the mouse tests are not silently skipped. `npm run docs` still uses the desktop capture path as before.
 
-Di Xvfb, tes memakai rendering perangkat lunak Mesa (`LIBGL_ALWAYS_SOFTWARE=1`) serta menonaktifkan compositing GPU dan perender DMA-BUF WebKitGTK (`WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1`) karena display virtual tidak menyediakan perangkat DRI3. Ini menghindari peringatan libEGL saat tes diagram Mermaid dan DBML; pengaturan ini hanya berlaku untuk `npm test`.
+On Xvfb, the tests use Mesa software rendering (`LIBGL_ALWAYS_SOFTWARE=1`) and turn off GPU compositing and the DMA-BUF renderer of WebKitGTK (`WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1`) because a virtual display does not provide a DRI3 device. This avoids the libEGL warning during the Mermaid and DBML diagram tests; this setting only applies to `npm test`.
 
-`npm run test:ui` menjalankan rangkaian tes yang sama pada desktop **X11 lokal** (atau XWayland yang menyediakan `DISPLAY` lokal), sehingga jendela tes terlihat. Mode ini tidak membutuhkan Xvfb. Pointer desktop akan bergerak selama tes drag; biarkan mouse dan keyboard sampai selesai. Pointer dikembalikan ke posisi semula setelah bagian tes mouse.
+`npm run test:ui` runs the same test suite on the **local X11** desktop (or XWayland that provides a local `DISPLAY`), so the test windows are visible. This mode does not need Xvfb. The desktop pointer will move during the drag tests; leave the mouse and keyboard alone until it finishes. The pointer is returned to its original position after the mouse part of the tests.
 
-Tes ditulis dalam TypeScript tanpa framework tambahan, dibundel Vite menjadi `dist/run-tests.js`, lalu dijalankan GJS. Script keluar dengan kode `1` jika ada yang gagal. Isinya:
+The tests are written in TypeScript without an additional framework, bundled by Vite into `dist/run-tests.js`, and then run by GJS. The script exits with code `1` if anything fails. What it contains:
 
-- **Unit**: konversi Markdown → HTML, pengurai format inline, simpan/baca pengaturan, model tabel dan kanban, alias bahasa kode, DBML, operasi berkas (buat/ganti nama/hapus/pindah), pengurai keluaran git, serta asisten, tanpa GUI
-- **Editor**: membuka jendela sungguhan, lalu memeriksa sintaks yang disembunyikan/ditampilkan, Enter dan Tab di daftar, shortcut format, undo, klik kotak tugas, serta simpan dan buka file
-- **Tabel**: aturan pengenalan tabel (pemisah satu strip, tanpa pipa di tepi, berhenti di blok lain), pemecahan sel, perataan, merapikan kolom (termasuk lebar CJK dan emoji), operasi baris/kolom, konversi format inline ke markup Pango, lebar kolom; lalu di editor: grid yang muncul dan hilang mengikuti kursor, letak grid di antara paragraf, klik sel, Tab/Shift+Tab/Enter, semua perintah menu, satu perintah = satu langkah undo, mode source, serta tabel beremoji yang tidak membuat GTK gagal menggambar
-- **Harness eksternal**: penugasan `@nama` (bukan email/`@{tanggal}`), proyek dari frontmatter atau tag, penolakan folder kerja, prompt (termasuk catatan `[[ ]]` terkait: bagian heading, yang hilang, dan batas panjang), perintah RPC (prompt, arahan, jawaban dialog, satu baris per perintah), pembaca event pi (alat, penalaran, biaya, sesi dari `get_state`, perintah ditolak, permintaan extension, galat), deteksi pertanyaan, catatan hasil, antrean per folder (termasuk run yang menunggu jawaban); di GUI dengan pi tiruan (skrip shell yang berbicara RPC) sungguhan: cwd dan prompt, kartu ke *Dikerjakan* lalu *Review* dengan catatan, log, antrean berurutan, hentikan, gagal, folder proyek yang ditanyakan dan diingat, papan yang tidak terbuka diperbarui di disk, permintaan izin yang menunggu lalu dijawab (dan *Nanti* yang tetap menunggu), pertanyaan yang dijawab atau diakhiri tanpa membalas, arahan saat bekerja, dan balasan yang melanjutkan sesi yang sama; `[[catatan]]` di kartu masuk prompt dan bisa diklik tanpa membuka dialog sunting
-- **Kanban**: model (mengenali papan, membaca dan menulis dengan hasil yang stabil, operasi kartu dan daftar, tag dan tanggal); di editor: dokumen dibuka sebagai papan, menambah/mencentang/menyunting/memindahkan lewat menu, seret kartu (jatuh di posisi yang ditunjuk, kartu bayangan dan penanda tujuan dibersihkan, tempat asal tidak mengubah apa pun), gulir otomatis di tepi, undo/redo satu langkah per perubahan, beralih ke tampilan teks dan kembali, aksi pengeditan teks ditolak saat papan tampil, dan simpan
-- **Diagram Mermaid**: blok dirender menjadi gambar, kode disembunyikan di luar blok dan tampil dengan pratinjau di dalamnya, galat sintaks ditampilkan tanpa menyembunyikan kode, render ulang saat kode diubah, widget dipakai ulang saat baris bergeser, blok kosong/tidak ditutup/bukan mermaid diabaikan, mode source, dan tema gelap (warna latar gambar); serta ekspor HTML-nya
-- **Diagram DBML**: penerjemah DBML → Mermaid (tabel, kolom, ref, alias, skema, galat berikut nomor barisnya), blok dbml dirender dan galatnya tampil tanpa menyembunyikan kode, serta ekspor HTML-nya
-- **Zoom gambar**: gambar ukuran penuh dari `imageAt()`, klik sekali vs ganda (lewat `GestureClick` yang dipicu tes) dan gambar yang tepat jika satu baris memuat beberapa, perintah menu; di penampil: zoom awal, kelipatan 1,25 dan batas 5%–800%, tombol, titik zoom di penunjuk, geser dengan drag, klik ganda, dan tidak ada peringatan GTK/cairo saat menggambar pada zoom besar
-- **Warna blok kode**: alias nama bahasa, warna kata kunci/string/komentar, blok tanpa bahasa atau bahasa tak dikenal, pewarnaan ulang saat mengetik, emoji sebelum blok, skema terang/gelap, dan mode fokus yang tetap meredupkan blok kode
-- **Riwayat git**: pengurai log/diff dan waktu relatif (unit); di GUI, daftar commit file aktif, tombol perubahan belum di-commit, daftar *Belum di-commit* dengan kotak centang, commit satu atau beberapa file sekaligus di repositori sementara, serta jendela baca commit (tab *Perubahan* dan *Isi versi ini*)
-- **Folder**: isi pohon dan urutannya, file tersembunyi dan non-Markdown yang disaring, isi subfolder yang baru dibaca saat dibuka, membuka file dengan klik, sorotan file aktif, pembaruan otomatis saat file ditambah/dihapus di disk, serta folder dari argumen dan dari pengaturan; menu klik kanan *File Baru*/*Folder Baru*/*Papan Kanban Baru*/*Inbox Baru* (di root, folder, dan sebelah file), pemindahan file/folder masuk dan keluar folder, penolakan nama tidak valid/bentrok/pindah ke diri sendiri, dokumen terbuka yang ikut berpindah path, dan seret-lepas dengan mouse X11 sungguhan
-- **Tes langsung ke API** (`npm run test:live`, butuh `DEEPSEEK_API_KEY` di `.env`, tidak ikut `npm test`): empat skenario atas naskah `tests/samples/buku-contoh` yang sengaja berisi kontradiksi, termasuk satu dengan anggaran konteks 900 token supaya model wajib memakai alat; `-- --thinking` untuk mode berpikir dan `-- --model=...` untuk model lain
-- **Asisten**: penyusunan konteks (pemecahan per heading, BM25, anggaran token, jendela di sekitar kursor, @lampiran, prefiks `system` yang stabil, pemangkasan riwayat), pembacaan aliran SSE dan pesan galat, markup jawaban, klien DeepSeek terhadap server tiruan, lalu alat penelusuran (hasil, batas, galat), loop agen (alat dikirim balik, penalaran dikembalikan, batas putaran dan anggaran, pembatalan), pembentukan pesan alat untuk API, lalu panel: pesan terkirim dengan dokumen/pilihan/potongan yang benar, langkah penelusuran tampil, jawaban terformat beserta token, riwayat, `@nama`, saklar konteks, galat dan pembatalan, Enter/Shift+Enter, serta pengaturan key dan model (semua dengan penyedia palsu; tanpa jaringan)
-- **Dokumen contoh lengkap**: membuka `tests/samples/semua-format.md`, lalu memeriksa tag setiap format, kasus-kasus sulit, dan hasil ekspor HTML-nya
-- **Ukuran jendela**: membuka file kedua tidak memperbesar jendela, jendela bisa diperbesar lalu diperkecil, dan gambar dibatasi lebar kolom teks
-- **Ketahanan**: kursor disapu ke semua baris, mengetik di tiap baris, dan dokumen dihapus sedikit demi sedikit untuk mencari crash
+- **Unit**: Markdown → HTML conversion, the inline format parser, saving/reading settings, the table and kanban models, code language aliases, DBML, file operations (create/rename/delete/move), the git output parser, and the assistant, without a GUI
+- **Editor**: opens a real window, and then checks hidden/shown syntax, Enter and Tab in lists, format shortcuts, undo, clicking a task box, and saving and opening files
+- **Tables**: the table recognition rules (a one-dash separator, no pipes at the edges, stopping at another block), splitting cells, alignment, tidying columns (including CJK and emoji widths), row/column operations, converting inline formats to Pango markup, the column width; and then in the editor: a grid that appears and disappears following the cursor, the position of a grid between paragraphs, clicking a cell, Tab/Shift+Tab/Enter, all the menu commands, one command = one undo step, source mode, and a table with emoji that does not make GTK fail to draw
+- **External harness**: `@name` assignment (not an email/`@{date}`), the project from frontmatter or a tag, rejecting the work folder, the prompt (including the related `[[ ]]` notes: the heading section, the missing ones, and the length limit), RPC commands (prompt, steering, dialog answers, one line per command), the pi event reader (tools, reasoning, cost, the session from `get_state`, a rejected command, an extension request, errors), question detection, the result note, the queue per folder (including a run that waits for an answer); in the GUI with a real fake pi (a shell script that speaks RPC): cwd and the prompt, a card to *In Progress* and then *Review* with a note, the log, a queue in order, stop, failure, a project folder that is asked for and remembered, a board that is not open being updated on disk, a permission request that waits and is then answered (and *Later* that keeps waiting), a question that is answered or ended without replying, steering while working, and a reply that continues the same session; `[[note]]` on a card goes into the prompt and can be clicked without opening the edit dialog
+- **Kanban**: the model (recognizing a board, reading and writing with a stable result, card and list operations, tags and dates); in the editor: a document opens as a board, adding/checking/editing/moving through the menu, dragging a card (dropping at the indicated position, the ghost card and the drop marker are cleaned up, the original place changes nothing), automatic scrolling at the edge, undo/redo one step per change, switching to the text view and back, text editing actions rejected while the board is shown, and saving
+- **Mermaid diagrams**: a block is rendered as an image, the code is hidden outside the block and shown with a preview inside it, a syntax error is shown without hiding the code, re-rendering when the code changes, the widget is reused when lines shift, an empty/unclosed/non-mermaid block is ignored, source mode, and the dark theme (the image background color); and also its HTML export
+- **DBML diagrams**: the DBML → Mermaid translator (tables, columns, refs, aliases, schemas, errors with their line number), a dbml block is rendered and its error is shown without hiding the code, and also its HTML export
+- **Image zoom**: the full-size image from `imageAt()`, a single vs a double click (through a `GestureClick` triggered by the test) and the right image when one line holds several, the menu command; in the viewer: the initial zoom, multiples of 1.25 and the limit of 5%–800%, keys, zooming at the pointer, dragging to pan, a double click, and no GTK/cairo warning when drawing at a large zoom
+- **Code block colors**: language name aliases, keyword/string/comment colors, a block without a language or with an unknown language, re-coloring while typing, an emoji before the block, light/dark schemes, and focus mode that still dims code blocks
+- **Git history**: the log/diff parser and relative time (unit); in the GUI, the list of commits of the active file, the uncommitted changes button, the *Uncommitted* list with checkboxes, committing one or several files at once in a temporary repository, and the commit reading window (the *Changes* and *Contents of this version* tabs)
+- **Folder**: the contents of the tree and their order, hidden and non-Markdown files being filtered, the contents of a subfolder being read when it is opened, opening a file with a click, highlighting the active file, automatic updates when a file is added/deleted on disk, and a folder from an argument and from the settings; the right-click menu *New File*/*New Folder*/*New Kanban Board*/*New Inbox* (at the root, in a folder, and next to a file), moving files/folders into and out of folders, rejecting invalid/conflicting names/moving into itself, an open document that follows its new path, and drag-and-drop with the real X11 mouse
+- **Live tests against the API** (`npm run test:live`, needs `DEEPSEEK_API_KEY` in `.env`, not part of `npm test`): four scenarios on the manuscript `tests/samples/sample-book` that deliberately holds contradictions, including one with a context budget of 900 tokens so that the model must use tools; `-- --thinking` for thinking mode and `-- --model=...` for another model
+- **The assistant**: building the context (splitting per heading, BM25, the token budget, a window around the cursor, @attachments, a stable `system` prefix, trimming the history), reading the SSE stream and the error messages, the answer markup, the DeepSeek client against a fake server, then the browsing tools (results, limits, errors), the agent loop (tools sent back, reasoning returned, the limit of rounds and the budget, cancellation), building the tool messages for the API, and then the panel: a message sent with the right document/selection/excerpts, the browsing steps shown, a formatted answer with tokens, history, `@name`, the context switches, errors and cancellation, Enter/Shift+Enter, and the key and model settings (all with a fake provider; no network)
+- **The complete sample document**: opens `tests/samples/all-formats.md`, and then checks the tag of every format, the tricky cases, and its HTML export result
+- **Window size**: opening a second file does not enlarge the window, the window can be enlarged and then shrunk, and images are limited to the width of the text column
+- **Robustness**: the cursor is swept over all the lines, typing on every line, and the document is deleted bit by bit to look for crashes
 
-Opsi tambahan, dijalankan setelah `npm run build`:
+An additional option, run after `npm run build`:
 
 ```bash
 gjs -m dist/run-tests.js --mouse
 ```
 
-Tes seret kartu lewat input mouse dari server X11 (tekan → gerak bertahap → lepas) termasuk dalam kedua mode: `npm test` dan `npm run test:ui`.
+The tests that drag a card through mouse input from the X11 server (press → gradual motion → release) are included in both modes: `npm test` and `npm run test:ui`.
 
-`npm test` memakai Xvfb dengan ekstensi XTest; `npm run test:ui` memakai display desktop. Seluruh kode tes dan helper ditulis dalam **TypeScript**, dibundel Vite dan dijalankan GJS; tidak ada dependensi Python atau `xdotool`. Helper memakai Gio untuk terhubung ke socket X11 dan membaca autentikasi dari `XAUTHORITY` (atau `~/.Xauthority`). Posisi pointer dikembalikan sesudah tes mouse, dan tombol kiri dilepas bila pengujian gagal. Pengaturan dan dokumen uji memakai folder sementara.
+`npm test` uses Xvfb with the XTest extension; `npm run test:ui` uses the desktop display. All the test code and helpers are written in **TypeScript**, bundled by Vite and run by GJS; there is no dependency on Python or `xdotool`. The helper uses Gio to connect to the X11 socket and reads the authentication from `XAUTHORITY` (or `~/.Xauthority`). The pointer position is restored after the mouse tests, and the left button is released if a test fails. The settings and the test documents use temporary folders.
 
-Lima skenario memeriksa perpindahan antar daftar beserta catatan/emoji, urutan dalam satu daftar, tujuan kosong, jatuh di posisi asal, serta klik tanpa drag. Pengujian juga memeriksa event tekan/gerak/lepas yang diterima GTK, pembersihan bayangan dan penanda tujuan, Markdown, satu langkah undo/redo, serta hasil simpan. Input dikirim langsung lewat permintaan **FakeInput** dalam [protokol XTest](https://xorg.freedesktop.org/archive/X11R7.6/doc/xextproto/xtest.html), bukan memanggil handler kartu atau membuat objek event tiruan. Inputnya tetap otomatis; ini tidak membuktikan pengujian manual dengan perangkat mouse fisik atau sesi Wayland. Jika input tidak diterima GTK, tes **gagal** (kode keluar `1`), bukan dilewati atau dianggap lulus.
+Five scenarios check moving between lists together with notes/emoji, the order within one list, an empty target, dropping at the original position, and a click without a drag. The tests also check the press/motion/release events that GTK receives, the cleanup of the ghost and the drop marker, the Markdown, one undo/redo step, and the saved result. The input is sent directly through the **FakeInput** request in the [XTest protocol](https://xorg.freedesktop.org/archive/X11R7.6/doc/xextproto/xtest.html), not by calling the card handlers or making fake event objects. The input is still automatic; this does not prove manual testing with a physical mouse or a Wayland session. If the input is not received by GTK, the test **fails** (exit code `1`), it is not skipped or counted as passing.
 
-| Opsi | Fungsi |
+| Option | Function |
 | --- | --- |
-| `--no-gui` | Semua tes unit, tanpa membuka jendela |
-| `--mouse` | Tambah klik mouse sungguhan lewat XTest (pointer akan bergerak sendiri). Dilewati dengan keterangan jika lingkungan Anda tidak meneruskan tombol mouse XTest ke GTK (terjadi di XFCE/X11 yang dipakai mengembangkan ini); gerak pointer saja tidak dihitung sebagai tes |
-| `--with-kanban-mouse` | Tambahkan lima tes input mouse kanban ke seluruh tes unit dan GUI; dipakai oleh `npm test` di Xvfb dan `npm run test:ui` di desktop. Tidak bisa digabung dengan `--no-gui` |
-| `--screenshot=file.png` | Simpan tangkapan layar jendela editor |
-| `--shot-harness=prefix` | Simpan tangkapan papan dengan kartu pi bekerja/antre (terang dan gelap), jendela log pi, kartu yang menunggu jawaban, dan dialog jawaban izin/pertanyaan (`prefix-papan.png`, `-papan-gelap.png`, `-log.png`, `-menunggu.png`, `-jawab-izin.png`, `-jawab-tanya.png`) |
+| `--no-gui` | All the unit tests, without opening a window |
+| `--mouse` | Add real mouse clicks through XTest (the pointer will move by itself). Skipped with a note if your environment does not pass the XTest mouse buttons on to GTK (this happens on the XFCE/X11 used to develop this); pointer motion alone does not count as a test |
+| `--with-kanban-mouse` | Add the five kanban mouse input tests to all the unit and GUI tests; used by `npm test` on Xvfb and `npm run test:ui` on the desktop. It cannot be combined with `--no-gui` |
+| `--screenshot=file.png` | Save a screenshot of the editor window |
+| `--shot-harness=prefix` | Save screenshots of the board with pi cards working/queued (light and dark), the pi log window, a card waiting for an answer, and the permission/question answer dialogs (`prefix-board.png`, `-board-dark.png`, `-log.png`, `-waiting.png`, `-answer-permission.png`, `-answer-question.png`) |
 
-Tes memakai folder pengaturan sementara, jadi pengaturan Anda tidak tersentuh.
+The tests use a temporary settings folder, so your settings are not touched.
 
-### File contoh
+### The sample file
 
-[`tests/samples/semua-format.md`](tests/samples/semua-format.md) berisi semua format yang didukung beserta kasus-kasus sulit: penekanan bersarang, escape, URL bergaris bawah, emoji dan teks non-Latin, tabel tanpa pipa di tepi, blok kode empat backtick, serta penekanan yang tidak ditutup. Buka di editor untuk memeriksa tampilannya secara manual:
+[`tests/samples/all-formats.md`](tests/samples/all-formats.md) holds all the supported formats together with the tricky cases: nested emphasis, escapes, URLs with underscores, emoji and non-Latin text, a table without pipes at the edges, a four-backtick code block, and unclosed emphasis. Open it in the editor to check its appearance manually:
 
 ```bash
-gjs -m dist/nyerat.js tests/samples/semua-format.md
+gjs -m dist/nyerat.js tests/samples/all-formats.md
 ```
 
-File ini juga dipakai oleh tes otomatis, jadi jika menambah format baru, tambahkan juga contohnya di sini.
+This file is also used by the automatic tests, so if you add a new format, add its example here too.
 
-## Arsitektur
-### Struktur folder
+## Architecture
+### Folder structure
 ```
-package.json              script npm dan dependensi pengembangan
-tsconfig.json             pengaturan pemeriksaan tipe TypeScript
-vite.config.ts            pengaturan build Vite
-scripts/dev.mjs           npm run dev: build ulang + buka ulang aplikasi + cek tipe
-scripts/capture.ts        potret editor dan buat PNG/GIF untuk docs/assets/
-scripts/gifenc.d.ts       deklarasi tipe gifenc untuk script capture
-scripts/pot.sh            npm run pot: templat terjemahan po/nyerat.pot
-docs/                     landing page statis dan aset tangkapan layar
-meson.build               pemasangan ke sistem/Flatpak (memasang isi dist/ setelah npm run build)
-build-aux/flatpak/        manifest Flatpak (runtime GNOME 50)
-po/                       terjemahan: POTFILES.in, LINGUAS, <bahasa>.po
-data/                     schema GSettings (dikompilasi ke dist/ saat build), berkas desktop dan metainfo (.in), ikon aplikasi, peluncur nyerat.in
-dist/                     hasil build (tidak masuk git)
+package.json              npm scripts and development dependencies
+tsconfig.json             TypeScript type-checking settings
+vite.config.ts            Vite build settings
+scripts/dev.mjs           npm run dev: rebuild + reopen the app + type check
+scripts/capture.ts        capture the editor and make the PNG/GIF files for docs/assets/
+scripts/gifenc.d.ts       gifenc type declarations for the capture script
+scripts/pot.sh            npm run pot: the translation template po/nyerat.pot
+docs/                     static landing page and screenshot assets
+meson.build               system/Flatpak install (installs the contents of dist/ after npm run build)
+build-aux/flatpak/        Flatpak manifest (GNOME 50 runtime)
+po/                       translations: POTFILES.in, LINGUAS, <language>.po
+data/                     GSettings schema (compiled into dist/ at build time), desktop and metainfo files (.in), app icon, the nyerat.in launcher
+dist/                     build output (not in git)
 src/
-├── main.ts               titik masuk: hanya memanggil main() dari app.ts
-├── env.d.ts              tipe untuk GJS dan modul gi:// (dari paket @girs)
-├── gtkutil.ts            pembantu GTK 4 untuk semua lapisan: iter baris, anak widget, klik/tombol, dialog modal tanpa main loop bersarang (modal(), after()), pack(), pixbuf ↔ Gdk.Texture, ikon dari dist/
-├── i18n.ts               gettext: _(), fmt(), pgettext(), ngettext(); domain diikat sebelum modul lain dievaluasi
-├── app.ts                membuat Gtk.Application dan jendela
-├── window.ts             MainWindow: menyusun komponen, mengelola dokumen/tab, buka/simpan/ekspor
-├── actions.ts            semua Gio.Action aplikasi dan shortcut-nya (toggle pengaturan memakai Gio.Settings.create_action)
-├── config.ts             nama, ID, versi aplikasi, dan font
-├── settings.ts           AppSettings: properti bertipe di atas Gio.Settings (schema di data/com.ekaput.Nyerat.gschema.xml)
-├── commands.ts           nama aksi untuk palet perintah
-├── activity.ts           log aktivitas harian untuk jurnal di <folder kerja>/.nyerat/aktivitas (append JSONL)
-├── files.ts              baca/tulis file teks UTF-8
-├── fileops.ts            buat, ganti nama, hapus (ke sampah), dan pindahkan file/folder di disk (tanpa GTK; dipakai pohon berkas)
-├── orchestrator.ts       menjalankan harness eksternal (pi) untuk kartu kanban di folder proyek: proses, antrean, pembaruan papan
-├── git.ts                riwayat git sebuah file dan daftar file yang belum di-commit lewat perintah `git` (async; hanya membaca, kecuali commit file terpilih); juga menjalankan alat Git agent
-├── gitlog.ts             pengurai keluaran git: log, diff, waktu relatif (murni, tanpa GTK)
-├── welcome.ts            dokumen contoh saat pertama dibuka
+├── main.ts               entry point: only calls main() from app.ts
+├── env.d.ts              types for GJS and gi:// modules (from the @girs packages)
+├── gtkutil.ts            GTK 4 helpers for all layers: line iterators, widget children, click/key handlers, modal dialogs without a nested main loop (modal(), after()), pack(), pixbuf ↔ Gdk.Texture, icons from dist/
+├── i18n.ts               gettext: _(), fmt(), pgettext(), ngettext(); the domain is bound before the other modules are evaluated
+├── app.ts                creates the Gtk.Application and the window
+├── window.ts             MainWindow: assembles the components, manages documents/tabs, open/save/export
+├── actions.ts            all the app's Gio.Actions and their shortcuts (setting toggles use Gio.Settings.create_action)
+├── config.ts             app name, ID, version, and fonts
+├── settings.ts           AppSettings: typed properties on top of Gio.Settings (schema in data/com.ekaput.Nyerat.gschema.xml)
+├── commands.ts           action names for the command palette
+├── activity.ts           daily activity log for the journal at <work folder>/.nyerat/activity (append-only JSONL)
+├── files.ts              read/write UTF-8 text files
+├── fileops.ts            create, rename, delete (to the trash), and move files/folders on disk (no GTK; used by the file tree)
+├── orchestrator.ts       runs the external harness (pi) for kanban cards in the project folder: process, queue, board updates
+├── git.ts                the git history of a file and the list of uncommitted files through the `git` command (async; read-only, except committing selected files); also runs the agent's Git tools
+├── gitlog.ts             git output parser: log, diff, relative time (pure, no GTK)
+├── welcome.ts            the sample document shown on first launch
 │
-├── agent/                asisten AI: konteks naskah dan klien model (tanpa GTK, kecuali yang tertulis)
-│   ├── tools.ts          murni: alat penelusuran untuk model (daftar_berkas, cari_dokumen, cari_teks, baca_berkas)
-│   ├── context.ts        murni: memecah naskah per heading, pencarian BM25, menyusun konteks dalam anggaran token, memangkas riwayat
-│   ├── session.ts        murni: satu percakapan (riwayat) dan loop agen satu giliran (model ↔ alat, termasuk menunggu persetujuan usulan)
-│   ├── changes.ts        murni: alat usulan (buat, ubah, sisip, hapus, pindah, kanban), validasi menjadi `Change`, kebalikan dan preflight perubahan, pratinjau selisih; tidak pernah menulis
-│   ├── gittools.ts       murni: alat riwayat Git agent (riwayat_git, lihat_commit, isi_versi): validasi argumen dan perapian keluaran
-│   ├── work.ts           murni: tujuan, rencana, status pekerjaan dan alat atur_pekerjaan
-│   ├── harness.ts        murni: harness eksternal untuk kartu kanban: proyek, prompt, pembaca JSON pi, antrean per folder
-│   ├── trace.ts          murni: log kegiatan agent (putaran, penalaran, alat, hasil) untuk jendela Log agent
-│   ├── batch.ts          murni: perencanaan paket, preflight semua berkas, dan rollback melalui host
-│   ├── verification.ts   murni: pemeriksaan teks (per berkas atau seluruh folder), status kartu kanban, dan struktur Markdown tanpa masalah baru pada isi aktual
-│   ├── journal.ts        murni: riwayat tindakan dan rekonsiliasi interupsi dari isi aktual
-│   ├── recovery.ts       murni: retry terbatas dan cuplikan riwayat lama
-│   ├── path.ts           validasi path dan penolakan symlink saat penulisan (Gio)
-│   ├── transcript.ts     murni: percakapan ↔ teks Markdown (frontmatter + `## Anda` / `## Asisten`), judul dan nama berkas
-│   ├── chatstore.ts      simpan, daftar, muat, dan buang percakapan di `<folder>/.nyerat/chats` (Gio)
-│   ├── provider.ts       antarmuka Provider (dipakai klien sungguhan dan penyedia palsu di tes)
-│   ├── sse.ts            murni: baca baris aliran SSE (teks, penalaran, potongan pemanggilan alat, usage) dan pesan galat HTTP
-│   ├── deepseek.ts       klien DeepSeek lewat libsoup 3 (GIO/GLib; dimuat saat dipakai)
-│   ├── project.ts        baca berkas Markdown di folder proyek dengan cache, dan daftar namanya untuk saran [[ (GLib/GIO)
-│   └── apikey.ts         API key: variabel lingkungan, keyring (libsecret), atau file 0600
+├── agent/                the AI assistant: manuscript context and model client (no GTK, except where noted)
+│   ├── tools.ts          pure: browsing tools for the model (list_files, search_documents, search_text, read_file)
+│   ├── context.ts        pure: splitting the manuscript per heading, BM25 search, building the context within a token budget, trimming the history
+│   ├── session.ts        pure: one conversation (history) and the one-turn agent loop (model ↔ tools, including waiting for approval of proposals)
+│   ├── changes.ts        pure: the proposal tools (create, edit, insert, delete, move, kanban), validation into a `Change`, change inversion and preflight, diff preview; never writes
+│   ├── gittools.ts       pure: the agent's Git history tools (git_log, show_commit, file_at_commit): argument validation and output tidying
+│   ├── work.ts           pure: goal, plan, work status and the set_work tool
+│   ├── harness.ts        pure: the external harness for kanban cards: project, prompt, the pi JSON reader, queue per folder
+│   ├── trace.ts          pure: the agent activity log (rounds, reasoning, tools, results) for the Agent log window
+│   ├── batch.ts          pure: batch planning, preflight of all files, and rollback through the host
+│   ├── verification.ts   pure: text checks (per file or the whole folder), kanban card status, and Markdown structure with no new problems in the actual content
+│   ├── journal.ts        pure: the action history and reconciliation of interruptions from the actual content
+│   ├── recovery.ts       pure: limited retries and excerpts of old history
+│   ├── path.ts           path validation and symlink rejection when writing (Gio)
+│   ├── transcript.ts     pure: conversation ↔ Markdown text (frontmatter + `## You` / `## Assistant`), titles and file names
+│   ├── chatstore.ts      save, list, load, and discard conversations in `<folder>/.nyerat/chats` (Gio)
+│   ├── provider.ts       the Provider interface (used by the real client and the fake provider in tests)
+│   ├── sse.ts            pure: reads SSE stream lines (text, reasoning, tool-call chunks, usage) and HTTP error messages
+│   ├── deepseek.ts       DeepSeek client through libsoup 3 (GIO/GLib; loaded on use)
+│   ├── project.ts        reads Markdown files in the project folder with a cache, and lists their names for [[ suggestions (GLib/GIO)
+│   └── apikey.ts         API key: environment variable, keyring (libsecret), or a 0600 file
 │
-├── markdown/             memahami Markdown (TypeScript murni, tanpa GTK)
-│   ├── syntax.ts         regex untuk heading, daftar, kutipan, tabel, penekanan
-│   ├── inline.ts         parseInline(): format di dalam satu baris
-│   ├── table.ts          tabel: mengenali blok, memecah sel, rapikan, tambah/hapus baris dan kolom
-│   ├── kanban.ts         papan kanban: membaca/menulis Markdown, operasi kartu dan daftar, tag, tanggal, dan penugasan @harness
-│   ├── inbox.ts          inbox: membaca/menulis Markdown, tangkap/sunting/hapus catatan, tag, waktu tangkap dan usia
-│   ├── home.ts           data Beranda: tenggat dari papan, inbox yang belum diproses, berkas terbaru, salam
-│   ├── jurnal.ts         jurnal harian: template, catat cepat, penggabungan Aktivitas, kejadian papan, log aktivitas JSONL
-│   ├── pango.ts          isi sel tabel (Markdown inline) → markup Pango untuk Gtk.Label
-│   ├── chatmarkup.ts     jawaban asisten (heading, daftar, kutipan, blok kode, inline) → markup Pango
-│   ├── dbml.ts           penerjemah DBML (dbdiagram.io) → diagram ER Mermaid
-│   ├── html.ts           markdownToHtml(): untuk Ekspor HTML
-│   └── wikilink.ts       tautan [[catatan]]: penguraian, pencarian berkas, saran nama
+├── markdown/             understanding Markdown (pure TypeScript, no GTK)
+│   ├── syntax.ts         regexes for headings, lists, quotes, tables, emphasis
+│   ├── inline.ts         parseInline(): formatting within a single line
+│   ├── table.ts          tables: recognizing blocks, splitting cells, tidying, adding/removing rows and columns
+│   ├── kanban.ts         kanban boards: reading/writing Markdown, card and list operations, tags, dates, and @harness assignment
+│   ├── inbox.ts          inbox: reading/writing Markdown, capturing/editing/deleting notes, tags, capture time and age
+│   ├── home.ts           Home data: deadlines from boards, unprocessed inbox, recent files, greeting
+│   ├── journal.ts        daily journal: template, quick capture, merging Activity, board events, the JSONL activity log
+│   ├── pango.ts          table cell contents (inline Markdown) → Pango markup for Gtk.Label
+│   ├── chatmarkup.ts     assistant answers (headings, lists, quotes, code blocks, inline) → Pango markup
+│   ├── dbml.ts           DBML (dbdiagram.io) translator → Mermaid ER diagram
+│   ├── html.ts           markdownToHtml(): for HTML export
+│   └── wikilink.ts       [[note]] links: parsing, file lookup, name suggestions
 │
-├── editor/               mesin editor
-│   ├── view.ts           MarkdownView: widget editor, menyatukan modul di bawah
-│   ├── tags.ts           gaya teks (GtkTextTag) dan warnanya
-│   ├── highlighter.ts    memasang tag sesuai sintaks, mengumpulkan marker
-│   ├── decorations.ts    menyembunyikan marker, meredupkan (mode fokus)
-│   ├── editing.ts        perintah format: tebal, tautan, heading, kutipan
-│   ├── lists.ts          Enter dan Tab di daftar dan kutipan
-│   ├── clicks.ts         klik kotak tugas, membaca URL tautan dan target [[catatan]]
-│   ├── wikicomplete.ts   saran nama catatan saat mengetik [[
-│   ├── images.ts         menampilkan gambar di bawah barisnya, dan menerima klik/klik ganda
-│   ├── tablelayer.ts     merender tabel sebagai grid yang muncul/hilang mengikuti kursor
-│   ├── codelayer.ts      merender blok kode sebagai kotak yang bisa digulir ke samping (teks mentah saat kursor di dalam)
-│   ├── mermaid.ts        menampilkan blok ```mermaid dan ```dbml sebagai diagram (pola yang sama dengan tabel)
-│   ├── mermaidrender.ts  merender kode Mermaid menjadi pixbuf lewat WebKitGTK tak terlihat
-│   ├── overlays.ts       slot widget overlay yang dipakai ulang oleh gambar, tabel, dan diagram
-│   ├── tableedit.ts      Tab/Enter di tabel dan perintah menu Edit Tabel
-│   ├── codehighlight.ts  mewarnai isi blok kode sesuai bahasanya
-│   ├── tagsync.ts        memasang tag dengan selisih (hanya rentang/baris yang berubah)
-│   └── offsets.ts        konversi posisi UTF-16 ↔ code point
+├── editor/               the editor engine
+│   ├── view.ts           MarkdownView: the editor widget, ties together the modules below
+│   ├── tags.ts           text styles (GtkTextTag) and their colors
+│   ├── highlighter.ts    applies tags according to the syntax, collects markers
+│   ├── decorations.ts    hides markers, dims text (focus mode)
+│   ├── editing.ts        formatting commands: bold, link, heading, quote
+│   ├── lists.ts          Enter and Tab in lists and quotes
+│   ├── clicks.ts         clicking task boxes, reading link URLs and [[note]] targets
+│   ├── wikicomplete.ts   note name suggestions when typing [[
+│   ├── images.ts         shows images below their lines, and handles clicks/double clicks
+│   ├── tablelayer.ts     renders tables as a grid that appears/disappears following the cursor
+│   ├── codelayer.ts      renders code blocks as boxes that scroll sideways (raw text when the cursor is inside)
+│   ├── mermaid.ts        shows ```mermaid and ```dbml blocks as diagrams (the same pattern as tables)
+│   ├── mermaidrender.ts  renders Mermaid code to a pixbuf through an invisible WebKitGTK
+│   ├── overlays.ts       overlay widget slots reused by images, tables, and diagrams
+│   ├── tableedit.ts      Tab/Enter in tables and the Edit Table menu commands
+│   ├── codehighlight.ts  colors the contents of code blocks according to their language
+│   ├── tagsync.ts        applies tags by diff (only the ranges/lines that changed)
+│   └── offsets.ts        UTF-16 ↔ code point position conversion
 │
-└── ui/                   komponen antarmuka
-    ├── *.ui              tata letak deklaratif (Gtk.Template) untuk headerbar, statusbar, findbar, preferences, palette, dan chat; dibundel Vite sebagai teks (`?raw`)
-    ├── headerbar.ts      tombol dan menu ☰ (headerbar.ui)
-    ├── preferences.ts    Adw.PreferencesDialog yang terikat ke GSettings (Ctrl+,)
-    ├── palette.ts        palet perintah Ctrl+Shift+P: Gio.ListStore → FilterListModel → ListView di atas Gio.Action
-    ├── sidebar.ts        sidebar bertab (Adw.OverlaySplitView): Berkas, Outline, dan Riwayat
-    ├── filetree.ts       tab Berkas: Gio.ListStore per folder → Gtk.TreeListModel → ListView + TreeExpander, menu klik kanan, seret-lepas, dipantau dengan Gio.FileMonitor
-    ├── outline.ts        tab Outline: Gio.ListStore heading di ListView
-    ├── history.ts        tab Riwayat: commit git untuk file aktif (ListView)
-    ├── historyviewer.ts  jendela baca satu commit: diff dan isi versi itu
-    ├── logviewer.ts      jendela Log agent: lini masa kegiatan agent, diperbarui langsung
-    ├── proposalviewer.ts jendela tinjau usulan perubahan agent: diff yang sama, centang per berkas paket, catatan untuk agent, tombol Tolak/Terapkan
-    ├── findbar.ts        bilah pencarian (targetnya berpindah mengikuti tab aktif)
-    ├── tabbar.ts         Adw.TabBar + Adw.TabView untuk tab dokumen (tampil jika ada ≥ 2 dokumen)
-    ├── statusbar.ts      hitungan kata dan posisi kursor (pemberitahuan singkat lewat Adw.Toast di window.ts)
-    ├── dialogs.ts        pilih file, konfirmasi simpan, error, tentang (mengembalikan Promise)
-    ├── shortcuts.ts      dialog pintasan keyboard (Ctrl+?) dari accel aksi yang terpasang: Adw.ShortcutsDialog bila ada, selain itu Adw.Dialog berisi daftar
-    ├── menu.ts           menu konteks sebagai data (MenuEntry) → Gtk.PopoverMenu
-    ├── imageviewer.ts    penampil gambar dengan zoom (Adw.Window, tekstur berskala lewat snapshot GSK)
-    ├── kanban.ts         tampilan papan kanban: daftar, kartu, menu, seret-lepas
-    ├── inbox.ts          tampilan inbox: tangkap cepat, daftar catatan, usia, tag
-    ├── home.ts           tab Beranda: kartu Lanjutkan, agent, tenggat, inbox, berkas terbaru
-    ├── chat.ts           panel Asisten di kanan: pesan, tombol Konteks, pengaturan key dan model
-    └── theme.ts          palet warna dokumen, font, CSS (warna bernama Adwaita untuk antarmuka, aksen sistem bila ada)
+└── ui/                   interface components
+    ├── *.ui              declarative layouts (Gtk.Template) for the headerbar, statusbar, findbar, preferences, palette, and chat; bundled by Vite as text (`?raw`)
+    ├── headerbar.ts      buttons and the ☰ menu (headerbar.ui)
+    ├── preferences.ts    Adw.PreferencesDialog bound to GSettings (Ctrl+,)
+    ├── palette.ts        the Ctrl+Shift+P command palette: Gio.ListStore → FilterListModel → ListView on top of Gio.Action
+    ├── sidebar.ts        tabbed sidebar (Adw.OverlaySplitView): Files, Outline, and History
+    ├── filetree.ts       Files tab: a Gio.ListStore per folder → Gtk.TreeListModel → ListView + TreeExpander, right-click menu, drag and drop, watched with Gio.FileMonitor
+    ├── outline.ts        Outline tab: a Gio.ListStore of headings in a ListView
+    ├── history.ts        History tab: git commits for the active file (ListView)
+    ├── historyviewer.ts  window for reading a single commit: the diff and the contents of that version
+    ├── logviewer.ts      Agent log window: a timeline of the agent's activity, updated live
+    ├── proposalviewer.ts window for reviewing the agent's change proposals: the same diff, a checkbox per file in a batch, a note for the agent, Reject/Apply buttons
+    ├── findbar.ts        search bar (its target follows the active tab)
+    ├── tabbar.ts         Adw.TabBar + Adw.TabView for document tabs (shown when there are ≥ 2 documents)
+    ├── statusbar.ts      word count and cursor position (short notifications through Adw.Toast in window.ts)
+    ├── dialogs.ts        file chooser, save confirmation, error, about (return a Promise)
+    ├── shortcuts.ts      keyboard shortcut dialog (Ctrl+?) from the accels of the installed actions: Adw.ShortcutsDialog if available, otherwise an Adw.Dialog with a list
+    ├── menu.ts           context menus as data (MenuEntry) → Gtk.PopoverMenu
+    ├── imageviewer.ts    image viewer with zoom (Adw.Window, texture scaled through a GSK snapshot)
+    ├── kanban.ts         kanban board view: lists, cards, menus, drag and drop
+    ├── inbox.ts          inbox view: quick capture, note list, age, tags
+    ├── home.ts           Home tab: Continue card, agent, deadlines, inbox, recent files
+    ├── chat.ts           Assistant panel on the right: messages, the Context button, key and model settings
+    └── theme.ts          document color palette, fonts, CSS (named Adwaita colors for the interface, the system accent if available)
 tests/
-├── run-tests.ts          titik masuk dan pendaftaran tes unit/GUI
-├── framework.ts          asersi, hasil tes, opsi CLI, folder sementara
-├── fixtures.ts           data papan kanban bersama untuk tes model dan GUI
-├── widgets.ts            pembantu tes GUI: tangkapan layar widget, anak widget, klik tiruan lewat GestureClick, posisi layar X11
-├── unit/                 tes tanpa jendela: inline, HTML, settings, tabel, kanban, bahasa kode, DBML, operasi berkas, asisten (konteks, SSE, sesi), format berkas percakapan, klien DeepSeek (server tiruan)
-│   └── helpers.ts        helper untuk mengambil isi body HTML hasil konversi
-├── gui/                  tes editor, file/folder, gambar, tabel, diagram, kanban, harness eksternal, riwayat, asisten, ukuran, ketahanan
-│   ├── context.ts        konteks jendela/editor dan helper tes GUI
-│   ├── kanban-mouse.ts   lima tes seret/klik lewat input mouse X11
-│   └── mouse-input.ts    klien X11/XTest TypeScript melalui Gio
+├── run-tests.ts          entry point and registration of unit/GUI tests
+├── framework.ts          assertions, test results, CLI options, temporary folders
+├── fixtures.ts           shared kanban board data for model and GUI tests
+├── widgets.ts            GUI test helpers: widget screenshots, widget children, fake clicks through GestureClick, X11 screen positions
+├── unit/                 tests without a window: inline, HTML, settings, tables, kanban, code languages, DBML, file operations, the assistant (context, SSE, session), the conversation file format, the DeepSeek client (fake server)
+│   └── helpers.ts        helper for getting the body of the HTML result of a conversion
+├── gui/                  tests for the editor, files/folders, images, tables, diagrams, kanban, external harness, history, assistant, size, robustness
+│   ├── context.ts        window/editor context and GUI test helpers
+│   ├── kanban-mouse.ts   five drag/click tests through X11 mouse input
+│   └── mouse-input.ts    TypeScript X11/XTest client through Gio
 └── samples/
-    ├── semua-format.md   dokumen berisi semua format, untuk tes dan pemeriksaan manual
-    ├── papan-kanban.md   contoh papan kanban untuk dicoba
-    ├── inbox.md          contoh inbox untuk dicoba
-    └── gambar/contoh.png gambar lokal yang dirujuk dokumen itu
+    ├── all-formats.md    a document with all the formats, for tests and manual checks
+    ├── kanban-board.md   a sample kanban board to try out
+    ├── inbox.md          a sample inbox to try out
+    └── images/example.png  the local image referenced by that document
 ```
 
 ### Build: TypeScript + Vite
 
-Vite dipakai sebagai **bundler** saja (mode library di [`vite.config.ts`](vite.config.ts)). Dev server dan HMR-nya tidak dipakai, karena ini aplikasi GTK yang dijalankan GJS, bukan halaman web.
+Vite is used only as a **bundler** (library mode in [`vite.config.ts`](vite.config.ts)). Its dev server and HMR are not used, because this is a GTK app run by GJS, not a web page.
 
 ```
-src/main.ts ─────────┐                        ┌─► dist/nyerat.js         (aplikasi)
-tests/run-tests.ts ──┼─► tsc --noEmit ─► vite ┼─► dist/run-tests.js      (tes)
-scripts/capture.ts ──┘   (cek tipe)   (bundel)├─► dist/capture.js        (capture docs)
-                                             └─► dist/chunks/*.js       (kode bersama)
-node_modules/mermaid/dist/mermaid.min.js ────────► dist/mermaid.min.js     (salinan skrip browser)
+src/main.ts ─────────┐                        ┌─► dist/nyerat.js         (the app)
+tests/run-tests.ts ──┼─► tsc --noEmit ─► vite ┼─► dist/run-tests.js      (tests)
+scripts/capture.ts ──┘   (type check)  (bundle)├─► dist/capture.js        (docs capture)
+                                             └─► dist/chunks/*.js       (shared code)
+node_modules/mermaid/dist/mermaid.min.js ────────► dist/mermaid.min.js     (copy of the browser script)
 ```
 
-- **Dua langkah build.** Vite mengubah TypeScript menjadi JavaScript tanpa memeriksa tipe. Karena itu `npm run build` menjalankan `tsc --noEmit` lebih dulu, dan build berhenti jika ada kesalahan tipe.
-- **Modul bawaan GJS ditandai `external`**: `gi://...`, `system`, `gettext`, `cairo`, dan `console`. Modul-modul ini disediakan GJS saat runtime, jadi tidak ikut dibundel dan tidak dicari di `node_modules`.
-- **Target `firefox115`**, karena GJS 1.80 memakai mesin JavaScript SpiderMonkey 115.
-- **Tipe untuk GTK, GLib, dan lainnya** berasal dari paket `@girs/*` (proyek ts-for-gir). Paket-paket itu didaftarkan di [`src/env.d.ts`](src/env.d.ts), sehingga `import Gtk from 'gi://Gtk?version=4.0'` dikenali TypeScript. Paket ini hanya dipakai saat pengecekan tipe dan tidak ikut ke `dist/`.
-- **Import antarmodul tetap memakai akhiran `.js`** (misalnya `'./tags.js'`), meskipun filenya `.ts`. TypeScript dan Vite sama-sama memetakannya ke file `.ts`.
-- **Input lewat controller GTK 4.** Sinyal `key-press-event`/`button-press-event` GTK 3 sudah tidak ada. Tombol dan klik ditangkap `Gtk.EventControllerKey` dan `Gtk.GestureClick` lewat pembantu `onKeyPress()`/`onClick()` di [`src/gtkutil.ts`](src/gtkutil.ts). Handler-nya menerima angka biasa (keyval, modifier, jumlah klik, posisi), bukan objek event, jadi tes bisa memanggilnya langsung (`MarkdownView.onKey(keyval, state)`, `onClick(n, x, y, state)`).
+- **Two build steps.** Vite turns TypeScript into JavaScript without checking types. That is why `npm run build` runs `tsc --noEmit` first, and the build stops if there is a type error.
+- **GJS built-in modules are marked `external`**: `gi://...`, `system`, `gettext`, `cairo`, and `console`. These modules are provided by GJS at runtime, so they are not bundled and not looked up in `node_modules`.
+- **Target `firefox115`**, because GJS 1.80 uses the SpiderMonkey 115 JavaScript engine.
+- **Types for GTK, GLib, and the rest** come from the `@girs/*` packages (the ts-for-gir project). They are registered in [`src/env.d.ts`](src/env.d.ts), so `import Gtk from 'gi://Gtk?version=4.0'` is recognized by TypeScript. These packages are only used for type checking and do not go into `dist/`.
+- **Imports between modules still use the `.js` suffix** (for example `'./tags.js'`), even though the file is `.ts`. TypeScript and Vite both map it to the `.ts` file.
+- **Input through GTK 4 controllers.** The GTK 3 `key-press-event`/`button-press-event` signals no longer exist. Keys and clicks are captured by `Gtk.EventControllerKey` and `Gtk.GestureClick` through the `onKeyPress()`/`onClick()` helpers in [`src/gtkutil.ts`](src/gtkutil.ts). The handlers receive plain numbers (keyval, modifier, click count, position), not event objects, so tests can call them directly (`MarkdownView.onKey(keyval, state)`, `onClick(n, x, y, state)`).
 
-### Lapisan dan arah ketergantungan
+### Layers and the direction of dependencies
 
-Kode dibagi menjadi lapisan. Setiap lapisan hanya boleh memakai lapisan di bawahnya, tidak pernah ke atas:
+The code is divided into layers. Each layer may only use the layers below it, never above:
 
 ```
  app.ts
    └─ window.ts ── actions.ts
-        ├─ ui/*            komponen antarmuka
-        ├─ editor/*        mesin editor
-        │    └─ markdown/* aturan Markdown (tanpa GTK)
-        ├─ agent/*         konteks naskah dan klien model (tanpa GTK)
+        ├─ ui/*            interface components
+        ├─ editor/*        the editor engine
+        │    └─ markdown/* Markdown rules (no GTK)
+        ├─ agent/*         manuscript context and model client (no GTK)
         └─ settings.ts, files.ts, git.ts, gitlog.ts, config.ts
 ```
 
-- **`agent/`** juga tanpa GTK. `ui/chat.ts` memakainya, dan jendela hanya memberinya cara mengambil naskah (`ChatHost`: dokumen aktif, pilihan, berkas proyek, folder naskah). `agent/` tidak tahu soal editor atau widget.
-- **`markdown/`** tidak meng-import GTK sama sekali. Isinya hanya fungsi string → data, jadi paling mudah dipelajari dan diuji.
-- **`editor/`** tidak tahu apa-apa soal file, menu, atau sidebar. `MarkdownView` hanya memberi kabar lewat callback (`onHighlighted`, `onCursorMoved`, `onMessage`).
-- **`ui/`** berisi komponen yang berdiri sendiri. `Outline` tidak kenal editor; ia hanya menerima daftar heading dan memanggil `onJump(baris)` saat diklik. Begitu juga `FileTree`: ia hanya menampilkan folder dan memanggil `onOpenFile(path)`; yang memutuskan cara membuka file (tab baru, pindah ke tab yang sudah ada, atau memakai ulang dokumen kosong) adalah jendela.
-- **`window.ts`** adalah satu-satunya tempat komponen saling dihubungkan. Contoh: setelah penyorotan, editor memanggil `onHighlighted`, lalu jendela meneruskan heading ke `Outline` dan teks ke `StatusBar`.
+- **`agent/`** is also free of GTK. `ui/chat.ts` uses it, and the window only gives it a way to fetch the manuscript (`ChatHost`: the active document, the selection, project files, the manuscript folder). `agent/` knows nothing about the editor or widgets.
+- **`markdown/`** does not import GTK at all. It only contains string → data functions, so it is the easiest to study and test.
+- **`editor/`** knows nothing about files, menus, or the sidebar. `MarkdownView` only reports through callbacks (`onHighlighted`, `onCursorMoved`, `onMessage`).
+- **`ui/`** holds self-contained components. `Outline` does not know the editor; it only receives a list of headings and calls `onJump(line)` when clicked. `FileTree` is the same: it only displays folders and calls `onOpenFile(path)`; the window decides how to open the file (a new tab, switching to an existing tab, or reusing an empty document).
+- **`window.ts`** is the only place where components are connected to each other. For example: after highlighting, the editor calls `onHighlighted`, and then the window passes the headings to `Outline` and the text to `StatusBar`.
 
-### Alur kerja editor
+### The editor workflow
 
-Ada dua siklus utama di `editor/view.ts`:
+There are two main cycles in `editor/view.ts`:
 
 ```
-Teks berubah ───► queueHighlight() ───► highlight()
-                                          ├─ highlighter.ts   pasang tag gaya,
-                                          │                   kumpulkan marker + heading
-                                          ├─ tablelayer.ts    perbarui blok tabel
-                                          ├─ codehighlight.ts warnai isi blok kode
-                                          ├─ mermaid.ts       perbarui diagram Mermaid/DBML
-                                          ├─ images.ts        tampilkan gambar yang ditemukan
+Text changes ───► queueHighlight() ───► highlight()
+                                          ├─ highlighter.ts   apply style tags,
+                                          │                   collect markers + headings
+                                          ├─ tablelayer.ts    update table blocks
+                                          ├─ codehighlight.ts color code block contents
+                                          ├─ mermaid.ts       update Mermaid/DBML diagrams
+                                          ├─ images.ts        show the images found
                                           ├─ onHighlighted()  → outline, status bar
                                           └─ updateCursor(true)
 
-Kursor pindah ──► queueCursorUpdate() ──► updateCursor()
-                                          ├─ decorations.ts   sembunyikan marker di luar
-                                          │                   baris aktif, redupkan (fokus)
-                                          ├─ tablelayer.ts   tampilkan grid atau teks mentah
-                                          ├─ mermaid.ts      tampilkan diagram atau kode + pratinjau
-                                          ├─ typewriter     gulir baris aktif ke tengah
+Cursor moves ──► queueCursorUpdate() ──► updateCursor()
+                                          ├─ decorations.ts   hide markers outside
+                                          │                   the active line, dim (focus)
+                                          ├─ tablelayer.ts   show the grid or raw text
+                                          ├─ mermaid.ts      show the diagram or code + preview
+                                          ├─ typewriter     scroll the active line to the middle
                                           └─ onCursorMoved() → status bar
 ```
 
-Keduanya ditunda dengan `GLib.idle_add(PRIORITY_HIGH_IDLE)`. Beberapa perubahan beruntun (misalnya saat menempel teks) digabung jadi satu proses, dan prosesnya selesai sebelum GTK menggambar ulang layar sehingga tidak berkedip.
+Both are deferred with `GLib.idle_add(PRIORITY_HIGH_IDLE)`. Several consecutive changes (for example when pasting text) are merged into one pass, and the pass finishes before GTK redraws the screen, so nothing flickers.
 
-### Cara kerja efek sintaks tersembunyi
+### How the hidden syntax effect works
 
-1. **`highlighter.ts`** membaca seluruh dokumen saat pertama dibuka, lalu hanya rentang suntingan saat teks berubah. Untuk setiap sintaks, ia memasang tag gaya pada isinya (misalnya `bold` pada "tebal" di `**tebal**`) dan mencatat posisi penandanya (`**`) sebagai **marker**.
-2. Setiap marker menyimpan rentang baris tempat ia "aktif": `[awal, akhir, barisPertama, barisTerakhir, baris]`. Untuk format inline, rentangnya hanya barisnya sendiri. Untuk pembatas ```` ``` ````, rentangnya seluruh blok kode, jadi pembatas muncul selama kursor ada di dalam blok.
-3. **`decorations.ts`** memasang tag `hidden` pada semua marker yang rentang barisnya tidak memuat kursor. Begitu kursor pindah baris, hanya langkah ini yang diulang; penyorotan penuh tidak perlu dijalankan lagi.
+1. **`highlighter.ts`** reads the whole document when it is first opened, and then only the edited range when the text changes. For each syntax it applies a style tag to the contents (for example `bold` on "bold" in `**bold**`) and records the position of its delimiters (`**`) as **markers**.
+2. Each marker stores the range of lines where it is "active": `[start, end, firstLine, lastLine, line]`. For inline formats the range is just its own line. For ```` ``` ```` fences the range is the whole code block, so the fences appear as long as the cursor is inside the block.
+3. **`decorations.ts`** applies the `hidden` tag to every marker whose line range does not contain the cursor. When the cursor changes line, only this step is repeated; the full highlight does not need to run again.
 
-**Tag dipasang dengan selisih (`editor/tagsync.ts`).** Menghapus tag di seluruh buffer lalu memasangnya lagi membuat GTK menata ulang seluruh dokumen (tag heading, `hidden`, dan jarak tabel/gambar mengubah ukuran baris), dan itu yang paling mahal di dokumen panjang. Karena itu:
+**Tags are applied by diff (`editor/tagsync.ts`).** Removing the tags from the whole buffer and then applying them again makes GTK lay out the whole document again (the heading tags, `hidden`, and the table/image spacing change the line sizes), and that is the most expensive thing in a long document. So:
 
-- Penyorotan membaca hanya baris buffer yang berubah, lalu mengurai rentang di antara batas konteks kode/tabel yang aman. Hasil di luar rentang itu dipakai ulang dengan offset yang disesuaikan. Suntingan di dalam kode/tabel mengurai ulang blok terkait; pembatas kode baru dapat memperpanjang parsing hingga akhir dokumen. Snapshot menyimpan hasil dokumen saat ini; cache token tambahan dibatasi 10.000 entri dan 4 Mi unit UTF-16, tanpa menyimpan baris di atas 4.096 unit.
-- Jumlah kata/karakter diperbarui dari rentang suntingan. Teks lengkap baru digabung saat diminta, sehingga status bar tidak membaca dan menghitung ulang seluruh dokumen.
-- Tag sintaks dan `hidden` dipasang lewat `LineTagger`, yang mengingat tag terakhir di tiap baris. `MarkdownView` mencatat rentang yang disunting (sinyal `insert-text`/`delete-range`, disimpan sebagai dua `GtkTextMark`), jadi saat menyorot ulang hanya baris yang disunting atau yang tag-nya berbeda yang disentuh. Baris lain cukup dibiarkan: tag ikut bergeser bersama teksnya.
-- Saat membuka atau menempel banyak baris, rentang tag yang bersebelahan digabung sebelum dipasang, sehingga GTK menerima lebih sedikit operasi. Penyorotan langsung dari `setText()` membatalkan callback penyorotan yang masih antre.
-- Tabel dan warna blok kode yang tidak berubah mempertahankan tag yang sudah bergeser bersama teks di GTK. Outline mempertahankan label saat hanya nomor baris heading berubah; tujuan klik tetap diperbarui.
-- Tag yang rentangnya sedikit (`dim`, `tablehide`, `mermaidhide`, jarak tabel/gambar/diagram, warna blok kode) dipasang dengan `setTagRanges()`: rentang yang sudah terpasang dibaca dari buffer, lalu hanya selisihnya yang dihapus atau ditambahkan.
-- Tes "penyorotan bertahap sama dengan penyorotan dari awal" (`tests/gui/robust.ts`) menyunting dokumen contoh secara acak dan memastikan hasilnya sama dengan menyorot dari awal.
+- Highlighting reads only the buffer lines that changed, and then parses the range between safe code/table context boundaries. Results outside that range are reused with adjusted offsets. An edit inside code/tables re-parses the block concerned; a new code fence may extend parsing to the end of the document. A snapshot holds the current result of the document; the extra token cache is limited to 10,000 entries and 4 Mi UTF-16 units, without storing lines above 4,096 units.
+- The word/character count is updated from the edited range. The full text is only joined on request, so the status bar does not read and recount the whole document.
+- Syntax and `hidden` tags are applied through `LineTagger`, which remembers the last tags on each line. `MarkdownView` records the edited range (the `insert-text`/`delete-range` signals, stored as two `GtkTextMark`s), so when re-highlighting only the edited lines or those whose tags differ are touched. The other lines are simply left alone: the tags move along with the text.
+- When opening or pasting many lines, adjacent tag ranges are merged before being applied, so GTK receives fewer operations. A highlight called directly from `setText()` cancels the highlight callback that is still queued.
+- Unchanged tables and code block colors keep the tags that already moved along with the text in GTK. The outline keeps its labels when only the heading line numbers change; the click targets are still updated.
+- Tags with few ranges (`dim`, `tablehide`, `mermaidhide`, table/image/diagram spacing, code block colors) are applied with `setTagRanges()`: the ranges that are already applied are read from the buffer, and then only the difference is removed or added.
+- The test "incremental highlighting is the same as highlighting from scratch" (`tests/gui/robust.ts`) edits the sample document randomly and checks that the result is the same as highlighting from scratch.
 
-`parseInline()` di `markdown/inline.ts` membuat salinan karakter hanya ketika masking diperlukan, dan memakai ulang string hasil masking selama tidak ada perubahan. Ia memakai teknik **masking**: setelah suatu bagian dikenali (misalnya kode inline), karakternya diganti `\0` agar tidak dikenali lagi oleh pola berikutnya. Itu sebabnya `` `**bukan tebal**` `` tetap tampil sebagai kode.
+`parseInline()` in `markdown/inline.ts` makes a copy of the characters only when masking is needed, and reuses the masked string as long as nothing changes. It uses a **masking** technique: after a part is recognized (for example inline code), its characters are replaced with `\0` so that later patterns do not recognize them again. That is why `` `**not bold**` `` is still shown as code.
 
-### Hal teknis yang perlu diketahui
+### Technical things to know
 
-**Posisi teks (`editor/offsets.ts`).** GtkTextBuffer menghitung posisi per karakter Unicode, sedangkan string JavaScript menghitung per unit UTF-16. Emoji 🎉 bernilai 1 di GTK tetapi 2 di JavaScript. Penyorot bekerja dengan posisi JavaScript, lalu mengonversinya dengan `makeCpMap()` tepat sebelum menyentuh buffer.
+**Text positions (`editor/offsets.ts`).** GtkTextBuffer counts positions per Unicode character, while JavaScript strings count per UTF-16 unit. The emoji 🎉 is 1 in GTK but 2 in JavaScript. The highlighter works with JavaScript positions, and converts them with `makeCpMap()` just before touching the buffer.
 
-**Menyembunyikan teks tanpa `invisible` (`editor/tags.ts`).** Atribut `invisible` milik GtkTextView di GTK 3 bisa memicu crash *"Byte index is off the end of the line"*. Karena itu tag `hidden` membuat teks sangat kecil dan berwarna sama dengan latar. Hasilnya di layar sama, tapi jalur kode GTK yang bermasalah tidak tersentuh. Cara ini dipertahankan setelah pindah ke GTK 4 karena seluruh tata letak tabel, diagram, dan marker bertumpu padanya.
+**Hiding text without `invisible` (`editor/tags.ts`).** The `invisible` attribute of GtkTextView in GTK 3 could trigger the crash *"Byte index is off the end of the line"*. That is why the `hidden` tag makes the text very small and the same color as the background. The result on screen is the same, but the problematic GTK code path is not touched. This approach was kept after moving to GTK 4 because the whole layout of tables, diagrams, and markers depends on it.
 
-Ukurannya **bukan 1** (satuan Pango, 1/1024 pt) melainkan 256 (`TINY` di `editor/tags.ts`). Font emoji berwarna adalah font bitmap, dan pada ukuran 1 skalanya menjadi nol sehingga GTK gagal menggambar seluruh jendela (*"invalid matrix (not invertible)"*). Ini ketahuan saat tabel berisi emoji dikecilkan; ada tes yang menjaganya.
+The size is **not 1** (a Pango unit, 1/1024 pt) but 256 (`TINY` in `editor/tags.ts`). The color emoji font is a bitmap font, and at size 1 its scale becomes zero so GTK fails to draw the whole window (*"invalid matrix (not invertible)"*). This was discovered when a table containing emoji was shrunk; there is a test that guards it.
 
-**Kolom teks di tengah (`editor/view.ts`).** Margin kiri/kanan dihitung dari lebar area yang terlihat, yaitu `page_size` adjustment horizontal yang diisi TextView saat dialokasikan (GTK 4 tidak punya sinyal `size-allocate`). ScrolledWindow memakai `hscrollbar_policy: EXTERNAL`, bukan `NEVER`. Lebar minimum GtkTextView yang dibungkus sama dengan lebarnya saat ini ditambah margin. Dengan `NEVER`, lebar minimum itu diteruskan ke jendela, sehingga jendela tidak bisa mengecil dan terus membesar setiap margin dihitung ulang.
+**The centered text column (`editor/view.ts`).** The left/right margins are calculated from the width of the visible area, which is the `page_size` of the horizontal adjustment that the TextView fills in when it is allocated (GTK 4 has no `size-allocate` signal). The ScrolledWindow uses `hscrollbar_policy: EXTERNAL`, not `NEVER`. The minimum width of a wrapped GtkTextView equals its current width plus the margins. With `NEVER`, that minimum width is passed on to the window, so the window cannot shrink and keeps growing every time the margins are recalculated.
 
-**Membuka dokumen panjang tanpa membeku (`replaceAllText()` di `editor/view.ts`).** GTK memberi tinggi 0 pada baris yang belum ditata. Jika gambar pertama setelah teks diganti mencakup area di bawah baris yang sudah ditata (cache piksel TextView menggambar setengah layar ekstra, dan `bottom_margin` memperpanjang kanvas), GTK menata *semua* baris sampai akhir dokumen sekaligus di thread utama; naskah 650 KB dulu membeku ±0,6 detik saat dibuka. `replaceAllText()` menolkan posisi gulir lalu mengantre gulir ke kursor, sehingga GTK lebih dulu menata dua layar di sekitar kursor dan sisanya sedikit demi sedikit di latar. Pakai fungsi ini setiap kali mengganti seluruh isi TextView yang bisa panjang (editor, penampil riwayat). Jangan mengubah `bottom_margin` saat runtime: setiap perubahan membuat GTK menata ulang seluruh dokumen. Gulir ke kursor hanya diantre jika TextView sudah punya ukuran: sebelum itu (jendela belum tampil, tab baru di `Gtk.Stack`) GTK 4 menyimpan gulirnya lalu menjalankannya dengan geometri kosong, sehingga dokumen terbuka di tengah atau akhir. Tes `file panjang di tab baru terbuka dari awal` di `tests/gui/tabs.ts` menjaganya.
+**Opening a long document without freezing (`replaceAllText()` in `editor/view.ts`).** GTK gives a height of 0 to lines that have not been laid out yet. If the first image after the text is replaced covers an area below the lines that have been laid out (the TextView pixel cache draws half a screen extra, and `bottom_margin` extends the canvas), GTK lays out *all* lines up to the end of the document at once on the main thread; a 650 KB manuscript used to freeze for ±0.6 seconds when opened. `replaceAllText()` zeroes the scroll position and then queues a scroll to the cursor, so GTK first lays out two screens around the cursor and the rest bit by bit in the background. Use this function whenever replacing the entire contents of a TextView that can be long (the editor, the history viewer). Do not change `bottom_margin` at runtime: every change makes GTK lay out the whole document again. The scroll to the cursor is only queued if the TextView already has a size: before that (the window is not shown yet, a new tab in a `Gtk.Stack`) GTK 4 stores the scroll and then runs it with empty geometry, so the document opens in the middle or at the end. The test `a long file in a new tab opens from the start, not scrolled to the middle` in `tests/gui/tabs.ts` guards this.
 
-**Penyorotan bertahap saat membuka (`queueFill()` di `editor/view.ts`).** `setText()` tetap mengurai seluruh dokumen (struktur baris, heading, dan offset dibutuhkan langsung), tetapi tag sintaks dan marker tersembunyi hanya dipasang untuk 200 baris pertama. Sisanya dicicil oleh idle berprioritas `HIGH_IDLE + 22` (≤8 ms per giliran): di atas penataan latar GtkTextView (125) supaya baris ditata sekali dengan tag akhirnya, di bawah menggambar (120) supaya layar tetap diperbarui. Tiap giliran mendahulukan baris di sekitar kursor dan yang terlihat (sebelum GTK selesai menata, area terlihat belum bisa dipercaya karena baris yang belum ditata setinggi 0), jadi melompat ke akhir dokumen tetap menampilkan teks terformat. `LineTagger.defer()`/`fill()` melewati baris yang ditunda; suntingan selama cicilan tetap disorot seperti biasa. Outline juga dibangun 50 baris per giliran. Tes yang memeriksa tag dokumen panjang menunggu `MarkdownView.highlightComplete`.
+**Incremental highlighting on open (`queueFill()` in `editor/view.ts`).** `setText()` still parses the whole document (the line structure, headings, and offsets are needed right away), but syntax tags and hidden markers are only applied for the first 200 lines. The rest are fed in by an idle with priority `HIGH_IDLE + 22` (≤8 ms per turn): above the GtkTextView background layout (125) so that lines are laid out once with their final tags, below drawing (120) so that the screen keeps updating. Each turn prioritizes the lines around the cursor and the visible ones (before GTK finishes the layout, the visible area cannot be trusted because lines not yet laid out are 0 high), so jumping to the end of the document still shows formatted text. `LineTagger.defer()`/`fill()` skip the deferred lines; edits during the feeding are still highlighted as usual. The outline is also built 50 lines per turn. Tests that check the tags of a long document wait for `MarkdownView.highlightComplete`.
 
-**Marker tersembunyi bertahap (`MarkerConcealer` di `editor/decorations.ts`).** Tiap ketukan dan perpindahan kursor hanya memeriksa baris aktif lama dan baru, baris yang diurai ulang penyorot (`reparsed` di hasil `highlight()`), dan baris yang tagnya belum diketahui. Pembatas ``` baru bisa mengubah marker baris di bawahnya tanpa menyunting baris itu, karena itu rentang `reparsed` wajib diteruskan. Marker di hasil penyorot urut menurut barisnya (dicari dengan pencarian biner), dan marker/heading/gambar setelah suntingan digeser di tempat karena snapshot lama tidak dipakai lagi.
+**Incremental hidden markers (`MarkerConcealer` in `editor/decorations.ts`).** Each keystroke and cursor move only checks the old and new active lines, the lines the highlighter re-parsed (`reparsed` in the `highlight()` result), and the lines whose tags are not yet known. A new ``` fence can change the markers of the lines below it without editing those lines, which is why the `reparsed` range must be passed on. The markers in the highlighter result are ordered by line (found by binary search), and the markers/headings/images are shifted in place after an edit because the old snapshot is no longer used.
 
-**Auto save di latar (`writeTextFileAsync()` di `files.ts`).** Auto save dari timer menulis lewat Gio di thread pekerja (file sementara, fsync, lalu rename atomik), jadi jeda fsync di disk lambat tidak terasa saat pengguna lanjut mengetik. Semua penulisan sinkron, pemindahan, dan pembuangan file lewat `files.ts`/`fileops.ts` lebih dulu menunggu penulisan latar ke path yang sama (`waitForWrites()`), supaya isi lama tidak menimpa yang baru. Status *modified* hanya direset jika teks tidak berubah selama ditulis.
+**Background auto save (`writeTextFileAsync()` in `files.ts`).** Timer-driven auto save writes through Gio on a worker thread (a temporary file, fsync, then an atomic rename), so the fsync pause on a slow disk is not felt while the user keeps typing. All synchronous writes, moves, and deletions of files through `files.ts`/`fileops.ts` first wait for background writes to the same path (`waitForWrites()`), so that old contents do not overwrite new ones. The *modified* status is only reset if the text did not change while it was being written.
 
-### Catatan GTK 4
+### GTK 4 notes
 
-Nyerat berjalan di GTK 4, GtkSourceView 5, dan WebKitGTK 6.0. Beberapa perilaku GTK 4 (lewat GJS) memengaruhi cara kode ditulis:
+Nyerat runs on GTK 4, GtkSourceView 5, and WebKitGTK 6.0. Some GTK 4 behaviors (through GJS) affect how the code is written:
 
-- **Sinyal `destroy` tidak berbunyi untuk widget yang masih dipegang JavaScript.** Widget anak baru di-*dispose* saat referensi terakhirnya hilang, dan GJS memegang referensi selama objek JavaScript-nya hidup. Karena itu pembersihan dilakukan eksplisit: `MarkdownView.destroy()` (dipanggil saat tab ditutup) menghentikan idle/timer editor beserta lapisan gambar, tabel, dan diagram; `MainWindow` memanggil `destroy()` semua komponennya saat jendelanya di-*unrealize* (sinyal yang memang berbunyi ketika jendela dihancurkan). Jendela kecil (riwayat, penampil gambar) menandai dirinya tertutup lewat `unrealize` juga.
-- **Anak overlay GtkTextView tidak bisa dilepas.** Di GTK 4.14, `gtk_text_view_remove()` tidak mengenal anak yang ditambahkan dengan `add_overlay()` (berakhir dengan *"GtkBox is not a child of GtkSourceView"*). `editor/overlays.ts` meminjamkan slot (`Gtk.Box` yang sudah menjadi overlay) ke gambar, tabel, dan diagram; slot yang dikembalikan dikosongkan, disembunyikan, lalu dipakai blok berikutnya. Penerima klik dipasang di isi slot, bukan di slotnya.
-- **Overlay GtkTextView tidak ikut bergulir sendiri.** Posisinya koordinat buffer, dan wadah overlay (`GtkTextViewChild`) menguranginya dengan offset gulir saat dialokasikan. Tetapi di GTK 4.14 offset itu hanya diperbarui di `size_allocate` TextView, dan menggulir tidak mengalokasikan ulang apa pun: gambar, tabel, dan diagram tertinggal di letak lama (tidak tampil atau melayang di atas teks). `OverlaySlots` karena itu meminta alokasi ulang TextView **dan** wadahnya setiap adjustment bergulir (GTK melewati alokasi wadah yang ukurannya tidak berubah). Biaya per langkah gulir tidak terukur (median ±0,22 ms dengan maupun tanpa). Tes `gambar di bawah dokumen panjang tampil di tempatnya setelah digulir` dan tes grid tabel memeriksa letak widget sebenarnya, bukan angka yang disimpan lapisan.
-- **`ListBox.remove_all()` ikut membuang placeholder** di GTK 4.14; `removeChildren()` (`gtkutil.ts`) membuang baris satu per satu.
-- **Dialog modal tanpa main loop bersarang.** `gtk_dialog_run()` sengaja dihapus GTK 4: main loop di dalam handler membuat kode lain berjalan di tengah-tengah handler itu. Dialog di `ui/dialogs.ts` mengembalikan Promise (`modal()` di `gtkutil.ts`), dan pemanggil melanjutkan lewat `after(nilai, lanjutan)`: nilai biasa (jalur yang tidak perlu bertanya, atau tiruan dialog di tes) diproses seketika, Promise setelah dijawab. Karena itu `closeTab()`, `save()`, dan `onClose()` tetap sinkron bila tidak ada yang perlu ditanyakan. Penutupan jendela yang perlu konfirmasi ditahan (`close-request` mengembalikan true), lalu `close()` dipanggil lagi setelah semua dialog dijawab setuju. Lanjutan yang berjalan setelah dialog memeriksa ulang keadaan (tab masih ada, kartu masih sama) karena pengguna bisa saja mengubahnya. Pemilih berkas memakai `Gtk.FileDialog` (sudah menanyakan sebelum menimpa; di desktop yang punya xdg-desktop-portal, dialognya dibuka portal). Pesan dan formulir memakai `Adw.AlertDialog` dan `Adw.Dialog` (`modalWindow()`), bukan `Gtk.AlertDialog` dan tanpa `destroy_with_parent`: keduanya menghubungkan dialog ke sinyal `destroy` jendela induk, dan saat proses keluar GJS bisa memfinalisasi induk lebih dulu sehingga muncul GLib-GObject-CRITICAL.
-- **Gambar sebagai `Gdk.Texture`.** `Gtk.Picture.new_for_pixbuf()` (usang sejak GTK 4.12), `Gdk.pixbuf_get_from_texture()` (4.12), dan `Gdk.cairo_set_source_pixbuf()` (4.20) tidak dipakai. Pixbuf tetap dipakai untuk memuat dan memperkecil gambar, lalu `textureFromPixbuf()`/`pixbufFromTexture()` (`gtkutil.ts`) menyalin pikselnya lewat `Gdk.MemoryTexture` dan `Gdk.TextureDownloader`. Penampil gambar menggambar teksturnya dengan `Gtk.Snapshot.append_scaled_texture()`.
-- **Tata letak adaptif.** Dua `Adw.Breakpoint` di jendela: di bawah 900sp panel Asisten melipat menjadi panel melayang, di bawah 600sp sidebar juga. Ukuran minimum jendela 360 × 294. OverlaySplitView dipasang dengan `pin_sidebar` supaya libadwaita tidak membuka panel sendiri saat jendela melebar; `bindPanel()` menutup panel saat melipat dan memulihkan pengaturan sebelumnya saat melebar (juga saat jendela ditutup selagi sempit).
-- **`hexpand`/`vexpand` diteruskan ke atas.** Di GTK 4, widget yang punya anak mengembang ikut mengembang. Sidebar, tab Riwayat, tab Berkas, dan panel Asisten diberi `hexpand: false` eksplisit, supaya tidak ikut dibagi ruang sisa jendela (dijaga tes `tab riwayat tidak membuat sidebar mengembang`). `pack(box, child, expand)` di `gtkutil.ts` menggantikan `pack_start()` dan menyetel ekspansi sesuai orientasi box.
-- **Seleksi jangan sampai kosong di tengah suntingan.** Di X11, seleksi yang sempat kosong melepas clipboard PRIMARY, dan GTK 4 membatalkan seleksi berikutnya begitu server mengonfirmasi pelepasan itu. `wrapSelection()` (`editor/editing.ts`) karena itu hanya menyisipkan/menghapus penanda di kedua ujung, tanpa menghapus seluruh seleksi dulu; tanpa itu Ctrl+B kedua tidak melepas `**`.
-- **Pohon berkas (TreeListModel + ListView) dan seret-lepas.** Tiap folder adalah `Gio.ListStore<FileNode>`; `Gtk.TreeListModel` memanggil fungsi pembuat anak juga hanya untuk memeriksa apakah baris bisa dibuka, jadi isi folder disimpan di `dirStores` dan dibaca sekali. Seret memakai `Gtk.DragSource`/`Gtk.DropTarget` pada ListView; baris di titik kursor dicari lewat `pick()` (baris adalah anak langsung ListView, isinya `TreeExpander`). Penanda tujuan memakai seleksi baris. Ikon drag diambil dari tema ikon; widget sebagai ikon (`GtkDragIcon`) memicu Gtk-CRITICAL saat drag selesai.
-- **Gtk.Template tanpa glib-compile-resources.** Berkas `.ui` diimpor sebagai teks (`import xml from './x.ui?raw'`) dan diberikan ke `Template:` sebagai `Uint8Array` (`uiTemplate()` di `gtkutil.ts`); tidak ada GResource yang perlu dikompilasi. `Adw.HeaderBar` kelas final, jadi `HeaderBar` membungkusnya dalam `Adw.Bin`.
-- **Pengaturan di GSettings.** Schema ada di `data/` dan dikompilasi ke `dist/` oleh plugin Vite; `settings.ts` memuatnya dari folder bundel bila ada, kalau tidak dari direktori schema sistem (versi terpasang). Toggle di menu (`sidebar`, `chat`, `focus`, `typewriter`, `autosave`) adalah `Gio.Settings.create_action`, sidebar dan panel Asisten terikat dengan `Gio.Settings.bind` ke `show-sidebar` (lewat `bindPanel()`, lihat tata letak adaptif), dan `MainWindow.onSettingChanged` menerapkan sisanya (termasuk perubahan dari dialog preferensi).
-- **Warna.** Antarmuka (sidebar, panel Asisten, papan, warna status) memakai warna bernama Adwaita (`@accent_color`, `@card_bg_color`, `@error_bg_color`, ...), jadi ikut aksen sistem dan mode kontras tinggi. Permukaan dokumen (editor, tabel, tag teks, diagram) tetap memakai palet `theme.ts` karena `GtkTextTag` dan render diagram butuh nilai warna nyata dan tag `hidden` harus persis sama dengan latar editor; aksennya diambil dari `Adw.StyleManager.get_accent_color_rgba()` bila libadwaita ≥ 1.6.
-- **Menu konteks sebagai data.** `Gtk.Menu` sudah tidak ada. Menu klik kanan (pohon berkas, kartu, daftar) dibangun sebagai `MenuEntry[]` (`ui/menu.ts`) lalu diubah menjadi `Gtk.PopoverMenu` beraksi `menu.*`; tes cukup mencari entri dan memanggil `run()`.
-- **Tangkapan layar.** `gdk_pixbuf_get_from_window()` sudah tidak ada. `tests/widgets.ts` menggambar widget lewat `Gtk.WidgetPaintable` lalu merendernya menjadi tekstur dengan renderer jendelanya (dipakai `--screenshot` dan `scripts/capture.ts`).
+- **The `destroy` signal does not fire for widgets that JavaScript still holds.** A child widget is only *disposed* when its last reference is gone, and GJS holds a reference as long as its JavaScript object is alive. That is why cleanup is explicit: `MarkdownView.destroy()` (called when a tab is closed) stops the editor's idles/timers along with the image, table, and diagram layers; `MainWindow` calls `destroy()` on all its components when its window is *unrealized* (a signal that does fire when the window is destroyed). Small windows (history, image viewer) mark themselves closed through `unrealize` as well.
+- **GtkTextView overlay children cannot be removed.** In GTK 4.14, `gtk_text_view_remove()` does not recognize children added with `add_overlay()` (it ends with *"GtkBox is not a child of GtkSourceView"*). `editor/overlays.ts` lends out slots (a `Gtk.Box` that is already an overlay) to images, tables, and diagrams; a returned slot is emptied, hidden, and then used by the next block. Click receivers are attached to the contents of the slot, not to the slot itself.
+- **GtkTextView overlays do not scroll on their own.** Their position is in buffer coordinates, and the overlay container (`GtkTextViewChild`) subtracts the scroll offset from it when allocated. But in GTK 4.14 that offset is only updated in the TextView's `size_allocate`, and scrolling does not reallocate anything: images, tables, and diagrams stay at the old place (not visible or floating over the text). `OverlaySlots` therefore requests a reallocation of the TextView **and** its container every time an adjustment scrolls (GTK skips the allocation of a container whose size did not change). The cost per scroll step is not measurable (median ±0.22 ms with or without). The test `an image below a long document is shown in place after scrolling` and the table grid tests check the actual position of the widget, not the number stored by the layer.
+- **`ListBox.remove_all()` also removes the placeholder** in GTK 4.14; `removeChildren()` (`gtkutil.ts`) removes rows one by one.
+- **Modal dialogs without a nested main loop.** `gtk_dialog_run()` was deliberately removed in GTK 4: a main loop inside a handler makes other code run in the middle of that handler. The dialogs in `ui/dialogs.ts` return a Promise (`modal()` in `gtkutil.ts`), and callers continue through `after(value, continuation)`: plain values (paths that do not need to ask, or dialog fakes in tests) are processed immediately, Promises after they are answered. That is why `closeTab()`, `save()`, and `onClose()` stay synchronous when there is nothing to ask. Closing a window that needs confirmation is held back (`close-request` returns true), and then `close()` is called again once all the dialogs are answered with consent. Continuations that run after a dialog re-check the state (the tab still exists, the card is still the same) because the user may have changed it. The file chooser uses `Gtk.FileDialog` (it already asks before overwriting; on desktops with an xdg-desktop-portal, the dialog is opened by the portal). Messages and forms use `Adw.AlertDialog` and `Adw.Dialog` (`modalWindow()`), not `Gtk.AlertDialog` and without `destroy_with_parent`: both connect the dialog to the parent window's `destroy` signal, and when the process exits GJS may finalize the parent first, producing a GLib-GObject-CRITICAL.
+- **Images as `Gdk.Texture`.** `Gtk.Picture.new_for_pixbuf()` (deprecated since GTK 4.12), `Gdk.pixbuf_get_from_texture()` (4.12), and `Gdk.cairo_set_source_pixbuf()` (4.20) are not used. Pixbufs are still used for loading and shrinking images, and then `textureFromPixbuf()`/`pixbufFromTexture()` (`gtkutil.ts`) copy the pixels through `Gdk.MemoryTexture` and `Gdk.TextureDownloader`. The image viewer draws its texture with `Gtk.Snapshot.append_scaled_texture()`.
+- **Adaptive layout.** Two `Adw.Breakpoint`s on the window: below 900sp the Assistant panel folds into a floating panel, below 600sp the sidebar does too. The minimum window size is 360 × 294. The OverlaySplitView is set up with `pin_sidebar` so that libadwaita does not open a panel by itself when the window widens; `bindPanel()` closes the panel when folding and restores the previous setting when widening (also when the window is closed while narrow).
+- **`hexpand`/`vexpand` propagate upward.** In GTK 4, a widget with an expanding child expands too. The sidebar, the History tab, the Files tab, and the Assistant panel are given an explicit `hexpand: false`, so they are not also given a share of the window's remaining space (guarded by the test `the history tab does not make the sidebar expand`). `pack(box, child, expand)` in `gtkutil.ts` replaces `pack_start()` and sets the expansion according to the box orientation.
+- **The selection must not become empty in the middle of an edit.** On X11, a selection that was briefly empty releases the PRIMARY clipboard, and GTK 4 cancels the next selection as soon as the server confirms that release. `wrapSelection()` (`editor/editing.ts`) therefore only inserts/removes the delimiters at both ends, without first deleting the whole selection; without that, a second Ctrl+B does not remove the `**`.
+- **The file tree (TreeListModel + ListView) and drag and drop.** Each folder is a `Gio.ListStore<FileNode>`; `Gtk.TreeListModel` also calls the child-creating function just to check whether a row can be expanded, so folder contents are stored in `dirStores` and read once. Dragging uses `Gtk.DragSource`/`Gtk.DropTarget` on the ListView; the row at the cursor is found with `pick()` (rows are direct children of the ListView, with a `TreeExpander` inside). The drop target marker uses row selection. The drag icon is taken from the icon theme; a widget as the icon (`GtkDragIcon`) triggers a Gtk-CRITICAL when the drag ends.
+- **Gtk.Template without glib-compile-resources.** `.ui` files are imported as text (`import xml from './x.ui?raw'`) and given to `Template:` as a `Uint8Array` (`uiTemplate()` in `gtkutil.ts`); there is no GResource to compile. `Adw.HeaderBar` is a final class, so `HeaderBar` wraps it in an `Adw.Bin`.
+- **Settings in GSettings.** The schema is in `data/` and compiled into `dist/` by the Vite plugin; `settings.ts` loads it from the bundle folder if present, otherwise from the system schema directory (the installed version). The menu toggles (`sidebar`, `chat`, `focus`, `typewriter`, `autosave`) are `Gio.Settings.create_action`, the sidebar and the Assistant panel are bound with `Gio.Settings.bind` to `show-sidebar` (through `bindPanel()`, see the adaptive layout), and `MainWindow.onSettingChanged` applies the rest (including changes from the preferences dialog).
+- **Colors.** The interface (sidebar, Assistant panel, board, status colors) uses named Adwaita colors (`@accent_color`, `@card_bg_color`, `@error_bg_color`, ...), so it follows the system accent and the high contrast mode. Document surfaces (the editor, tables, text tags, diagrams) still use the `theme.ts` palette because `GtkTextTag` and diagram rendering need real color values and the `hidden` tag must be exactly the same as the editor background; the accent is taken from `Adw.StyleManager.get_accent_color_rgba()` if libadwaita ≥ 1.6.
+- **Context menus as data.** `Gtk.Menu` no longer exists. Right-click menus (the file tree, cards, lists) are built as `MenuEntry[]` (`ui/menu.ts`) and then turned into a `Gtk.PopoverMenu` with `menu.*` actions; tests only need to find an entry and call `run()`.
+- **Screenshots.** `gdk_pixbuf_get_from_window()` no longer exists. `tests/widgets.ts` draws a widget through `Gtk.WidgetPaintable` and then renders it into a texture with its window's renderer (used by `--screenshot` and `scripts/capture.ts`).
 
-### Cara kerja gambar (`editor/images.ts`)
+### How images work (`editor/images.ts`)
 
-Gambar tidak dimasukkan ke buffer teks. Jika memakai `GtkTextChildAnchor`, setiap gambar akan menambah karakter ke dokumen dan ke riwayat undo. Sebagai gantinya:
+Images are not put in the text buffer. If `GtkTextChildAnchor` were used, every image would add a character to the document and to the undo history. Instead:
 
-1. `highlighter.ts` mencatat setiap gambar beserta barisnya: `{ line, url, alt }`.
-2. `ImageLayer` memuat gambar secara async lewat GIO (file lokal, atau http/https lewat gvfs) dan menyimpannya di cache per URI. Mengetik tidak memuat ulang gambar yang sama.
-3. Di bawah baris gambar disediakan ruang kosong dengan tag `pixels_below_lines` setinggi gambarnya.
-4. Widget gambar ditempel di atas ruang itu sebagai overlay TextView (slot dari `editor/overlays.ts`, posisinya diatur dengan `move_overlay()`). Posisinya dalam koordinat buffer sehingga ikut bergulir, dan dihitung ulang dari `get_line_yrange()` setiap kali tata letak berubah (perubahan terlihat dari adjustment vertikal).
-5. Widget dicocokkan berdasarkan URI, bukan nomor baris. Jika ada baris baru di atasnya, widget yang sama hanya dipindahkan, tidak dibuat ulang.
+1. `highlighter.ts` records every image with its line: `{ line, url, alt }`.
+2. `ImageLayer` loads the image asynchronously through GIO (a local file, or http/https through gvfs) and stores it in a cache per URI. Typing does not reload the same image.
+3. Below the image line, empty space is reserved with a `pixels_below_lines` tag as tall as the image.
+4. The image widget is placed over that space as a TextView overlay (a slot from `editor/overlays.ts`, positioned with `move_overlay()`). Its position is in buffer coordinates so that it scrolls along, and it is recalculated from `get_line_yrange()` every time the layout changes (a change visible through the vertical adjustment).
+5. Widgets are matched by URI, not by line number. If a new line appears above, the same widget is just moved, not recreated.
 
-Seperti format lain, seluruh `![alt](url)` didaftarkan sebagai marker, jadi sintaksnya tersembunyi kecuali di baris aktif.
+Like the other formats, the whole `![alt](url)` is registered as a marker, so the syntax is hidden except on the active line.
 
-### Cara kerja tabel (`editor/tablelayer.ts`, `tableedit.ts`, `markdown/table.ts`)
+### How tables work (`editor/tablelayer.ts`, `tableedit.ts`, `markdown/table.ts`)
 
-Tabel memakai cara yang sama dengan gambar: widget ditempel di atas ruang kosong di dalam teks, sehingga isi dokumen tidak berubah. Bedanya, tabel punya dua keadaan yang mengikuti kursor:
+Tables use the same approach as images: a widget is placed over an empty space inside the text, so the contents of the document do not change. The difference is that a table has two states that follow the cursor:
 
-| Kursor | Teks tabel | Grid |
+| Cursor | Table text | Grid |
 | --- | --- | --- |
-| di luar tabel | dikecilkan jadi ~1 px per baris (tag `tablehide`) | tampil, di ruang yang disediakan di bawah baris terakhir |
-| di dalam tabel | tampil sebagai teks mentah, untuk disunting | hilang |
+| outside the table | shrunk to ~1 px per line (the `tablehide` tag) | shown, in the space reserved below the last line |
+| inside the table | shown as raw text, to be edited | gone |
 
-1. `markdown/table.ts` mengenali blok tabel (`findTables()`), dan itu satu-satunya tempat aturan tabel ditulis: penyorot, perintah edit, dan ekspor HTML semuanya memakainya.
-2. `highlighter.ts` meneruskan rentang baris tiap tabel ke `TableLayer`.
-3. Saat tabel perlu tampil sebagai grid, `TableLayer` memecah isinya (`parseTable()`), membuat `Gtk.Label` untuk setiap sel dengan markup Pango dari `markdown/pango.ts` (tebal, miring, kode, tautan), lalu menyusunnya di `Gtk.Grid`. Ukuran tabel diukur dengan dua sel GTK yang dipakai ulang; grid lengkap baru dibuat ketika tabel terlihat. Ukuran disimpan pada blok tabel aktif; cache yang dipakai bersama dibatasi 256 tabel dan 1.024 sel, masing-masing maksimal 1 Mi unit UTF-16 kunci. Mengetik di dalam tabel tidak membangun grid.
-4. Ruang kosong disediakan lewat tag `pixels_below_lines` di baris terakhir tabel setinggi grid, lalu grid ditempel di atasnya sebagai overlay (slot dari `editor/overlays.ts`). Saat kursor atau seleksi berpindah, hanya tag tabel yang berganti keadaan yang diubah. Posisi dihitung ulang dari `get_line_yrange()` hanya untuk grid yang terlihat; grid di luar layar disembunyikan tanpa menghapus ruangnya, lalu diposisikan ketika digulir ke layar. Ini mencegah perpindahan kursor memaksa GTK menata seluruh dokumen. Mengubah lebar kolom memakai ulang grid dan mengatur ulang lebar sel tanpa membongkar widget; ellipsize menjaga tinggi tabel tetap sama.
-5. Lebar kolom sebesar teks terpanjang. Jika jumlahnya melebihi lebar kolom teks, kolom yang sempit dibiarkan dan sisa ruang dibagi ke kolom yang lebar (`fitColumns()`), lalu teksnya dipotong dengan "…". Lebarnya harus dipaksa dengan `set_size_request`, karena TextView hanya memberi anak widget ukuran minimumnya.
-6. Klik sel menaruh kursor di sel itu pada teks mentah (`cellStart()`), yang otomatis membuka tabelnya.
-7. `tableedit.ts` membaca ulang dokumen dari buffer setiap kali dipakai (bukan dari hasil penyorotan terakhir), lalu menulis ulang baris tabel dalam satu langkah undo. Perintah menu selalu menghasilkan tabel yang dirapikan, karena menambah atau menghapus kolom mengubah lebar kolom.
+1. `markdown/table.ts` recognizes table blocks (`findTables()`), and it is the only place where the table rules are written: the highlighter, the edit commands, and the HTML export all use it.
+2. `highlighter.ts` passes the line range of each table on to `TableLayer`.
+3. When a table needs to be shown as a grid, `TableLayer` splits its contents (`parseTable()`), creates a `Gtk.Label` for every cell with Pango markup from `markdown/pango.ts` (bold, italic, code, links), and then arranges them in a `Gtk.Grid`. The table is measured with two reused GTK cells; the full grid is only created when the table is visible. The size is stored on the active table block; the shared cache is limited to 256 tables and 1,024 cells, each with a key of at most 1 Mi UTF-16 units. Typing inside a table does not build the grid.
+4. The empty space is reserved through a `pixels_below_lines` tag on the last line of the table as tall as the grid, and then the grid is placed over it as an overlay (a slot from `editor/overlays.ts`). When the cursor or the selection moves, only the tables whose state changed have their tags changed. The position is recalculated from `get_line_yrange()` only for visible grids; off-screen grids are hidden without removing their space, and positioned when scrolled onto the screen. This prevents cursor moves from forcing GTK to lay out the entire document. Changing the column width reuses the grid and resets the cell widths without tearing down the widgets; ellipsize keeps the table height the same.
+5. A column is as wide as its longest text. If the total exceeds the width of the text column, narrow columns are left alone and the remaining space is divided among the wide columns (`fitColumns()`), and then the text is cut with "…". The width has to be forced with `set_size_request`, because a TextView only gives child widgets their minimum size.
+6. Clicking a cell puts the cursor in that cell in the raw text (`cellStart()`), which automatically opens the table.
+7. `tableedit.ts` re-reads the document from the buffer every time it is used (not from the last highlight result), and then rewrites the table lines in a single undo step. Menu commands always produce a tidied table, because adding or removing columns changes the column widths.
 
-### Cara kerja diagram Mermaid (`editor/mermaid.ts`, `mermaidrender.ts`)
+### How Mermaid diagrams work (`editor/mermaid.ts`, `mermaidrender.ts`)
 
-Mermaid hanya berjalan di browser (butuh DOM dan pengukuran teks), jadi tidak bisa dipanggil langsung dari GJS.
+Mermaid only runs in a browser (it needs the DOM and text measurement), so it cannot be called directly from GJS.
 
-1. **Perender (`mermaidrender.ts`).** Satu `WebKitWebView` (WebKitGTK 6.0) yang tidak pernah dipasang di jendela memuat `mermaid.min.js`. Skrip itu disalin dari `node_modules/mermaid` ke `dist/` oleh plugin kecil di `vite.config.ts`. Untuk tiap diagram, halaman menjalankan `mermaid.render()` lalu mengirim ukurannya kembali lewat *script message handler*; snapshot seluruh dokumen (WebKit menggambarnya walau view tidak tampil, dan ukurannya mengikuti isi halaman) dipotong seukuran diagram menjadi `GdkPixbuf`. Snapshot dipilih daripada SVG + librsvg karena label Mermaid memakai `<foreignObject>` yang tidak didukung librsvg.
-2. WebKitGTK dimuat dengan `import()` dan WebView baru dibuat saat diagram pertama dibutuhkan, jadi dokumen tanpa diagram tidak membayar biayanya (dan aplikasi tetap jalan tanpa WebKitGTK). Diagram dirender satu per satu, hasilnya disimpan di cache per (tema, kode).
-3. **Lapisan (`mermaid.ts`)** meniru `TableLayer`: gambar ditempel di ruang kosong di bawah baris penutup blok (`pixels_below_lines`). Saat kursor di luar blok, semua barisnya dikecilkan dengan tag `mermaidhide`; saat di dalam, kode tampil dan diagram menjadi pratinjau di bawahnya. Tag-nya terpisah dari `tablehide` karena tiap lapisan menghapus tag-nya di seluruh dokumen saat sinkron.
-4. Render ditunda 400 ms setelah kode berubah; diagram lama tetap tampil selama dirender ulang. Blok yang gagal dirender (galat sintaks) tidak pernah disembunyikan.
-5. **DBML** memakai jalur yang sama: `markdown/dbml.ts` (`dbmlToMermaid()`) mengurai DBML dan menulisnya sebagai `erDiagram`, lalu hasilnya dirender seperti kode Mermaid biasa. Galat DBML dilempar sebagai `DbmlError` (berisi nomor baris) dan ditampilkan seketika oleh lapisan tanpa melewati WebKit.
+1. **The renderer (`mermaidrender.ts`).** A single `WebKitWebView` (WebKitGTK 6.0) that is never attached to a window loads `mermaid.min.js`. That script is copied from `node_modules/mermaid` to `dist/` by a small plugin in `vite.config.ts`. For each diagram, the page runs `mermaid.render()` and then sends its size back through a *script message handler*; a snapshot of the whole document (WebKit draws it even if the view is not shown, and its size follows the page contents) is cropped to the size of the diagram into a `GdkPixbuf`. A snapshot was chosen over SVG + librsvg because Mermaid labels use `<foreignObject>`, which librsvg does not support.
+2. WebKitGTK is loaded with `import()` and the WebView is only created when the first diagram is needed, so a document without diagrams does not pay for it (and the app still runs without WebKitGTK). Diagrams are rendered one at a time, and the results are stored in a cache per (theme, code).
+3. **The layer (`mermaid.ts`)** imitates `TableLayer`: the image is placed over the empty space below the closing line of the block (`pixels_below_lines`). When the cursor is outside the block, all its lines are shrunk with the `mermaidhide` tag; when inside, the code is shown and the diagram becomes a preview below it. Its tag is separate from `tablehide` because each layer removes its tags across the whole document when it syncs.
+4. Rendering is delayed 400 ms after the code changes; the old diagram stays visible while it re-renders. A block that fails to render (a syntax error) is never hidden.
+5. **DBML** uses the same path: `markdown/dbml.ts` (`dbmlToMermaid()`) parses DBML and writes it as an `erDiagram`, and then the result is rendered like ordinary Mermaid code. DBML errors are thrown as a `DbmlError` (containing the line number) and shown immediately by the layer without going through WebKit.
 
-### Cara kerja papan kanban (`markdown/kanban.ts`, `ui/kanban.ts`)
+### How the kanban board works (`markdown/kanban.ts`, `ui/kanban.ts`)
 
-**Format.** Papan adalah file Markdown biasa:
-
-```markdown
----
-kanban: true
----
-
-## Rencana
-
-- [ ] Tulis laporan #penting @{2026-10-20}
-  catatan kartu (baris yang diindentasi)
-- [ ] Kirim undangan
-
-## Selesai
-
-- [x] Pesan tempat
-```
-
-Frontmatter `kanban: true` (juga `kanban: yes`, tanpa membedakan huruf besar/kecil, boleh dikutip) menandai dokumen sebagai papan; penanda dicari dalam 40 baris pertama sebelum penutup frontmatter. Dokumen tanpa penanda tetap dibuka sebagai teks biasa. Penanda lama `kanban-plugin: …` (dari plugin Kanban Obsidian, nilai satu token tidak kosong) juga dikenali, dan frontmatter yang sudah ada dipertahankan apa adanya saat disimpan. Heading `##` adalah daftar, item daftar adalah kartu (`[x]` = selesai, tanpa kotak = item biasa), dan baris yang diindentasi di bawah kartu adalah catatannya. Hal yang tidak dikenali (judul papan di atas, baris biasa di dalam daftar seperti `**Complete**` atau `***`, dan blok `%% kanban:settings` di akhir) dipertahankan apa adanya, jadi file dari Obsidian tidak rusak.
-
-**Alur data.** Teks dokumen di buffer adalah satu-satunya sumber kebenaran:
-
-```
-buffer teks ──parseBoard()──► KanbanBoard (model + tampilan)
-     ▲                              │ commit(papan baru)
-     └──── replaceText() ◄── serializeBoard() ◄──┘   (satu langkah undo)
-```
-
-1. Saat dokumen kanban dibuka, `MainWindow.syncMode()` mengganti editor dengan papan (`Gtk.Stack`) dan membaca teksnya dengan `parseBoard()`.
-2. Setiap perubahan dari papan lewat `commit()`: model baru ditulis dengan `serializeBoard()` lalu dimasukkan ke buffer lewat `MarkdownView.replaceText()`, yang hanya mengganti bagian tengah teks yang berbeda dan menjadikannya satu langkah undo.
-3. Undo/redo (aksi `undo`/`redo`, `Ctrl+Z`) mengubah buffer. Perubahan yang bukan dari papan sendiri dikenali dengan membandingkan teks dengan yang terakhir ditulis papan, lalu papan membaca ulang teksnya.
-4. Semua operasi atas model (`addCard`, `moveCard`, `moveColumn`, …) murni dan tidak mengubah papan asal, sehingga mudah diuji. `moveCard` memakai posisi *akhir* kartu di daftar tujuan, jadi memindahkan ke bawah di daftar yang sama tidak butuh penyesuaian.
-
-**Menyeret.** Tidak memakai drag-and-drop bawaan GTK, melainkan penunjuk sendiri (`Gtk.GestureDrag` di tiap kartu): tekan di kartu, gerakkan lebih dari 6 piksel, lepas. Selama menyeret, kartu bayangan (gambar diam kartu dari `Gtk.WidgetPaintable`, di lapisan `Gtk.Overlay` di atas papan, karena GTK 4 tidak bisa memindahkan jendela popup sendiri) mengikuti penunjuk, kartu asal diredupkan, dan penanda putus-putus menunjukkan tujuan. Tujuan dihitung dari posisi penunjuk: daftar yang melingkupinya (atau yang terdekat), lalu `dropIndex()` menghitung berapa kartu lain yang titik tengahnya di atas penunjuk. Dekat tepi, papan atau daftar tujuan digulir otomatis. Gerakan di bawah 6 piksel dianggap klik biasa dan membuka dialog sunting. Cara ini dipilih supaya perilakunya terkendali dan bisa diuji dengan memanggil `onCardPress()`/`onCardMotion()`/`onCardRelease()` langsung (koordinat kartu).
-
-**Dialog** (`editCardDialog`, `promptDialog`, `confirmDialog`) menahan program sampai ditutup, jadi `KanbanBoard.dialogs` bisa diganti, dan tes memakai pengganti.
-
-### Cara kerja orkestrator harness (`agent/harness.ts`, `orchestrator.ts`)
+**Format.** A board is an ordinary Markdown file:
 
 ```markdown
 ---
 kanban: true
-proyek: web-ecommerce          ← proyek bawaan papan
 ---
 
-## Rencana
-- [ ] Checkout pakai QRIS @pi #fitur          ← @pi = harness yang ditugasi
-- [ ] Tes keranjang @pi #proyek/toko-admin     ← tag proyek menang atas frontmatter
+## Plan
+
+- [ ] Write the report #important @{2026-10-20}
+  card note (an indented line)
+- [ ] Send the invitations
+
+## Done
+
+- [x] Book the venue
+```
+
+The frontmatter `kanban: true` (also `kanban: yes`, case-insensitive, may be quoted) marks a document as a board; the marker is looked for in the first 40 lines before the closing frontmatter delimiter. A document without the marker is still opened as ordinary text. The old marker `kanban-plugin: …` (from the Obsidian Kanban plugin, a non-empty single-token value) is also recognized, and existing frontmatter is kept as it is when saving. A `##` heading is a list, a list item is a card (`[x]` = done, no box = an ordinary item), and lines indented under a card are its note. Anything not recognized (a board title at the top, ordinary lines inside a list such as `**Complete**` or `***`, and the `%% kanban:settings` block at the end) is kept as it is, so files from Obsidian are not broken.
+
+**Data flow.** The document text in the buffer is the single source of truth:
+
+```
+text buffer ──parseBoard()──► KanbanBoard (model + view)
+     ▲                              │ commit(new board)
+     └──── replaceText() ◄── serializeBoard() ◄──┘   (one undo step)
+```
+
+1. When a kanban document is opened, `MainWindow.syncMode()` swaps the editor for the board (a `Gtk.Stack`) and reads its text with `parseBoard()`.
+2. Every change from the board goes through `commit()`: the new model is written with `serializeBoard()` and then put into the buffer through `MarkdownView.replaceText()`, which only replaces the middle part of the text that differs and makes it a single undo step.
+3. Undo/redo (the `undo`/`redo` actions, `Ctrl+Z`) change the buffer. Changes that do not come from the board itself are recognized by comparing the text with what the board last wrote, and then the board re-reads its text.
+4. All operations on the model (`addCard`, `moveCard`, `moveColumn`, …) are pure and do not change the original board, so they are easy to test. `moveCard` uses the card's *final* position in the target list, so moving down within the same list needs no adjustment.
+
+**Dragging.** This does not use GTK's built-in drag and drop, but its own pointer handling (a `Gtk.GestureDrag` on each card): press on a card, move more than 6 pixels, release. While dragging, a ghost card (a still image of the card from `Gtk.WidgetPaintable`, in a `Gtk.Overlay` layer above the board, because GTK 4 cannot move a popup window by itself) follows the pointer, the source card is dimmed, and a dashed marker shows the destination. The destination is calculated from the pointer position: the list that contains it (or the nearest one), and then `dropIndex()` counts how many other cards have their midpoint above the pointer. Near the edge, the board or the target list scrolls automatically. A movement under 6 pixels is treated as an ordinary click and opens the edit dialog. This approach was chosen so that the behavior is controlled and can be tested by calling `onCardPress()`/`onCardMotion()`/`onCardRelease()` directly (card coordinates).
+
+**Dialogs** (`editCardDialog`, `promptDialog`, `confirmDialog`) hold the program until they are closed, so `KanbanBoard.dialogs` can be replaced, and tests use a stand-in.
+
+### How the harness orchestrator works (`agent/harness.ts`, `orchestrator.ts`)
+
+```markdown
+---
+kanban: true
+project: web-ecommerce          ← the board's default project
+---
+
+## Plan
+- [ ] Checkout with QRIS @pi #feature          ← @pi = the harness assigned
+- [ ] Test the cart @pi #project/shop-admin     ← the project tag wins over the frontmatter
 ```
 
 ```
-kartu + [[catatan]] ──buildPrompt()──► pi --mode rpc --name <judul> [--session <id>]   (cwd = folder proyek)
-  ▲                         stdin ▲            │ stdout: JSONL per baris
+card + [[note]] ──buildPrompt()──► pi --mode rpc --name <title> [--session <id>]   (cwd = project folder)
+  ▲                         stdin ▲            │ stdout: JSONL per line
   │   get_state, prompt, steer,  │            ▼
-  │   extension_ui_response ─────┘   PiReader ──► AgentTrace (Log pi) + sinyal ask / settled
+  │   extension_ui_response ─────┘   PiReader ──► AgentTrace (pi log) + ask / settled signals
   │                                             │
-  │                         ask → ⏸ menunggu ──► Jawab pi… (dialog) ──► jawaban lewat stdin
-  │                         settled + "?" → ⏸ menunggu; settled lainnya → tutup stdin → pi keluar
-  └── updateBoard(): pindah ke Dikerjakan / Review, catatan ↳ hasil
+  │                         ask → ⏸ waiting ──► Answer pi… (dialog) ──► the answer goes through stdin
+  │                         settled + "?" → ⏸ waiting; other settled → close stdin → pi exits
+  └── updateBoard(): move to In Progress / Review, a ↳ result note
 ```
 
-1. **Proyek, bukan path.** Isi Markdown hanya menyebut *nama* proyek; nama dipetakan ke folder di `settings.projects`, yang hanya diisi lewat dialog pilih folder. Jadi kartu atau agent tidak bisa mengarahkan harness ke folder sembarang. `checkProjectFolder()` menolak folder kerja Nyerat, isinya, induknya, root, dan path relatif, karena harness menulis bebas tanpa jendela tinjau.
-2. **Catatan terkait.** `cardWikiLinks()` mengumpulkan `[[tautan]]` di judul dan catatan kartu (maksimal 10, tanpa duplikat, kode inline dilewati). `OrchestratorHost.linkedNotes()` di jendela mencarinya dengan `resolveWikiLink()` di folder kerja (aturan yang sama dengan Ctrl+klik), membaca isinya dari editor bila sedang terbuka atau dari disk, dan mengambil bagian `#heading` saja dengan `noteSection()`. `buildPrompt()` menyalinnya ke bagian *Catatan terkait dari Nyerat* dalam blok kode berpagar lebih panjang dari backtick di isinya, maksimal 8.000 karakter per catatan dan 24.000 total; tautan yang tidak ditemukan disebut apa adanya. Harness tidak diberi path folder kerja, hanya isi catatan, karena folder kerja sengaja di luar jangkauannya.
-3. **Menjalankan.** `Orchestrator.start()` menambahkan `@pi` bila belum ada, memasukkan run ke `RunQueue`, lalu `launch()` mencari program (PATH, lalu `~/.local/bin` dan sejenisnya, karena aplikasi dari menu desktop sering tidak mewarisi PATH shell) dan menjalankannya lewat `spawnHarness()` dalam mode RPC pi. Pipe dibaca dan ditulis dengan `GLib.IOChannel` (framing JSONL pi: satu perintah atau event per baris, dipisah LF), bukan `Gio.Subprocess.get_stdout_pipe()`: setelah Gtk dimuat, GJS membungkus pipe itu sebagai `Gio.UnixInputStream` dan mencetak Gjs-WARNING. Perintah ditulis sebagai byte UTF-8 dengan panjang eksplisit (string dengan panjang -1 tidak dijamin diakhiri NUL dan memicu GLib-WARNING). Setelah proses jalan, Nyerat mengirim `get_state` (id sesi) lalu `prompt`.
-4. **Antrean.** Satu folder proyek hanya dikerjakan satu run (`working` atau `waiting`; run yang menunggu jawaban masih memegang prosesnya); kartu lain `queued` dan mulai saat run sebelumnya selesai. Membatalkan antrean tidak memberi giliran.
-5. **Menunggu jawaban.** `PiReader.line()` mengembalikan sinyal. `extension_ui_request` dengan `select`/`confirm`/`input`/`editor` menjadi `HarnessAsk` dan run berstatus `waiting`; jawaban dikirim sebagai `extension_ui_response` dengan id yang sama (`confirmed`, `value`, atau `cancelled`). Bila permintaan punya `timeout`, pi menjawab sendiri dengan nilai bawaan setelahnya, dan Nyerat mengembalikan status ke `working` pada saat yang sama. `notify` hanya dicatat di log; `setStatus`/`setWidget` diabaikan (khusus TUI). Saat `agent_settled`, jawaban yang diakhiri `?` (`endsWithQuestion()`) membuat run menunggu; balasan dikirim sebagai `prompt` berikutnya ke proses yang sama (`PiReader.restart()` membuang status giliran lama), sedangkan *Akhiri tanpa membalas* menutup stdin. Jawaban lain langsung menutup stdin, dan pi keluar dengan tertib. *Beri Arahan* mengirim `steer`; *Balas* setelah selesai menjalankan pi lagi dengan `--session <id>` dan log yang sama.
-6. **Membaca hasil.** `PiReader` memetakan event (`response` dari `get_state`/perintah ditolak, `turn_start`, `message_update` teks/penalaran, `tool_execution_start/end`, `message_end` asisten dengan `stopReason`/`usage.cost`, `agent_settled`) ke `AgentTrace`, sehingga `LogViewer` agent dipakai ulang. Gagal bila `stopReason` error/aborted, kode keluar bukan 0 (pesan = baris stderr terakhir), atau tidak ada jawaban.
-7. **Selesai dan berhenti.** Setelah proses keluar, sisa keluaran diberi tenggang 1,5 detik: cucu proses (perintah dari alat `bash` harness) bisa menahan pipe tetap terbuka. *Hentikan* mengirim SIGTERM, lalu SIGKILL setelah 5 detik. Menutup jendela menghentikan semua harness yang berjalan.
-8. **Menulis papan.** Kartu dicari ulang menurut teksnya di papan terkini (`locateCard()`, harus unik). Papan yang terbuka diubah lewat editornya (satu langkah undo); yang tidak terbuka ditulis langsung ke disk. Daftar tujuan dikenali dari judulnya (*Dikerjakan*/*Doing*/*In Progress*, *Review*/*Tinjau*); bila tidak ada, kartu tidak dipindah.
+1. **A project, not a path.** The Markdown contents only mention the *name* of a project; the name is mapped to a folder in `settings.projects`, which is only filled in through the folder chooser dialog. So a card or an agent cannot point the harness to an arbitrary folder. `checkProjectFolder()` rejects Nyerat's work folder, its contents, its parents, the root, and relative paths, because the harness writes freely without a review window.
+2. **Related notes.** `cardWikiLinks()` collects the `[[links]]` in the card's title and note (at most 10, without duplicates, inline code skipped). `OrchestratorHost.linkedNotes()` in the window looks them up with `resolveWikiLink()` in the work folder (the same rules as Ctrl+click), reads their contents from the editor if open or from disk, and takes only the `#heading` section with `noteSection()`. `buildPrompt()` copies them into the *Related notes from Nyerat* section inside a fenced code block longer than any backtick run in the contents, at most 8,000 characters per note and 24,000 in total; links that are not found are mentioned as they are. The harness is not given the path of the work folder, only the contents of the notes, because the work folder is deliberately out of its reach.
+3. **Running.** `Orchestrator.start()` adds `@pi` if it is not there yet, puts the run into the `RunQueue`, and then `launch()` looks for the program (PATH, then `~/.local/bin` and similar, because apps launched from the desktop menu often do not inherit the shell's PATH) and starts it through `spawnHarness()` in pi's RPC mode. The pipes are read and written with `GLib.IOChannel` (pi's JSONL framing: one command or event per line, separated by LF), not `Gio.Subprocess.get_stdout_pipe()`: after Gtk is loaded, GJS wraps that pipe as a `Gio.UnixInputStream` and prints a Gjs-WARNING. Commands are written as UTF-8 bytes with an explicit length (a string with length -1 is not guaranteed to be NUL-terminated and triggers a GLib-WARNING). Once the process is running, Nyerat sends `get_state` (the session id) and then `prompt`.
+4. **The queue.** A project folder only works on one run at a time (`working` or `waiting`; a run waiting for an answer still holds its process); other cards are `queued` and start when the previous run finishes. Cancelling a queued run does not give anyone a turn.
+5. **Waiting for an answer.** `PiReader.line()` returns signals. An `extension_ui_request` with `select`/`confirm`/`input`/`editor` becomes a `HarnessAsk` and the run gets the status `waiting`; the answer is sent as an `extension_ui_response` with the same id (`confirmed`, `value`, or `cancelled`). If a request has a `timeout`, pi answers by itself with a default value after it, and Nyerat returns the status to `working` at the same moment. `notify` is only recorded in the log; `setStatus`/`setWidget` are ignored (TUI only). On `agent_settled`, an answer that ends in `?` (`endsWithQuestion()`) makes the run wait; a reply is sent as the next `prompt` to the same process (`PiReader.restart()` discards the old turn state), while *End without replying* closes stdin. Other answers close stdin immediately, and pi exits in an orderly way. *Steer* sends `steer`; *Reply* after finishing runs pi again with `--session <id>` and the same log.
+6. **Reading the result.** `PiReader` maps events (the `response` of `get_state`/a rejected command, `turn_start`, `message_update` text/reasoning, `tool_execution_start/end`, the assistant's `message_end` with `stopReason`/`usage.cost`, `agent_settled`) to `AgentTrace`, so the agent's `LogViewer` is reused. It fails if `stopReason` is error/aborted, the exit code is not 0 (the message = the last stderr line), or there is no answer.
+7. **Finishing and stopping.** After the process exits, the remaining output gets a 1.5-second grace period: grandchild processes (commands from the harness's `bash` tool) can keep the pipe open. *Stop* sends SIGTERM, then SIGKILL after 5 seconds. Closing the window stops all running harnesses.
+8. **Writing the board.** The card is looked up again by its text on the current board (`locateCard()`, must be unique). A board that is open is changed through its editor (one undo step); one that is not open is written straight to disk. The destination lists are recognized by their titles (*In Progress*/*Doing*, *Review*); if there is none, the card is not moved.
 
-### Cara kerja asisten (`agent/*`, `ui/chat.ts`)
+### How the assistant works (`agent/*`, `ui/chat.ts`)
 
-Model hanya tahu apa yang dikirim, jadi mutu jawaban ditentukan oleh `agent/context.ts`. Tiap pertanyaan membangun konteks baru (naskah bisa berubah di antara pertanyaan) dalam anggaran token (`DEFAULT_BUDGET` = 48.000 token; 1 token ≈ 3 karakter, sengaja boros). Konteks dibagi dua supaya cache prefiks DeepSeek terpakai:
+The model only knows what is sent to it, so the quality of the answers is determined by `agent/context.ts`. Every question builds a fresh context (the manuscript may change between questions) within a token budget (`DEFAULT_BUDGET` = 48,000 tokens; 1 token ≈ 3 characters, deliberately wasteful). The context is split in two so that DeepSeek's prefix cache is used:
 
 ```
-pesan system  (stabil)   instruksi + <peta_proyek> + <dokumen_aktif>     ← sama antar-pertanyaan, jadi prefiksnya di-cache
-riwayat       (dipangkas) pertanyaan dan jawaban sebelumnya, tanpa konteks lamanya
-pesan user    (berubah)  <konteks_tambahan> + pertanyaan                ← pilihan, kursor, @lampiran, potongan relevan
+system message  (stable)   instructions + <project_map> + <active_document>     ← the same across questions, so the prefix is cached
+history         (trimmed)  earlier questions and answers, without their old context
+user message    (changes)  <extra_context> + the question                ← selection, cursor, @attachments, relevant excerpts
 ```
 
-Semua baris naskah yang dikirim diberi nomor di depannya (`12│ teks`, nomor asli di berkasnya, juga pada jendela di sekitar kursor dan pada potongan), sama dengan keluaran `baca_berkas`. Tanpa nomor, model menebak lokasi dan sering meleset; instruksinya melarang mengutip nomor itu sebagai bagian naskah. Tes langsung (`npm run test:live`) memeriksa bahwa tiap kutipan `berkas.md:N` di jawaban menunjuk baris yang benar.
+Every manuscript line that is sent is numbered at the front (`12│ text`, the real number in its file, also in the window around the cursor and in excerpts), the same as the output of `read_file`. Without numbers, the model guesses locations and often misses; the instructions forbid quoting those numbers as part of the manuscript. The live test (`npm run test:live`) checks that every `file.md:N` citation in an answer points to the right line.
 
-Urutan prioritas dan batas anggarannya: pilihan teks (8%), dokumen aktif (40%; bila lebih panjang diambil jendela baris di sekitar kursor dan sisanya ikut dicari lewat potongan), berkas `@mention` (20% per berkas), peta proyek (6%; makin ringkas jika berkasnya banyak), lalu potongan relevan (40%, paling banyak 10). Potongan berasal dari memecah tiap berkas per heading (bagian panjang dipecah di baris kosong) dan diurutkan dengan BM25 atas kata kunci pertanyaan (bobot 1), pilihan (0,5), dan dua pertanyaan sebelumnya (0,4); kata umum dibuang dan akhiran seperti *-nya*/*-kan* dikupas seadanya. Tidak ada embedding, jadi tanpa unduhan model dan tanpa pengiriman naskah hanya untuk pencarian. Riwayat dibatasi 25% anggaran, dibuang berpasangan dari yang tertua.
+The priority order and budget limits: the text selection (8%), the active document (40%; if it is longer, a window of lines around the cursor is taken and the rest is searched through excerpts), `@mention` files (20% per file), the project map (6%; more compact when there are many files), and then relevant excerpts (40%, at most 10). Excerpts come from splitting each file per heading (long sections are split at blank lines) and are ranked with BM25 over the keywords of the question (weight 1), the selection (0.5), and the two previous questions (0.4); common words are dropped and suffixes such as Indonesian *-nya*/*-kan* are stripped roughly. There are no embeddings, so there is no model download and no manuscript is sent just for searching. The history is limited to 25% of the budget, dropped in pairs from the oldest.
 
-`ChatSession.ask()` menjalankan loop model ↔ alat, maksimal 10 putaran; putaran terakhir tanpa alat. Empat alat baca memiliki batas 6.000 token per hasil dan total hasil baca sebesar anggaran konteks. Alat perubahan tunggal memakai `onProposal`; `usulkan_paket` memakai `onBatchProposal` untuk satu tinjauan semua diff. Alat Git memakai `git` di handler (dari `ChatHost.git`), dihitung dalam anggaran baca yang sama. Paket menghasilkan satu `Change` per berkas dan menolak paket yang menyentuh berkas yang dihapus/dipindah bersama tindakan lain, sehingga tiap berkas bisa diterapkan atau ditolak sendiri. Paket menggabungkan perubahan berantai pada berkas yang sama, memeriksa semua snapshot sebelum menulis, dan mencoba memulihkan berkas bila penulisan gagal. Ini transaksi dalam proses, bukan transaksi filesystem yang tahan mati listrik. Kegagalan rollback dilaporkan; isi yang berubah dan path yang melewati symlink ditolak.
+`ChatSession.ask()` runs the model ↔ tools loop, at most 10 rounds; the last round has no tools. The four read tools have a limit of 6,000 tokens per result and the total of read results equals the context budget. Single-change tools use `onProposal`; `propose_batch` uses `onBatchProposal` for one review of all the diffs. The Git tools use `git` in the handler (from `ChatHost.git`), counted in the same read budget. A batch produces one `Change` per file and rejects a batch that touches a file that is deleted/moved together with other actions, so each file can be applied or rejected on its own. A batch merges chained changes to the same file, checks all snapshots before writing, and tries to restore the files if a write fails. This is an in-process transaction, not a filesystem transaction that survives a power cut. Rollback failures are reported; changed contents and paths that go through a symlink are rejected.
 
-Untuk pekerjaan beberapa langkah, model memakai `atur_pekerjaan` lalu `verifikasi_pekerjaan`. Verifikasi membaca ulang isi disk/buffer melalui host (melewati cache), memeriksa teks wajib ada/tidak ada (per berkas, atau di seluruh folder dengan berkas `"*"` untuk memastikan nilai lama tidak tersisa di berkas yang tidak diubah), kartu pada daftar dan status tertentu, atau struktur Markdown (`markdown/lint.ts`: jumlah sel tabel, heading kosong atau melompat level, blok kode tidak ditutup, tautan ke berkas Markdown yang tidak ada). Struktur dibandingkan dengan isi sebelum pekerjaan, jadi hanya masalah yang muncul karena perubahan yang menggagalkan; masalah lama disebut tetapi dibiarkan. Untuk tiap berkas yang diubah, verifikasi otomatis menambahkan pemeriksaan struktur, memastikan berkas yang dihapus/dipindah memang tidak ada di tempat lamanya, dan mewajibkan setidaknya satu kriteria dari model. Status selesai memerlukan semua langkah done dan pemeriksaan lulus. Pemeriksaan ini membuktikan kriteria konkret, bukan seluruh konsistensi semantik dokumen; kualitas kriteria masih bergantung pada model.
+For multi-step work, the model uses `set_work` and then `verify_work`. Verification re-reads the contents of the disk/buffer through the host (bypassing the cache) and checks required/forbidden text (per file, or across the whole folder with the file `"*"` to make sure old values do not remain in files that were not changed), cards in a given list and status, or the Markdown structure (`markdown/lint.ts`: the number of table cells, empty headings or ones that skip a level, unclosed code blocks, links to Markdown files that do not exist). The structure is compared with the contents before the work, so only problems that appear because of the change cause a failure; old problems are mentioned but left alone. For every changed file, verification automatically adds a structure check, makes sure files that were deleted/moved are really not at their old place, and requires at least one criterion from the model. The done status requires all steps to be done and the checks to pass. These checks prove concrete criteria, not the whole semantic consistency of a document; the quality of the criteria still depends on the model.
 
-Journal menyimpan usulan sebelum tinjauan dan keputusan setelah penerapan, termasuk snapshot sebelum/sesudah. `onState` menyimpan checkpoint saat proses berjalan jika saklar simpan aktif. Membuka percakapan memulihkan rencana, journal, tombol Lanjutkan pekerjaan, serta tombol melihat diff riwayat tanpa penerapan ulang. Usulan yang prosesnya terputus diperiksa terhadap isi aktual: hasil sesuai usulan dikenali sebagai diterapkan, hasil lama sebagai interupsi, dan hasil campuran sebagai kegagalan yang perlu diperiksa. Checkpoint memulihkan pekerjaan; perubahan buffer yang belum disimpan tetap mengikuti aturan simpan editor.
+The journal stores a proposal before review and the decision after applying, including before/after snapshots. `onState` saves a checkpoint while the process is running if the save switch is on. Opening a conversation restores the plan, the journal, the Continue work button, and the button to view the history diff without re-applying. A proposal whose process was interrupted is checked against the actual contents: a result that matches the proposal is recognized as applied, an old result as an interruption, and a mixed result as a failure that needs to be inspected. A checkpoint restores the work; unsaved buffer changes still follow the editor's save rules.
 
-Riwayat lengkap tetap di disk. Konteks model memuat giliran terbaru dan cuplikan ekstraktif terbatas dari giliran lama; cuplikan tidak menciptakan fakta baru dan dapat terpotong. Klien DeepSeek mencoba ulang kegagalan koneksi, HTTP 429, dan 5xx maksimal dua kali (jeda 300/900 ms) hanya jika belum ada teks atau penalaran ditampilkan. Kegagalan autentikasi tidak diulang. Aliran yang terputus sebelum `[DONE]` dianggap gagal dan tidak menjalankan panggilan alat parsial. Pembatalan memakai `Gio.Cancellable`, termasuk saat jeda retry.
+The full history stays on disk. The model's context contains the latest turns and limited extractive excerpts from older turns; excerpts do not create new facts and can be cut off. The DeepSeek client retries connection failures, HTTP 429, and 5xx at most twice (300/900 ms pauses) only if no text or reasoning has been shown yet. Authentication failures are not retried. A stream that is cut off before `[DONE]` is treated as failed and does not run partial tool calls. Cancellation uses `Gio.Cancellable`, including during the retry pause.
 
-Evaluasi deterministik di `tests/unit/agentic.ts` menguji pekerjaan sampai hasil terverifikasi, penolakan, konflik, verifikasi tidak lengkap, dan pemulihan setelah kegagalan; `tests/unit/agentactions.ts` menguji alat sunting baru, hapus/pindah, aksi kanban tambahan, kebalikan perubahan, persetujuan sebagian dan catatan, pemeriksaan struktur, serta alat Git (termasuk satu repositori git sungguhan di folder sementara). Tes GUI memeriksa paket, centang per berkas, catatan, Urungkan (berhasil dan ditolak karena isi berubah), pindah berkas yang terbuka, hapus ke Tempat Sampah, dan pemulihan rencana. Tes klien memakai server SSE lokal; semua ikut `npm test` tanpa API berbayar. `npm run test:live -- --agentic` menambah evaluasi model sungguhan untuk persetujuan, penolakan, dan konflik, hanya atas fixture di folder sementara (memakai kuota API). `npm run bench:agentic` mengukur paket 20 berkas, verifikasi, checkpoint beserta journal, dan ringkasan riwayat (median/p95/maksimum; tanpa jaringan).
+The deterministic evaluation in `tests/unit/agentic.ts` tests work through to a verified result, rejection, conflicts, incomplete verification, and recovery after failure; `tests/unit/agentactions.ts` tests the new edit tools, delete/move, extra kanban actions, change inversion, partial approval and notes, structure checks, and the Git tools (including a real git repository in a temporary folder). The GUI tests check batches, per-file checkboxes, notes, Undo (successful and rejected because the contents changed), moving open files, deleting to the Trash, and restoring the plan. The client tests use a local SSE server; all of them are part of `npm test` without a paid API. `npm run test:live -- --agentic` adds evaluation of a real model for approval, rejection, and conflicts, only on fixtures in a temporary folder (it uses API quota). `npm run bench:agentic` measures a 20-file batch, verification, a checkpoint along with its journal, and the history summary (median/p95/maximum; no network).
 
-### Cara kerja zoom gambar (`ui/imageviewer.ts`)
+### How image zoom works (`ui/imageviewer.ts`)
 
-1. Setiap gambar di editor (`Gtk.Picture`) punya `Gtk.GestureClick` sendiri, sehingga klik ganda tahu gambar mana yang dimaksud jika satu baris memuat beberapa gambar. Satu klik tetap membuka sintaksnya (`onActivate`); klik ganda (klik ke-2 dari gesture) memanggil `onZoom`, dan menu *Perbesar Gambar* memanggil `MarkdownView.zoomImage()` untuk baris kursor.
-2. `ImageLayer.imageAt()` memberikan **pixbuf ukuran penuh** dari cache (gambar di editor hanya salinan yang diperkecil), jadi penampil menampilkan resolusi aslinya.
-3. `MarkdownView` tidak membuka jendela sendiri. Ia memanggil `onViewImage`, dan `MainWindow` yang membuka `ImageViewer`, sehingga lapisan `editor/` tetap tidak bergantung pada `ui/`.
-4. `ImageViewer` menggambar tekstur gambar pada skala zoom di widget kecil sendiri (`ZoomArea`, `vfunc_snapshot` + `append_scaled_texture()`), bukan membuat salinan yang diperbesar, jadi zoom 800% pada foto besar tidak menghabiskan memori. Zoom mulai 300% memakai filter `NEAREST` supaya piksel tampil apa adanya; di bawah 100% `TRILINEAR`.
-5. Zoom dibatasi 5%–800%, berkelipatan 1,25 (roda mouse lewat `Gtk.EventControllerScroll`; geser lewat `Gtk.GestureDrag` di ScrolledWindow yang tidak ikut bergeser). Saat roda mouse diputar di atas gambar, titik gambar di bawah penunjuk dijaga tidak bergeser: titik itu dihitung dalam koordinat gambar, lalu posisi gulir diatur ulang setelah tata letak selesai.
-6. Gambar dibuka dalam mode "pas layar tapi tidak diperbesar melebihi 100%", dan mengikuti ukuran jendela selama zoom belum diubah.
+1. Every image in the editor (`Gtk.Picture`) has its own `Gtk.GestureClick`, so a double click knows which image is meant when one line holds several images. A single click still opens its syntax (`onActivate`); a double click (the 2nd click of the gesture) calls `onZoom`, and the *Zoom Image* menu calls `MarkdownView.zoomImage()` for the cursor line.
+2. `ImageLayer.imageAt()` gives the **full-size pixbuf** from the cache (the image in the editor is only a shrunken copy), so the viewer shows the original resolution.
+3. `MarkdownView` does not open a window itself. It calls `onViewImage`, and `MainWindow` opens the `ImageViewer`, so the `editor/` layer remains independent of `ui/`.
+4. `ImageViewer` draws the image texture at the zoom scale in its own small widget (`ZoomArea`, `vfunc_snapshot` + `append_scaled_texture()`), instead of making an enlarged copy, so 800% zoom on a large photo does not use up memory. Zoom from 300% uses the `NEAREST` filter so that pixels are shown as they are; below 100% `TRILINEAR`.
+5. Zoom is limited to 5%–800%, in multiples of 1.25 (mouse wheel through `Gtk.EventControllerScroll`; panning through a `Gtk.GestureDrag` on the ScrolledWindow that does not move along). When the mouse wheel is turned over the image, the image point under the pointer is kept from shifting: that point is calculated in image coordinates, and then the scroll position is reset after the layout finishes.
+6. An image is opened in "fit the screen but never enlarge beyond 100%" mode, and follows the window size as long as the zoom has not been changed.
 
-### Cara kerja warna blok kode (`editor/codehighlight.ts`)
+### How code block colors work (`editor/codehighlight.ts`)
 
-Nyerat tidak punya pewarna kode sendiri. Pekerjaannya diserahkan ke GtkSourceView, yang sudah punya definisi untuk ratusan bahasa dan beberapa skema warna:
+Nyerat has no code colorer of its own. The work is handed over to GtkSourceView, which already has definitions for hundreds of languages and several color schemes:
 
-1. `highlighter.ts` mencatat setiap blok kode: bahasanya (teks setelah ```` ``` ````), posisi awal isinya, dan isinya.
-2. Nama bahasa diterjemahkan ke id GtkSourceView lewat `resolveLanguage()`. Alias yang lazim ditangani langsung (`javascript` → `js`, `py` → `python3`, `bash` → `sh`); nama lain dicoba sebagai id, lalu sebagai ekstensi file (`rs` → `rust`, `kt` → `kotlin`).
-3. Isi blok disalin ke `GtkSource.Buffer` tersembunyi (satu per bahasa), lalu `ensure_highlight()` menyorotinya saat itu juga.
-4. Tag hasil sorotan dibaca rentang demi rentang. Warna, tebal, miring, garis bawah, dan coret disalin menjadi tag `syntax:…` di buffer editor. Latar belakang tidak disalin, supaya blok kode tetap memakai latar dari tema aplikasi.
-5. Hasilnya disimpan di cache per (skema, bahasa, isi blok). Mengetik di luar blok kode, atau di blok lain, tidak membuat blok ini disorot ulang.
+1. `highlighter.ts` records every code block: its language (the text after ```` ``` ````), the start position of its contents, and the contents.
+2. The language name is translated to a GtkSourceView id through `resolveLanguage()`. Common aliases are handled directly (`javascript` → `js`, `py` → `python3`, `bash` → `sh`); other names are tried as an id, and then as a file extension (`rs` → `rust`, `kt` → `kotlin`).
+3. The block contents are copied into a hidden `GtkSource.Buffer` (one per language), and then `ensure_highlight()` highlights it right away.
+4. The tags from the highlighting are read range by range. Color, bold, italic, underline, and strikethrough are copied into `syntax:…` tags in the editor buffer. The background is not copied, so code blocks keep using the background from the app theme.
+5. The result is stored in a cache per (scheme, language, block contents). Typing outside a code block, or in another block, does not make this block get highlighted again.
 
-Skema warnanya `tango` untuk mode terang dan `cobalt` untuk mode gelap (diatur di `codeScheme` pada `ui/theme.ts`). Karena tag warna kode dibuat belakangan, prioritasnya otomatis di atas `codeblock`. Setiap kali tag warna baru dibuat, `dim` (mode fokus) dan `hidden` dinaikkan lagi ke paling atas, supaya keduanya tetap menang atas warna kode.
+The color scheme is `tango` for light mode and `cobalt` for dark mode (set in `codeScheme` in `ui/theme.ts`). Because the code color tags are created later, their priority is automatically above `codeblock`. Every time a new color tag is created, `dim` (focus mode) and `hidden` are raised to the very top again, so that both still win over code colors.
 
-### Urutan membaca kode
+### Reading order
 
-Untuk mempelajari kodenya, urutan berikut bergerak dari yang paling sederhana:
+To learn the code, the following order moves from the simplest:
 
-1. `src/markdown/syntax.ts` → `inline.ts` → `html.ts`: aturan Markdown, tanpa GTK
-2. `src/editor/tags.ts` → `highlighter.ts` → `decorations.ts`: inti efek sintaks tersembunyi
-3. `src/editor/view.ts`: bagaimana semuanya digerakkan oleh sinyal GTK
-4. `src/editor/editing.ts`, `lists.ts`, `clicks.ts`: interaksi pengguna
-5. `src/editor/images.ts`, `codehighlight.ts`, dan `tablelayer.ts`: gambar, warna kode, dan tabel (`markdown/table.ts` lebih dulu)
-6. `src/ui/*`: komponen antarmuka
-7. `src/window.ts` dan `src/actions.ts`: bagaimana semuanya disatukan
-8. `tests/run-tests.ts`: contoh pemakaian setiap bagian
+1. `src/markdown/syntax.ts` → `inline.ts` → `html.ts`: the Markdown rules, without GTK
+2. `src/editor/tags.ts` → `highlighter.ts` → `decorations.ts`: the core of the hidden syntax effect
+3. `src/editor/view.ts`: how it is all driven by GTK signals
+4. `src/editor/editing.ts`, `lists.ts`, `clicks.ts`: user interaction
+5. `src/editor/images.ts`, `codehighlight.ts`, and `tablelayer.ts`: images, code colors, and tables (`markdown/table.ts` first)
+6. `src/ui/*`: the interface components
+7. `src/window.ts` and `src/actions.ts`: how it all comes together
+8. `tests/run-tests.ts`: usage examples for every part
 
-### Menambah fitur
+### Adding a feature
 
-Contoh menambah format baru, misalnya `^superskrip^`:
+An example of adding a new format, such as `^superscript^`:
 
-1. Tambahkan pola di `EMPHASIS` (`src/markdown/syntax.ts`), misalnya `['sup', /(\^)(?=\S)([\s\S]*?\S)\^/g, 1]`, lalu tambahkan `'sup'` ke tipe `EmphasisTag` di file yang sama
-2. Tambahkan tag `sup` di `TAG_DEFS` (`src/editor/tags.ts`), misalnya `{ rise: 4000, scale: 0.8 }`
-3. Tambahkan konversinya di `emphHtml()` (`src/markdown/html.ts`)
-4. Jika perlu shortcut, daftarkan di `src/actions.ts`: `action('sup', ['<Control><Shift>p'], () => wrapSelection(buf, '^'))`
-5. Tambahkan contohnya di `tests/samples/semua-format.md`, tes penguraian/ekspor di `tests/unit/`, dan tes tampilan/interaksi di `tests/gui/`. Daftarkan modul tes baru di `tests/run-tests.ts`
+1. Add a pattern to `EMPHASIS` (`src/markdown/syntax.ts`), for example `['sup', /(\^)(?=\S)([\s\S]*?\S)\^/g, 1]`, and then add `'sup'` to the `EmphasisTag` type in the same file
+2. Add a `sup` tag to `TAG_DEFS` (`src/editor/tags.ts`), for example `{ rise: 4000, scale: 0.8 }`
+3. Add its conversion in `emphHtml()` (`src/markdown/html.ts`)
+4. If a shortcut is needed, register it in `src/actions.ts`: `action('sup', ['<Control><Shift>p'], () => wrapSelection(buf, '^'))`
+5. Add an example to `tests/samples/all-formats.md`, a parsing/export test in `tests/unit/`, and a display/interaction test in `tests/gui/`. Register the new test module in `tests/run-tests.ts`
 
-## Pengaturan
+## Settings
 
-Disimpan di GSettings (schema `com.ekaput.Nyerat`, jalur `/com/ekaput/Nyerat/`; lihat `dconf-editor` atau `gsettings list-recursively com.ekaput.Nyerat` bila schema dipasang): tema warna (`color-scheme`: ikuti sistem, terang, gelap), sidebar dan tab yang terakhir dipilih (Berkas, Outline, atau Riwayat), folder yang terakhir dibuka, tab berfile yang terbuka saat jendela ditutup (urutan, tab aktif, dan posisi kursor; tab Beranda dicatat sebagai `nyerat:beranda`), Beranda saat tidak ada dokumen terbuka (`home`), 30 berkas yang terakhir dibuka untuk Beranda (`recent-files`), mode fokus, mode typewriter, auto save, ukuran jendela, panel Asisten (terbuka atau tidak) beserta model dan mode berpikirnya, pemetaan nama proyek → folder untuk harness eksternal (`projects`), dan penanda bahwa dokumen contoh sudah pernah ditampilkan.
+Stored in GSettings (schema `com.ekaput.Nyerat`, path `/com/ekaput/Nyerat/`; see `dconf-editor` or `gsettings list-recursively com.ekaput.Nyerat` if the schema is installed): the color theme (`color-scheme`: follow the system, light, dark), the sidebar and the last selected tab (Files, Outline, or History), the last folder opened, the file tabs that were open when the window was closed (order, active tab, and cursor position; the Home tab is recorded as `nyerat:home`), Home when no document is open (`home`), the last 30 files opened for Home (`recent-files`), focus mode, typewriter mode, auto save, the window size, the Assistant panel (open or not) along with its model and thinking mode, the project name → folder mapping for the external harness (`projects`), and a flag that the sample document has been shown.
 
-Nilai bawaan: sidebar terbuka pada tab Outline, panel Asisten tertutup dengan model `deepseek-flash` tanpa mode berpikir, fokus/typewriter mati, ukuran jendela 1100 × 760 piksel, dan tema warna mengikuti sistem (`color-scheme = 'system'`). Setelah tema dipilih lewat menu atau Preferensi (Ctrl+,), pilihan itu disimpan. Ukuran awal jendela dibatasi ke area kerja monitor. Mode source dan pilihan tampilan papan/teks tidak disimpan antar proses.
+Defaults: the sidebar is open on the Outline tab, the Assistant panel is closed with the model `deepseek-flash` without thinking mode, focus/typewriter are off, the window size is 1100 × 760 pixels, and the color theme follows the system (`color-scheme = 'system'`). After a theme is chosen through the menu or Preferences (Ctrl+,), the choice is saved. The initial window size is limited to the monitor's work area. Source mode and the board/text view choice are not saved between processes.
 
-## Keterbatasan
+## Limitations
 
-- Asisten: hanya DeepSeek, chat dengan usulan perubahan yang disetujui (belum ada pemeriksaan kontradiksi otomatis; kontradiksi bisa ditanyakan lewat chat dan model menelusurinya sendiri). Usulan perubahan: hanya berkas Markdown (bukan folder) di folder kerja dengan tindakan tunggal atau paket maksimal 20 tindakan; pindah berkas tidak memperbarui tautan di berkas lain (agent harus mengusulkannya terpisah), dan Urungkan memulihkan berkas yang dihapus dari snapshot journal, bukan dari Tempat Sampah; alat Git hanya membaca yang sudah di-commit; serialisasi papan bisa merapikan spasi kosong di bagian lain, dan itu tampil apa adanya di selisih; rencana, journal keputusan, diff, dan verifikasi disimpan jika saklar simpan aktif. Rincian konteks lengkap, hasil baca lengkap, proses berpikir, dan pemakaian token tidak disimpan. Snapshot journal dapat membuat berkas percakapan besar; checkpoint masih ditulis sinkron. Riwayat tidak bisa dicari dari panel (cari lewat berkasnya), dan percakapan yang dipindah ke folder lain di tengah jalan dilanjutkan sebagai berkas baru di folder tujuan. Pencarian (`cari_dokumen` dan potongan otomatis) berbasis kata kunci (BM25), bukan makna, jadi kualitas penelusuran bergantung pada kata kunci yang dipilih model; `cari_teks` mencari teks persis dan tidak mengenali sinonim atau ejaan berbeda. Penelusuran memakan putaran model sehingga pertanyaan yang luas lebih lambat dan memakai lebih banyak token. Nama model mengikuti dokumentasi DeepSeek saat ini; jika API menolak nama model, galatnya tampil di panel. Perkiraan token kasar (3 karakter per token). Jawaban tampil sebagai teks terformat, bukan Markdown penuh (tanpa tabel dan gambar)
-- Tab: hanya tab berfile yang dipulihkan (dokumen yang belum pernah disimpan tidak), dan daftarnya dicatat saat jendela ditutup, jadi jika aplikasi berhenti mendadak yang dipulihkan adalah sesi sebelumnya. Dengan beberapa jendela, jendela yang terakhir ditutup yang menentukan. Riwayat undo, posisi gulir persis, dan tampilan teks/papan tidak ikut dipulihkan (gulir mengikuti kursor), dan semua tab dibuka penuh saat aplikasi dimulai. Belum ada tampilan berdampingan atau pengurutan tab dengan seret, dan semua tab berbagi satu tampilan papan kanban (posisi gulir papan hilang saat berpindah tab). Baris perintah hanya membuka satu file atau folder
-- Jurnal: folder `jurnal/` dan template tetap. Aktivitas hanya dicatat selama Nyerat terbuka untuk folder kerja yang dibuka, dan digabung saat jurnal dibuka lewat `Ctrl+Alt+J` atau Beranda (bukan dari pohon berkas). Kartu yang dipindah lewat teks papan atau di luar Nyerat tidak tercatat; commit yang di-amend bisa muncul dua kali; Urungkan perubahan agent ikut tercatat sebagai perubahan agent
-- Beranda: tenggat dan inbox hanya dibaca dari folder kerja yang sedang dibuka (maksimal 300 berkas Markdown, seperti konteks asisten), bukan dari folder kode di `projects`. Mengklik tugas membuka papannya tanpa menyorot kartunya. Status agent hanya ada selama aplikasi terbuka. Berkas terbaru dicatat Nyerat sendiri di GSettings, belum lewat `Gtk.RecentManager`, jadi tidak muncul di daftar terbaru aplikasi lain
-- Gambar yang diubah di disk tidak dimuat ulang sampai aplikasi dibuka lagi (ada cache per URI); GIF animasi hanya menampilkan frame pertama, termasuk di penampil zoom
-- **Seret kartu telah diuji lewat input mouse X11/XTest.** `npm test` dan `npm run test:ui` memeriksa lima skenario melalui event yang benar-benar diterima GTK, termasuk perubahan Markdown, undo/redo, dan simpan. Jalur input ini berhasil di lingkungan pengembangan, sementara helper klik lama `Gdk.test_simulate_button` tidak meneruskan tombol dengan andal. Pengujian manual dengan mouse fisik dan sesi Wayland masih belum terverifikasi
-- Papan: hanya item daftar di tingkat atas yang menjadi kartu (daftar bersarang dipertahankan sebagai catatan kartu); baris biasa di antara dua kartu dipindahkan ke akhir daftar saat disimpan. Belum ada arsip atau penyuntingan label lewat antarmuka (tulis `#tag` dan `@{YYYY-MM-DD}` di judul kartu), dan memindahkan kartu dengan keyboard hanya lewat menu klik kanan
-- Harness eksternal: baru pi. Status run (antre, bekerja, log) hanya ada selama aplikasi terbuka; yang bertahan adalah posisi kartu dan catatan `↳`. Kartu dikenali dari teksnya, jadi menyunting judul kartu yang sedang dikerjakan memutus statusnya: chip dan menu log hilang dari kartu itu, dan kartu tidak dipindah saat harness selesai. Pertanyaan dikenali dari tanda `?` di akhir jawaban; pertanyaan tanpa `?` membuat kartu langsung ke *Review*, tetapi masih bisa dibalas lewat *Balas pi…* selama aplikasi terbuka. Pi tidak meminta izin alat sendiri: tanpa extension seperti `permission-gate`, semua alat pi langsung berjalan. Dialog extension `custom()` (TUI) tidak didukung mode RPC pi, dan belum ada terminal interaktif. Pi yang menunggu jawaban tetap hidup dan memegang antrean proyeknya sampai dijawab, dihentikan, atau jendela ditutup. Belum ada worktree per kartu (kartu di proyek yang sama mengantre) dan belum ada tampilan diff hasil harness di Nyerat; tinjau di repo proyek Catatan `[[ ]]` di kartu disalin ke prompt hanya saat run dimulai (*Balas pi* tidak menyalinnya lagi), maksimal 10 catatan, 8.000 karakter per catatan dan 24.000 total; tautan ke catatan yang tidak ada di papan tampil sama seperti tautan biasa.
-- Di tampilan teks, frontmatter papan tampil seperti Markdown biasa (garis `---` dan teks)
-- Terjemahan: belum ada bahasa selain Indonesia. Teks dari lapisan `agent/` dan `markdown/` (deskripsi alat dan pesan galat yang juga dibaca model, pesan validasi papan) serta dokumen contoh belum dibungkus gettext
-- Kepatuhan GNOME yang belum terverifikasi: sesi Wayland (tes berjalan di Xvfb/X11), pemasangan Meson dan build Flatpak, serta jalur libadwaita ≥ 1.6/1.8 (aksen sistem, `Adw.ShortcutsDialog`). Di dalam Flatpak, `git` dan `pi` harus tersedia di sandbox; manifest belum menyertakannya. `AdwSidebar`/`AdwViewSwitcherSidebar` (libadwaita 1.9) dan media query CSS (GTK 4.20) belum dipakai karena belum ada di libadwaita/GTK yang terpasang. Panel yang melayang di jendela sempit tidak tertutup saat konten diklik (efek `pin_sidebar`); tutup lewat tombolnya
-- Klik pertama pada gambar membuka sintaksnya, sehingga gambar bergeser sekitar satu baris ke bawah. Klik ganda yang jatuh di strip tipis tepi atas gambar karenanya bisa meleset ke teks di atasnya
-- Gambar di dalam sel tabel tidak ditampilkan (hanya teks alt-nya), dan gambar di dalam daftar atau kutipan tidak ikut menjorok
-- Ekspor papan kanban menghasilkan Markdown yang dikonversi menjadi heading dan daftar HTML, bukan tampilan papan. Frontmatter tidak diproses khusus; DBML yang salah sintaks diekspor sebagai blok kode biasa
-- Ekspor HTML tidak menyalin atau menyematkan gambar lokal, dan tidak menyesuaikan path relatif jika hasil ekspor disimpan di folder lain
-- Tautan `[[catatan]]`: belum ada panel tautan balik (backlink) atau grafik, mengganti nama/memindah berkas tidak memperbarui tautan `[[ ]]` yang menunjuknya, sematan `![[ ]]` dan rujukan blok `^id` belum didukung, saran `[[` hanya nama berkas (belum heading), dan verifikasi struktur agent belum memeriksa tautan `[[ ]]` yang putus
-- Warna blok kode belum ikut ke hasil Ekspor HTML; di HTML blok kode hanya diberi kelas `language-…`
-- Sel tabel disunting di teks mentahnya (klik sel atau gerakkan kursor ke dalam tabel), bukan langsung di grid
-- Teks sel yang terlalu panjang dipotong dengan "…", tidak dibungkus ke baris berikutnya, dan isi sel hanya satu baris
-- Merapikan tabel (`Ctrl+Shift+T` dan semua perintah di menu Edit Tabel) membuang sel yang berlebih dibanding baris judul, sesuai aturan GFM
-- Tabel yang kursornya di dalamnya tampil mentah; jika seluruh dokumen hanya berisi satu tabel dan kursor ada di dalamnya, grid baru tampil setelah kursor keluar
-- Garis pemisah tampil sebagai teks `---` pudar di tengah, bukan garis
-- Parsing suntingan sudah bertahap, tetapi penyesuaian array offset/metadata masih sebanding dengan jumlah baris (salinan array sekali per ketukan; ±0,4 ms pada naskah 650 KB). Membuka dokumen atau mengubah konteks fence sampai akhir tetap mengurai seluruh dokumen secara sinkron (membuka naskah 650 KB: jeda terpanjang ±70 ms, yaitu `set_text` GTK ±30 ms dan penguraian ±30 ms; pemasangan tag dicicil); kenyamanan GUI pada puluhan ribu baris dengan banyak tabel belum terverifikasi karena benchmark ekstrem masih menemui callback GJS yang terblokir saat GC.
+- The assistant: DeepSeek only, chat with approved change proposals (there is no automatic contradiction check yet; contradictions can be asked about in the chat and the model traces them itself). Change proposals: only Markdown files (not folders) in the work folder, with a single action or a batch of at most 20 actions; moving a file does not update links in other files (the agent has to propose that separately), and Undo restores a deleted file from the journal snapshot, not from the Trash; the Git tools only read what has been committed; board serialization can tidy blank space elsewhere, and that shows up as it is in the diff; the plan, decision journal, diff, and verification are saved if the save switch is on. The details of the full context, the full read results, the thinking process, and token usage are not saved. Journal snapshots can make a conversation file large; checkpoints are still written synchronously. The history cannot be searched from the panel (search through its file), and a conversation moved to another folder midway is continued as a new file in the destination folder. Search (`search_documents` and the automatic excerpts) is keyword-based (BM25), not meaning-based, so the quality of browsing depends on the keywords the model picks; `search_text` looks for exact text and does not recognize synonyms or different spellings. Browsing costs model rounds, so broad questions are slower and use more tokens. The model name follows the current DeepSeek documentation; if the API rejects a model name, the error is shown in the panel. The token estimate is rough (3 characters per token). Answers are shown as formatted text, not full Markdown (no tables and images)
+- Tabs: only file tabs are restored (documents that were never saved are not), and the list is recorded when the window is closed, so if the app stops suddenly the previous session is what is restored. With several windows, the last window closed decides. The undo history, the exact scroll position, and the text/board view are not restored (scrolling follows the cursor), and all tabs are fully opened when the app starts. There is no side-by-side view or tab reordering by dragging yet, and all tabs share a single kanban board view (the board scroll position is lost when switching tabs). The command line only opens a single file or folder
+- The journal: the `journal/` folder and the template are fixed. Activity is only recorded while Nyerat is open for the work folder that is open, and merged when the journal is opened through `Ctrl+Alt+J` or Home (not from the file tree). Cards moved through the board text or outside Nyerat are not recorded; an amended commit can appear twice; Undoing an agent change is recorded as an agent change too
+- Home: deadlines and the inbox are only read from the work folder that is currently open (at most 300 Markdown files, like the assistant context), not from code folders in `projects`. Clicking a task opens its board without highlighting the card. The agent status only exists while the app is open. Recent files are recorded by Nyerat itself in GSettings, not through `Gtk.RecentManager` yet, so they do not appear in other apps' recent lists
+- Images changed on disk are not reloaded until the app is opened again (there is a cache per URI); animated GIFs only show the first frame, including in the zoom viewer
+- **Dragging cards has been tested through X11/XTest mouse input.** `npm test` and `npm run test:ui` check five scenarios through events that GTK really receives, including Markdown changes, undo/redo, and saving. This input path works in the development environment, while the old click helper `Gdk.test_simulate_button` does not pass buttons on reliably. Manual testing with a physical mouse and a Wayland session is still unverified
+- The board: only top-level list items become cards (nested lists are kept as card notes); ordinary lines between two cards are moved to the end of the list when saving. There is no archive or label editing through the interface yet (write `#tag` and `@{YYYY-MM-DD}` in the card title), and moving a card with the keyboard is only possible through the right-click menu
+- The external harness: only pi so far. The run status (queued, working, log) only exists while the app is open; what persists is the card position and the `↳` note. A card is recognized by its text, so editing the title of a card that is being worked on breaks its status: the chip and the log menu disappear from that card, and the card is not moved when the harness finishes. A question is recognized by a `?` at the end of the answer; a question without a `?` sends the card straight to *Review*, but it can still be answered through *Reply to pi…* while the app is open. Pi does not ask for tool permission by itself: without an extension such as `permission-gate`, all pi tools run immediately. The `custom()` extension dialog (TUI) is not supported by pi's RPC mode, and there is no interactive terminal yet. A pi waiting for an answer stays alive and holds its project's queue until it is answered, stopped, or the window is closed. There is no worktree per card yet (cards in the same project queue up) and no diff view of the harness result in Nyerat; review it in the project repository. `[[ ]]` notes on a card are copied into the prompt only when the run starts (*Reply to pi* does not copy them again), at most 10 notes, 8,000 characters per note and 24,000 in total; a link to a note that does not exist is shown on the board the same as an ordinary link.
+- In the text view, the board frontmatter is shown like ordinary Markdown (a `---` line and text)
+- Translations: the source language is English and no other language is shipped yet. Text from the `agent/` and `markdown/` layers (tool descriptions and error messages that the model also reads, board validation messages) and the sample document are not wrapped in gettext yet
+- GNOME compliance not yet verified: a Wayland session (the tests run on Xvfb/X11), the Meson install and the Flatpak build, and the libadwaita ≥ 1.6/1.8 paths (system accent, `Adw.ShortcutsDialog`). Inside Flatpak, `git` and `pi` must be available in the sandbox; the manifest does not include them. `AdwSidebar`/`AdwViewSwitcherSidebar` (libadwaita 1.9) and CSS media queries (GTK 4.20) are not used yet because they are not in the installed libadwaita/GTK. A panel that floats over a narrow window does not close when the content is clicked (an effect of `pin_sidebar`); close it with its button
+- The first click on an image opens its syntax, so the image shifts about one line down. A double click that lands in the thin strip at the top edge of an image can therefore miss and land on the text above it
+- Images inside table cells are not shown (only their alt text), and images inside lists or quotes are not indented along
+- Exporting a kanban board produces Markdown converted into HTML headings and lists, not a board view. Frontmatter is not processed specially; DBML with a syntax error is exported as an ordinary code block
+- HTML export does not copy or embed local images, and does not adjust relative paths if the exported result is saved in another folder
+- `[[note]]` links: there is no backlinks panel or graph yet, renaming/moving a file does not update the `[[ ]]` links that point to it, `![[ ]]` embeds and `^id` block references are not supported yet, `[[` suggestions are file names only (no headings yet), and the agent's structure verification does not check broken `[[ ]]` links yet
+- Code block colors are not carried over into the HTML export result yet; in HTML a code block only gets a `language-…` class
+- Table cells are edited in their raw text (click a cell or move the cursor into the table), not directly in the grid
+- Cell text that is too long is cut with "…", not wrapped onto the next line, and cell contents are a single line
+- Tidying a table (`Ctrl+Shift+T` and all the commands in the Edit Table menu) removes cells beyond the header row, following the GFM rules
+- A table with the cursor inside it is shown raw; if the whole document only holds one table and the cursor is inside it, the grid only appears after the cursor leaves
+- A horizontal rule is shown as faded `---` text in the middle, not a line
+- Parsing edits is incremental, but adjusting the offset/metadata arrays is still proportional to the number of lines (one array copy per keystroke; ±0.4 ms on a 650 KB manuscript). Opening a document or changing the fence context to the end still parses the entire document synchronously (opening a 650 KB manuscript: the longest pause ±70 ms, namely GTK `set_text` ±30 ms and parsing ±30 ms; applying tags is fed in bit by bit); GUI comfort at tens of thousands of lines with many tables has not been verified because extreme benchmarks still run into GJS callbacks that are blocked during GC.

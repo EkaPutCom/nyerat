@@ -1,4 +1,4 @@
-/* Gaya bersama halaman dokumentasi Nyerat (docs/docs/*.html). Token warna sama dengan landing page. */
+/* Shared styles of the Nyerat documentation pages (docs/docs/*.html). The color tokens are the same as the landing page. */
 :root {
   --bg: #fbfbfa;
   --bg-alt: #f2f3f1;
@@ -45,7 +45,7 @@ kbd {
   border-radius: 6px; padding: .05em .45em; font-size: .82em; white-space: nowrap;
 }
 
-/* Bilah atas */
+/* Top bar */
 .top {
   position: sticky; top: 0; z-index: 20; height: var(--top);
   background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(10px);
@@ -63,7 +63,7 @@ kbd {
   color: var(--text); padding: 6px 10px; font: inherit; font-size: .9rem; cursor: pointer;
 }
 
-/* Tata letak tiga kolom */
+/* Three-column layout */
 .layout { display: grid; grid-template-columns: 270px minmax(0, 1fr) 220px; min-height: calc(100vh - var(--top)); }
 .side {
   position: sticky; top: var(--top); height: calc(100vh - var(--top)); overflow-y: auto;
@@ -110,7 +110,7 @@ main.doc { padding: 40px 48px 80px; max-width: 860px; width: 100%; }
   main.doc { padding: 28px 16px 64px; }
 }
 
-/* Isi dokumen */
+/* Document contents */
 .doc .eyebrow { color: var(--accent); font-weight: 700; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 6px; }
 .doc h1 { font-size: clamp(1.9rem, 4.5vw, 2.5rem); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 12px; }
 .doc .lead { font-size: 1.12rem; color: var(--muted); margin: 0 0 28px; }
@@ -145,7 +145,7 @@ th { background: var(--bg-alt); white-space: nowrap; }
 .cards span { color: var(--muted); font-size: .92rem; }
 .tag { display: inline-block; font-size: .72rem; font-weight: 700; padding: .1em .55em; border-radius: 99px; background: var(--accent-soft); color: var(--accent); vertical-align: middle; }
 
-/* Sebelumnya / berikutnya */
+/* Previous / next */
 .pager { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 56px; }
 .pager a { border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; text-decoration: none; color: var(--text); background: var(--card); }
 .pager a:hover { border-color: var(--accent); }

@@ -1,5 +1,5 @@
-// Warna, font, dan CSS aplikasi untuk mode terang dan gelap.
-// Warna tag teks editor diatur terpisah di editor/tags.ts (paintTags).
+// Colors, fonts, and CSS of the app for light and dark mode.
+// The editor text tag colors are set separately in editor/tags.ts (paintTags).
 
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -10,8 +10,8 @@ export interface Palette {
     bg: string; fg: string; heading: string; faint: string; dim: string;
     accent: string; codeBg: string; codeFg: string; quoteFg: string;
     quoteBg: string; markBg: string; sel: string; sideBg: string;
-    codeScheme: string;  // skema warna GtkSourceView untuk isi blok kode
-    columnBg: string;    // latar daftar di papan kanban
+    codeScheme: string;  // GtkSourceView color scheme for code block contents
+    columnBg: string;    // background of lists on the kanban board
     dark: boolean;
 }
 
@@ -34,13 +34,13 @@ export const PALETTES: Record<'light' | 'dark', Palette> = {
     },
 };
 
-// Pilihan gelap/terang dari pengaturan sistem (GNOME: Gaya Gelap), sebelum aplikasi memaksa salah satunya.
+// The dark/light choice from the system settings (GNOME: Dark Style), before the app forces one of them.
 export const systemPrefersDark = (): boolean => Adw.StyleManager.get_default().dark;
 
-// Warna permukaan dokumen (editor, tabel, tag teks) tetap dari palet karena tag GtkTextTag dan render
-// diagram butuh nilai warna nyata, dan tag `hidden` harus persis sama dengan latar editor. Selebihnya
-// (sidebar, panel asisten, papan, status bar, warna status) memakai warna bernama Adwaita, sehingga
-// ikut aksen sistem dan mode kontras tinggi tanpa CSS tambahan.
+// Document surface colors (editor, tables, text tags) still come from the palette because GtkTextTag and diagram
+// rendering need real color values, and the `hidden` tag must be exactly the same as the editor background. The rest
+// (sidebar, assistant panel, board, status bar, status colors) use named Adwaita colors, so they
+// follow the system accent and high contrast mode without extra CSS.
 const buildCss = (p: Palette): string => `
     .editor, .editor text { background-color: ${p.bg}; color: ${p.fg}; }
     .editor { font-family: ${FONT_TEXT}; font-size: 16px; caret-color: ${p.accent}; }
@@ -56,7 +56,7 @@ const buildCss = (p: Palette): string => `
     .chat-user { background-color: alpha(@accent_bg_color, 0.16); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
     .chat-assistant { font-size: 13px; }
     .chat-thinking { color: alpha(currentColor, 0.55); font-size: 12px; font-style: italic; }
-    /* Popover memakai latar tema GTK, bukan latar sidebar: warna redup sidebar jadi tak terbaca di sana. */
+    /* A popover uses the GTK theme background, not the sidebar background: the sidebar's dim color becomes unreadable there. */
     .chat-pop label { color: @popover_fg_color; }
     .chat-pop label.side-title, .chat-pop label.side-meta { opacity: 0.7; }
     .chat-work { font-size: 13px; }
@@ -118,21 +118,21 @@ const buildCss = (p: Palette): string => `
 
 let provider: Gtk.CssProvider | null = null;
 
-// Warna aksen pilihan pengguna (libadwaita ≥ 1.6, GNOME 47+) untuk tag teks dan kursor; libadwaita
-// yang lebih tua tidak punya API-nya, jadi aksen bawaan Adwaita di palet tetap dipakai.
+// The user's chosen accent color (libadwaita ≥ 1.6, GNOME 47+) for text tags and the cursor; older libadwaita
+// has no API for it, so the default Adwaita accent in the palette is still used.
 function withSystemAccent(palette: Palette, style: Adw.StyleManager): Palette {
     const manager = style as Adw.StyleManager & { get_system_supports_accent_colors?(): boolean; get_accent_color_rgba?(): Gdk.RGBA };
     if (!manager.get_system_supports_accent_colors?.() || !manager.get_accent_color_rgba) return palette;
     const rgba = manager.get_accent_color_rgba();
-    // Aksen standalone (untuk teks) berbeda dari latar aksen; di mode gelap Adwaita memakai versi yang lebih terang.
+    // The standalone accent (for text) differs from the accent background; in dark mode Adwaita uses a lighter version.
     const hex = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0');
     const mix = palette.dark ? 0.35 : 0;
     const lift = (v: number) => v + (1 - v) * mix;
     return { ...palette, accent: `#${hex(lift(rgba.red))}${hex(lift(rgba.green))}${hex(lift(rgba.blue))}` };
 }
 
-// Pasang CSS untuk seluruh aplikasi dan beri tahu libadwaita tema mana yang dipakai;
-// null = ikuti tema sistem. Mengembalikan palet supaya pemanggil bisa mewarnai tag editor.
+// Install the CSS for the whole app and tell libadwaita which theme is used;
+// null = follow the system theme. Returns the palette so the caller can color the editor tags.
 export function applyTheme(dark: boolean | null): Palette {
     const style = Adw.StyleManager.get_default();
     style.set_color_scheme(dark === null ? Adw.ColorScheme.DEFAULT : dark ? Adw.ColorScheme.FORCE_DARK : Adw.ColorScheme.FORCE_LIGHT);

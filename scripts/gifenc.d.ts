@@ -1,4 +1,4 @@
-// gifenc (dipakai scripts/capture.ts) tidak membawa tipe.
+// gifenc (used by scripts/capture.ts) does not ship types.
 declare module 'gifenc' {
     export interface GifEncoder {
         writeFrame(index: Uint8Array, width: number, height: number, opts?: { palette?: number[][]; delay?: number; repeat?: number; transparent?: boolean; transparentIndex?: number; dispose?: number }): void;

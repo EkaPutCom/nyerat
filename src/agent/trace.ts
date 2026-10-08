@@ -1,35 +1,35 @@
-// Log kegiatan agent (murni, tanpa GTK): urutan kejadian satu percakapan, dari putaran model, penalaran,
-// panggilan alat beserta argumen dan hasilnya, sampai usulan perubahan. Hanya untuk dilihat pengguna;
-// tidak pernah dikirim ke model dan tidak ikut berkas percakapan.
+// Agent activity log (pure, no GTK): the sequence of events of one conversation, from model rounds, reasoning,
+// tool calls with their arguments and results, to change proposals. Only for the user to view;
+// never sent to the model and not part of the conversation file.
 
 export type TraceKind = 'turn' | 'round' | 'reasoning' | 'text' | 'tool' | 'usage' | 'note' | 'error';
 
 export interface TraceEvent {
     seq: number;
-    time: string;          // ISO lokal, mis. 2026-10-05T14:20:00
+    time: string;          // local ISO, e.g. 2026-10-05T14:20:00
     kind: TraceKind;
-    round?: number;        // putaran model (mulai 1) tempat kejadian ini terjadi
+    round?: number;        // model round (from 1) in which this event happened
     title: string;
-    detail: string;        // isi lengkap (penalaran, argumen, hasil), sudah dipotong ke MAX_DETAIL
+    detail: string;        // full contents (reasoning, arguments, result), already truncated to MAX_DETAIL
     status?: 'running' | 'ok' | 'failed';
-    ms?: number;           // lama kejadian, bila ada
+    ms?: number;           // duration of the event, if any
 }
 
 const MAX_DETAIL = 20000;
 const MAX_EVENTS = 2000;
 
-const clip = (text: string): string => text.length > MAX_DETAIL ? `${text.slice(0, MAX_DETAIL)}\n… (${text.length - MAX_DETAIL} karakter lagi dipotong)` : text;
+const clip = (text: string): string => text.length > MAX_DETAIL ? `${text.slice(0, MAX_DETAIL)}\n… (${text.length - MAX_DETAIL} more characters truncated)` : text;
 
-// Argumen alat adalah JSON mentah dari model; tampilkan rapi bila valid, apa adanya bila tidak.
+// Tool arguments are raw JSON from the model; shown neatly if valid, as is if not.
 export function prettyArguments(raw: string): string {
-    if (!raw.trim()) return '(tanpa argumen)';
+    if (!raw.trim()) return '(no arguments)';
     try { return JSON.stringify(JSON.parse(raw), null, 2); } catch { return raw; }
 }
 
 export class AgentTrace {
     readonly events: TraceEvent[] = [];
     private seq = 0;
-    private open = new Map<string, number>();   // kunci → indeks kejadian yang masih berjalan, untuk dilengkapi nanti
+    private open = new Map<string, number>();   // key → index of the event still in progress, to be completed later
     private starts = new Map<string, number>();
     onChange: () => void = () => {};
 
@@ -47,13 +47,13 @@ export class AgentTrace {
         this.events.push(event);
         if (this.events.length > MAX_EVENTS) {
             this.events.splice(0, this.events.length - MAX_EVENTS);
-            this.open.clear();   // indeks bergeser; kejadian yang masih berjalan sudah terlalu tua untuk dilengkapi
+            this.open.clear();   // indices shift; events still in progress are too old to be completed
         }
         this.onChange();
         return event;
     }
 
-    // Mulai kejadian yang selesainya menyusul (panggilan alat, putaran model); dilengkapi lewat finish() dengan kunci yang sama.
+    // Start an event whose completion follows (tool call, model round); completed through finish() with the same key.
     begin(kind: TraceKind, key: string, title: string, detail = '', round?: number): void {
         const event = this.add(kind, title, detail, { round, status: 'running' });
         this.open.set(`${kind}:${key}`, this.events.indexOf(event));
@@ -76,20 +76,20 @@ export class AgentTrace {
         this.onChange();
     }
 
-    // Penalaran dan jawaban mengalir sedikit-sedikit: sambung ke kejadian terakhir yang sejenis dalam putaran yang sama.
+    // Reasoning and answers stream in little by little: append to the last event of the same kind in the same round.
     append(kind: 'reasoning' | 'text', round: number, delta: string): void {
         const last = this.events[this.events.length - 1];
         if (last && last.kind === kind && last.round === round) {
             last.detail = clip(last.detail + delta);
             this.onChange();
         } else {
-            this.add(kind, kind === 'reasoning' ? 'Penalaran model' : 'Jawaban model', delta, { round });
+            this.add(kind, kind === 'reasoning' ? 'Model reasoning' : 'Model answer', delta, { round });
         }
     }
 
-    // Satu kejadian sebagai teks biasa, untuk disalin atau diekspor.
+    // One event as plain text, to copy or export.
     static format(e: TraceEvent): string {
-        const head = `[${e.time.slice(11)}]${e.round ? ` putaran ${e.round} ·` : ''} ${e.title}${e.ms !== undefined ? ` (${e.ms} ms)` : ''}${e.status === 'failed' ? ' — GAGAL' : ''}`;
+        const head = `[${e.time.slice(11)}]${e.round ? ` round ${e.round} ·` : ''} ${e.title}${e.ms !== undefined ? ` (${e.ms} ms)` : ''}${e.status === 'failed' ? ' — FAILED' : ''}`;
         return e.detail ? `${head}\n${e.detail}` : head;
     }
 
@@ -97,7 +97,7 @@ export class AgentTrace {
         return this.events.map(AgentTrace.format).join('\n\n');
     }
 
-    // Satu objek JSON per baris, untuk dianalisis di luar aplikasi.
+    // One JSON object per line, for analysis outside the app.
     jsonl(): string {
         return this.events.map(e => JSON.stringify(e)).join('\n') + (this.events.length ? '\n' : '');
     }

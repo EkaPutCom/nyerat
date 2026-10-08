@@ -1,4 +1,4 @@
-// Tes GUI: Ketahanan (mencari crash).
+// GUI tests: Robustness (hunting for crashes).
 
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -17,18 +17,18 @@ import { MouseInput } from './mouse-input.js';
 export function robustnessTests(c: GuiContext): void {
     const { w, ed, buf, pump, text, setText, cursorTo, action, waitImages, samplePath } = c;
 
-    section('Ketahanan (mencari crash)');
-    test('kursor menyapu setiap baris dokumen contoh', () => {
+    section('Robustness (hunting for crashes)');
+    test('the cursor sweeps every line of the sample document', () => {
         setText(WELCOME);
         const n = buf.get_line_count();
         for (let i = 0; i < n; i++) { cursorTo(i); cursorTo(i, -1); }
         for (let i = n - 1; i >= 0; i--) cursorTo(i);
     });
-    test('mengetik di setiap baris dokumen contoh', () => {
+    test('typing on every line of the sample document', () => {
         const n = buf.get_line_count();
         for (let i = 0; i < n; i++) { cursorTo(i); buf.insert_at_cursor('x', -1); pump(); }
     });
-    test('menghapus seluruh dokumen sedikit demi sedikit', () => {
+    test('deleting the whole document bit by bit', () => {
         setText(WELCOME);
         while (buf.get_char_count() > 0) {
             const e = buf.get_end_iter(), s = e.copy();
@@ -37,10 +37,10 @@ export function robustnessTests(c: GuiContext): void {
             pump();
         }
     });
-    // Penyorotan hanya memasang ulang baris yang berubah (editor/tagsync.ts). Setelah suntingan
-    // apa pun, tag di buffer harus sama persis dengan hasil menyorot dokumen itu dari awal.
-    test('penyorotan bertahap sama dengan penyorotan dari awal', () => {
-        // Tag mermaidhide dan jarak gambar bergantung pada render/pemuatan asinkron, jadi tidak dibandingkan.
+    // Highlighting only reapplies the lines that changed (editor/tagsync.ts). After any
+    // edit, the tags in the buffer must be exactly the same as highlighting the document from scratch.
+    test('incremental highlighting is the same as highlighting from scratch', () => {
+        // The mermaidhide tag and the image spacing depend on asynchronous rendering/loading, so they are not compared.
         const snapshot = () => {
             const out: Record<string, string> = {};
             buf.get_tag_table().foreach(tag => {
@@ -62,13 +62,13 @@ export function robustnessTests(c: GuiContext): void {
                 eq(incremental[name], fresh[name], `tag ${name} setelah ${what}`);
         };
 
-        // Pembangkit acak sederhana dengan benih tetap, supaya kegagalan bisa diulang.
+        // A simple random generator with a fixed seed, so failures can be repeated.
         let seed = 7;
         const rand = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
         const pieces = ['x', '\n', '**', '`', '```\n', '| a |', '# ', '- [ ] ', '> ', '🎉', '~~', '\n\n', '![g](a.png)'];
         setText(readTextFile(samplePath));
         for (let round = 0; round < 8; round++) {
-            // Beberapa suntingan sebelum penyorotan berjalan, supaya rentang kotor digabung.
+            // Several edits before highlighting runs, so dirty ranges are merged.
             for (let k = 0; k < 1 + rand(4); k++) {
                 const n = buf.get_char_count();
                 const at = buf.get_iter_at_offset(rand(n + 1));
@@ -83,12 +83,12 @@ export function robustnessTests(c: GuiContext): void {
             buf.place_cursor(buf.get_iter_at_offset(rand(buf.get_char_count() + 1)));
             pump();
             if (round % 3 === 2) { buf.undo(); pump(); }
-            compare(`suntingan ke-${round + 1}`);
+            compare(`edit number ${round + 1}`);
         }
     });
-    // Marker disembunyikan bertahap (editor/decorations.ts): hanya baris aktif lama/baru dan
-    // baris yang diurai ulang yang diperiksa. Bandingkan dengan menghitung semua marker.
-    test('marker tersembunyi bertahap sama dengan perhitungan penuh', () => {
+    // Markers are hidden incrementally (editor/decorations.ts): only the old/new active lines and
+    // the re-parsed lines are checked. Compare against computing all markers.
+    test('incrementally hidden markers are the same as the full computation', () => {
         const expected = () => {
             const ins = buf.get_iter_at_mark(buf.get_insert()).get_line();
             const sel = buf.get_iter_at_mark(buf.get_selection_bound()).get_line();
@@ -101,16 +101,16 @@ export function robustnessTests(c: GuiContext): void {
         const rand = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
         const pieces = ['x', '\n', '**b**', '`k`', '```\n', '# ', '> ', '🎉', '*m*', '\n\n', '![g](a.png)', '~~c~~'];
         const check = (what: string) => eq(JSON.stringify(tagRanges(buf, ed.tags.hidden)), JSON.stringify(expected()), what);
-        // Pembatas ``` baru mengubah marker baris di bawahnya tanpa menyunting baris itu.
-        setText('awal\n\n**satu** dan *dua*\n\n# Judul\nakhir');
+        // A new ``` fence changes the markers of the lines below it without editing those lines.
+        setText('start\n\n**one** and *two*\n\n# Title\nend');
         cursorTo(0);
-        check('sebelum pembatas');
+        check('before the fence');
         buf.insert(iterAtLine(buf, 1), '```\n', -1); pump();
-        check('setelah pembatas dibuka');
+        check('after the fence is opened');
         cursorTo(6);
-        check('kursor pindah setelah pembatas');
+        check('cursor moved after the fence');
         buf.undo(); pump();
-        check('setelah pembatas dibatalkan');
+        check('after the fence is undone');
         setText(readTextFile(samplePath));
         try {
             for (let round = 0; round < 60; round++) {
@@ -129,18 +129,18 @@ export function robustnessTests(c: GuiContext): void {
                 if (rand(15) === 0) ed.setMode('source', !ed.modes.source);
                 if (rand(10) === 0) buf.undo();
                 pump();
-                check(`marker tersembunyi pada langkah ${round + 1}`);
+                check(`hidden markers at step ${round + 1}`);
             }
         } finally {
             ed.setMode('source', false);
             pump();
         }
     });
-    // Penyorotan bertahap (MarkdownView.queueFill): dokumen panjang diberi tag sebagian dulu,
-    // sisanya dicicil. Hasil akhirnya harus sama persis dengan penyorotan penuh.
-    test('penyorotan bertahap dokumen panjang sama dengan penyorotan penuh', () => {
+    // Incremental highlighting (MarkdownView.queueFill): a long document is tagged partially first,
+    // the rest is done in installments. The end result must be exactly the same as full highlighting.
+    test('incremental highlighting of a long document is the same as full highlighting', () => {
         const long = Array.from({ length: 300 }, (_, i) =>
-            `## Bagian ${i}\n\nParagraf **tebal** dan *miring* ke-${i} 🎉 dengan \`kode\`.\n\n`).join('');
+            `## Section ${i}\n\nParagraph **bold** and *italic* number ${i} 🎉 with \`code\`.\n\n`).join('');
         ed.setText(long);
         const lastLine = buf.get_line_count() - 3;
         const boldAt = (line: number) => {
@@ -148,14 +148,14 @@ export function robustnessTests(c: GuiContext): void {
             it.forward_chars(12);
             return it.has_tag(ed.tags.bold);
         };
-        ok(boldAt(2), 'awal dokumen langsung diberi tag');
-        ok(!ed.highlightComplete && !boldAt(lastLine), 'akhir dokumen seharusnya masih dicicil');
-        // Menyunting selagi cicilan berjalan, termasuk menambah baris.
-        buf.insert(iterAtLine(buf, 6), '**baru**\n\n', -1);
+        ok(boldAt(2), 'the start of the document was tagged immediately');
+        ok(!ed.highlightComplete && !boldAt(lastLine), 'the end of the document should still be pending');
+        // Editing while the installments run, including adding lines.
+        buf.insert(iterAtLine(buf, 6), '**new**\n\n', -1);
         for (let i = 0; i < 1000 && !ed.highlightComplete; i++) pump();
-        ok(ed.highlightComplete, 'penyorotan bertahap tidak selesai');
-        ok(boldAt(lastLine + 2), 'akhir dokumen diberi tag setelah cicilan');
-        eq(w.outline.count, 300, 'jumlah baris outline');
+        ok(ed.highlightComplete, 'incremental highlighting did not finish');
+        ok(boldAt(lastLine + 2), 'the end of the document was tagged after the installments');
+        eq(w.outline.count, 300, 'number of outline rows');
 
         const reference = new Gtk.TextBuffer();
         const tags = createTags(reference);
@@ -165,11 +165,11 @@ export function robustnessTests(c: GuiContext): void {
             eq(JSON.stringify(tagRanges(buf, ed.tags[name])), JSON.stringify(tagRanges(reference, tags[name])), `tag ${name}`);
         const line = buf.get_iter_at_mark(buf.get_insert()).get_line();
         const hidden = normalize(ed.markers.filter(([, , r0, r1]) => r1 < line || r0 > line).map(([a, b]) => [a, b] as [number, number]));
-        eq(JSON.stringify(tagRanges(buf, ed.tags.hidden)), JSON.stringify(hidden), 'marker tersembunyi');
+        eq(JSON.stringify(tagRanges(buf, ed.tags.hidden)), JSON.stringify(hidden), 'hidden markers');
         setText('');
     });
-    test('penyorotan bertahap mendahulukan baris di sekitar kursor', () => {
-        const long = Array.from({ length: 3000 }, (_, i) => `Paragraf **tebal** ke-${i}.\n\n`).join('');
+    test('incremental highlighting prioritizes the lines around the cursor', () => {
+        const long = Array.from({ length: 3000 }, (_, i) => `Paragraph **bold** number ${i}.\n\n`).join('');
         ed.setText(long);
         const lastLine = buf.get_line_count() - 3;
         buf.place_cursor(iterAtLine(buf, lastLine));
@@ -181,13 +181,13 @@ export function robustnessTests(c: GuiContext): void {
         };
         const ctx = GLib.MainContext.default();
         for (let i = 0; i < 2000 && !boldAt(lastLine) && !ed.highlightComplete; i++) ctx.iteration(false);
-        ok(boldAt(lastLine), 'baris kursor di akhir dokumen tidak diberi tag');
-        ok(!ed.highlightComplete && !boldAt(3000), 'tengah dokumen seharusnya masih dicicil');
+        ok(boldAt(lastLine), 'the cursor line at the end of the document was not tagged');
+        ok(!ed.highlightComplete && !boldAt(3000), 'the middle of the document should still be pending');
         for (let i = 0; i < 5000 && !ed.highlightComplete; i++) pump();
-        ok(ed.highlightComplete && boldAt(3000), 'cicilan tidak selesai');
+        ok(ed.highlightComplete && boldAt(3000), 'the installments did not finish');
         setText('');
     });
-    test('cache baris sama dengan parser baru setelah konteks blok dan Unicode berubah', () => {
+    test('the line cache equals a fresh parser after the block context and Unicode change', () => {
         const reference = new Gtk.TextBuffer();
         const tags = createTags(reference);
         const check = () => {
@@ -195,65 +195,65 @@ export function robustnessTests(c: GuiContext): void {
             const fresh = highlight(reference, tags, new LineTagger(reference, SYNTAX_TAGS.map(n => tags[n])));
             eq(ed.markers, fresh.markers, 'marker cache');
             eq(ed.headings, fresh.headings, 'heading cache');
-            eq(ed.tables, fresh.tables, 'tabel cache');
-            eq(ed.starts, fresh.starts, 'offset Unicode cache');
+            eq(ed.tables, fresh.tables, 'table cache');
+            eq(ed.starts, fresh.starts, 'Unicode offset cache');
             for (const name of SYNTAX_TAGS)
                 eq(tagRanges(buf, ed.tags[name]), tagRanges(reference, tags[name]), `tag cache ${name}`);
         };
-        setText('😀 awal\n# Judul\n**tebal**\n\nA | B\n-- | --\nsatu | dua\n\n```js\nconst x = 1;\n```\nakhir');
+        setText('😀 start\n# Title\n**bold**\n\nA | B\n-- | --\none | two\n\n```js\nconst x = 1;\n```\nend');
         check();
         const insert = (line: number, value: string) => {
             buf.insert(iterAtLine(buf, line), value, -1); pump(); check();
         };
         insert(0, '🎉\n');
-        insert(3, '```\n');  // format inline/tabel berubah menjadi isi blok kode
-        insert(7, '```\n');  // tabel muncul lagi setelah penutup
-        insert(0, 'paragraf baru\n');
+        insert(3, '```\n');  // inline/table formats turn into code block contents
+        insert(7, '```\n');  // the table appears again after the closing fence
+        insert(0, 'new paragraph\n');
         buf.undo(); pump(); check();
         buf.redo(); pump(); check();
         const end = iterAtLine(buf, 5);
         buf.delete(iterAtLine(buf, 0), end); pump(); check();
-        setText('**tebal**'); check();  // newline terakhir memengaruhi rentang tag
+        setText('**bold**'); check();  // the last newline affects the tag ranges
         buf.insert_at_cursor('\n', -1); pump(); check();
     });
-    test('setText menyelesaikan satu penyorotan tanpa callback ganda', () => {
+    test('setText finishes one highlight without a double callback', () => {
         let calls = 0;
         const original = ed.onHighlighted;
         ed.onHighlighted = result => { calls++; original(result); };
         try {
-            setText('# Baru\n\ncatatan');
-            eq(calls, 1, 'jumlah callback setelah setText');
+            setText('# New\n\nnote');
+            eq(calls, 1, 'number of callbacks after setText');
             buf.insert_at_cursor('x', -1); pump();
-            eq(calls, 2, 'suntingan berikutnya tetap disorot');
+            eq(calls, 2, 'the next edit is still highlighted');
         } finally { ed.onHighlighted = original; }
     });
-    test('mengedit satu heading mempertahankan baris outline lainnya', () => {
-        setText('# Satu\n\n## Dua\n\n# Tiga');
+    test('editing one heading keeps the other outline rows', () => {
+        setText('# One\n\n## Two\n\n# Three');
         const first = w.outline.store.get_item(0)!;
         const last = w.outline.store.get_item(2)!;
         cursorTo(2, -1);
-        buf.insert_at_cursor(' baru', -1); pump();
-        ok(w.outline.store.get_item(0) === first, 'heading pertama dibangun ulang');
-        ok(w.outline.store.get_item(2) === last, 'heading terakhir dibangun ulang');
+        buf.insert_at_cursor(' new', -1); pump();
+        ok(w.outline.store.get_item(0) === first, 'the first heading was rebuilt');
+        ok(w.outline.store.get_item(2) === last, 'the last heading was rebuilt');
         cursorTo(2);
-        buf.insert_at_cursor('x', -1); pump();  // heading kedua menjadi paragraf
-        eq(w.outline.count, 2, 'satu heading dihapus');
-        ok(w.outline.store.get_item(1) === last, 'akhiran tidak dipertahankan');
+        buf.insert_at_cursor('x', -1); pump();  // the second heading becomes a paragraph
+        eq(w.outline.count, 2, 'one heading was removed');
+        ok(w.outline.store.get_item(1) === last, 'the tail was not preserved');
         w.outline.list.emit('activate', 1); pump();
-        eq(buf.get_iter_at_mark(buf.get_insert()).get_line(), 4, 'tujuan klik setelah heading dihapus');
+        eq(buf.get_iter_at_mark(buf.get_insert()).get_line(), 4, 'click target after the heading was removed');
         buf.undo(); pump();
-        eq(w.outline.count, 3, 'undo mengembalikan heading');
+        eq(w.outline.count, 3, 'undo restored the heading');
     });
-    test('outline memakai ulang label saat heading hanya bergeser baris', () => {
-        setText('awal\n\n# Judul');
+    test('the outline reuses labels when a heading only shifts lines', () => {
+        setText('start\n\n# Title');
         const item = w.outline.store.get_item(0)!;
-        buf.insert(buf.get_start_iter(), 'baris baru\n', -1); pump();
-        ok(w.outline.store.get_item(0) === item, 'item outline tidak dipakai ulang');
+        buf.insert(buf.get_start_iter(), 'new line\n', -1); pump();
+        ok(w.outline.store.get_item(0) === item, 'the outline item was not reused');
         w.outline.list.emit('activate', 0);
         pump();
-        eq(buf.get_iter_at_mark(buf.get_insert()).get_line(), 3, 'tujuan klik heading bergeser');
+        eq(buf.get_iter_at_mark(buf.get_insert()).get_line(), 3, 'click target of the shifted heading');
     });
-    test('mode fokus dan typewriter aktif bersamaan', () => {
+    test('focus mode and typewriter mode are active together', () => {
         setText(WELCOME);
         action('focus'); action('typewriter');
         for (let i = 0; i < buf.get_line_count(); i++) cursorTo(i);
@@ -261,10 +261,10 @@ export function robustnessTests(c: GuiContext): void {
     });
 
     if (opt('mouse')) {
-        section('Klik mouse sungguhan (XTest)');
+        section('Real mouse click (XTest)');
         const input = new MouseInput();
         const original = input.position();
-        // Klik di (x, y), koordinat widget TextView.
+        // Click at (x, y), in TextView widget coordinates.
         const xtest = (x: number, y: number) => {
             input.move(...screenPoint(ed.view, x, y, (xid, sx, sy) => input.toRoot(xid, sx, sy)));
             input.down();
@@ -272,10 +272,10 @@ export function robustnessTests(c: GuiContext): void {
             for (let k = 0; k < 8; k++) { pump(); GLib.usleep(15000); }
         };
 
-        // Pemeriksaan awal: di sebagian lingkungan (diuji di sini: XFCE/X11) gerak pointer XTest
-        // sampai, tetapi tombol mouse tidak pernah diterima GTK. Tes klik di bawah ini tidak ada
-        // artinya jika klik tidak sampai, jadi dilewati dengan keterangan, bukan lulus palsu.
-        setText('baris satu\n\nbaris dua'); cursorTo(0);
+        // Initial check: in some environments (tested here: XFCE/X11) the XTest pointer motion
+        // arrives, but the mouse button is never received by GTK. The click tests below are
+        // meaningless if the click does not arrive, so they are skipped with a note, not a false pass.
+        setText('line one\n\nline two'); cursorTo(0);
         w.win.present_with_time(Gdk.CURRENT_TIME);
         for (let k = 0; k < 20; k++) { pump(); GLib.usleep(15000); }
         const probe = countPointerEvents(ed.view);
@@ -284,27 +284,27 @@ export function robustnessTests(c: GuiContext): void {
         const delivered = probe.presses;
 
         if (!delivered) {
-            print(`  ${DIM}- dilewati: XTest tidak mengirim tombol mouse ke jendela di lingkungan ini${RESET}`);
+            print(`  ${DIM}- skipped: XTest does not deliver mouse buttons to the window in this environment${RESET}`);
         } else {
-            test('klik ganda pada gambar di editor membuka penampil', () => {
+            test('a double click on an image in the editor opens the viewer', () => {
                 w.file = GLib.build_filenamev([tmp, 'dok.md']);
-                setText('teks\n\n![uji](gambar/uji.png)\n\nakhir'); waitImages(); cursorTo(0);
+                setText('text\n\n![test](images/test.png)\n\nend'); waitImages(); cursorTo(0);
                 for (let i = 0; i < 30; i++) { pump(); GLib.usleep(10000); }
                 let opened = false;
                 const keep = ed.onViewImage;
                 ed.onViewImage = () => { opened = true; };
-                // Titik 60 px di bawah tepi atas gambar (tingginya 100): tetap di dalam gambar walau klik
-                // pertama menggesernya ke bawah karena sintaks gambar muncul. Posisinya diambil dari
-                // widget gambarnya, bukan dari rumus, supaya tidak bergantung pada margin editor.
+                // A point 60 px below the top edge of the image (its height is 100): still inside the image even if the first click
+                // shifts it down because the image syntax appears. Its position is taken from
+                // the image widget, not from a formula, so it does not depend on the editor margin.
                 const picture = ed.images.blocks[0].content.get_first_child()!;
                 const [, px, py] = picture.translate_coordinates(ed.view, 40, 60);
                 xtest(px, py);
                 xtest(px, py);
                 ed.onViewImage = keep;
                 w.file = null;
-                ok(opened, 'klik ganda dengan mouse tidak membuka penampil');
+                ok(opened, 'a double click with the mouse did not open the viewer');
             });
-            test('klik di seluruh area teks tidak membuat editor error', () => {
+            test('clicking across the whole text area does not make the editor fail', () => {
                 setText(WELCOME);
                 for (let y = 20; y < ed.view.get_height(); y += 23)
                     for (const x of [20, 250, 600]) xtest(x, y);

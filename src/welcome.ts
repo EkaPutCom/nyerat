@@ -1,46 +1,46 @@
-// Dokumen contoh yang ditampilkan saat aplikasi pertama kali dibuka.
+// The sample document shown the first time the app is opened.
 
-export const WELCOME = `# Selamat datang di Nyerat
+export const WELCOME = `# Welcome to Nyerat
 
-Ruang kerja pribadi untuk catatan, rencana, dan tugas, bersama agent AI (buka panelnya dengan \`Ctrl+Shift+A\`). Semuanya **Markdown** yang langsung terformat: sintaks disembunyikan, dan muncul lagi saat kursor berada di barisnya. Coba klik baris ini.
+A personal workspace for notes, plans, and tasks, together with AI agents (open the panel with \`Ctrl+Shift+A\`). Everything is **Markdown** that is formatted live: the syntax is hidden, and shows up again when the cursor is on its line. Try clicking this line.
 
-## Format teks
+## Text formatting
 
-- **Tebal** dengan \`Ctrl+B\`, *miring* dengan \`Ctrl+I\`
-- ~~Coret~~, ==stabilo==, dan \`kode inline\`
-- Tautan: [GTK](https://www.gtk.org) — **Ctrl+klik** untuk membuka
+- **Bold** with \`Ctrl+B\`, *italic* with \`Ctrl+I\`
+- ~~Strikethrough~~, ==highlight==, and \`inline code\`
+- Link: [GTK](https://www.gtk.org) — **Ctrl+click** to open
 
-## Daftar tugas
+## Task list
 
-- [x] Buka folder kerja
-- [ ] Catat keputusan rapat hari ini (klik kotaknya untuk mencentang)
+- [x] Open a work folder
+- [ ] Note down today's meeting decisions (click the box to check it)
 
-1. Tulis rencana
-2. Tekan Enter untuk lanjut otomatis
+1. Write a plan
+2. Press Enter to continue automatically
 
-> Kutipan juga bisa.
-> Tekan Enter di baris kosong untuk keluar.
+> Quotes work too.
+> Press Enter on an empty line to leave.
 
 \`\`\`js
-function sisaAnggaran(total, terpakai) {
-    return total - terpakai;
+function remainingBudget(total, spent) {
+    return total - spent;
 }
 \`\`\`
 
-| Shortcut | Fungsi |
+| Shortcut | Function |
 | -------- | ------ |
 | Ctrl+1…6 | Heading |
-| Ctrl+/   | Mode source |
-| F8       | Mode fokus |
+| Ctrl+/   | Source mode |
+| F8       | Focus mode |
 
 \`\`\`mermaid
 graph LR
-    A[Catat] --> B{Perlu tindak lanjut?}
-    B -->|ya| C[Buat tugas]
-    B -->|belum| A
+    A[Note] --> B{Needs follow-up?}
+    B -->|yes| C[Create a task]
+    B -->|not yet| A
 \`\`\`
 
 ---
 
-Buka menu ☰ untuk ekspor HTML, mode gelap, dan lainnya.
+Open the ☰ menu for HTML export, dark mode, and more.
 `;

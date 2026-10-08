@@ -1,35 +1,35 @@
-// Tabel Markdown (GFM): mengenali blok tabel, memecah baris menjadi sel, dan
-// operasi atas tabel (tambah/hapus baris dan kolom, rata kiri/tengah/kanan,
-// merapikan). Murni TypeScript tanpa GTK, sehingga mudah diuji.
+// Markdown tables (GFM): recognizing table blocks, splitting lines into cells, and
+// table operations (add/delete rows and columns, align left/center/right,
+// tidying up). Pure TypeScript without GTK, so it is easy to test.
 //
-// Bentuk tabel:
+// Table shape:
 //
-//   | Nama  | Nilai |      ← baris judul
-//   | :---- | ----: |      ← baris pemisah; titik dua menentukan perataan
-//   | satu  |     1 |      ← baris isi (boleh tanpa pipa di tepi)
+//   | Name  | Value |      ← header row
+//   | :---- | ----: |      ← separator row; colons set the alignment
+//   | one   |     1 |      ← body row (the edge pipes may be omitted)
 
 import { RE, startsTable } from './syntax.js';
 
 export type Align = 'left' | 'center' | 'right' | null;
 
-// Rentang baris sebuah tabel di dokumen (inklusif): baris judul … baris isi terakhir.
+// Line range of a table in the document (inclusive): header row … last body row.
 export interface TableRange {
     start: number;
     end: number;
 }
 
-// Isi tabel. Jumlah kolom ditentukan baris judul, seperti GFM: sel berlebih di
-// baris isi dibuang, sel yang kurang dianggap kosong.
+// Table contents. The number of columns is set by the header row, as in GFM: extra cells in
+// body rows are dropped, missing cells are treated as empty.
 export interface Table {
     header: string[];
     aligns: Align[];
     rows: string[][];
 }
 
-// ---------- Mengenali blok tabel ----------
+// ---------- Recognizing table blocks ----------
 
-// Baris isi terakhir tabel yang judulnya di baris `start` (pemisah di start + 1).
-// Tabel berakhir di baris kosong, baris tanpa pipa, atau awal blok lain.
+// Last body row of the table whose header is at line `start` (separator at start + 1).
+// The table ends at a blank line, a line without a pipe, or the start of another block.
 export function tableEnd(lines: string[], start: number): number {
     let end = start + 1;
     while (end + 1 < lines.length) {
@@ -41,7 +41,7 @@ export function tableEnd(lines: string[], start: number): number {
     return end;
 }
 
-// Semua tabel di dokumen, tidak termasuk yang berada di dalam blok kode.
+// All tables in the document, excluding those inside code blocks.
 export function findTables(lines: string[]): TableRange[] {
     const tables: TableRange[] = [];
     let fence: { ch: string; len: number } | null = null;
@@ -64,15 +64,15 @@ export function findTables(lines: string[]): TableRange[] {
     return tables;
 }
 
-// ---------- Memecah baris ----------
+// ---------- Splitting lines ----------
 
 export interface CellSpan {
-    text: string;    // isi sel tanpa spasi di tepi; Markdown mentah (\| tetap ada)
-    start: number;   // posisi awal isi di baris (UTF-16); sel kosong: posisi kursor yang wajar
+    text: string;    // cell contents without surrounding spaces; raw Markdown (\| stays)
+    start: number;   // start position of the contents in the line (UTF-16); empty cell: a sensible cursor position
     end: number;
 }
 
-// Posisi pipa yang bukan bagian dari \|.
+// Positions of pipes that are not part of \|.
 function pipePositions(line: string): number[] {
     const pipes: number[] = [];
     for (let i = 0; i < line.length; i++) {
@@ -82,15 +82,15 @@ function pipePositions(line: string): number[] {
     return pipes;
 }
 
-// Memecah satu baris tabel menjadi sel. Pipa di awal dan akhir baris hanya pembatas,
-// bukan sel kosong: "| a | b |" dan "a | b" sama-sama berisi dua sel.
+// Splits one table line into cells. Pipes at the start and end of the line are only delimiters,
+// not empty cells: "| a | b |" and "a | b" both contain two cells.
 export function splitRow(line: string): CellSpan[] {
     const pipes = pipePositions(line);
     const leading = pipes.length > 0 && line.slice(0, pipes[0]).trim() === '';
     const lastPipe = pipes[pipes.length - 1];
     const trailing = pipes.length > 0 && !(leading && pipes.length === 1) && line.slice(lastPipe + 1).trim() === '';
 
-    // Batas antar sel; -1 dan line.length adalah batas maya jika pipa di tepi tidak ada.
+    // Boundaries between cells; -1 and line.length are virtual boundaries if there are no edge pipes.
     const bounds = [...(leading ? [] : [-1]), ...pipes, ...(trailing ? [] : [line.length])];
     const cells: CellSpan[] = [];
     for (let k = 0; k + 1 < bounds.length; k++) {
@@ -101,14 +101,14 @@ export function splitRow(line: string): CellSpan[] {
             const start = from + raw.length - raw.trimStart().length;
             cells.push({ text, start, end: start + text.length });
         } else {
-            const at = Math.min(from + (raw.startsWith(' ') ? 1 : 0), to);  // setelah "| "
+            const at = Math.min(from + (raw.startsWith(' ') ? 1 : 0), to);  // after "| "
             cells.push({ text: '', start: at, end: at });
         }
     }
     return cells;
 }
 
-// Kolom (mulai 0) yang memuat posisi `offset` (UTF-16) di baris tabel.
+// The column (from 0) containing position `offset` (UTF-16) in a table line.
 export function cellIndexAt(line: string, offset: number): number {
     const pipes = pipePositions(line);
     const leading = pipes.length > 0 && line.slice(0, pipes[0]).trim() === '';
@@ -116,13 +116,13 @@ export function cellIndexAt(line: string, offset: number): number {
     return Math.max(0, before - (leading ? 1 : 0));
 }
 
-// Posisi kursor (UTF-16) di awal isi sel `col`; di akhir baris jika sel itu tidak ada.
+// Cursor position (UTF-16) at the start of the contents of cell `col`; at the end of the line if that cell does not exist.
 export function cellStart(line: string, col: number): number {
     const cells = splitRow(line);
     return cells[col]?.start ?? line.trimEnd().length;
 }
 
-// ---------- Membaca dan menulis ----------
+// ---------- Reading and writing ----------
 
 const alignOf = (cell: string): Align => {
     const left = cell.startsWith(':'), right = cell.endsWith(':');
@@ -132,7 +132,7 @@ const alignOf = (cell: string): Align => {
 const fitCells = (cells: string[], n: number): string[] =>
     Array.from({ length: n }, (_, i) => cells[i] ?? '');
 
-// lines: baris judul, baris pemisah, lalu baris isi.
+// lines: header row, separator row, then body rows.
 export function parseTable(lines: string[]): Table {
     const header = splitRow(lines[0]).map(c => c.text);
     const n = header.length;
@@ -142,8 +142,8 @@ export function parseTable(lines: string[]): Table {
     return { header, aligns, rows };
 }
 
-// Lebar tampilan teks dalam kolom monospace: huruf CJK dan emoji dua kolom,
-// tanda gabung dan pengubah emoji nol kolom.
+// Display width of text in monospace columns: CJK letters and emoji take two columns,
+// joiners and emoji modifiers take zero columns.
 const WIDE: [number, number][] = [
     [0x1100, 0x115F], [0x2E80, 0x303E], [0x3041, 0x33FF], [0x3400, 0x4DBF], [0x4E00, 0x9FFF],
     [0xA000, 0xA4CF], [0xAC00, 0xD7A3], [0xF900, 0xFAFF], [0xFE30, 0xFE6F], [0xFF00, 0xFF60],
@@ -178,7 +178,7 @@ function separator(width: number, align: Align): string {
     return '-'.repeat(width);
 }
 
-// Menulis tabel menjadi baris Markdown dengan kolom yang rapi (lebar kolom sama).
+// Writes a table as Markdown lines with tidy columns (equal column widths).
 export function renderTable(table: Table): string[] {
     const n = table.header.length;
     const widths = Array.from({ length: n }, (_, c) =>
@@ -191,13 +191,13 @@ export function renderTable(table: Table): string[] {
     ];
 }
 
-// Satu baris saja, tanpa merapikan kolom (untuk baris baru yang disisipkan saat mengetik).
+// One line only, without tidying the columns (for new rows inserted while typing).
 export const renderRow = (cells: string[]): string => `| ${cells.join(' | ')} |`;
 
-// ---------- Operasi ----------
-// Semua operasi mengembalikan tabel baru; tabel asal tidak diubah.
+// ---------- Operations ----------
+// All operations return a new table; the original table is not changed.
 
-// Sisipkan baris kosong sebelum rows[at] (at = rows.length: di akhir).
+// Insert a blank row before rows[at] (at = rows.length: at the end).
 export function insertRow(table: Table, at: number): Table {
     const rows = [...table.rows];
     rows.splice(at, 0, table.header.map(() => ''));
@@ -208,7 +208,7 @@ export function deleteRow(table: Table, at: number): Table {
     return { ...table, rows: table.rows.filter((_, i) => i !== at) };
 }
 
-// Sisipkan kolom kosong sebelum kolom `at` (at = jumlah kolom: di kanan sendiri).
+// Insert a blank column before column `at` (at = number of columns: at the far right).
 export function insertColumn(table: Table, at: number): Table {
     const put = <T>(cells: T[], value: T) => [...cells.slice(0, at), value, ...cells.slice(at)];
     return {
@@ -218,7 +218,7 @@ export function insertColumn(table: Table, at: number): Table {
     };
 }
 
-// Kolom terakhir tidak bisa dihapus: tabel tanpa kolom bukan tabel.
+// The last column cannot be deleted: a table without columns is not a table.
 export function deleteColumn(table: Table, at: number): Table {
     if (table.header.length <= 1) return table;
     const drop = <T>(cells: T[]) => cells.filter((_, i) => i !== at);

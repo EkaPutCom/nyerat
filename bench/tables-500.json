@@ -1,6 +1,6 @@
 {
-  "versi": 2,
-  "tanggal": "2026-10-04T12:41:37.788Z",
+  "version": 2,
+  "date": "2026-10-04T12:41:37.788Z",
   "size": 500,
   "runs": 10,
   "sizes": [
@@ -8,7 +8,7 @@
   ],
   "fixture": "mixed",
   "mode": "gui",
-  "lingkungan": {
+  "environment": {
     "gjs": 18002,
     "glib": "2.80.0",
     "gtk": "3.24.41",
@@ -16,24 +16,24 @@
     "backend": "x11",
     "commit": "7080c4ea602c2da3746c7e4a020a01208b129e60"
   },
-  "hasil": {
-    "Editor GUI 500 blok / setText + sorot + layout": 1679.0385000035167,
-    "Editor GUI 500 blok / buka: jeda terpanjang": 605.2775000035763,
-    "Editor GUI 500 blok / highlight() ulang": 1.5644999966025352,
-    "Editor GUI 500 blok / ketik 20 karakter": 94.26200000941753,
-    "Editor GUI 500 blok / ketik per karakter": 3.9109999984502792,
-    "Editor GUI 500 blok / ketik lewat view (paragraf)": 14.899999998509884,
-    "Editor GUI 500 blok / Enter paragraf baru": 12.452500000596046,
-    "Editor GUI 500 blok / paste besar + Unicode": 157.19799999892712,
-    "Editor GUI 500 blok / hapus teks besar": 5.39750000089407,
-    "Editor GUI 500 blok / undo paste besar": 5.092499993741512,
-    "Editor GUI 500 blok / redo paste besar": 176.99649999290705,
-    "Editor GUI 500 blok / pindah kursor 20 baris": 27.76349999755621,
-    "Editor GUI 500 blok / auto save (tulis file)": 13.528499998152256,
-    "Editor GUI 500 blok / auto save latar (thread utama)": 8.638999998569489
+  "results": {
+    "Editor GUI 500 blocks / setText + highlight + layout": 1679.0385000035167,
+    "Editor GUI 500 blocks / open: longest pause": 605.2775000035763,
+    "Editor GUI 500 blocks / highlight() again": 1.5644999966025352,
+    "Editor GUI 500 blocks / type 20 characters": 94.26200000941753,
+    "Editor GUI 500 blocks / type per character": 3.9109999984502792,
+    "Editor GUI 500 blocks / type via view (paragraph)": 14.899999998509884,
+    "Editor GUI 500 blocks / Enter new paragraph": 12.452500000596046,
+    "Editor GUI 500 blocks / large paste + Unicode": 157.19799999892712,
+    "Editor GUI 500 blocks / delete large text": 5.39750000089407,
+    "Editor GUI 500 blocks / undo large paste": 5.092499993741512,
+    "Editor GUI 500 blocks / redo large paste": 176.99649999290705,
+    "Editor GUI 500 blocks / move cursor 20 lines": 27.76349999755621,
+    "Editor GUI 500 blocks / autosave (write file)": 13.528499998152256,
+    "Editor GUI 500 blocks / background autosave (main thread)": 8.638999998569489
   },
-  "statistik": {
-    "Editor GUI 500 blok / setText + sorot + layout": {
+  "stats": {
+    "Editor GUI 500 blocks / setText + highlight + layout": {
       "median": 1679.0385000035167,
       "p95": 1827.0329999923706,
       "max": 1827.0329999923706,
@@ -50,7 +50,7 @@
         1705.5810000002384
       ]
     },
-    "Editor GUI 500 blok / buka: jeda terpanjang": {
+    "Editor GUI 500 blocks / open: longest pause": {
       "median": 605.2775000035763,
       "p95": 741.6990000009537,
       "max": 741.6990000009537,
@@ -67,7 +67,7 @@
         588.1870000064373
       ]
     },
-    "Editor GUI 500 blok / highlight() ulang": {
+    "Editor GUI 500 blocks / highlight() again": {
       "median": 1.5644999966025352,
       "p95": 4.61599999666214,
       "max": 4.61599999666214,
@@ -84,7 +84,7 @@
         1.6620000004768372
       ]
     },
-    "Editor GUI 500 blok / ketik 20 karakter": {
+    "Editor GUI 500 blocks / type 20 characters": {
       "median": 94.26200000941753,
       "p95": 105.6699999421835,
       "max": 105.6699999421835,
@@ -101,7 +101,7 @@
         95.47800004482269
       ]
     },
-    "Editor GUI 500 blok / ketik per karakter": {
+    "Editor GUI 500 blocks / type per character": {
       "median": 3.9109999984502792,
       "p95": 10.290999993681908,
       "max": 18.711999997496605,
@@ -308,7 +308,7 @@
         3.434000000357628
       ]
     },
-    "Editor GUI 500 blok / ketik lewat view (paragraf)": {
+    "Editor GUI 500 blocks / type via view (paragraph)": {
       "median": 14.899999998509884,
       "p95": 25.857999995350838,
       "max": 28.774000003933907,
@@ -365,7 +365,7 @@
         4.394000008702278
       ]
     },
-    "Editor GUI 500 blok / Enter paragraf baru": {
+    "Editor GUI 500 blocks / Enter new paragraph": {
       "median": 12.452500000596046,
       "p95": 14.437999993562698,
       "max": 14.437999993562698,
@@ -382,7 +382,7 @@
         12.59800000488758
       ]
     },
-    "Editor GUI 500 blok / paste besar + Unicode": {
+    "Editor GUI 500 blocks / large paste + Unicode": {
       "median": 157.19799999892712,
       "p95": 168.2980000078678,
       "max": 168.2980000078678,
@@ -399,7 +399,7 @@
         155.62700000405312
       ]
     },
-    "Editor GUI 500 blok / hapus teks besar": {
+    "Editor GUI 500 blocks / delete large text": {
       "median": 5.39750000089407,
       "p95": 6.46000000834465,
       "max": 6.46000000834465,
@@ -416,7 +416,7 @@
         6.336999997496605
       ]
     },
-    "Editor GUI 500 blok / undo paste besar": {
+    "Editor GUI 500 blocks / undo large paste": {
       "median": 5.092499993741512,
       "p95": 6.754000008106232,
       "max": 6.754000008106232,
@@ -433,7 +433,7 @@
         4.966999992728233
       ]
     },
-    "Editor GUI 500 blok / redo paste besar": {
+    "Editor GUI 500 blocks / redo large paste": {
       "median": 176.99649999290705,
       "p95": 191.11499999463558,
       "max": 191.11499999463558,
@@ -450,7 +450,7 @@
         176.98599998652935
       ]
     },
-    "Editor GUI 500 blok / pindah kursor 20 baris": {
+    "Editor GUI 500 blocks / move cursor 20 lines": {
       "median": 27.76349999755621,
       "p95": 42.945000007748604,
       "max": 42.945000007748604,
@@ -467,7 +467,7 @@
         28.376000002026558
       ]
     },
-    "Editor GUI 500 blok / auto save (tulis file)": {
+    "Editor GUI 500 blocks / autosave (write file)": {
       "median": 13.528499998152256,
       "p95": 34.45600000023842,
       "max": 34.45600000023842,
@@ -484,7 +484,7 @@
         14.078999996185303
       ]
     },
-    "Editor GUI 500 blok / auto save latar (thread utama)": {
+    "Editor GUI 500 blocks / background autosave (main thread)": {
       "median": 8.638999998569489,
       "p95": 10.457000002264977,
       "max": 10.457000002264977,
@@ -502,5 +502,5 @@
       ]
     }
   },
-  "catatan": "Hasil working tree sebelum commit; lingkungan.commit adalah HEAD awal. Run GUI sesudah pemanasan, 10 pengulangan, batas subprocess diagnostik 900 detik; durasi proses sekitar 198 detik. Baseline lama tidak diganti."
+  "notes": "Result of the working tree before the commit; environment.commit is the initial HEAD. GUI run after warm-up, 10 repetitions, diagnostic subprocess limit 900 seconds; the process lasted about 198 seconds. The old baseline was not replaced."
 }

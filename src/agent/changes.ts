@@ -1,6 +1,6 @@
-// Perubahan berkas yang diusulkan agent. Murni TypeScript tanpa GTK: modul ini hanya memvalidasi usulan dan
-// menghitung hasilnya; tidak pernah menulis apa pun. Penerapannya ke disk atau editor dilakukan jendela setelah
-// pengguna menyetujui selisihnya (ui/chat.ts), jadi model tidak pernah mengubah berkas sendirian.
+// File changes proposed by the agent. Pure TypeScript without GTK: this module only validates proposals and
+// computes their results; it never writes anything. Applying them to disk or the editor is done by the window after
+// the user approves the diff (ui/chat.ts), so the model never changes files on its own.
 
 import { matchMention, type SourceFile } from './context.js';
 import { addCard, addColumn, deleteCard, deleteColumn, isKanban, moveCard, parseBoard, renameColumn, serializeBoard, updateCard, type Board, type Position } from '../markdown/kanban.js';
@@ -8,11 +8,11 @@ import type { ToolSpec } from './provider.js';
 
 export interface Change {
     kind: 'create' | 'edit' | 'delete' | 'move';
-    file: string;      // path relatif terhadap folder proyek (untuk move: path asal)
-    before: string;    // isi sebelumnya ('' untuk berkas baru)
-    after: string;     // isi sesudah perubahan diterapkan ('' untuk hapus; sama dengan before untuk pindah)
-    reason: string;    // alasan dari model, ditampilkan di kartu persetujuan
-    to?: string;       // move saja: path tujuan
+    file: string;      // path relative to the project folder (for move: the source path)
+    before: string;    // previous contents ('' for a new file)
+    after: string;     // contents after the change is applied ('' for delete; same as before for move)
+    reason: string;    // the model's reason, shown on the approval card
+    to?: string;       // move only: the destination path
 }
 
 export const MAX_NEW_FILE_CHARS = 100_000;
@@ -20,94 +20,94 @@ const MARKDOWN_EXTENSION = /\.(md|markdown|mdown|mkd)$/i;
 
 export const CHANGE_TOOLS: ToolSpec[] = [
     {
-        name: 'buat_berkas',
-        description: 'Usulkan berkas Markdown baru di folder kerja (mis. catatan, rencana, ringkasan riset). Tidak langsung ditulis: pengguna melihat isinya lalu menerapkan atau menolak. Gagal bila nama sudah dipakai.',
+        name: 'create_file',
+        description: 'Propose a new Markdown file in the work folder (e.g. notes, plans, a research summary). It is not written right away: the user sees the contents and then applies or rejects it. Fails if the name is already taken.',
         parameters: {
             type: 'object',
             properties: {
-                nama: { type: 'string', description: 'Path relatif di folder kerja, mis. "rencana/oktober.md" (folder dibuat bila perlu; berkas bertitik tidak boleh)' },
-                isi: { type: 'string', description: 'Isi lengkap berkas dalam Markdown' },
-                alasan: { type: 'string', description: 'Satu kalimat: untuk apa berkas ini' },
+                name: { type: 'string', description: 'Relative path in the work folder, e.g. "plans/october.md" (folders are created if needed; dot files are not allowed)' },
+                content: { type: 'string', description: 'The full contents of the file in Markdown' },
+                reason: { type: 'string', description: 'One sentence: what this file is for' },
             },
-            required: ['nama', 'isi', 'alasan'],
+            required: ['name', 'content', 'reason'],
             additionalProperties: false,
         },
     },
     {
-        name: 'ubah_berkas',
-        description: 'Usulkan penggantian potongan teks di berkas yang ada. teks_lama harus persis seperti di berkas (baca dulu dengan baca_berkas). Bawaannya teks_lama harus muncul tepat satu kali (tambahkan baris di sekitarnya bila perlu); dengan semua=true setiap kemunculan diganti, mis. mengganti nama atau tanggal di seluruh berkas. Tidak langsung ditulis: pengguna melihat selisihnya lalu menerapkan atau menolak.',
+        name: 'edit_file',
+        description: 'Propose replacing a piece of text in an existing file. old_text must be exactly as in the file (read it first with read_file). By default old_text must appear exactly once (add surrounding lines if needed); with all=true every occurrence is replaced, e.g. renaming a name or date throughout the file. It is not written right away: the user sees the diff and then applies or rejects it.',
         parameters: {
             type: 'object',
             properties: {
-                nama: { type: 'string', description: 'Nama berkas seperti di daftar_berkas' },
-                teks_lama: { type: 'string', description: 'Teks yang diganti, persis seperti tertulis (tanpa nomor baris)' },
-                teks_baru: { type: 'string', description: 'Pengganti teks_lama; kosong berarti menghapusnya' },
-                semua: { type: 'boolean', description: 'true = ganti semua kemunculan (bawaan false: harus tepat satu)' },
-                alasan: { type: 'string', description: 'Satu kalimat: mengapa perubahan ini' },
+                name: { type: 'string', description: 'File name as in list_files' },
+                old_text: { type: 'string', description: 'The text being replaced, exactly as written (without line numbers)' },
+                new_text: { type: 'string', description: 'Replacement for old_text; empty means deleting it' },
+                all: { type: 'boolean', description: 'true = replace all occurrences (default false: there must be exactly one)' },
+                reason: { type: 'string', description: 'One sentence: why this change' },
             },
-            required: ['nama', 'teks_lama', 'teks_baru', 'alasan'],
+            required: ['name', 'old_text', 'new_text', 'reason'],
             additionalProperties: false,
         },
     },
     {
-        name: 'sisip_teks',
-        description: 'Usulkan penyisipan teks baru ke berkas yang ada tanpa mengganti apa pun: di awal (setelah frontmatter bila ada), di akhir, atau setelah baris tertentu. Untuk setelah_baris, isi_baris wajib berisi isi baris itu seperti hasil baca_berkas (tanpa nomor) sebagai pengaman salah hitung. Tidak langsung ditulis: pengguna melihat selisihnya lalu menerapkan atau menolak.',
+        name: 'insert_text',
+        description: 'Propose inserting new text into an existing file without replacing anything: at the start (after the frontmatter if there is one), at the end, or after a given line. For after_line, line_text must contain the contents of that line as returned by read_file (without the number) as a safeguard against miscounting. It is not written right away: the user sees the diff and then applies or rejects it.',
         parameters: {
             type: 'object',
             properties: {
-                nama: { type: 'string', description: 'Nama berkas seperti di daftar_berkas' },
-                posisi: { type: 'string', enum: ['awal', 'akhir', 'setelah_baris'] },
-                baris: { type: 'integer', description: 'setelah_baris saja: nomor baris (mulai 1) yang diikuti teks baru' },
-                isi_baris: { type: 'string', description: 'setelah_baris saja: isi baris itu, untuk memastikan nomornya benar' },
-                teks: { type: 'string', description: 'Teks Markdown yang disisipkan (satu baris atau lebih)' },
-                alasan: { type: 'string', description: 'Satu kalimat: mengapa perubahan ini' },
+                name: { type: 'string', description: 'File name as in list_files' },
+                position: { type: 'string', enum: ['start', 'end', 'after_line'] },
+                line: { type: 'integer', description: 'after_line only: the line number (from 1) the new text follows' },
+                line_text: { type: 'string', description: 'after_line only: the contents of that line, to make sure the number is correct' },
+                text: { type: 'string', description: 'The Markdown text to insert (one or more lines)' },
+                reason: { type: 'string', description: 'One sentence: why this change' },
             },
-            required: ['nama', 'posisi', 'teks', 'alasan'],
+            required: ['name', 'position', 'text', 'reason'],
             additionalProperties: false,
         },
     },
     {
-        name: 'hapus_berkas',
-        description: 'Usulkan membuang berkas Markdown ke Tempat Sampah (bisa dipulihkan pengguna). Hanya bila pengguna memintanya atau jelas berkas itu duplikat/usang. Tidak langsung dijalankan: pengguna melihat isinya lalu menerapkan atau menolak.',
+        name: 'delete_file',
+        description: 'Propose moving a Markdown file to the Trash (the user can recover it). Only if the user asked for it or the file is clearly a duplicate/obsolete. It is not carried out right away: the user sees the contents and then applies or rejects it.',
         parameters: {
             type: 'object',
             properties: {
-                nama: { type: 'string', description: 'Nama berkas seperti di daftar_berkas' },
-                alasan: { type: 'string', description: 'Satu kalimat: mengapa berkas ini dibuang' },
+                name: { type: 'string', description: 'File name as in list_files' },
+                reason: { type: 'string', description: 'One sentence: why this file is being removed' },
             },
-            required: ['nama', 'alasan'],
+            required: ['name', 'reason'],
             additionalProperties: false,
         },
     },
     {
-        name: 'pindah_berkas',
-        description: 'Usulkan mengganti nama atau memindahkan berkas Markdown ke path lain di folder kerja (folder dibuat bila perlu). Isinya tidak berubah; tautan di berkas lain tidak ikut diperbarui, jadi usulkan perubahannya terpisah bila perlu. Gagal bila tujuan sudah ada.',
+        name: 'move_file',
+        description: 'Propose renaming or moving a Markdown file to another path in the work folder (folders are created if needed). The contents do not change; links in other files are not updated, so propose that change separately if needed. Fails if the destination already exists.',
         parameters: {
             type: 'object',
             properties: {
-                nama: { type: 'string', description: 'Nama berkas seperti di daftar_berkas' },
-                tujuan: { type: 'string', description: 'Path relatif baru, mis. "arsip/rapat-1-okt.md"' },
-                alasan: { type: 'string', description: 'Satu kalimat: mengapa dipindah' },
+                name: { type: 'string', description: 'File name as in list_files' },
+                destination: { type: 'string', description: 'The new relative path, e.g. "archive/meeting-oct-1.md"' },
+                reason: { type: 'string', description: 'One sentence: why it is being moved' },
             },
-            required: ['nama', 'tujuan', 'alasan'],
+            required: ['name', 'destination', 'reason'],
             additionalProperties: false,
         },
     },
     {
-        name: 'ubah_kanban',
-        description: 'Usulkan perubahan pada papan kanban (berkas Markdown dengan "kanban: true" di frontmatter). Lebih aman daripada ubah_berkas untuk papan. Aksi kartu: tambah, pindah, tandai (selesai/belum), ubah (ganti teks kartu), hapus. Aksi daftar: tambah_daftar, ganti_nama_daftar, hapus_daftar (hanya daftar kosong). Tidak langsung ditulis: pengguna melihat selisihnya lalu menerapkan atau menolak.',
+        name: 'edit_kanban',
+        description: 'Propose a change to a kanban board (a Markdown file with "kanban: true" in the frontmatter). Safer than edit_file for boards. Card actions: add, move, mark (done/not done), edit (replace the card text), delete. List actions: add_list, rename_list, delete_list (empty lists only). It is not written right away: the user sees the diff and then applies or rejects it.',
         parameters: {
             type: 'object',
             properties: {
-                nama: { type: 'string', description: 'Nama berkas papan seperti di daftar_berkas' },
-                aksi: { type: 'string', enum: ['tambah', 'pindah', 'tandai', 'ubah', 'hapus', 'tambah_daftar', 'ganti_nama_daftar', 'hapus_daftar'], description: 'tambah = kartu baru di akhir daftar; pindah = pindahkan kartu ke akhir daftar lain; tandai = ubah status selesai; ubah = ganti teks kartu dengan teks_baru; hapus = buang kartu; tambah_daftar/ganti_nama_daftar/hapus_daftar = kelola daftar' },
-                kartu: { type: 'string', description: 'tambah: teks kartu baru (boleh memuat #tag dan @{2026-10-20}). pindah/tandai/ubah/hapus: potongan teks kartu yang ada (harus cocok dengan tepat satu kartu). Tidak dipakai untuk aksi daftar' },
-                daftar: { type: 'string', description: 'tambah/pindah: daftar tujuan. tambah_daftar: nama daftar baru. ganti_nama_daftar/hapus_daftar: daftar yang ada. Nama persis seperti heading di papan (huruf besar/kecil tidak dibedakan)' },
-                teks_baru: { type: 'string', description: 'ubah: teks kartu pengganti. ganti_nama_daftar: nama daftar baru' },
-                selesai: { type: 'boolean', description: 'tandai saja: true = selesai, false = belum' },
-                alasan: { type: 'string', description: 'Satu kalimat: mengapa perubahan ini' },
+                name: { type: 'string', description: 'Board file name as in list_files' },
+                action: { type: 'string', enum: ['add', 'move', 'mark', 'edit', 'delete', 'add_list', 'rename_list', 'delete_list'], description: 'add = new card at the end of a list; move = move a card to the end of another list; mark = change the done status; edit = replace the card text with new_text; delete = remove a card; add_list/rename_list/delete_list = manage lists' },
+                card: { type: 'string', description: 'add: text of the new card (may contain #tags and @{2026-10-20}). move/mark/edit/delete: a piece of the text of an existing card (must match exactly one card). Not used for list actions' },
+                list: { type: 'string', description: 'add/move: the destination list. add_list: name of the new list. rename_list/delete_list: the existing list. The exact name as the heading on the board (case-insensitive)' },
+                new_text: { type: 'string', description: 'edit: the replacement card text. rename_list: the new list name' },
+                done: { type: 'boolean', description: 'mark only: true = done, false = not done' },
+                reason: { type: 'string', description: 'One sentence: why this change' },
             },
-            required: ['nama', 'aksi', 'alasan'],
+            required: ['name', 'action', 'reason'],
             additionalProperties: false,
         },
     },
@@ -117,12 +117,12 @@ export const isChangeTool = (name: string): boolean => CHANGE_TOOLS.some(t => t.
 
 export type PlanResult =
     | { ok: true; change: Change }
-    | { ok: false; message: string; summary: string };   // message kembali ke model; summary tampil di antarmuka
+    | { ok: false; message: string; summary: string };   // message goes back to the model; summary is shown in the interface
 
 const fail = (message: string, summary: string): PlanResult => ({ ok: false, message, summary });
 const asText = (v: unknown): string => typeof v === 'string' ? v : '';
 
-// Nama berkas baru: relatif, tanpa "..", tanpa segmen bertitik (disembunyikan dari pohon dan tidak dibaca asisten).
+// New file name: relative, without "..", without dot segments (hidden from the tree and not read by the assistant).
 export function cleanNewName(raw: string): string | null {
     let name = raw.trim().replace(/^\.\//, '');
     if (!name || name.startsWith('/') || name.includes('\\') || name.includes('\0')) return null;
@@ -132,194 +132,194 @@ export function cleanNewName(raw: string): string | null {
     return name;
 }
 
-// Ubah panggilan alat menjadi Change, atau pesan galat yang bisa dipakai model untuk memperbaiki usulannya.
+// Turn a tool call into a Change, or an error message the model can use to fix its proposal.
 export function planChange(name: string, rawArguments: string, files: SourceFile[]): PlanResult {
     let args: Record<string, unknown>;
     try {
         const parsed = JSON.parse(rawArguments || '{}');
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('bukan objek');
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
         args = parsed;
     } catch (e) {
-        return fail('Argumen bukan JSON objek yang valid.', 'argumen tidak valid');
+        return fail('The arguments are not a valid JSON object.', 'invalid arguments');
     }
-    const reason = asText(args.alasan).trim();
-    const raw = asText(args.nama);
+    const reason = asText(args.reason).trim();
+    const raw = asText(args.name);
 
-    if (name === 'buat_berkas') {
+    if (name === 'create_file') {
         const file = cleanNewName(raw);
-        if (!file) return fail(`Nama "${raw}" tidak valid. Pakai path relatif tanpa "..", tanpa awalan titik atau "/".`, 'nama tidak valid');
+        if (!file) return fail(`The name "${raw}" is not valid. Use a relative path without "..", without a leading dot or "/".`, 'invalid name');
         const taken = files.find(f => f.name.toLowerCase() === file.toLowerCase());
-        if (taken) return fail(`Berkas "${taken.name}" sudah ada. Pakai ubah_berkas untuk mengubahnya, atau pilih nama lain.`, 'sudah ada');
-        const text = asText(args.isi);
-        if (!text.trim()) return fail('Argumen "isi" wajib diisi.', 'isi kosong');
-        if (text.length > MAX_NEW_FILE_CHARS) return fail('Isi terlalu panjang untuk satu berkas usulan. Pecah menjadi beberapa berkas.', 'terlalu panjang');
+        if (taken) return fail(`File "${taken.name}" already exists. Use edit_file to change it, or choose another name.`, 'already exists');
+        const text = asText(args.content);
+        if (!text.trim()) return fail('The "content" argument is required.', 'empty content');
+        if (text.length > MAX_NEW_FILE_CHARS) return fail('The content is too long for a single proposed file. Split it into several files.', 'too long');
         return { ok: true, change: { kind: 'create', file, before: '', after: text.endsWith('\n') ? text : `${text}\n`, reason } };
     }
 
-    if (!isChangeTool(name)) return fail(`Alat "${name}" tidak dikenal.`, 'alat tidak dikenal');
-    if (!raw.trim()) return fail('Argumen "nama" wajib diisi.', 'nama kosong');
+    if (!isChangeTool(name)) return fail(`Tool "${name}" is not recognized.`, 'unknown tool');
+    if (!raw.trim()) return fail('The "name" argument is required.', 'empty name');
     const file = matchMention(raw, files);
-    if (!file) return fail(`Berkas "${raw}" tidak ditemukan. Panggil daftar_berkas untuk melihat nama yang ada${name === 'ubah_berkas' || name === 'sisip_teks' ? ', atau pakai buat_berkas untuk berkas baru' : ''}.`, 'berkas tidak ada');
+    if (!file) return fail(`File "${raw}" was not found. Call list_files to see the existing names${name === 'edit_file' || name === 'insert_text' ? ', or use create_file for a new file' : ''}.`, 'file not found');
     const edit = (after: string): PlanResult => after === file.text
-        ? fail('Tidak ada yang berubah.', 'tidak ada perubahan')
+        ? fail('Nothing changed.', 'no change')
         : { ok: true, change: { kind: 'edit', file: file.name, before: file.text, after, reason } };
 
-    if (name === 'ubah_berkas') {
-        const oldText = asText(args.teks_lama);
-        if (!oldText) return fail('Argumen "teks_lama" wajib diisi (potongan persis yang diganti).', 'teks_lama kosong');
+    if (name === 'edit_file') {
+        const oldText = asText(args.old_text);
+        if (!oldText) return fail('The "old_text" argument is required (the exact piece being replaced).', 'empty old_text');
         const count = file.text.split(oldText).length - 1;
-        if (!count) return fail(`teks_lama tidak ditemukan di ${file.name}. Baca ulang bagian itu dengan baca_berkas dan salin persis, tanpa nomor baris.`, 'teks tidak cocok');
-        const all = args.semua === true;
-        if (count > 1 && !all) return fail(`teks_lama muncul ${count} kali di ${file.name}. Perpanjang dengan baris di sekitarnya sampai unik, atau pakai semua=true bila setiap kemunculan memang harus diganti.`, 'tidak unik');
-        const newText = asText(args.teks_baru);
-        if (newText === oldText) return fail('teks_baru sama dengan teks_lama; tidak ada yang berubah.', 'tidak ada perubahan');
+        if (!count) return fail(`old_text was not found in ${file.name}. Re-read that part with read_file and copy it exactly, without line numbers.`, 'text does not match');
+        const all = args.all === true;
+        if (count > 1 && !all) return fail(`old_text appears ${count} times in ${file.name}. Extend it with surrounding lines until it is unique, or use all=true if every occurrence really has to be replaced.`, 'not unique');
+        const newText = asText(args.new_text);
+        if (newText === oldText) return fail('new_text is the same as old_text; nothing changes.', 'no change');
         if (all) return edit(file.text.split(oldText).join(newText));
         const at = file.text.indexOf(oldText);
         return edit(file.text.slice(0, at) + newText + file.text.slice(at + oldText.length));
     }
 
-    if (name === 'sisip_teks') {
-        const text = asText(args.teks).replace(/\n+$/, '');
-        if (!text.trim()) return fail('Argumen "teks" wajib diisi.', 'teks kosong');
+    if (name === 'insert_text') {
+        const text = asText(args.text).replace(/\n+$/, '');
+        if (!text.trim()) return fail('The "text" argument is required.', 'empty text');
         const lines = file.text ? file.text.split('\n') : [];
-        // Baris kosong terakhir hanyalah penutup berkas, bukan baris yang bisa diikuti.
+        // A trailing blank line is just the end of the file, not a line that can be followed.
         const count = file.text.endsWith('\n') ? lines.length - 1 : lines.length;
-        // Berkas tanpa baris baru di akhir mendapatkannya hanya bila teks ditambahkan di ujungnya.
+        // A file without a newline at the end gets one only if the text is added at its end.
         const insertAt = (index: number): PlanResult => edit([...lines.slice(0, index), ...text.split('\n'), ...lines.slice(index)].join('\n') + (index === count && count === lines.length ? '\n' : ''));
-        const position = asText(args.posisi);
-        if (position === 'awal') {
+        const position = asText(args.position);
+        if (position === 'start') {
             const front = /^---\n[\s\S]*?\n---(?:\n|$)/.exec(file.text);
             return insertAt(front ? front[0].replace(/\n$/, '').split('\n').length : 0);
         }
-        if (position === 'akhir') return insertAt(count);
-        if (position === 'setelah_baris') {
-            const line = typeof args.baris === 'number' && Number.isInteger(args.baris) ? args.baris : 0;
-            if (line < 1 || line > count) return fail(`Argumen "baris" harus 1–${count} untuk ${file.name}.`, 'baris tidak valid');
-            if (typeof args.isi_baris !== 'string') return fail('Argumen "isi_baris" wajib diisi untuk setelah_baris: salin isi baris itu dari baca_berkas.', 'isi_baris kosong');
+        if (position === 'end') return insertAt(count);
+        if (position === 'after_line') {
+            const line = typeof args.line === 'number' && Number.isInteger(args.line) ? args.line : 0;
+            if (line < 1 || line > count) return fail(`The "line" argument must be 1–${count} for ${file.name}.`, 'invalid line');
+            if (typeof args.line_text !== 'string') return fail('The "line_text" argument is required for after_line: copy the contents of that line from read_file.', 'empty line_text');
             const actual = lines[line - 1];
-            if (actual.trim() !== args.isi_baris.trim()) {
-                const near = lines.map((l, i) => l.trim() === (args.isi_baris as string).trim() ? i + 1 : 0).filter(n => n).slice(0, 5);
-                return fail(`Baris ${line} di ${file.name} berisi "${actual.slice(0, 200)}", bukan isi_baris.${near.length ? ` isi_baris ada di baris ${near.join(', ')}.` : ' Baca ulang berkasnya dengan baca_berkas.'}`, 'baris tidak cocok');
+            if (actual.trim() !== args.line_text.trim()) {
+                const near = lines.map((l, i) => l.trim() === (args.line_text as string).trim() ? i + 1 : 0).filter(n => n).slice(0, 5);
+                return fail(`Line ${line} in ${file.name} contains "${actual.slice(0, 200)}", not line_text.${near.length ? ` line_text is on ${near.length === 1 ? "line" : "lines"} ${near.join(', ')}.` : ' Re-read the file with read_file.'}`, 'line does not match');
             }
             return insertAt(line);
         }
-        return fail('Argumen "posisi" harus salah satu dari: awal, akhir, setelah_baris.', 'posisi tidak valid');
+        return fail('The "position" argument must be one of: start, end, after_line.', 'invalid position');
     }
 
-    if (name === 'hapus_berkas') return { ok: true, change: { kind: 'delete', file: file.name, before: file.text, after: '', reason } };
+    if (name === 'delete_file') return { ok: true, change: { kind: 'delete', file: file.name, before: file.text, after: '', reason } };
 
-    if (name === 'pindah_berkas') {
-        const rawTarget = asText(args.tujuan);
+    if (name === 'move_file') {
+        const rawTarget = asText(args.destination);
         const to = cleanNewName(rawTarget);
-        if (!to) return fail(`Tujuan "${rawTarget}" tidak valid. Pakai path relatif tanpa "..", tanpa awalan titik atau "/".`, 'tujuan tidak valid');
-        if (to === file.name) return fail('Tujuan sama dengan nama sekarang.', 'tidak ada perubahan');
+        if (!to) return fail(`The destination "${rawTarget}" is not valid. Use a relative path without "..", without a leading dot or "/".`, 'invalid destination');
+        if (to === file.name) return fail('The destination is the same as the current name.', 'no change');
         const taken = files.find(f => f.name.toLowerCase() === to.toLowerCase() && f !== file);
-        if (taken) return fail(`Berkas "${taken.name}" sudah ada; pilih tujuan lain.`, 'tujuan sudah ada');
+        if (taken) return fail(`File "${taken.name}" already exists; choose another destination.`, 'destination already exists');
         return { ok: true, change: { kind: 'move', file: file.name, to, before: file.text, after: file.text, reason } };
     }
 
     return planKanban(args, reason, file);
 }
 
-// ---------- Papan kanban ----------
+// ---------- Kanban board ----------
 
 function planKanban(args: Record<string, unknown>, reason: string, file: SourceFile): PlanResult {
-    if (!isKanban(file.text)) return fail(`${file.name} bukan papan kanban (frontmatter tanpa "kanban: true"). Pakai ubah_berkas untuk berkas biasa.`, 'bukan papan');
+    if (!isKanban(file.text)) return fail(`${file.name} is not a kanban board (frontmatter without "kanban: true"). Use edit_file for ordinary files.`, 'not a board');
     const board = parseBoard(file.text);
-    const titles = board.columns.map(c => c.title).join(', ') || '(belum ada daftar)';
-    const action = asText(args.aksi);
-    const cardText = asText(args.kartu).trim();
-    const newText = asText(args.teks_baru).trim();
-    const listName = asText(args.daftar);
+    const titles = board.columns.map(c => c.title).join(', ') || '(no lists yet)';
+    const action = asText(args.action);
+    const cardText = asText(args.card).trim();
+    const newText = asText(args.new_text).trim();
+    const listName = asText(args.list);
 
     const findColumn = (wanted: string): number | string => {
         const w = wanted.trim().toLowerCase();
-        if (!w) return 'Argumen "daftar" wajib diisi.';
+        if (!w) return 'The "list" argument is required.';
         const exact = board.columns.map((c, i) => c.title.toLowerCase() === w ? i : -1).filter(i => i >= 0);
         const hits = exact.length ? exact : board.columns.map((c, i) => c.title.toLowerCase().includes(w) ? i : -1).filter(i => i >= 0);
         if (hits.length === 1) return hits[0];
-        return `Daftar "${wanted}" ${hits.length ? 'cocok dengan lebih dari satu daftar' : 'tidak ada'}. Daftar di papan: ${titles}.`;
+        return `The list "${wanted}" ${hits.length ? 'matches more than one list' : 'does not exist'}. Lists on the board: ${titles}.`;
     };
     const findCard = (): Position | string => {
-        if (!cardText) return 'Argumen "kartu" wajib diisi.';
+        if (!cardText) return 'The "card" argument is required.';
         const w = cardText.toLowerCase();
         const hits: Position[] = [];
         board.columns.forEach((c, column) => c.cards.forEach((card, index) => { if (card.text.toLowerCase().includes(w)) hits.push({ column, index }); }));
         if (hits.length === 1) return hits[0];
         const list = hits.slice(0, 5).map(p => `"${board.columns[p.column].cards[p.index].text}" (${board.columns[p.column].title})`).join('; ');
-        return hits.length ? `"${cardText}" cocok dengan ${hits.length} kartu: ${list}. Perpanjang teksnya sampai unik.` : `Tidak ada kartu yang memuat "${cardText}" di ${file.name}.`;
+        return hits.length ? `"${cardText}" matches ${hits.length} cards: ${list}. Extend the text until it is unique.` : `No card contains "${cardText}" in ${file.name}.`;
     };
 
     let next: Board;
-    if (action === 'tambah') {
-        if (!cardText) return fail('Argumen "kartu" wajib diisi.', 'kartu kosong');
+    if (action === 'add') {
+        if (!cardText) return fail('The "card" argument is required.', 'empty card');
         const column = findColumn(listName);
-        if (typeof column === 'string') return fail(column, 'daftar tidak cocok');
-        if (cardText.includes('\n')) return fail('Teks kartu baru harus satu baris.', 'kartu tidak valid');
+        if (typeof column === 'string') return fail(column, 'list does not match');
+        if (cardText.includes('\n')) return fail('The text of a new card must be a single line.', 'invalid card');
         next = addCard(board, column, cardText);
-    } else if (action === 'pindah') {
+    } else if (action === 'move') {
         const from = findCard();
-        if (typeof from === 'string') return fail(from, 'kartu tidak cocok');
+        if (typeof from === 'string') return fail(from, 'card does not match');
         const column = findColumn(listName);
-        if (typeof column === 'string') return fail(column, 'daftar tidak cocok');
-        if (column === from.column) return fail('Kartu itu sudah ada di daftar tersebut.', 'tidak ada perubahan');
+        if (typeof column === 'string') return fail(column, 'list does not match');
+        if (column === from.column) return fail('That card is already in that list.', 'no change');
         next = moveCard(board, from, { column, index: Infinity });
-    } else if (action === 'tandai') {
+    } else if (action === 'mark') {
         const at = findCard();
-        if (typeof at === 'string') return fail(at, 'kartu tidak cocok');
-        if (typeof args.selesai !== 'boolean') return fail('Argumen "selesai" (true/false) wajib diisi untuk aksi tandai.', 'selesai kosong');
-        if (board.columns[at.column].cards[at.index].done === args.selesai) return fail('Kartu itu sudah berstatus demikian.', 'tidak ada perubahan');
-        next = updateCard(board, at, { done: args.selesai });
-    } else if (action === 'ubah') {
+        if (typeof at === 'string') return fail(at, 'card does not match');
+        if (typeof args.done !== 'boolean') return fail('The "done" argument (true/false) is required for the mark action.', 'empty done');
+        if (board.columns[at.column].cards[at.index].done === args.done) return fail('That card already has that status.', 'no change');
+        next = updateCard(board, at, { done: args.done });
+    } else if (action === 'edit') {
         const at = findCard();
-        if (typeof at === 'string') return fail(at, 'kartu tidak cocok');
-        if (!newText || newText.includes('\n')) return fail('Argumen "teks_baru" wajib diisi dan harus satu baris.', 'teks_baru tidak valid');
+        if (typeof at === 'string') return fail(at, 'card does not match');
+        if (!newText || newText.includes('\n')) return fail('The "new_text" argument is required and must be a single line.', 'invalid new_text');
         next = updateCard(board, at, { text: newText });
-    } else if (action === 'hapus') {
+    } else if (action === 'delete') {
         const at = findCard();
-        if (typeof at === 'string') return fail(at, 'kartu tidak cocok');
+        if (typeof at === 'string') return fail(at, 'card does not match');
         next = deleteCard(board, at);
-    } else if (action === 'tambah_daftar') {
+    } else if (action === 'add_list') {
         const title = listName.trim();
-        if (!title || title.includes('\n')) return fail('Argumen "daftar" wajib diisi dengan nama daftar baru (satu baris).', 'daftar kosong');
-        if (board.columns.some(c => c.title.toLowerCase() === title.toLowerCase())) return fail(`Daftar "${title}" sudah ada. Daftar di papan: ${titles}.`, 'daftar sudah ada');
+        if (!title || title.includes('\n')) return fail('The "list" argument must be filled with the name of the new list (a single line).', 'empty list');
+        if (board.columns.some(c => c.title.toLowerCase() === title.toLowerCase())) return fail(`The list "${title}" already exists. Lists on the board: ${titles}.`, 'list already exists');
         next = addColumn(board, title);
-    } else if (action === 'ganti_nama_daftar') {
+    } else if (action === 'rename_list') {
         const column = findColumn(listName);
-        if (typeof column === 'string') return fail(column, 'daftar tidak cocok');
-        if (!newText || newText.includes('\n')) return fail('Argumen "teks_baru" wajib diisi dengan nama daftar baru (satu baris).', 'teks_baru tidak valid');
-        if (board.columns.some((c, i) => i !== column && c.title.toLowerCase() === newText.toLowerCase())) return fail(`Daftar "${newText}" sudah ada.`, 'daftar sudah ada');
+        if (typeof column === 'string') return fail(column, 'list does not match');
+        if (!newText || newText.includes('\n')) return fail('The "new_text" argument must be filled with the new list name (a single line).', 'invalid new_text');
+        if (board.columns.some((c, i) => i !== column && c.title.toLowerCase() === newText.toLowerCase())) return fail(`The list "${newText}" already exists.`, 'list already exists');
         next = renameColumn(board, column, newText);
-    } else if (action === 'hapus_daftar') {
+    } else if (action === 'delete_list') {
         const column = findColumn(listName);
-        if (typeof column === 'string') return fail(column, 'daftar tidak cocok');
-        // Kartu tidak boleh ikut hilang diam-diam bersama daftarnya.
+        if (typeof column === 'string') return fail(column, 'list does not match');
+        // Cards must not silently disappear together with their list.
         const cards = board.columns[column].cards.length;
-        if (cards) return fail(`Daftar "${board.columns[column].title}" masih berisi ${cards} kartu. Pindahkan atau hapus kartunya dulu.`, 'daftar tidak kosong');
+        if (cards) return fail(`The list "${board.columns[column].title}" still contains ${cards} cards. Move or delete the cards first.`, 'list is not empty');
         next = deleteColumn(board, column);
     } else {
-        return fail('Argumen "aksi" harus salah satu dari: tambah, pindah, tandai, ubah, hapus, tambah_daftar, ganti_nama_daftar, hapus_daftar.', 'aksi tidak valid');
+        return fail('The "action" argument must be one of: add, move, mark, edit, delete, add_list, rename_list, delete_list.', 'invalid action');
     }
     const after = serializeBoard(next);
-    if (after === file.text) return fail('Tidak ada yang berubah di papan.', 'tidak ada perubahan');
+    if (after === file.text) return fail('Nothing changed on the board.', 'no change');
     return { ok: true, change: { kind: 'edit', file: file.name, before: file.text, after, reason } };
 }
 
 export function describeChange(c: Change): string {
     switch (c.kind) {
-        case 'create': return `Berkas baru ${c.file}`;
-        case 'delete': return `Hapus ${c.file}`;
-        case 'move': return `Pindah ${c.file} → ${c.to}`;
-        default: return `Ubah ${c.file}`;
+        case 'create': return `New file ${c.file}`;
+        case 'delete': return `Delete ${c.file}`;
+        case 'move': return `Move ${c.file} → ${c.to}`;
+        default: return `Edit ${c.file}`;
     }
 }
 
-// ---------- Keadaan berkas terhadap usulan ----------
+// ---------- File state relative to proposals ----------
 
-// Path yang disentuh perubahan; pindah menyentuh asal dan tujuan.
+// Paths touched by a change; a move touches the source and the destination.
 export const changeFiles = (c: Change): string[] => c.kind === 'move' && c.to ? [c.file, c.to] : [c.file];
 
-// Terapkan perubahan ke daftar berkas di memori (salinan naskah agent); tidak menyentuh disk.
+// Apply a change to the in-memory file list (the agent's copy of the manuscript); does not touch the disk.
 export function applyToFiles(files: SourceFile[], c: Change): void {
     const index = files.findIndex(f => f.name === c.file);
     if (c.kind === 'delete' || c.kind === 'move') {
@@ -329,9 +329,9 @@ export function applyToFiles(files: SourceFile[], c: Change): void {
     else files.push({ name: c.file, text: c.after });
 }
 
-// Kebalikan perubahan yang sudah diterapkan, untuk tombol Urungkan. Penerapannya tetap lewat preflight yang sama.
+// The inverse of an applied change, for the Undo button. Applying it still goes through the same preflight.
 export function invertChange(c: Change): Change {
-    const reason = `Urungkan: ${c.reason}`;
+    const reason = `Undo: ${c.reason}`;
     switch (c.kind) {
         case 'create': return { kind: 'delete', file: c.file, before: c.after, after: '', reason };
         case 'delete': return { kind: 'create', file: c.file, before: '', after: c.before, reason };
@@ -340,9 +340,9 @@ export function invertChange(c: Change): Change {
     }
 }
 
-type Reader = (file: string) => string | null;   // null = berkas tidak ada
+type Reader = (file: string) => string | null;   // null = the file does not exist
 
-// Apakah isi aktual sama dengan keadaan sebelum atau sesudah perubahan.
+// Whether the actual contents equal the state before or after the change.
 export function changeState(c: Change, read: Reader): 'before' | 'after' | 'other' {
     const at = read(c.file);
     switch (c.kind) {
@@ -357,17 +357,17 @@ export function changeState(c: Change, read: Reader): 'before' | 'after' | 'othe
     }
 }
 
-// Pesan galat bila perubahan tidak lagi bisa diterapkan dengan aman (isi berubah sejak diusulkan), atau null.
+// Error message if the change can no longer be applied safely (contents changed since it was proposed), or null.
 export function preflight(c: Change, read: Reader): string | null {
     const at = read(c.file);
-    if (c.kind === 'create') return at === null ? null : `${c.file} sudah ada`;
-    if (at === null) return `${c.file} tidak ada lagi`;
-    if (at !== c.before) return `${c.file} berubah sejak diusulkan; minta usulan baru`;
-    if (c.kind === 'move' && c.to && read(c.to) !== null) return `${c.to} sudah ada`;
+    if (c.kind === 'create') return at === null ? null : `${c.file} already exists`;
+    if (at === null) return `${c.file} no longer exists`;
+    if (at !== c.before) return `${c.file} changed since it was proposed; ask for a new proposal`;
+    if (c.kind === 'move' && c.to && read(c.to) !== null) return `${c.to} already exists`;
     return null;
 }
 
-// ---------- Pratinjau selisih ----------
+// ---------- Diff preview ----------
 
 // ---------- Diff ----------
 
@@ -380,9 +380,9 @@ const MAX_LCS_CELLS = 4_000_000;
 
 const splitLines = (text: string): string[] => text ? text.replace(/\n$/, '').split('\n') : [];
 
-// Diff per baris: awalan dan akhiran yang sama dipangkas, bagian tengahnya dibandingkan dengan LCS supaya
-// perubahan yang terpisah (mis. kartu kanban pindah daftar) tidak tampil sebagai satu blok hapus-tambah.
-// Bagian tengah yang terlalu besar untuk LCS jatuh ke satu blok hapus lalu tambah.
+// Line diff: the common prefix and suffix are trimmed, the middle part is compared with LCS so that
+// separate changes (e.g. a kanban card moving lists) do not show up as a single delete-add block.
+// A middle part too large for LCS falls back to a single delete block followed by an add block.
 function diffOps(before: string, after: string): Op[] {
     const a = splitLines(before), b = splitLines(after);
     let head = 0;
@@ -396,7 +396,7 @@ function diffOps(before: string, after: string): Op[] {
     if (!n || !m || (n + 1) * (m + 1) > MAX_LCS_CELLS) {
         ops.push(...ma.map(text => ({ sign: '-' as const, text })), ...mb.map(text => ({ sign: '+' as const, text })));
     } else {
-        // lcs[i][j] = panjang LCS dari ma[i..] dan mb[j..]
+        // lcs[i][j] = LCS length of ma[i..] and mb[j..]
         const w = m + 1;
         const lcs = new Int32Array((n + 1) * w);
         for (let i = n - 1; i >= 0; i--) {
@@ -407,7 +407,7 @@ function diffOps(before: string, after: string): Op[] {
         let i = 0, j = 0;
         while (i < n || j < m) {
             if (i < n && j < m && ma[i] === mb[j]) { ops.push({ sign: ' ', text: ma[i] }); i++; j++; }
-            else if (i < n && (j === m || lcs[(i + 1) * w + j] >= lcs[i * w + j + 1])) ops.push({ sign: '-', text: ma[i++] });   // hapus dulu, baru tambah (seperti git)
+            else if (i < n && (j === m || lcs[(i + 1) * w + j] >= lcs[i * w + j + 1])) ops.push({ sign: '-', text: ma[i++] });   // delete first, then add (like git)
             else ops.push({ sign: '+', text: mb[j++] });
         }
     }
@@ -416,14 +416,14 @@ function diffOps(before: string, after: string): Op[] {
 }
 
 interface Hunk {
-    oldStart: number;   // nomor baris mulai (1-based; 0 bila kosong)
+    oldStart: number;   // starting line number (1-based; 0 if empty)
     oldCount: number;
     newStart: number;
     newCount: number;
     ops: Op[];
 }
 
-// Kelompokkan perubahan menjadi hunk dengan `context` baris di sekitarnya; hunk yang berdekatan digabung.
+// Group changes into hunks with `context` lines around them; nearby hunks are merged.
 function hunksOf(ops: Op[], context: number): Hunk[] {
     const changed = ops.map((o, i) => o.sign === ' ' ? -1 : i).filter(i => i >= 0);
     if (!changed.length) return [];
@@ -443,7 +443,7 @@ function hunksOf(ops: Op[], context: number): Hunk[] {
     });
 }
 
-// Diff gaya git untuk jendela tinjauan: hunk dengan 3 baris konteks. Kosong bila tidak ada perbedaan.
+// Git-style diff for the review window: hunks with 3 lines of context. Empty if there is no difference.
 export function unifiedDiff(before: string, after: string, context = 3): string {
     return hunksOf(diffOps(before, after), context).map(h =>
         [`@@ -${h.oldStart},${h.oldCount} +${h.newStart},${h.newCount} @@`, ...h.ops.map(o => `${o.sign}${o.text}`)].join('\n')).join('\n');
@@ -463,7 +463,7 @@ export interface DiffPreview {
 const CONTEXT_LINES = 2;
 const MAX_PREVIEW_LINES = 60;
 
-// Ringkasan singkat: jumlah baris tambah/hapus dan baris-barisnya (konteks 2 baris, dipotong bila panjang).
+// Short summary: the number of added/removed lines and the lines themselves (2 lines of context, truncated if long).
 export function diffPreview(before: string, after: string): DiffPreview {
     const ops = diffOps(before, after);
     const hunks = hunksOf(ops, CONTEXT_LINES);
@@ -477,7 +477,7 @@ export function diffPreview(before: string, after: string): DiffPreview {
     if (lines.length > MAX_PREVIEW_LINES) {
         const hidden = lines.length - MAX_PREVIEW_LINES;
         lines.length = MAX_PREVIEW_LINES;
-        lines.push({ sign: '…', text: `${hidden} baris lagi` });
+        lines.push({ sign: '…', text: `${hidden} more lines` });
     }
     return { lines, added: ops.filter(o => o.sign === '+').length, removed: ops.filter(o => o.sign === '-').length };
 }

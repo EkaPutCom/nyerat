@@ -1,5 +1,5 @@
-// Tes GUI: dialog libadwaita sungguhan (Adw.Dialog dan Adw.AlertDialog), bukan tiruan.
-// Dialog menjawab lewat Promise; interaksinya dijadwalkan dari timer selagi settle() menunggu jawabannya.
+// GUI tests: real libadwaita dialogs (Adw.Dialog and Adw.AlertDialog), not fakes.
+// Dialogs answer through a Promise; the interaction is scheduled from a timer while settle() waits for the answer.
 
 import GLib from 'gi://GLib';
 import Adw from 'gi://Adw?version=1';
@@ -14,9 +14,9 @@ import type { GuiContext } from './context.js';
 
 export function dialogTests(c: GuiContext): void {
     const { w } = c;
-    section('Dialog libadwaita');
+    section('libadwaita dialogs');
 
-    // Jalankan `act` setelah dialog `title` tampil (dicoba berulang), lalu kembalikan hasil `open`.
+    // Run `act` after the dialog `title` appears (retried repeatedly), then return the result of `open`.
     const drive = <T>(title: string, open: () => Promise<T>, act: (dialog: Adw.Dialog) => void): T => {
         let tries = 0;
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
@@ -26,7 +26,7 @@ export function dialogTests(c: GuiContext): void {
         });
         return settle(open());
     };
-    // close() selama animasi buka diabaikan Adw.Dialog; ulangi sampai dialog benar-benar tertutup.
+    // close() during the open animation is ignored by Adw.Dialog; repeat until the dialog is really closed.
     const closeWhenReady = (dialog: Adw.Dialog): void => {
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
             if (!dialog.get_mapped()) return GLib.SOURCE_REMOVE;
@@ -36,25 +36,25 @@ export function dialogTests(c: GuiContext): void {
     };
     const button = (root: Gtk.Widget, label: string) => descendants(root).find(x => x instanceof Gtk.Button && x.label === label) as Gtk.Button;
 
-    test('prompt: tombol OK mengembalikan isian, Enter di isian juga menerima', () => {
-        eq(drive('Nama', () => promptDialog(w.win, { title: 'Nama', label: 'Nama baru', value: 'a' }), d => {
+    test('prompt: the OK button returns the input, Enter in the entry also accepts', () => {
+        eq(drive('Name',  () => promptDialog(w.win, { title: 'Name', label: 'New name', value: 'a' }), d => {
             const entry = descendants(d).find(x => x instanceof Gtk.Entry) as Gtk.Entry;
-            entry.set_text('baru');
+            entry.set_text('new');
             button(d, 'OK').emit('clicked');
-        }), 'baru');
-        eq(drive('Nama', () => promptDialog(w.win, { title: 'Nama', label: 'Nama baru', value: 'lewat enter' }), d => {
+        }), 'new');
+        eq(drive('Name',  () => promptDialog(w.win, { title: 'Name', label: 'New name', value: 'via enter' }), d => {
             (descendants(d).find(x => x instanceof Gtk.Entry) as Gtk.Entry).emit('activate');
-        }), 'lewat enter', 'Enter menjalankan tombol bawaan');
+        }), 'via enter', 'Enter runs the default button');
     });
 
-    test('prompt: Batal dan Escape (close) mengembalikan null', () => {
-        eq(drive('Nama', () => promptDialog(w.win, { title: 'Nama', label: 'x', value: 'a' }), d => button(d, 'Batal').emit('clicked')), null);
-        eq(drive('Nama', () => promptDialog(w.win, { title: 'Nama', label: 'x', value: 'a' }), closeWhenReady), null);
+    test('prompt: Cancel and Escape (close) return null', () => {
+        eq(drive('Name',  () => promptDialog(w.win, { title: 'Name', label: 'x', value: 'a' }), d => button(d, 'Cancel').emit('clicked')), null);
+        eq(drive('Name',  () => promptDialog(w.win, { title: 'Name', label: 'x', value: 'a' }), closeWhenReady), null);
     });
 
-    // Dialog yang baru dijawab masih terlihat selama animasi tutup; jangan dijawab dua kali.
+    // A dialog that has just been answered is still visible during the close animation; do not answer it twice.
     let answered: Adw.Dialog | null = null;
-    test('konfirmasi: tombol Hapus bertanda destruktif; Batal dan menutup = false', () => {
+    test('confirm: the Delete button is marked destructive; Cancel and closing = false', () => {
         const pick = (response: string): boolean => {
             let tries = 0;
             let target: Adw.AlertDialog | null = null;
@@ -71,39 +71,39 @@ export function dialogTests(c: GuiContext): void {
                 }
                 return ++tries < 100 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
             });
-            return settle(confirmDialog(w.win, 'Hapus kartu ini?', 'Tidak bisa dikembalikan.'));
+            return settle(confirmDialog(w.win, 'Delete this card?', 'This cannot be undone.'));
         };
-        eq(pick('Hapus'), true, 'Hapus');
-        eq(pick('Batal'), false, 'Batal');
-        eq(pick('close'), false, 'ditutup');
+        eq(pick('Delete'), true, 'Delete');
+        eq(pick('Cancel'), false, 'Cancel');
+        eq(pick('close'), false, 'closed');
     });
 
-    test('preferensi: switch terikat ke GSettings dan jendela menerapkannya, juga sebaliknya', () => {
+    test('preferences: the switch is bound to GSettings and the window applies it, and vice versa', () => {
         const settleP = () => { for (let i = 0; i < 20; i++) { c.pump(); GLib.usleep(10000); } };
         const wasFocus = w.settings.focus, wasDark = w.dark;
         c.action('preferences'); settleP();
         const dialog = w.win.get_visible_dialog();
-        ok(dialog instanceof PreferencesDialog, 'dialog preferensi tidak tampil');
+        ok(dialog instanceof PreferencesDialog, 'the preferences dialog is not shown');
         const rows = descendants(dialog as Adw.Dialog);
         const switchRow = (title: string) => rows.find(x => x instanceof Adw.SwitchRow && x.title === title) as Adw.SwitchRow;
         const comboRow = (title: string) => rows.find(x => x instanceof Adw.ComboRow && x.title === title) as Adw.ComboRow;
 
-        switchRow('Mode fokus').active = true; settleP();
-        eq(w.settings.focus, true, 'GSettings mengikuti switch');
-        eq(w.editor.modes.focus, true, 'editor mengikuti GSettings');
+        switchRow('Focus mode').active = true; settleP();
+        eq(w.settings.focus, true, 'GSettings follows the switch');
+        eq(w.editor.modes.focus, true, 'the editor follows GSettings');
         w.settings.focus = false; settleP();
-        eq(switchRow('Mode fokus').active, false, 'switch mengikuti GSettings');
-        eq(w.editor.modes.focus, false, 'editor mengikuti GSettings (arah sebaliknya)');
+        eq(switchRow('Focus mode').active, false, 'the switch follows GSettings');
+        eq(w.editor.modes.focus, false, 'the editor follows GSettings (reverse direction)');
 
-        comboRow('Tema warna').selected = 2; settleP();
-        eq(w.settings.dark, true, 'tema gelap tersimpan');
-        eq(w.dark, true, 'jendela memakai tema gelap');
-        comboRow('Tema warna').selected = 1; settleP();
-        eq(w.dark, false, 'jendela kembali terang');
+        comboRow('Color scheme').selected = 2; settleP();
+        eq(w.settings.dark, true, 'the dark theme is saved');
+        eq(w.dark, true, 'the window uses the dark theme');
+        comboRow('Color scheme').selected = 1; settleP();
+        eq(w.dark, false, 'the window went back to light');
 
         comboRow('Model').selected = 1; settleP();
-        eq(w.settings.chatModel, 'deepseek-v4-pro', 'model asisten tersimpan');
-        eq(w.chat.model, 'deepseek-v4-pro', 'panel asisten mengikuti');
+        eq(w.settings.chatModel, 'deepseek-v4-pro', 'the assistant model is saved');
+        eq(w.chat.model, 'deepseek-v4-pro', 'the assistant panel follows');
         w.settings.chatModel = 'deepseek-flash'; settleP();
 
         (dialog as Adw.Dialog).force_close();
@@ -112,31 +112,31 @@ export function dialogTests(c: GuiContext): void {
         w.setDark(wasDark);
     });
 
-    test('palet perintah: daftar aksi bisa disaring, dan Enter menjalankan Gio.Action yang sama', () => {
+    test('command palette: the action list can be filtered, and Enter runs the same Gio.Action', () => {
         const settleP = () => { for (let i = 0; i < 20; i++) { c.pump(); GLib.usleep(10000); } };
         const wasBoard = w.boardMode;
-        if (wasBoard) w.toggleBoardView(false);   // di papan kanban aksi penyunting teks mati dan tidak tampil
+        if (wasBoard) w.toggleBoardView(false);   // on the kanban board the text editor actions are disabled and not shown
         c.action('command-palette'); settleP();
         const palette = w.win.get_visible_dialog() as CommandPalette;
-        ok(palette instanceof CommandPalette, 'palet tidak tampil');
+        ok(palette instanceof CommandPalette, 'the palette is not shown');
         const search = descendants(palette).find(x => x instanceof Gtk.SearchEntry) as Gtk.SearchEntry;
         const all = palette.visibleCount;
-        ok(all > 30, `terlalu sedikit perintah: ${all}`);
-        search.set_text('fokus'); settleP();
-        eq(palette.visibleCount, 1, 'saringan "fokus"');
-        search.set_text('tabel rata'); settleP();
-        eq(palette.visibleCount, 3, 'semua kata harus cocok, urutan bebas');
-        search.set_text('tidak-ada-perintah-ini'); settleP();
-        eq(palette.visibleCount, 0, 'tanpa hasil');
-        search.set_text('mode fokus'); settleP();
+        ok(all > 30, `too few commands: ${all}`);
+        search.set_text('focus'); settleP();
+        eq(palette.visibleCount, 1, 'filter "focus"');
+        search.set_text('table align'); settleP();
+        eq(palette.visibleCount, 3, 'all words must match, in any order');
+        search.set_text('no-such-command'); settleP();
+        eq(palette.visibleCount, 0, 'no results');
+        search.set_text('focus mode'); settleP();
         const before = w.settings.focus;
         search.emit('activate'); settleP();
-        eq(w.settings.focus, !before, 'aksi dijalankan');
+        eq(w.settings.focus, !before, 'the action ran');
         for (let i = 0; i < 100 && w.win.get_visible_dialog(); i++) { c.pump(); GLib.usleep(20000); }
-        eq(w.win.get_visible_dialog(), null, 'palet tertutup setelah memilih');
+        eq(w.win.get_visible_dialog(), null, 'the palette closed after choosing');
         w.settings.focus = before; settleP();
 
-        // Aksi yang dinonaktifkan tidak tampil di palet.
+        // A disabled action is not shown in the palette.
         const countInPalette = (): number => {
             c.action('command-palette'); settleP();
             const p = w.win.get_visible_dialog() as CommandPalette;
@@ -147,12 +147,12 @@ export function dialogTests(c: GuiContext): void {
         const bold = w.app.lookup_action('bold') as Gio.SimpleAction;
         const enabledCount = countInPalette();
         bold.set_enabled(false);
-        eq(countInPalette(), enabledCount - 1, 'aksi nonaktif tidak tampil');
+        eq(countInPalette(), enabledCount - 1, 'the disabled action is not shown');
         bold.set_enabled(true);
         if (wasBoard) w.toggleBoardView(true);
         for (let i = 0; i < 100 && w.win.get_visible_dialog(); i++) { c.pump(); GLib.usleep(20000); }
     });
 
-    // Tes sesudahnya (mouse) tidak boleh mulai selagi dialog masih beranimasi menutup dan menahan input.
+    // The tests after this (mouse) must not start while a dialog is still animating closed and holding the input.
     for (let i = 0; i < 100 && w.win.get_visible_dialog(); i++) { c.pump(); GLib.usleep(20000); }
 }

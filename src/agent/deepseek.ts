@@ -1,5 +1,5 @@
-// Klien API DeepSeek (kompatibel OpenAI: POST /chat/completions) lewat libsoup 3.
-// GJS tidak punya fetch, jadi jawaban dibaca baris demi baris dari aliran SSE.
+// DeepSeek API client (OpenAI-compatible: POST /chat/completions) through libsoup 3.
+// GJS has no fetch, so answers are read line by line from the SSE stream.
 
 import { TemporaryProviderError, requestWithRetry } from './recovery.js';
 import Gio from 'gi://Gio';
@@ -9,14 +9,14 @@ import type { ChatMessage, ChatRequest, ChatResult, Provider, ToolCall, Usage } 
 import { httpErrorMessage, parseStreamLine } from './sse.js';
 
 export const DEEPSEEK_URL = 'https://api.deepseek.com';
-// Model yang tercantum di dokumentasi DeepSeek saat ini (konteks 1M token, mendukung alat dan mode berpikir).
+// Models listed in the current DeepSeek documentation (1M token context, supporting tools and thinking mode).
 export const DEEPSEEK_MODELS = ['deepseek-flash', 'deepseek-v4-pro'];
 
 const encoder = new TextEncoder();
 
 type Soup = typeof SoupModule;
 
-// Bentuk pesan di API (snake_case). Saat mode berpikir aktif, reasoning_content wajib dikembalikan bersama tool_calls.
+// Message shape in the API (snake_case). When thinking mode is active, reasoning_content must be sent back together with tool_calls.
 export function toApiMessage(m: ChatMessage): Record<string, unknown> {
     if (m.role === 'tool') return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
     if (m.role === 'assistant' && m.toolCalls?.length) {
@@ -32,13 +32,13 @@ export function toApiMessage(m: ChatMessage): Record<string, unknown> {
 export class DeepSeek implements Provider {
     constructor(private readonly apiKey: string, private readonly baseUrl = DEEPSEEK_URL) {}
 
-    // libsoup dimuat saat dibutuhkan: tanpa typelib-nya (gir1.2-soup-3.0) hanya asisten yang tidak berfungsi, bukan seluruh aplikasi.
+    // libsoup is loaded when needed: without its typelib (gir1.2-soup-3.0) only the assistant stops working, not the whole app.
     async chat(request: ChatRequest): Promise<ChatResult> {
         let Soup: Soup;
         try {
             Soup = (await import('gi://Soup?version=3.0')).default;
         } catch (e) {
-            throw new Error('libsoup 3 tidak terpasang (di Debian/Ubuntu: paket gir1.2-soup-3.0); asisten membutuhkannya untuk terhubung ke DeepSeek');
+            throw new Error('libsoup 3 is not installed (on Debian/Ubuntu: package gir1.2-soup-3.0); the assistant needs it to connect to DeepSeek');
         }
         return requestWithRetry({ chat: r => this.stream(Soup, r) }, request, ms => new Promise(resolve => {
             let timer = 0, connection = 0;
@@ -49,7 +49,7 @@ export class DeepSeek implements Provider {
             };
             timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => { timer = 0; finish(); return GLib.SOURCE_REMOVE; });
             if (request.cancellable) connection = request.cancellable.connect(() => {
-                // Jangan disconnect dari dalam callback cancel sendiri (GIO dapat menunggu callback itu).
+                // Do not disconnect from inside the cancel callback itself (GIO may wait for that callback).
                 const id = connection; connection = 0;
                 finish();
                 GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { if (id) request.cancellable?.disconnect(id); return GLib.SOURCE_REMOVE; });
@@ -60,7 +60,7 @@ export class DeepSeek implements Provider {
 
     private stream(Soup: Soup, { model, messages, tools, thinking, onText, onReasoning, cancellable }: ChatRequest): Promise<ChatResult> {
         return new Promise((resolve, reject) => {
-            // Model penalar bisa lama diam sebelum jawaban mengalir; server mengirim keep-alive tiap beberapa detik.
+            // A reasoning model can stay silent for a long time before the answer streams in; the server sends keep-alives every few seconds.
             const session = new Soup.Session({ idle_timeout: 120, timeout: 120 });
             const message = Soup.Message.new('POST', `${this.baseUrl}/chat/completions`);
             message.get_request_headers().append('Authorization', `Bearer ${this.apiKey}`);
@@ -75,7 +75,7 @@ export class DeepSeek implements Provider {
             const cancelled = () => !!cancellable?.is_cancelled();
             let usage: Usage | null = null;
             let reasoning = '';
-            const calls: ToolCall[] = [];   // diindeks menurut ToolDelta.index
+            const calls: ToolCall[] = [];   // indexed by ToolDelta.index
 
             session.send_async(message, GLib.PRIORITY_DEFAULT, cancellable ?? null, (_session, result) => {
                 let stream: Gio.InputStream;
@@ -83,18 +83,18 @@ export class DeepSeek implements Provider {
                     stream = session.send_finish(result);
                 } catch (e) {
                     if (cancelled()) resolve({ usage, cancelled: true, toolCalls: [], reasoning });
-                    else reject(new TemporaryProviderError(`Tidak dapat terhubung ke DeepSeek: ${e instanceof Error ? e.message : e}`));
+                    else reject(new TemporaryProviderError(`Cannot connect to DeepSeek: ${e instanceof Error ? e.message : e}`));
                     return;
                 }
                 const status: number = message.get_status();
                 const reader = new Gio.DataInputStream({ base_stream: stream, close_base_stream: true });
                 const finish = (error?: Error) => {
-                    try { reader.close(null); } catch (e) { /* sudah tertutup */ }
+                    try { reader.close(null); } catch (e) { /* already closed */ }
                     if (error) reject(error);
                     else resolve({ usage, cancelled: cancelled(), toolCalls: calls.filter(Boolean), reasoning });
                 };
 
-                // Status bukan 200: seluruh isi adalah JSON galat, bukan aliran.
+                // A status other than 200: the whole body is a JSON error, not a stream.
                 let errorBody = '';
                 const readLine = () => reader.read_line_async(GLib.PRIORITY_DEFAULT, cancellable ?? null, (_reader, res) => {
                     let line: string | null;
@@ -102,11 +102,11 @@ export class DeepSeek implements Provider {
                         [line] = reader.read_line_finish_utf8(res);
                     } catch (e) {
                         if (cancelled()) finish();
-                        else finish(new TemporaryProviderError(`Koneksi ke DeepSeek terputus: ${e instanceof Error ? e.message : e}`));
+                        else finish(new TemporaryProviderError(`The connection to DeepSeek was interrupted: ${e instanceof Error ? e.message : e}`));
                         return;
                     }
                     if (line === null) {
-                        finish(status === 200 ? new TemporaryProviderError('Aliran DeepSeek berakhir sebelum penanda selesai; pekerjaan dapat dilanjutkan dari checkpoint.') : (status === 429 || status >= 500 ? new TemporaryProviderError(httpErrorMessage(status, errorBody)) : new Error(httpErrorMessage(status, errorBody))));
+                        finish(status === 200 ? new TemporaryProviderError('The DeepSeek stream ended before the completion marker; the work can be resumed from the checkpoint.') : (status === 429 || status >= 500 ? new TemporaryProviderError(httpErrorMessage(status, errorBody)) : new Error(httpErrorMessage(status, errorBody))));
                         return;
                     }
                     if (status !== 200) {

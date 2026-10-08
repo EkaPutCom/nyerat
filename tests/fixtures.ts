@@ -1,23 +1,23 @@
-// Data bersama untuk tes model dan tes GUI.
+// Data shared by the model tests and the GUI tests.
 
-// Papan kanban baku untuk tes model dan tes GUI.
+// The standard kanban board for the model tests and the GUI tests.
 export const BOARD = [
     '---', 'kanban: true', '---', '',
-    '## Rencana', '',
-    '- [ ] Tulis laporan #penting @{2026-10-20}', '  catatan satu', '', '  catatan dua',
-    '- [ ] Kirim undangan', '',
-    '## Dikerjakan', '', '**Aktif**', '', '- [ ] Desain logo', '',
-    '## Selesai', '', '- [x] Pesan tempat', '- Item biasa', '', '***', '',
+    '## Plan', '',
+    '- [ ] Write report #important @{2026-10-20}', '  note one', '', '  note two',
+    '- [ ] Send invitations', '',
+    '## In Progress', '', '**Active**', '', '- [ ] Design logo', '',
+    '## Done', '', '- [x] Book venue', '- Plain item', '', '***', '',
     '%% kanban:settings', '```', '{"kanban":true}', '```', '%%', '',
 ].join('\n');
 
-// Inbox baku untuk tes model dan tes GUI.
+// The standard inbox for the model tests and the GUI tests.
 export const INBOX = [
     '---', 'inbox: true', '---', '',
     '# Inbox', '',
-    'Tempat menangkap ide.', '',
-    '- Ide SQLite #idea ➕ 2026-10-07 14:22', '  catatan satu', '', '  catatan dua',
-    '- Baca artikel HIG #read #gnome ➕ 2026-10-07 13:32',
-    '- Item tanpa waktu', '',
-    'Penutup biasa', '',
+    'A place to capture ideas.', '',
+    '- SQLite idea #idea ➕ 2026-10-07 14:22', '  note one', '', '  note two',
+    '- Read HIG article #read #gnome ➕ 2026-10-07 13:32',
+    '- Item without time', '',
+    'Plain closing', '',
 ].join('\n');

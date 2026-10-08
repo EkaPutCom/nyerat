@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home · Nyerat Documentation</title>
+<meta name="description" content="The Nyerat Home: a tab that summarizes recent files, today's journal, running agents, kanban due dates, and the unprocessed inbox.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
+<main class="doc">
+<p class="eyebrow">Workspace</p>
+<h1>Home</h1>
+<p class="lead">The Home tab summarizes what you can continue today: recent files, today's journal, running agents, due dates from kanban boards, and the unprocessed inbox. Everything is read directly from the Markdown files in the work folder, without a database.</p>
+
+<h2 id="opening">Opening Home</h2>
+<ul>
+  <li>Home opens by itself when Nyerat starts without saved tabs, and when the last tab is closed.</li>
+  <li><kbd>Alt</kbd>+<kbd>Home</kbd> or the ☰ menu → <em>Home</em> opens it at any time. There is only one Home tab, marked with a house icon.</li>
+  <li>The Home tab is recorded and restored together with the file tabs.</li>
+  <li>Do not want Home to appear by itself? Turn off <em>Home</em> in Preferences (<kbd>Ctrl</kbd>+<kbd>,</kbd>). After that, closing the last tab empties the document as before.</li>
+</ul>
+
+<h2 id="contents">What Home contains</h2>
+<ul>
+  <li><strong>Continue:</strong> up to three cards of the latest files, one card per folder, so that every card represents a different place of work.</li>
+  <li><strong>Journal:</strong> the <em>Today's journal</em> row with the number of notes and activities of today. Click it to open the <a href="journal.html">journal</a>, or the + button for a quick capture. It is shown when a work folder is open.</li>
+  <li><strong>Agent:</strong> <code>@pi</code> cards that are working, queued, or waiting for your answer. Click a waiting row to answer right away; a working one opens its log; a queued one opens its board. This section is only shown when an agent is running.</li>
+  <li><strong>Due dates:</strong> cards from all the kanban boards in the work folder that are not finished and whose due date (<code>@{YYYY-MM-DD}</code>) is overdue, today, tomorrow, or the day after. The status is written as text (<em>2 days overdue</em>, <em>Today</em>, <em>Tomorrow</em>), not only a color. Cards in the <em>Done</em> column or already checked are not included. The project name is taken from the <code>#project/…</code> tag or the <code>project:</code> frontmatter of the board.</li>
+  <li><strong>Inbox:</strong> an inbox file that still has unchecked items, with their number.</li>
+  <li><strong>Recent files:</strong> other files that were opened recently, with their folder and age.</li>
+</ul>
+
+<h2 id="tasks">Finishing tasks</h2>
+<p>Check the box in front of a task to mark it done: Nyerat writes <code>[x]</code> to the card on its board. If that board is open, the change goes through its editor as one undo step. The task stays visible until Home is redrawn, so a mistaken check can be undone right away. If the card has changed since Home was read, the check is rejected and the board is not touched. Click the task title to open its board.</p>
+
+<h2 id="data">Where the data comes from</h2>
+<ul>
+  <li>Due dates and the inbox are read from the Markdown files in the open work folder (using a cache by modification time, at most 300 files). An unsaved tab is read from its editor.</li>
+  <li>The list of recent files is stored in the settings (<code>recent-files</code>, 30 files).</li>
+  <li>Home is recalculated every time it is shown, when the window becomes active again (for example after <code>git pull</code> or an edit from another editor), and when the status of an agent changes.</li>
+</ul>
+</main>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

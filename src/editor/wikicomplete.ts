@@ -1,8 +1,8 @@
-// Saran nama catatan saat mengetik [[ (gaya Obsidian). Daftar berkas diminta dari jendela lewat `listNotes`
-// karena editor tidak tahu soal folder; daftar itu dibaca sekali tiap saran dibuka, bukan tiap ketukan.
+// Note name suggestions while typing [[ (Obsidian style). The file list is requested from the window through `listNotes`
+// because the editor knows nothing about folders; the list is read once each time a suggestion opens, not on every keystroke.
 //
-// Popover tidak mengambil fokus: kursor tetap di TextView, dan MarkdownView.onKey meneruskan
-// panah/Enter/Tab/Esc ke sini selama saran terlihat.
+// The popover does not take focus: the cursor stays in the TextView, and MarkdownView.onKey passes
+// arrows/Enter/Tab/Esc to it while the suggestion is visible.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
@@ -16,13 +16,13 @@ import { suggestNotes, wikiQuery, wikiTargetFor } from '../markdown/wikilink.js'
 export class WikiCompleter {
     readonly popover: Gtk.Popover;
     private list: Gtk.ListBox;
-    private files: string[] | null = null;   // null = belum dibaca untuk saran yang sedang terbuka
+    private files: string[] | null = null;   // null = not read yet for the suggestion that is currently open
     items: string[] = [];
     selected = 0;
     private queued = 0;
     private destroyed = false;
 
-    // Path relatif semua berkas Markdown di proyek.
+    // Relative paths of all Markdown files in the project.
     listNotes: () => string[] = () => [];
 
     constructor(private view: Gtk.TextView) {
@@ -44,8 +44,8 @@ export class WikiCompleter {
         return this.popover.get_visible();
     }
 
-    // typed = teks baru saja diketik: saran boleh dibuka. Perpindahan kursor saja hanya memperbarui
-    // atau menutup saran yang sudah terbuka, supaya kursor yang lewat di [[ lama tidak memunculkannya.
+    // typed = text was just typed: the suggestion may open. A cursor move alone only updates
+    // or closes a suggestion that is already open, so a cursor passing over an old [[ does not bring it up.
     queue(typed: boolean): void {
         if (!typed && !this.visible) return;
         if (this.queued) return;
@@ -81,7 +81,7 @@ export class WikiCompleter {
         if (this.visible) this.popover.popdown();
     }
 
-    // Tombol selama saran terlihat. true = ditangani.
+    // Keys while the suggestion is visible. true = handled.
     onKey(keyval: number): boolean {
         if (!this.visible) return false;
         switch (keyval) {
@@ -97,7 +97,7 @@ export class WikiCompleter {
         return false;
     }
 
-    // Ganti teks setelah [[ dengan nama berkas terpilih dan tutup dengan ]] (jika belum ada).
+    // Replace the text after [[ with the chosen file name and close with ]] (if not there yet).
     accept(index: number): void {
         const file = this.items[index];
         const buffer = this.view.get_buffer();
@@ -159,8 +159,8 @@ export class WikiCompleter {
     }
 }
 
-// Pasang saran [[ pada TextView biasa (mis. kolom catatan di dialog kartu). MarkdownView menyambungkan sinyalnya sendiri.
-// Pemanggil wajib memanggil destroy() saat TextView-nya tidak dipakai lagi supaya popover dilepas.
+// Install [[ suggestions on a plain TextView (e.g. the notes field in the card dialog). MarkdownView wires up its own signal.
+// The caller must call destroy() when the TextView is no longer used so the popover is released.
 export function attachWikiCompleter(view: Gtk.TextView, listNotes: () => string[]): WikiCompleter {
     const completer = new WikiCompleter(view);
     completer.listNotes = listNotes;

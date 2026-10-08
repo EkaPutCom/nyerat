@@ -1,7 +1,7 @@
-# Pemasangan Nyerat ke sistem atau Flatpak.
+# Installing Nyerat on the system or as a Flatpak.
 #
-# Kode TypeScript dibundel Vite, bukan Meson: jalankan `npm ci && npm run build` lebih dulu,
-# lalu Meson memasang isi dist/ beserta berkas desktop, metainfo, ikon, schema, dan terjemahan.
+# The TypeScript code is bundled by Vite, not Meson: run `npm ci && npm run build` first,
+# and then Meson installs the contents of dist/ along with the desktop file, metainfo, icons, schema, and translations.
 #   npm ci && npm run build
 #   meson setup _build --prefix=/usr
 #   meson install -C _build
@@ -21,11 +21,11 @@ datadir = get_option('datadir')
 pkgdatadir = datadir / meson.project_name()
 
 if not import('fs').exists('dist/nyerat.js')
-  error('dist/nyerat.js belum ada: jalankan `npm ci && npm run build` sebelum meson setup')
+  error('dist/nyerat.js does not exist: run `npm ci && npm run build` before meson setup')
 endif
 
-# Bundel aplikasi. Bundel tes/benchmark dan schema hasil kompilasi dev tidak ikut dipasang;
-# schema terpasang di direktori schema sistem (lihat di bawah) dan settings.ts mencarinya di sana.
+# The app bundle. The test/benchmark bundles and the schema compiled for dev are not installed;
+# the schema is installed in the system schema directory (see below) and settings.ts looks for it there.
 install_subdir('dist',
   install_dir: pkgdatadir,
   strip_directory: true,

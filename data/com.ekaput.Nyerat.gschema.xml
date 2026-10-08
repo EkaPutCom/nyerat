@@ -14,83 +14,83 @@
   <schema id="com.ekaput.Nyerat" path="/com/ekaput/Nyerat/">
     <key name="color-scheme" enum="com.ekaput.Nyerat.ColorScheme">
       <default>'system'</default>
-      <summary>Tema warna</summary>
-      <description>system mengikuti tema sistem; light atau dark memaksa satu tema.</description>
+      <summary>Color scheme</summary>
+      <description>system follows the system theme; light or dark forces one theme.</description>
     </key>
     <key name="autosave" type="b">
       <default>true</default>
-      <summary>Simpan otomatis dokumen yang sudah punya file</summary>
+      <summary>Autosave documents that already have a file</summary>
     </key>
     <key name="typewriter" type="b">
       <default>false</default>
-      <summary>Mode typewriter</summary>
+      <summary>Typewriter mode</summary>
     </key>
     <key name="focus" type="b">
       <default>false</default>
-      <summary>Mode fokus</summary>
+      <summary>Focus mode</summary>
     </key>
 
     <key name="sidebar" type="b">
       <default>true</default>
-      <summary>Sidebar terbuka</summary>
+      <summary>Sidebar open</summary>
     </key>
     <key name="sidebar-page" enum="com.ekaput.Nyerat.SidebarPage">
       <default>'outline'</default>
-      <summary>Halaman sidebar yang aktif</summary>
+      <summary>Active sidebar page</summary>
     </key>
     <key name="chat" type="b">
       <default>false</default>
-      <summary>Panel asisten terbuka</summary>
+      <summary>Assistant panel open</summary>
     </key>
     <key name="chat-model" type="s">
       <default>'deepseek-flash'</default>
-      <summary>Model DeepSeek untuk asisten</summary>
+      <summary>DeepSeek model for the assistant</summary>
     </key>
     <key name="chat-thinking" type="b">
       <default>false</default>
-      <summary>Mode berpikir model (lebih teliti, lebih lambat)</summary>
+      <summary>Model thinking mode (more thorough, slower)</summary>
     </key>
     <key name="chat-save" type="b">
       <default>true</default>
-      <summary>Simpan riwayat percakapan di folder/.nyerat/chats</summary>
+      <summary>Save conversation history in folder/.nyerat/chats</summary>
     </key>
 
     <key name="folder" type="s">
       <default>''</default>
-      <summary>Folder yang terakhir dibuka (kosong = tidak ada)</summary>
+      <summary>Last opened folder (empty = none)</summary>
     </key>
     <key name="tabs" type="a(si)">
       <default>[]</default>
-      <summary>Tab berfile yang dipulihkan: (path, posisi kursor dalam code point)</summary>
+      <summary>File-backed tabs to restore: (path, cursor position in code points)</summary>
     </key>
     <key name="active-tab" type="i">
       <default>-1</default>
-      <summary>Indeks tab aktif di tabs, -1 = tidak ada</summary>
+      <summary>Index of the active tab in tabs, -1 = none</summary>
     </key>
     <key name="home" type="b">
       <default>true</default>
-      <summary>Tampilkan Beranda saat tidak ada dokumen yang terbuka</summary>
+      <summary>Show Home when no document is open</summary>
     </key>
     <key name="recent-files" type="a(sx)">
       <default>[]</default>
-      <summary>Berkas yang terakhir dibuka untuk Beranda: (path, detik Unix), terbaru dulu</summary>
+      <summary>Recently opened files for Home: (path, Unix seconds), newest first</summary>
     </key>
     <key name="projects" type="a{ss}">
       <default>{}</default>
-      <summary>Nama proyek ke folder, untuk harness eksternal yang mengerjakan kartu kanban</summary>
+      <summary>Project name to folder, for external harnesses that work on kanban cards</summary>
     </key>
 
     <key name="width" type="i">
       <default>1100</default>
-      <summary>Lebar jendela</summary>
+      <summary>Window width</summary>
     </key>
     <key name="height" type="i">
       <default>760</default>
-      <summary>Tinggi jendela</summary>
+      <summary>Window height</summary>
     </key>
     <key name="welcomed" type="b">
       <default>false</default>
-      <summary>Dokumen contoh sudah pernah ditampilkan</summary>
+      <summary>Sample document has been shown before</summary>
     </key>
   </schema>
 </schemalist>

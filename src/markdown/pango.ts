@@ -1,12 +1,12 @@
-// Mengubah teks Markdown inline (isi sel tabel) menjadi markup Pango untuk Gtk.Label:
-// **tebal**, *miring*, ~~coret~~, ==stabilo==, `kode`, dan [tautan](url).
-// Tanda Markdown-nya sendiri dibuang. Murni TypeScript tanpa GTK.
+// Turns inline Markdown text (table cell contents) into Pango markup for Gtk.Label:
+// **bold**, *italic*, ~~strikethrough~~, ==highlight==, `code`, and [links](url).
+// The Markdown markers themselves are dropped. Pure TypeScript without GTK.
 
 import { parseInline } from './inline.js';
 import { ESCAPE_OR_CODE } from './syntax.js';
 import { WIKILINK } from './wikilink.js';
 
-// Skema URI tautan [[catatan]] di markup; label yang memakainya menangani sinyal activate-link.
+// URI scheme of [[note]] links in markup; labels that use it handle the activate-link signal.
 export const NOTE_URI = 'nyerat-note:';
 
 export interface MarkupColors {
@@ -37,7 +37,7 @@ function attributes(flags: number, colors: MarkupColors): string {
     return attrs.join(' ');
 }
 
-// Rentang teks yang terlihat dari tiap [[tautan]] (sama dengan parseInline) beserta isi di antara kurungnya.
+// The visible text range of each [[link]] (same as parseInline) together with the content between its brackets.
 function wikiRanges(text: string): Map<number, [number, string]> {
     const ranges = new Map<number, [number, string]>();
     if (!text.includes('[[')) return ranges;
@@ -50,9 +50,9 @@ function wikiRanges(text: string): Map<number, [number, string]> {
     return ranges;
 }
 
-// links = true: [[catatan]] dibungkus <a href="nyerat-note:…"> supaya bisa diklik di Gtk.Label.
+// links = true: [[note]] is wrapped in <a href="nyerat-note:…"> so it can be clicked in a Gtk.Label.
 export function cellMarkup(text: string, colors: MarkupColors, links = false): string {
-    // Satu penanda gaya per unit UTF-16; gaya yang bertumpuk (tebal di dalam miring) digabung.
+    // One style marker per UTF-16 unit; overlapping styles (bold inside italic) are merged.
     const flags = new Uint8Array(text.length);
     for (const [name, a, b] of parseInline(text).tags)
         for (let i = a; i < b; i++) flags[i] |= FLAG_OF[name];

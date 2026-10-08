@@ -1,15 +1,15 @@
-// Tes pengaturan (GSettings dengan backend memori).
+// Settings tests (GSettings with the memory backend).
 
 import { AppSettings } from '../../src/settings.js';
 import { section, test, eq } from '../framework.js';
 
 export function settingsTests(): void {
-    section('Pengaturan');
-    test('nilai bawaan sesuai schema', () => {
+    section('Settings');
+    test('default values match the schema', () => {
         const s = AppSettings.inMemory();
         eq(s.focus, false, 'focus');
         eq(s.autosave, true, 'autosave');
-        eq(s.dark, null, 'dark = ikuti sistem');
+        eq(s.dark, null, 'dark = follow the system');
         eq(s.folder, null, 'folder');
         eq(s.tabs, [], 'tabs');
         eq(s.projects, {}, 'projects');
@@ -18,25 +18,25 @@ export function settingsTests(): void {
         eq(s.home, true, 'home');
         eq(s.recentFiles, [], 'recentFiles');
     });
-    test('pengaturan ditulis lalu dibaca kembali, termasuk tipe majemuk', () => {
+    test('settings are written and read back, including compound types', () => {
         const s = AppSettings.inMemory();
         s.focus = true;
         s.dark = false;
-        s.folder = '/tmp/proyek';
+        s.folder = '/tmp/project';
         s.tabs = [{ file: '/tmp/a.md', cursor: 7 }, { file: '/tmp/b.md', cursor: 0 }];
-        s.projects = { toko: '/tmp/toko' };
+        s.projects = { shop: '/tmp/shop' };
         s.sidebarPage = 'history';
         s.recentFiles = [{ path: '/tmp/a.md', time: 1791360000 }];
         eq(s.recentFiles, [{ path: '/tmp/a.md', time: 1791360000 }], 'recentFiles');
         eq(s.focus, true, 'focus');
         eq(s.dark, false, 'dark');
-        eq(s.folder, '/tmp/proyek', 'folder');
+        eq(s.folder, '/tmp/project', 'folder');
         eq(s.tabs, [{ file: '/tmp/a.md', cursor: 7 }, { file: '/tmp/b.md', cursor: 0 }], 'tabs');
-        eq(s.projects, { toko: '/tmp/toko' }, 'projects');
+        eq(s.projects, { shop: '/tmp/shop' }, 'projects');
         eq(s.sidebarPage, 'history', 'sidebarPage');
         s.dark = null;
         s.folder = null;
-        eq(s.dark, null, 'dark kembali ke sistem');
-        eq(s.folder, null, 'folder kosong');
+        eq(s.dark, null, 'dark goes back to the system');
+        eq(s.folder, null, 'empty folder');
     });
 }

@@ -1,9 +1,9 @@
-// Membaca satu baris aliran SSE dari API chat gaya OpenAI (dipakai DeepSeek).
-// Murni TypeScript tanpa GTK supaya mudah diuji.
+// Reads one line of an SSE stream from an OpenAI-style chat API (used by DeepSeek).
+// Pure TypeScript without GTK so it is easy to test.
 
 import type { Usage } from './provider.js';
 
-// Potongan pemanggilan alat yang datang bertahap: `index` menentukan alat mana, argumennya disambung.
+// Tool-call fragments that arrive incrementally: `index` determines which tool, its arguments are concatenated.
 export interface ToolDelta {
     index: number;
     id?: string;
@@ -15,7 +15,7 @@ export type StreamEvent =
     | { kind: 'chunk'; text: string; reasoning: string; tools: ToolDelta[]; usage: Usage | null }
     | { kind: 'done' };
 
-// null = baris yang diabaikan (kosong, komentar keep-alive, JSON rusak, atau potongan tanpa isi).
+// null = an ignored line (blank, keep-alive comment, broken JSON, or a fragment without content).
 export function parseStreamLine(line: string): StreamEvent | null {
     if (!line.startsWith('data:')) return null;
     const payload = line.slice(5).trim();
@@ -45,7 +45,7 @@ export function parseStreamLine(line: string): StreamEvent | null {
     return { kind: 'chunk', text, reasoning, tools, usage };
 }
 
-// Pesan galat dari status HTTP; body (JSON {"error":{"message":…}}) dipakai sebagai keterangan tambahan.
+// Error message from an HTTP status; the body (JSON {"error":{"message":…}}) is used as additional detail.
 export function httpErrorMessage(status: number, body: string): string {
     let detail = '';
     try {
@@ -54,14 +54,14 @@ export function httpErrorMessage(status: number, body: string): string {
         detail = body.slice(0, 200);
     }
     const base: Record<number, string> = {
-        400: 'Permintaan ditolak (format, nama model, atau panjang konteks tidak valid)',
-        401: 'API key ditolak; periksa kembali key di pengaturan asisten',
-        402: 'Saldo akun DeepSeek tidak cukup',
-        422: 'Parameter permintaan tidak valid',
-        429: 'Terlalu banyak permintaan; coba lagi sebentar lagi',
-        500: 'Server DeepSeek bermasalah; coba lagi nanti',
-        503: 'Server DeepSeek sedang sibuk; coba lagi nanti',
+        400: 'Request rejected (invalid format, model name, or context length)',
+        401: 'API key rejected; check the key again in the assistant settings',
+        402: 'Insufficient DeepSeek account balance',
+        422: 'Invalid request parameters',
+        429: 'Too many requests; try again in a moment',
+        500: 'DeepSeek server problem; try again later',
+        503: 'DeepSeek server is busy; try again later',
     };
-    const text = base[status] ?? `Server membalas dengan status ${status}`;
+    const text = base[status] ?? `The server responded with status ${status}`;
     return detail ? `${text}: ${detail}` : text;
 }

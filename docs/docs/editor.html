@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Editor Markdown · Dokumentasi Nyerat</title>
-<meta name="description" content="Editor Markdown Nyerat yang langsung terformat: sintaks tersembunyi, tabel sebagai grid, blok kode berwarna, gambar dengan zoom, mode fokus, typewriter, source, dan ekspor HTML.">
+<title>The Markdown editor · Nyerat Documentation</title>
+<meta name="description" content="The Nyerat Markdown editor that formats live: hidden syntax, tables as a grid, colored code blocks, images with zoom, focus, typewriter, and source modes, and HTML export.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="docs.css">
 </head>
@@ -18,87 +18,87 @@
   </a>
   <nav>
     <a href="index.html" aria-current="true">Docs</a>
-    <a class="hide-sm" href="../belajar-agent.html">Belajar agent</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
     <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
   </nav>
 </header>
 
 <div class="layout">
-<aside class="side" id="side" aria-label="Navigasi dokumentasi"></aside>
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
 <main class="doc">
-<p class="eyebrow">Ruang kerja</p>
-<h1>Editor Markdown</h1>
-<p class="lead">Tidak ada panel pratinjau terpisah. Teks langsung tampil terformat, dan sintaks Markdown muncul hanya di baris tempat kursor berada.</p>
+<p class="eyebrow">Workspace</p>
+<h1>The Markdown editor</h1>
+<p class="lead">There is no separate preview panel. The text is shown formatted right away, and the Markdown syntax appears only on the line where the cursor is.</p>
 
-<figure><img src="../assets/mengetik.gif" width="900" height="586" loading="lazy" alt="Animasi mengetik Markdown: heading, teks tebal dan miring, serta daftar tugas langsung tampil terformat"><figcaption>Mengetik Markdown, langsung jadi</figcaption></figure>
+<figure><img src="../assets/typing.gif" width="900" height="586" loading="lazy" alt="Animation of typing Markdown: a heading, bold and italic text, and a task list are shown formatted right away"><figcaption>Type Markdown and it is formatted at once</figcaption></figure>
 
-<h2 id="format">Format langsung</h2>
+<h2 id="format">Live formatting</h2>
 <ul>
-  <li>Heading, <strong>tebal</strong>, <em>miring</em>, coret (<code>~~</code>), stabilo (<code>==</code>), kode inline, tautan, dan gambar langsung terformat.</li>
-  <li>Sintaks seperti <code>**</code>, <code>==</code>, atau <code>[]()</code> muncul lagi saat kursor masuk ke barisnya.</li>
-  <li>Kutipan bersarang <code>&gt;&gt;</code> makin menjorok sampai tiga tingkat.</li>
-  <li>Tautan dibuka dengan <kbd>Ctrl</kbd>+klik; path relatif dihitung dari folder berkas, dan tautan ke berkas Markdown dibuka di tab Nyerat.</li>
+  <li>Headings, <strong>bold</strong>, <em>italic</em>, strikethrough (<code>~~</code>), highlight (<code>==</code>), inline code, links, and images are formatted right away.</li>
+  <li>Syntax such as <code>**</code>, <code>==</code>, or <code>[]()</code> appears again when the cursor enters its line.</li>
+  <li>Nested quotes <code>&gt;&gt;</code> are indented further, up to three levels.</li>
+  <li>Links are opened with <kbd>Ctrl</kbd>+click; relative paths are computed from the folder of the file, and links to Markdown files open in a Nyerat tab.</li>
 </ul>
-<figure><img src="../assets/sintaks.gif" width="900" height="586" loading="lazy" alt="Animasi kursor berpindah antar baris; sintaks Markdown muncul di baris aktif dan tersembunyi di baris lain"><figcaption>Sintaks hanya terlihat di baris tempat kursor berada</figcaption></figure>
+<figure><img src="../assets/syntax.gif" width="900" height="586" loading="lazy" alt="Animation of the cursor moving between lines; the Markdown syntax appears on the active line and is hidden on other lines"><figcaption>The syntax is only visible on the line where the cursor is</figcaption></figure>
 
-<h2 id="wikilink">Tautan antardokumen <code>[[ ]]</code></h2>
-<p>Seperti di Obsidian, catatan saling ditautkan menurut namanya, tanpa perlu menulis path.</p>
+<h2 id="wikilink">Links between documents <code>[[ ]]</code></h2>
+<p>As in Obsidian, notes are linked to each other by name, without writing a path.</p>
 <table>
-  <tr><th>Tulis</th><th>Hasil</th></tr>
-  <tr><td><code>[[Catatan Harian]]</code></td><td>Tautan ke <code>Catatan Harian.md</code> di subfolder mana pun dalam folder kerja</td></tr>
-  <tr><td><code>[[Catatan Harian|kemarin]]</code></td><td>Tampil sebagai “kemarin”</td></tr>
-  <tr><td><code>[[Rencana#Anggaran]]</code></td><td>Membuka <code>Rencana.md</code> lalu melompat ke heading “Anggaran”</td></tr>
-  <tr><td><code>[[#Anggaran]]</code></td><td>Melompat ke heading di dokumen yang sama</td></tr>
-  <tr><td><code>[[arsip/Rencana]]</code></td><td>Memilih berkas tertentu bila ada beberapa yang bernama sama</td></tr>
+  <tr><th>Write</th><th>Result</th></tr>
+  <tr><td><code>[[Daily Notes]]</code></td><td>A link to <code>Daily Notes.md</code> in any subfolder of the work folder</td></tr>
+  <tr><td><code>[[Daily Notes|yesterday]]</code></td><td>Shown as “yesterday”</td></tr>
+  <tr><td><code>[[Plan#Budget]]</code></td><td>Opens <code>Plan.md</code> and then jumps to the heading “Budget”</td></tr>
+  <tr><td><code>[[#Budget]]</code></td><td>Jumps to a heading in the same document</td></tr>
+  <tr><td><code>[[archive/Plan]]</code></td><td>Picks a specific file when several have the same name</td></tr>
 </table>
 <ul>
-  <li>Di baris lain hanya nama (atau teks setelah <code>|</code>) yang tampil sebagai tautan; kurungnya muncul lagi saat kursor masuk ke baris itu.</li>
-  <li><kbd>Ctrl</kbd>+klik membuka catatannya di tab. Nama dicocokkan tanpa ekstensi dan tanpa membedakan huruf besar/kecil; bila ada nama kembar, berkas di folder yang sama dengan dokumen asal dipakai, lalu yang path-nya paling pendek.</li>
-  <li>Catatan yang belum ada dibuka sebagai dokumen kosong di samping dokumen asal. Berkasnya baru dibuat saat disimpan, jadi klik yang keliru tidak meninggalkan berkas kosong.</li>
-  <li>Mengetik <code>[[</code> memunculkan saran nama berkas. <kbd>↑</kbd>/<kbd>↓</kbd> memilih, <kbd>Enter</kbd> atau <kbd>Tab</kbd> menyisipkan nama beserta <code>]]</code>, <kbd>Esc</kbd> menutup saran.</li>
-  <li>Ekspor HTML menulis <code>[[Nama]]</code> sebagai tautan ke <code>Nama.md</code>.</li>
+  <li>On other lines only the name (or the text after <code>|</code>) is shown as a link; the brackets appear again when the cursor enters that line.</li>
+  <li><kbd>Ctrl</kbd>+click opens the note in a tab. Names are matched without the extension and without distinguishing upper and lower case; with duplicate names, the file in the same folder as the source document is used, then the one with the shortest path.</li>
+  <li>A note that does not exist yet is opened as an empty document next to the source document. The file is only created when it is saved, so a mistaken click leaves no empty file.</li>
+  <li>Typing <code>[[</code> shows file name suggestions. <kbd>↑</kbd>/<kbd>↓</kbd> choose, <kbd>Enter</kbd> or <kbd>Tab</kbd> inserts the name together with <code>]]</code>, <kbd>Esc</kbd> closes the suggestions.</li>
+  <li>HTML export writes <code>[[Name]]</code> as a link to <code>Name.md</code>.</li>
 </ul>
 
-<h2 id="daftar">Daftar dan tugas</h2>
+<h2 id="lists">Lists and tasks</h2>
 <ul>
-  <li><kbd>Enter</kbd> melanjutkan daftar, daftar bernomor, daftar tugas, dan kutipan; <kbd>Enter</kbd> di item kosong mengakhirinya.</li>
-  <li><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> mengatur indentasi item.</li>
-  <li>Kotak <code>- [ ]</code> bisa dicentang dengan klik.</li>
+  <li><kbd>Enter</kbd> continues a list, a numbered list, a task list, and a quote; <kbd>Enter</kbd> on an empty item ends it.</li>
+  <li><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> set the indentation of an item.</li>
+  <li>A <code>- [ ]</code> box can be checked with a click.</li>
 </ul>
 
-<h2 id="tabel">Tabel sebagai grid</h2>
-<p>Tabel digambar dengan garis sel, header tebal, dan rata kiri/tengah/kanan. Saat kursor masuk, teks mentahnya muncul untuk disunting; klik sebuah sel untuk langsung menyunting sel itu.</p>
+<h2 id="tables">Tables as a grid</h2>
+<p>A table is drawn with cell lines, a bold header, and left/center/right alignment. When the cursor enters it, its raw text appears for editing; click a cell to edit that cell right away.</p>
 <ul>
-  <li><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> pindah antar sel; di sel terakhir, <kbd>Tab</kbd> menambah baris.</li>
-  <li><kbd>Enter</kbd> pindah ke baris berikutnya; di baris kosong terakhir, keluar dari tabel.</li>
-  <li>Menu ☰ → <em>Edit Tabel</em> menambah/menghapus baris dan kolom, mengatur rata, dan merapikan kolom (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>).</li>
-  <li>Tabel yang lebih lebar dari kolom teks dipersempit, dan teks terpotong diberi “…” dengan isi lengkap sebagai tooltip.</li>
+  <li><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> move between cells; in the last cell, <kbd>Tab</kbd> adds a row.</li>
+  <li><kbd>Enter</kbd> moves to the next row; on the last empty row, it leaves the table.</li>
+  <li>The ☰ menu → <em>Edit Table</em> adds/deletes rows and columns, sets the alignment, and tidies the columns (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>).</li>
+  <li>A table that is wider than the text column is narrowed, and cut-off text is given “…” with the full contents as a tooltip.</li>
 </ul>
-<figure><img src="../assets/tabel.png" width="1332" height="867" loading="lazy" alt="Tabel anggaran proyek dirender sebagai grid dengan rata kolom kiri, tengah, dan kanan"><figcaption>Tabel sebagai grid, dengan rata kolom</figcaption></figure>
+<figure><img src="../assets/table.png" width="1332" height="867" loading="lazy" alt="A project budget table rendered as a grid with left, center, and right column alignment"><figcaption>A table as a grid, with column alignment</figcaption></figure>
 
-<h2 id="kode">Blok kode berwarna</h2>
-<p>Isi blok kode diwarnai sesuai bahasanya (<code>```js</code>, <code>```python</code>, <code>```rust</code>, dan ratusan bahasa lain dari GtkSourceView), dengan skema warna yang mengikuti mode terang atau gelap.</p>
+<h2 id="code">Colored code blocks</h2>
+<p>The contents of a code block are colored according to its language (<code>```js</code>, <code>```python</code>, <code>```rust</code>, and hundreds of other languages from GtkSourceView), with a color scheme that follows light or dark mode.</p>
 
-<h2 id="gambar">Gambar dan zoom</h2>
-<p>Gambar <code>![alt](url)</code> tampil di bawah barisnya, dari berkas lokal maupun internet. Klik ganda (atau menu ☰ → <em>Perbesar Gambar</em>) membuka penampil: roda mouse memperbesar di titik penunjuk, <kbd>+</kbd>/<kbd>−</kbd>, <kbd>0</kbd> untuk 100%, <kbd>F</kbd> untuk pas layar, geser dengan drag, <kbd>Esc</kbd> menutup.</p>
+<h2 id="images">Images and zoom</h2>
+<p>An image <code>![alt](url)</code> is shown below its line, from a local file or the internet. A double click (or the ☰ menu → <em>Zoom Image</em>) opens the viewer: the mouse wheel zooms at the pointer, <kbd>+</kbd>/<kbd>−</kbd>, <kbd>0</kbd> for 100%, <kbd>F</kbd> to fit the screen, drag to pan, <kbd>Esc</kbd> closes.</p>
 
-<h2 id="mode">Mode tampilan</h2>
+<h2 id="modes">View modes</h2>
 <div class="table-wrap"><table>
-  <tr><th>Mode</th><th>Fungsi</th><th>Shortcut</th></tr>
-  <tr><td>Fokus</td><td>Redupkan paragraf selain yang sedang disunting</td><td><kbd>F8</kbd></td></tr>
-  <tr><td>Typewriter</td><td>Baris aktif selalu di tengah layar</td><td><kbd>F9</kbd></td></tr>
-  <tr><td>Source</td><td>Tampilkan semua sintaks; gambar, grid tabel, dan diagram disembunyikan</td><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td></tr>
-  <tr><td>Gelap</td><td>Otomatis mengikuti tema sistem saat pertama dibuka</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></td></tr>
+  <tr><th>Mode</th><th>Function</th><th>Shortcut</th></tr>
+  <tr><td>Focus</td><td>Dim paragraphs other than the one being edited</td><td><kbd>F8</kbd></td></tr>
+  <tr><td>Typewriter</td><td>The active line is always in the middle of the screen</td><td><kbd>F9</kbd></td></tr>
+  <tr><td>Source</td><td>Show all the syntax; images, table grids, and diagrams are hidden</td><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td></tr>
+  <tr><td>Dark</td><td>Automatically follows the system theme the first time it is opened</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></td></tr>
 </table></div>
 
-<h2 id="simpan">Simpan dan ekspor</h2>
+<h2 id="saving">Saving and exporting</h2>
 <ul>
-  <li><strong>Auto save</strong> (aktif bawaan): dokumen yang sudah punya berkas disimpan 1 detik setelah berhenti mengetik, di latar sehingga tidak menahan ketikan.</li>
-  <li>Peringatan muncul sebelum menutup bila ada perubahan yang belum tersimpan.</li>
-  <li><strong>Ekspor HTML</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>): satu berkas HTML mandiri dengan CSS. Diagram di hasil ekspor memuat Mermaid dari CDN.</li>
+  <li><strong>Autosave</strong> (on by default): a document that already has a file is saved 1 second after you stop typing, in the background so that it does not hold up typing.</li>
+  <li>A warning appears before closing if there are unsaved changes.</li>
+  <li><strong>HTML export</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>): one standalone HTML file with CSS. Diagrams in the exported file load Mermaid from a CDN.</li>
 </ul>
 </main>
-<aside class="toc" id="toc" aria-label="Daftar isi"></aside>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
 </div>
 
 <script src="nav.js"></script>

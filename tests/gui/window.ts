@@ -1,4 +1,4 @@
-// Tes GUI: Ukuran jendela.
+// GUI tests: Window size.
 
 import GLib from 'gi://GLib';
 import { section, test, eq, ok, ROOT } from '../framework.js';
@@ -7,31 +7,31 @@ import type { GuiContext } from './context.js';
 export function windowSizeTests(c: GuiContext): void {
     const { w, ed, buf, pump, samplePath, images, waitImages } = c;
 
-    section('Ukuran jendela');
+    section('Window size');
     const settle = () => { for (let i = 0; i < 40; i++) { pump(); GLib.usleep(15000); } };
     const winWidth = () => w.win.get_width();
-    test('membuka file kedua tidak memperbesar jendela', () => {
+    test('opening a second file does not enlarge the window', () => {
         w.win.set_default_size(1100, 700); settle();
         const before = winWidth();
-        ok(w.load(samplePath), 'load() file pertama gagal'); waitImages(); settle();
-        ok(w.load(GLib.build_filenamev([ROOT, 'README.md'])), 'load() file kedua gagal');
+        ok(w.load(samplePath), 'load() of the first file failed'); waitImages(); settle();
+        ok(w.load(GLib.build_filenamev([ROOT, 'README.md'])), 'load() of the second file failed');
         settle();
-        eq(winWidth(), before, 'lebar jendela');
+        eq(winWidth(), before, 'window width');
     });
-    test('jendela bisa diperbesar lalu diperkecil lagi', () => {
-        // Lebih kecil dari layar Xvfb (1280): GTK 4 tidak membesarkan jendela melewati monitor.
-        // Lebar widget jendela bisa beberapa piksel lebih kecil dari ukuran default (bingkai CSD).
+    test('the window can be enlarged and then shrunk again', () => {
+        // Smaller than the Xvfb screen (1280): GTK 4 does not enlarge a window past the monitor.
+        // The window widget width can be a few pixels smaller than the default size (the CSD frame).
         w.win.set_default_size(1240, 700); settle();
-        ok(Math.abs(winWidth() - 1240) <= 16, `setelah diperbesar: ${winWidth()}`);
+        ok(Math.abs(winWidth() - 1240) <= 16, `after enlarging: ${winWidth()}`);
         w.win.set_default_size(800, 700); settle();
-        ok(Math.abs(winWidth() - 800) <= 16, `setelah diperkecil: ${winWidth()}`);
-        ok(ed.view.get_left_margin() < 100, `margin tidak ikut mengecil (${ed.view.get_left_margin()})`);
+        ok(Math.abs(winWidth() - 800) <= 16, `after shrinking:  ${winWidth()}`);
+        ok(ed.view.get_left_margin() < 100, `the margin did not shrink along (${ed.view.get_left_margin()})`);
     });
-    test('gambar tidak lebih lebar dari kolom teks', () => {
-        ok(w.load(samplePath), 'load() gagal'); waitImages(); settle();
+    test('an image is not wider than the text column', () => {
+        ok(w.load(samplePath), 'load() failed'); waitImages(); settle();
         const column = ed.widget.get_allocated_width() - 2 * ed.view.get_left_margin();
         for (const block of images())
-            ok(block.box.get_allocated_width() <= column, `gambar ${block.box.get_allocated_width()}px > kolom ${column}px`);
+            ok(block.box.get_allocated_width() <= column, `image ${block.box.get_allocated_width()}px > column ${column}px`);
         w.win.set_default_size(1100, 700); settle();
     });
     buf.set_modified(false);

@@ -1,15 +1,15 @@
-// Memasang tag dengan selisih: hanya rentang yang berubah yang disentuh.
+// Applies tags by difference: only the ranges that changed are touched.
 //
-// Menghapus tag di seluruh buffer lalu memasangnya lagi memang sederhana, tetapi untuk tag
-// yang memengaruhi ukuran (font, spasi baris) GTK lalu menata ulang seluruh dokumen, dan
-// itu yang paling mahal saat mengetik atau memindah kursor di dokumen panjang.
+// Removing tags across the whole buffer and then applying them again is simple, but for tags
+// that affect size (font, line spacing) GTK then lays out the whole document again, and
+// that is the most expensive thing when typing or moving the cursor in a long document.
 
 import type Gtk from 'gi://Gtk?version=4.0';
 
-// Rentang [awal, akhir) dalam offset code point.
+// Range [start, end) in code point offsets.
 export type Range = [start: number, end: number];
 
-// Rentang tempat `tag` terpasang sekarang, berurutan.
+// Ranges where `tag` is currently applied, in order.
 export function tagRanges(buffer: Gtk.TextBuffer, tag: Gtk.TextTag): Range[] {
     const out: Range[] = [];
     const it = buffer.get_start_iter();
@@ -22,7 +22,7 @@ export function tagRanges(buffer: Gtk.TextBuffer, tag: Gtk.TextTag): Range[] {
     }
 }
 
-// Urutkan dan gabungkan rentang yang bertumpuk atau bersambung; rentang kosong dibuang.
+// Sort and merge overlapping or adjacent ranges; empty ranges are dropped.
 export function normalize(ranges: Range[]): Range[] {
     const sorted = ranges.filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
     const out: Range[] = [];
@@ -34,7 +34,7 @@ export function normalize(ranges: Range[]): Range[] {
     return out;
 }
 
-// Bagian dari `a` yang tidak tercakup `b` (keduanya sudah dinormalisasi).
+// The part of `a` not covered by `b` (both already normalized).
 export function subtract(a: Range[], b: Range[]): Range[] {
     const out: Range[] = [];
     let j = 0;
@@ -50,7 +50,7 @@ export function subtract(a: Range[], b: Range[]): Range[] {
     return out;
 }
 
-// Samakan tag di buffer dengan `wanted`.
+// Make the buffer's tags match `wanted`.
 export function setTagRanges(buffer: Gtk.TextBuffer, tag: Gtk.TextTag, wanted: Range[]): void {
     const want = normalize(wanted);
     const have = tagRanges(buffer, tag);
@@ -59,10 +59,10 @@ export function setTagRanges(buffer: Gtk.TextBuffer, tag: Gtk.TextTag, wanted: R
     for (const [a, b] of subtract(want, have)) buffer.apply_tag(tag, ...span.at(a, b));
 }
 
-// Dua iter yang dipakai ulang untuk rentang [a, b). Membuat iter baru (get_iter_at_offset)
-// di GJS 3× lebih mahal daripada set_offset() pada iter yang sudah ada, dan saat membuka
-// dokumen ada ribuan rentang tag. Memasang/melepas tag tidak membatalkan iter; hanya
-// perubahan teks yang membatalkannya, jadi IterPair tidak boleh dipakai melewati suntingan.
+// Two iters reused for range [a, b). Creating a new iter (get_iter_at_offset)
+// in GJS is 3× more expensive than set_offset() on an existing iter, and when opening a
+// document there are thousands of tag ranges. Applying/removing tags does not invalidate iters; only
+// text changes do, so IterPair must not be used across edits.
 export class IterPair {
     private readonly start: Gtk.TextIter;
     private readonly end: Gtk.TextIter;
@@ -79,55 +79,55 @@ export class IterPair {
     }
 }
 
-// Seperti setTagRanges untuk sekelompok tag sekaligus; tag yang tidak disebut di `wanted`
-// dihapus seluruhnya.
+// Like setTagRanges for a group of tags at once; tags not mentioned in `wanted`
+// are removed entirely.
 export function setTagGroup(buffer: Gtk.TextBuffer, tags: Iterable<Gtk.TextTag>, wanted: Map<Gtk.TextTag, Range[]>): void {
     for (const tag of new Set([...tags, ...wanted.keys()])) setTagRanges(buffer, tag, wanted.get(tag) ?? []);
 }
 
-// ---------- Tag per baris ----------
+// ---------- Tags per line ----------
 //
-// Untuk tag yang rentangnya selalu di dalam satu baris (penyorotan sintaks, marker yang
-// disembunyikan). LineTagger mengingat tag yang terakhir dipasang di tiap baris, sehingga
-// pemasangan berikutnya hanya menyentuh baris yang tagnya berbeda atau teksnya disunting.
-// Tag ikut bergeser bersama teks di GtkTextBuffer, jadi baris yang tidak disunting tetap
-// memakai tag yang sama walaupun posisinya berpindah.
+// For tags whose range is always within one line (syntax highlighting, hidden
+// markers). LineTagger remembers the tags last applied on each line, so the
+// next application only touches lines whose tags differ or whose text was edited.
+// Tags shift along with the text in a GtkTextBuffer, so unedited lines keep
+// the same tags even though their position moved.
 
-// Tag di satu baris: offset relatif terhadap awal baris; akhir boleh mencakup newline.
+// Tags on one line: offsets relative to the start of the line; the end may include the newline.
 export type LineSpan = [tag: Gtk.TextTag, start: number, end: number];
 
 const sameSpans = (a: LineSpan[], b: LineSpan[]): boolean =>
     a.length === b.length && a.every((s, k) => s[0] === b[k][0] && s[1] === b[k][1] && s[2] === b[k][2]);
 
-// Rentang baris tak dikenal sekecil ini dibersihkan dengan tagsIn(), bukan semua tag.
+// Unknown line ranges this small are cleared with tagsIn(), not all tags.
 const FEW_LINES = 8;
 
 export class LineTagger {
-    private applied: (LineSpan[] | null)[] = [];   // null = belum diketahui, pasang ulang
-    // Baris tak dikenal mulai nomor ini ditunda: apply()/applyLines() melewatinya dan fill()
-    // mengisinya sedikit demi sedikit (penyorotan bertahap saat membuka dokumen panjang).
+    private applied: (LineSpan[] | null)[] = [];   // null = not known yet, reapply
+    // Unknown lines from this number on are deferred: apply()/applyLines() skip them and fill()
+    // fills them in little by little (incremental highlighting when opening a long document).
     private deferFrom = Infinity;
 
-    // allTags: semua tag yang dikelola, dihapus dari baris yang isinya tidak diketahui.
+    // allTags: all managed tags, removed from lines whose contents are unknown.
     constructor(private readonly buffer: Gtk.TextBuffer, private readonly allTags: Gtk.TextTag[]) {}
 
-    // Jumlah baris yang dikenal tagger (jumlah baris dokumen saat apply terakhir/edited).
+    // Number of lines known to the tagger (the document line count at the last apply/edited).
     get lineCount(): number {
         return this.applied.length;
     }
 
-    // true = masih ada baris yang ditunda.
+    // true = there are still deferred lines.
     get pending(): boolean {
         return this.deferFrom < this.applied.length;
     }
 
-    // Tunda pemasangan tag baris tak dikenal mulai baris `line`; Infinity = tidak ada yang ditunda.
+    // Defer applying tags to unknown lines from line `line`; Infinity = nothing is deferred.
     defer(line: number): void {
         this.deferFrom = line;
     }
 
-    // Teks disunting di baris first..last (nomor baris sekarang), jumlah baris kini `count`.
-    // Baris sebelum dan sesudahnya tidak berubah, hanya bergeser.
+    // Text edited at lines first..last (current line numbers), the line count is now `count`.
+    // Lines before and after are unchanged, only shifted.
     edited(first: number, last: number, count: number): void {
         const old = this.applied;
         const shift = count - old.length;
@@ -135,16 +135,16 @@ export class LineTagger {
             i < first ? old[i] ?? null : i > last ? old[i - shift] ?? null : null);
     }
 
-    // spans[i] = tag untuk baris i; starts[i] = offset awal baris i.
+    // spans[i] = tags for line i; starts[i] = start offset of line i.
     apply(spans: LineSpan[][], starts: number[]): void {
         if (this.applied.length !== spans.length) this.applied = spans.map(() => null);
         this.run(spans.length, k => k, i => spans[i], starts, true);
     }
 
-    // Seperti apply(), tetapi hanya memeriksa baris di `lines` (urut naik, tanpa duplikat)
-    // ditambah baris yang tagnya belum diketahui. Baris lain dianggap sudah benar, jadi
-    // pemanggil tidak perlu menyusun tag untuk seluruh dokumen. Baris di `lines` yang
-    // ditunda hanya dipasang jika forced(baris) (bawaan: semua, mis. baris yang terlihat).
+    // Like apply(), but only checks the lines in `lines` (ascending, no duplicates)
+    // plus lines whose tags are not yet known. Other lines are assumed correct, so the
+    // caller does not need to compose tags for the whole document. Lines in `lines` that
+    // are deferred are only applied if forced(line) (default: all, e.g. the visible lines).
     applyLines(lines: number[], spansOf: (line: number) => LineSpan[], starts: number[], forced: (line: number) => boolean = () => true): void {
         const count = starts.length;
         if (this.applied.length !== count) this.applied = starts.map(() => null);
@@ -158,7 +158,7 @@ export class LineTagger {
         this.run(visit.length, n => visit[n], spansOf, starts, false);
     }
 
-    // Pasang `lines` baris berikutnya yang ditunda. true = tidak ada lagi yang ditunda.
+    // Apply the next `lines` deferred lines. true = nothing is deferred anymore.
     fill(lines: number, spansOf: (line: number) => LineSpan[], starts: number[]): boolean {
         const end = this.deferFrom + lines;
         this.deferFrom = end >= starts.length ? Infinity : end;
@@ -166,9 +166,9 @@ export class LineTagger {
         return !this.pending;
     }
 
-    // Tag yang dikelola tagger ini dan terpasang di [s, e). Baris yang baru disunting biasanya
-    // hanya punya beberapa tag: menelusuri toggle lebih murah daripada remove_tag untuk
-    // semua tag (±30 panggilan per ketukan).
+    // Tags managed by this tagger that are applied in [s, e). A freshly edited line usually
+    // has only a few tags: walking the toggles is cheaper than remove_tag for
+    // all tags (±30 calls per keystroke).
     private tagsIn(s: Gtk.TextIter, e: Gtk.TextIter): Set<Gtk.TextTag> {
         const found = new Set<Gtk.TextTag>();
         const add = (tags: Gtk.TextTag[]) => { for (const tag of tags) if (this.allTags.includes(tag)) found.add(tag); };
@@ -178,8 +178,8 @@ export class LineTagger {
         return found;
     }
 
-    // Kunjungi baris lineAt(0..count-1) (urut naik) dan samakan tagnya dengan spansOf.
-    // skipDeferred: lewati baris tak dikenal yang ditunda (lihat defer()).
+    // Visit lines lineAt(0..count-1) (ascending) and make their tags match spansOf.
+    // skipDeferred: skip unknown deferred lines (see defer()).
     private run(count: number, lineAt: (k: number) => number, spansOf: (line: number) => LineSpan[], starts: number[], skipDeferred: boolean): void {
         const buf = this.buffer;
         const total = buf.get_char_count();
@@ -193,14 +193,14 @@ export class LineTagger {
             const prev = this.applied[i];
             if (prev && (prev === want || sameSpans(prev, want))) continue;
             if (!prev) {
-                // Baris tak dikenal yang berurutan dibersihkan sekaligus (mis. setelah setText).
+                // Consecutive unknown lines are cleared at once (e.g. after setText).
                 let n = k;
                 while (n + 1 < count && lineAt(n + 1) === lineAt(n) + 1 && !this.applied[lineAt(n + 1)] && !deferred(lineAt(n + 1))) n++;
                 const j = lineAt(n);
                 const [s, e] = lines(i, j);
                 for (const tag of j - i < FEW_LINES ? this.tagsIn(s, e) : this.allTags) buf.remove_tag(tag, s, e);
-                // Saat membuka/paste dokumen, gabungkan rentang tag yang bertemu
-                // supaya GTK tidak menerima ribuan operasi untuk blok kode panjang.
+                // When opening/pasting a document, merge tag ranges that meet
+                // so GTK does not receive thousands of operations for a long code block.
                 const ranges = new Map<Gtk.TextTag, Range[]>();
                 for (let line = i; line <= j; line++) {
                     const spans = line === i ? want : spansOf(line);

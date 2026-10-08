@@ -3,7 +3,7 @@ import type { ChatRequest, ChatResult, Provider } from './provider.js';
 
 export class TemporaryProviderError extends Error {}
 
-// Hanya ulangi request yang belum menampilkan keluaran; jangan menggandakan potongan teks/penalaran.
+// Only retry requests that have not shown output yet; do not duplicate text/reasoning fragments.
 export async function requestWithRetry(provider: Provider, request: ChatRequest, wait: (ms: number) => Promise<void>): Promise<ChatResult> {
     for (let attempt = 0; ; attempt++) {
         if (request.cancellable?.is_cancelled()) return { usage: null, cancelled: true, toolCalls: [], reasoning: '' };
@@ -20,7 +20,7 @@ export async function requestWithRetry(provider: Provider, request: ChatRequest,
     }
 }
 
-// Ringkasan ekstraktif: tidak menambah fakta. Riwayat lengkap tetap disimpan di disk.
+// Extractive summary: adds no facts. The full history stays saved on disk.
 export function compactHistory(history: Turn[], budget: number): { recent: Turn[]; summary: string } {
     let start = 0;
     let size = history.reduce((n, t) => n + estimateTokens(t.content), 0);
@@ -31,7 +31,7 @@ export function compactHistory(history: Turn[], budget: number): { recent: Turn[
     const limit = Math.max(0, Math.min(4000, Math.floor(budget * 0.2) * 3));
     let summary = '';
     for (const t of history.slice(0, start).reverse()) {
-        const line = `${t.role === 'user' ? 'Pengguna' : 'Asisten'}: ${t.content.replace(/\s+/g, ' ').slice(0, 400)}\n`;
+        const line = `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content.replace(/\s+/g, ' ').slice(0, 400)}\n`;
         if (summary.length + line.length > limit) break;
         summary = line + summary;
     }

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Assistant panel · Nyerat Documentation</title>
+<meta name="description" content="The Nyerat Assistant panel: ask, request a plan, or request changes from the DeepSeek agent, with streamed answers and token details.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fdb'/%3E%3Cpath d='M9 23V9h3l8 10V9h3v14h-3L12 13v10z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <a class="brand" href="../index.html">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 23V9h3l8 10V9h3v14h-3L12 13v10z" fill="var(--accent-text)"/></svg>
+    Nyerat <span>Docs</span>
+  </a>
+  <nav>
+    <a href="index.html" aria-current="true">Docs</a>
+    <a class="hide-sm" href="../learn-agent.html">Learn agents</a>
+    <a href="https://github.com/EkaPutCom/nyerat">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="side" id="side" aria-label="Documentation navigation"></aside>
+<main class="doc">
+<p class="eyebrow">Agent</p>
+<h1>The Assistant panel</h1>
+<p class="lead">The place where you work with the agent: ask questions, request a plan, or request changes in plain language.</p>
+
+<figure><img src="../assets/assistant.gif" width="900" height="586" loading="lazy" alt="Animation of the Assistant panel answering a question about meeting decisions that have not made it into the launch plan"><figcaption>The agent browses the meeting notes and the plan, then points out the release date that is out of sync</figcaption></figure>
+
+<h2 id="open">Opening the panel</h2>
+<p>Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> or the bubble button in the header bar. The panel appears on the right side and is remembered the next time the app opens. <kbd>Enter</kbd> sends the message, <kbd>Shift</kbd>+<kbd>Enter</kbd> makes a new line.</p>
+<p>The panel header has these buttons:</p>
+<ul>
+  <li><strong>Clock</strong>: the list of conversations saved in this folder (<a href="history.html">Conversation history</a>)</li>
+  <li><strong>Broom</strong>: a new conversation</li>
+  <li><strong>Terminal</strong>: the <em>Agent log</em> window (<a href="history.html#agent-log">Agent log</a>)</li>
+  <li><strong>Gear</strong>: the API key, the model, thinking mode, and the switch for saving history</li>
+</ul>
+
+<h2 id="model">Model and thinking mode</h2>
+<p>The agent uses a DeepSeek model: <code>deepseek-flash</code> (the default) or <code>deepseek-v4-pro</code>, chosen in the panel settings. The <em>Deep thinking</em> checkbox turns on a thinking mode that is more thorough but slower and more expensive. The model's thinking process can be opened separately above the answer and is not saved to the conversation file.</p>
+
+<h2 id="answers">Answers</h2>
+<ul>
+  <li>The answer streams as it is made and is shown with Markdown formatting.</li>
+  <li>Quotes name the file and the line number, e.g. <code>meeting-1-oct.md:12</code>.</li>
+  <li>Every lookup is shown as a small line above the answer, e.g. <em>Searching text “Raka” → 3 lines</em>.</li>
+  <li>Below the answer are the details of the context that was sent and the token usage, including the part served from the cache.</li>
+  <li>The <em>Stop</em> button cancels the answer in progress; the result is sent back to the model so that it does not insist.</li>
+</ul>
+
+<h2 id="asking-for-action">Asking for action</h2>
+<p>When you ask for a change, the agent calls a proposal tool. The review window opens automatically, and a compact status card remains in the panel with a <em>Review changes</em> button. See <a href="proposals.html">Proposals and approval</a>.</p>
+<p>Examples of suitable requests:</p>
+<ul>
+  <li>“Write a summary of the competitor research in the research folder.”</li>
+  <li>“Replace every ‘Raka’ with ‘Rakai’ in the meeting notes.”</li>
+  <li>“Add the card ‘Prepare the demo’ to the Plan list with the tag #release.”</li>
+  <li>“When was the release date changed and by whom?” (answered from the Git history)</li>
+</ul>
+
+<h2 id="reliability">Connection reliability</h2>
+<p>Connection failures, HTTP 429, and 5xx errors are retried at most twice, only if no text has been shown yet. Authentication errors are not retried. A stream that is cut off before it finishes is treated as failed, and an incomplete tool call is not executed.</p>
+</main>
+<aside class="toc" id="toc" aria-label="Table of contents"></aside>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>

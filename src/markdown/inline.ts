@@ -1,13 +1,13 @@
-// Pengurai format inline (di dalam satu baris): kode, tautan, tebal, miring, dll.
+// Inline format parser (within one line): code, links, bold, italic, etc.
 //
-// Teknik "masking": setelah suatu bagian dikenali, karakternya diganti '\0' di
-// salinan string, sehingga pola berikutnya tidak bisa mengenalinya lagi. Urutan
-// pengenalan: escape (\*) dan kode inline → [[wikilink]] → tautan/gambar → URL → penekanan.
-// Contoh: di `**x**` bagian ** sudah di-mask sebagai kode, jadi tidak jadi tebal.
+// The "masking" technique: once a part is recognized, its characters are replaced with '\0' in a
+// copy of the string, so later patterns cannot recognize it again. Recognition order:
+// escapes (\*) and inline code → [[wikilink]] → links/images → URLs → emphasis.
+// Example: in `**x**` the ** part is already masked as code, so it does not become bold.
 //
-// Hasil: tags [nama, awal, akhir], marks [awal, akhir] (sintaks yang boleh
-// disembunyikan), dan images [{ alt, url, start, end }].
-// Posisi dalam satuan UTF-16 dan relatif terhadap awal string.
+// Result: tags [name, start, end], marks [start, end] (syntax that may be
+// hidden), and images [{ alt, url, start, end }].
+// Positions are in UTF-16 units and relative to the start of the string.
 
 import { EMPHASIS, ESCAPE_OR_CODE, type InlineTag } from './syntax.js';
 import { WIKILINK } from './wikilink.js';
@@ -25,12 +25,12 @@ export interface InlineResult {
     images: InlineImage[];
 }
 
-// Mengurai format inline satu baris. Hasil: tag [nama, awal, akhir] dan
-// rentang "marker" (sintaks yang disembunyikan saat kursor di baris lain).
+// Parses the inline formatting of one line. Result: tags [name, start, end] and
+// "marker" ranges (syntax hidden while the cursor is on another line).
 export function parseInline(s: string): InlineResult {
     const tags: InlineResult['tags'] = [], marks: InlineResult['marks'] = [], images: InlineImage[] = [];
-    // Baris tanpa sintaks tidak perlu salinan karakter. Setelah masking, rangkai
-    // ulang string hanya jika ada bagian baru yang ditutup oleh tahap sebelumnya.
+    // A line without syntax needs no character copy. After masking, rebuild
+    // the string only if a new part was closed by an earlier stage.
     let m: string[] | null = null;
     let current = s, changed = false;
     const mask = (a: number, b: number) => {
@@ -48,16 +48,16 @@ export function parseInline(s: string): InlineResult {
     const reEscCode = ESCAPE_OR_CODE();
     while ((r = reEscCode.exec(s))) {
         const a = r.index, b = a + r[0].length;
-        if (r[1] !== undefined) {           // \* → sembunyikan backslash-nya
+        if (r[1] !== undefined) {           // \* → hide the backslash
             mark(a, a + 1);
-        } else {                            // `kode`
+        } else {                            // `code`
             const n = r[2].length;
             tags.push(['code', a + n, b - n]); mark(a, a + n); mark(b - n, b);
         }
         mask(a, b);
     }
 
-    // [[Catatan]] dan [[Catatan|teks]]: yang terlihat hanya nama catatan, atau teksnya bila ada alias.
+    // [[Note]] and [[Note|text]]: only the note name is visible, or the text when there is an alias.
     t = cur();
     if (t.includes('[[')) {
         const reWiki = WIKILINK();
@@ -77,7 +77,7 @@ export function parseInline(s: string): InlineResult {
         const ts = a + r[1].length + 1, te = ts + r[2].length;
         tags.push([r[1] ? 'image' : 'link', ts, te]);
         mark(a, ts); mark(te, b); mask(a, ts); mask(te, b);
-        // Gambar: url tanpa judul opsional, misalnya ![alt](foto.png "Judul")
+        // Image: url without the optional title, e.g. ![alt](photo.png "Title")
         if (r[1]) images.push({ alt: r[2], url: r[3].trim().split(/\s+/)[0] ?? '', start: a, end: b });
     }
 

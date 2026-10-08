@@ -1,20 +1,20 @@
-// Pembantu kecil untuk API GTK 4 yang dipakai di semua lapisan (editor, ui, jendela).
-// Tidak meng-import modul proyek lain, jadi boleh dipakai dari mana saja.
+// Small helpers for the GTK 4 API used in all layers (editor, ui, window).
+// Does not import other project modules, so it can be used from anywhere.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
 
-// Iter di awal baris `line`. GTK 4 mengembalikan [ok, iter]; jika baris di luar dokumen,
-// iter-nya tetap diisi akhir buffer (perilaku yang sama dengan GTK 3).
+// Iter at the start of line `line`. GTK 4 returns [ok, iter]; if the line is outside the document,
+// the iter is still set to the end of the buffer (same behavior as GTK 3).
 export function iterAtLine(buffer: Gtk.TextBuffer, line: number): Gtk.TextIter {
     return buffer.get_iter_at_line(line)[1];
 }
 
-// Offset awal baris `first` dan akhir baris `last` (sebelum newline-nya), dengan satu iter
-// yang dipakai ulang: di GJS membuat iter baru per baris 4× lebih mahal daripada set_line().
-// Baris harus ada di dokumen.
+// Offset of the start of line `first` and the end of line `last` (before its newline), with one iter
+// that is reused: in GJS creating a new iter per line is 4× more expensive than set_line().
+// The lines must exist in the document.
 export function lineSpanOffsets(iter: Gtk.TextIter, first: number, last: number): [start: number, lastLineStart: number, end: number] {
     iter.set_line(first);
     const start = iter.get_offset();
@@ -24,7 +24,7 @@ export function lineSpanOffsets(iter: Gtk.TextIter, first: number, last: number)
     return [start, lastLineStart, iter.get_offset()];
 }
 
-// Anak langsung sebuah widget, urut dari pertama. GTK 4 tidak punya get_children().
+// Direct children of a widget, in order from the first. GTK 4 has no get_children().
 export function childrenOf(widget: Gtk.Widget): Gtk.Widget[] {
     const result: Gtk.Widget[] = [];
     for (let child = widget.get_first_child(); child; child = child.get_next_sibling()) result.push(child);
@@ -35,14 +35,14 @@ interface Container {
     remove(child: Gtk.Widget): void;
 }
 
-// Lepaskan widget dari induknya (pengganti destroy() GTK 3 untuk widget anak). Induk yang
-// punya remove() (Box, Grid, ListBox, TextView, Stack, ...) dipakai supaya data internalnya
-// ikut diperbarui; selain itu widget dilepas langsung.
+// Detach a widget from its parent (replacement for GTK 3's destroy() on child widgets). A parent
+// that has remove() (Box, Grid, ListBox, TextView, Stack, ...) is used so its internal data
+// is updated too; otherwise the widget is detached directly.
 export function removeWidget(widget: Gtk.Widget): void {
     const parent = widget.get_parent();
     if (!parent) return;
     if (parent instanceof Gtk.ListBoxRow || parent instanceof Gtk.FlowBoxChild) {
-        // Baris ListBox/FlowBox dibuang bersama barisnya, bukan hanya isinya.
+        // A ListBox/FlowBox row is removed together with its row, not only its contents.
         removeWidget(parent);
         return;
     }
@@ -50,8 +50,8 @@ export function removeWidget(widget: Gtk.Widget): void {
     else widget.unparent();
 }
 
-// Kosongkan wadah dari semua anaknya. Placeholder ListBox juga anaknya di GTK 4, dan
-// remove_all() GTK 4.14 ikut membuangnya; karena itu ListBox dikosongkan per baris.
+// Empty a container of all its children. A ListBox placeholder is also a child in GTK 4, and
+// GTK 4.14's remove_all() removes it too; that is why a ListBox is emptied row by row.
 export function removeChildren(widget: Gtk.Widget): void {
     if (widget instanceof Gtk.ListBox) {
         for (let row = widget.get_row_at_index(0); row; row = widget.get_row_at_index(0)) widget.remove(row);
@@ -60,12 +60,12 @@ export function removeChildren(widget: Gtk.Widget): void {
     for (const child of childrenOf(widget)) removeWidget(child);
 }
 
-// Nilai yang mungkin baru tersedia nanti: dialog asli mengembalikan Promise, tiruannya di tes nilai biasa.
+// A value that may only become available later: the real dialog returns a Promise, its stand-in in tests a plain value.
 export type Awaitable<T> = T | Promise<T>;
 
-// Dialog modal tanpa main loop bersarang (GTK 4 sengaja menghapus gtk_dialog_run(): main loop di dalam
-// handler membuat kode lain berjalan di tengah-tengah handler itu). `start` menampilkan dialog dan memanggil
-// finish(nilai) sekali saat dijawab; panggilan berikutnya diabaikan.
+// Modal dialog without a nested main loop (GTK 4 deliberately removed gtk_dialog_run(): a main loop inside a
+// handler makes other code run in the middle of that handler). `start` shows the dialog and calls
+// finish(value) once when answered; later calls are ignored.
 export function modal<T>(start: (finish: (value: T) => void) => void): Promise<T> {
     return new Promise(resolve => {
         let done = false;
@@ -77,15 +77,15 @@ export function modal<T>(start: (finish: (value: T) => void) => void): Promise<T
     });
 }
 
-// Lanjutkan dengan nilai yang mungkin masih Promise. Nilai biasa (tiruan dialog di tes, atau jalur yang
-// tidak perlu bertanya) diproses seketika sehingga hasilnya juga sinkron; Promise diproses setelah selesai.
+// Continue with a value that may still be a Promise. A plain value (dialog stand-in in tests, or a path that
+// does not need to ask) is processed immediately so the result is synchronous too; a Promise is processed once it resolves.
 export function after<T, R>(value: Awaitable<T>, next: (value: T) => Awaitable<R>): Awaitable<R> {
     return value instanceof Promise ? value.then(next) : next(value);
 }
 
-// Klik tombol mouse pada widget (pengganti sinyal button-press-event). `handler` menerima
-// jumlah klik beruntun (2 = klik ganda), posisi, dan modifier; true = klik ditangani dan
-// tidak diteruskan ke widget di bawahnya.
+// Mouse button click on a widget (replacement for the button-press-event signal). `handler` receives
+// the number of consecutive clicks (2 = double click), position, and modifiers; true = click handled and
+// not passed on to the widget below.
 export function onClick(widget: Gtk.Widget, handler: (count: number, x: number, y: number, state: number) => boolean | void, button = 1): Gtk.GestureClick {
     const gesture = new Gtk.GestureClick({ button });
     gesture.connect('pressed', (g, count, x, y) => {
@@ -95,7 +95,7 @@ export function onClick(widget: Gtk.Widget, handler: (count: number, x: number, 
     return gesture;
 }
 
-// Tombol keyboard ditekan saat widget (atau anaknya) berfokus. true = sudah ditangani.
+// Keyboard key pressed while the widget (or its child) has focus. true = handled.
 export function onKeyPress(widget: Gtk.Widget, handler: (keyval: number, state: number) => boolean, phase = Gtk.PropagationPhase.BUBBLE): Gtk.EventControllerKey {
     const controller = new Gtk.EventControllerKey({ propagation_phase: phase });
     controller.connect('key-pressed', (_c, keyval, _code, state) => handler(keyval, state));
@@ -103,8 +103,8 @@ export function onKeyPress(widget: Gtk.Widget, handler: (keyval: number, state: 
     return controller;
 }
 
-// Pengganti gtk_box_pack_start() GTK 3: tambahkan child di akhir box. expand = child mengambil
-// sisa ruang searah orientasi box (GTK 4 memakai hexpand/vexpand milik child).
+// Replacement for GTK 3's gtk_box_pack_start(): append a child at the end of the box. expand = the child takes
+// the remaining space along the box's orientation (GTK 4 uses the child's own hexpand/vexpand).
 export function pack(box: Gtk.Box, child: Gtk.Widget, expand = false): void {
     if (expand) {
         if (box.get_orientation() === Gtk.Orientation.HORIZONTAL) child.set_hexpand(true);
@@ -113,17 +113,17 @@ export function pack(box: Gtk.Box, child: Gtk.Widget, expand = false): void {
     box.append(child);
 }
 
-// Isi Gtk.Template dari berkas .ui yang dibundel sebagai teks (`import xml from './x.ui?raw'`).
+// Contents of a Gtk.Template from a .ui file bundled as text (`import xml from './x.ui?raw'`).
 export const uiTemplate = (xml: string): Uint8Array => new TextEncoder().encode(xml);
 
-// Pixbuf → Gdk.Texture. Gtk.Picture.new_for_pixbuf() dan Gdk.Texture.new_for_pixbuf() sudah usang
-// (GTK 4.12/4.20); data piksel pixbuf (RGB/RGBA 8 bit, tanpa premultiply) disalin apa adanya.
+// Pixbuf → Gdk.Texture. Gtk.Picture.new_for_pixbuf() and Gdk.Texture.new_for_pixbuf() are deprecated
+// (GTK 4.12/4.20); the pixbuf's pixel data (RGB/RGBA 8 bit, not premultiplied) is copied as is.
 export function textureFromPixbuf(pixbuf: GdkPixbuf.Pixbuf): Gdk.Texture {
     const format = pixbuf.get_has_alpha() ? Gdk.MemoryFormat.R8G8B8A8 : Gdk.MemoryFormat.R8G8B8;
     return Gdk.MemoryTexture.new(pixbuf.get_width(), pixbuf.get_height(), format, pixbuf.read_pixel_bytes(), pixbuf.get_rowstride());
 }
 
-// Gdk.Texture → pixbuf RGBA, pengganti Gdk.pixbuf_get_from_texture() yang usang sejak GTK 4.12.
+// Gdk.Texture → RGBA pixbuf, replacement for Gdk.pixbuf_get_from_texture() deprecated since GTK 4.12.
 export function pixbufFromTexture(texture: Gdk.Texture): GdkPixbuf.Pixbuf {
     const downloader = Gdk.TextureDownloader.new(texture);
     downloader.set_format(Gdk.MemoryFormat.R8G8B8A8);
@@ -131,11 +131,11 @@ export function pixbufFromTexture(texture: Gdk.Texture): GdkPixbuf.Pixbuf {
     return GdkPixbuf.Pixbuf.new_from_bytes(bytes, GdkPixbuf.Colorspace.RGB, true, 8, texture.get_width(), texture.get_height(), stride);
 }
 
-// Saat dijalankan dari dist/ (belum dipasang), ikon aplikasi ada di dist/icons (disalin vite.config.ts),
-// bukan di tema hicolor sistem. Aman dipanggil berulang: jalur yang sudah ada tidak ditambahkan lagi.
+// When run from dist/ (not installed), the app icon is in dist/icons (copied by vite.config.ts),
+// not in the system hicolor theme. Safe to call repeatedly: a path that is already there is not added again.
 export function addBundledIcons(display: Gdk.Display): void {
     let dir = Gio.File.new_for_uri(import.meta.url).get_parent();
-    if (dir && !dir.get_child('icons').query_exists(null)) dir = dir.get_parent();   // dari dist/chunks/
+    if (dir && !dir.get_child('icons').query_exists(null)) dir = dir.get_parent();   // from dist/chunks/
     const icons = dir?.get_child('icons');
     if (!icons?.query_exists(null)) return;
     const theme = Gtk.IconTheme.get_for_display(display);

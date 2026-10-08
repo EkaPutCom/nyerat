@@ -1,30 +1,30 @@
-// Dialog daftar pintasan keyboard (Ctrl+?), disusun dari aksi yang terdaftar di actions.ts:
-// label dari COMMAND_LABELS, tombol dari accel yang benar-benar dipasang, jadi daftar ini
-// tidak bisa berbeda dari pintasan yang berlaku.
+// Keyboard shortcut list dialog (Ctrl+?), built from the actions registered in actions.ts:
+// labels from COMMAND_LABELS, keys from the accels actually installed, so this list
+// cannot differ from the shortcuts in effect.
 //
-// libadwaita ≥ 1.8 (GNOME 49+) punya Adw.ShortcutsDialog, pengganti Gtk.ShortcutsWindow yang
-// usang sejak GTK 4.18. Di libadwaita yang lebih tua (mis. 1.5 di Ubuntu 24.04) isinya ditampilkan
-// sebagai Adw.Dialog berisi daftar baris dengan Gtk.ShortcutLabel. Gtk.ShortcutsWindow tidak dipakai:
-// selain usang, di GTK 4.14 label internalnya memicu Gtk-WARNING "reported min width -4".
+// libadwaita ≥ 1.8 (GNOME 49+) has Adw.ShortcutsDialog, the replacement for Gtk.ShortcutsWindow, which has been
+// deprecated since GTK 4.18. In older libadwaita (e.g. 1.5 on Ubuntu 24.04) the contents are shown
+// as an Adw.Dialog containing a list of rows with Gtk.ShortcutLabel. Gtk.ShortcutsWindow is not used:
+// besides being deprecated, in GTK 4.14 its internal labels trigger the Gtk-WARNING "reported min width -4".
 
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import { COMMAND_LABELS } from '../commands.js';
 import { _ } from '../i18n.js';
 
-// Bagian dialog dan aksi di dalamnya, urut seperti yang tampil.
+// Dialog sections and the actions in them, in the order displayed.
 export const SHORTCUT_SECTIONS = (): [title: string, actions: string[]][] => [
-    [_('Berkas'), ['new', 'open', 'open-folder', 'save', 'save-as', 'export-html']],
+    [_('Files'), ['new', 'open', 'open-folder', 'save', 'save-as', 'export-html']],
     [_('Tab'), ['home', 'next-tab', 'prev-tab', 'close-tab']],
-    [_('Jurnal'), ['journal', 'journal-capture']],
-    [_('Penyuntingan'), ['undo', 'redo', 'find']],
+    [_('Journal'), ['journal', 'journal-capture']],
+    [_('Editing'), ['undo', 'redo', 'find']],
     [_('Format'), ['bold', 'italic', 'strike', 'inline-code', 'highlight', 'link', 'image', 'codeblock', 'table', 'quote', 'ulist', 'olist']],
-    [_('Tabel'), ['table-row-below', 'table-row-above', 'table-delete-row', 'table-col-right', 'table-col-left', 'table-delete-col', 'table-format']],
-    [_('Tampilan'), ['sidebar', 'chat', 'kanban-view', 'source', 'focus', 'typewriter', 'dark']],
-    [_('Umum'), ['command-palette', 'preferences', 'shortcuts', 'quit']],
+    [_('Table'), ['table-row-below', 'table-row-above', 'table-delete-row', 'table-col-right', 'table-col-left', 'table-delete-col', 'table-format']],
+    [_('View'), ['sidebar', 'chat', 'kanban-view', 'source', 'focus', 'typewriter', 'dark']],
+    [_('General'), ['command-palette', 'preferences', 'shortcuts', 'quit']],
 ];
 
-// Aksi yang punya accel, per bagian; bagian tanpa pintasan dilewati.
+// Actions that have an accel, per section; sections without shortcuts are skipped.
 export function shortcutEntries(app: Gtk.Application): [title: string, items: [label: string, accel: string][]][] {
     return SHORTCUT_SECTIONS()
         .map(([title, actions]) => [title, actions.flatMap(name => {
@@ -34,10 +34,10 @@ export function shortcutEntries(app: Gtk.Application): [title: string, items: [l
         .filter(([, items]) => items.length > 0);
 }
 
-// Adw.ShortcutsDialog ada sejak libadwaita 1.8.
+// Adw.ShortcutsDialog exists since libadwaita 1.8.
 export const hasAdwShortcutsDialog = (): boolean => 'ShortcutsDialog' in Adw;
 
-export const SHORTCUTS_TITLE = (): string => _('Pintasan Keyboard');
+export const SHORTCUTS_TITLE = (): string => _('Keyboard Shortcuts');
 
 export function showShortcuts(app: Gtk.Application, parent: Gtk.Window): Adw.Dialog {
     const entries = shortcutEntries(app);

@@ -1,24 +1,24 @@
-// Merender kode Mermaid menjadi gambar.
+// Renders Mermaid code into an image.
 //
-// Mermaid hanya berjalan di lingkungan browser (butuh DOM dan pengukuran teks), jadi
-// dipakai WebKitGTK yang tidak ditampilkan:
+// Mermaid only runs in a browser environment (it needs the DOM and text measurement), so
+// a WebKitGTK that is not displayed is used:
 //
-//   1. Sebuah WebKitWebView yang tidak pernah dipasang di jendela memuat halaman kosong
-//      yang menyertakan mermaid.min.js (disalin ke dist/ saat build, lihat vite.config.ts).
-//   2. Untuk tiap diagram, halaman menjalankan mermaid.render(), memasang SVG-nya, lalu
-//      mengirim ukurannya kembali lewat script message handler.
-//   3. Snapshot seluruh dokumen (WebKit menggambarnya walau view tidak tampil; ukurannya
-//      mengikuti isi halaman) dipotong seukuran diagram menjadi pixbuf.
+//   1. A WebKitWebView that is never attached to a window loads a blank page
+//      that includes mermaid.min.js (copied to dist/ at build time, see vite.config.ts).
+//   2. For each diagram, the page runs mermaid.render(), attaches its SVG, then
+//      sends its size back through a script message handler.
+//   3. A snapshot of the whole document (WebKit draws it even though the view is not shown; its size
+//      follows the page contents) is cropped to the diagram's size into a pixbuf.
 //
-// Snapshot dipilih daripada memuat SVG lewat librsvg karena label Mermaid memakai
-// <foreignObject> (HTML di dalam SVG) yang tidak didukung librsvg.
+// A snapshot is chosen over loading the SVG through librsvg because Mermaid labels use
+// <foreignObject> (HTML inside SVG), which librsvg does not support.
 //
-// WebKitGTK dimuat dengan import() saat diagram pertama dibutuhkan, bukan di awal program:
-// tanpa pustakanya aplikasi tetap berjalan dan diagram menampilkan pesan galat.
+// WebKitGTK is loaded with import() when the first diagram is needed, not at program start:
+// without the library the app still runs and diagrams show an error message.
 //
-// WebView hanya satu dan dibuat saat diagram pertama dibutuhkan, jadi dokumen tanpa
-// diagram tidak membayar biayanya. Diagram dirender satu per satu (antrean), dan hasilnya
-// disimpan di cache per (tema, kode).
+// There is only one WebView and it is created when the first diagram is needed, so documents without
+// diagrams do not pay its cost. Diagrams are rendered one at a time (a queue), and the results
+// are kept in a cache per (theme, code).
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -28,18 +28,18 @@ import type JavaScriptCore from 'gi://JavaScriptCore?version=6.0';
 import { pixbufFromTexture } from '../gtkutil.js';
 import { _ } from '../i18n.js';
 
-const PAD = 12;              // ruang di sekeliling diagram pada gambar hasil
-const MAX_SIZE = 8000;       // diagram yang lebih besar dari ini (piksel) ditolak
-const TIMEOUT_SECONDS = 20;  // batas waktu satu diagram
-const SETTLE_MS = 150;       // jeda setelah diagram dipasang, sebelum snapshot
+const PAD = 12;              // space around the diagram in the resulting image
+const MAX_SIZE = 8000;       // diagrams larger than this (pixels) are rejected
+const TIMEOUT_SECONDS = 20;  // time limit for one diagram
+const SETTLE_MS = 150;       // pause after the diagram is attached, before the snapshot
 const CACHE_LIMIT = 100;
 
 export interface DiagramTheme {
     dark: boolean;
-    bg: string;   // warna latar gambar; harus sama dengan latar editor
-    fg: string;   // teks dan garis
-    accent: string;   // garis tepi simpul
-    node: string;     // isi simpul
+    bg: string;   // image background color; must match the editor background
+    fg: string;   // text and lines
+    accent: string;   // node border line
+    node: string;     // node fill
 }
 
 export type DiagramResult =
@@ -54,7 +54,7 @@ interface Job {
     callbacks: ((result: DiagramResult) => void)[];
 }
 
-// Cari mermaid.min.js di sebelah kode yang sedang berjalan (dist/ atau dist/chunks/).
+// Find mermaid.min.js next to the running code (dist/ or dist/chunks/).
 function findScript(): string | null {
     const here = Gio.File.new_for_uri(import.meta.url).get_parent();
     for (const dir of [here, here?.get_parent()]) {
@@ -77,18 +77,18 @@ export class MermaidRenderer {
     private nextId = 1;
     private cache = new Map<string, DiagramResult>();
 
-    // Tersedia jika skrip Mermaid ada (tanpa itu, diagram menampilkan pesan galat).
+    // Available if the Mermaid script exists (without it, diagrams show an error message).
     get available(): boolean {
         return findScript() !== null;
     }
 
-    // Hasil dari cache jika diagram yang sama pernah dirender.
+    // Result from the cache if the same diagram has been rendered before.
     cached(code: string, theme: DiagramTheme): DiagramResult | undefined {
         return this.cache.get(this.keyOf(code, theme));
     }
 
-    // Render `code`; callback dipanggil (async) dengan hasilnya. Permintaan yang sama
-    // yang sedang antre digabung.
+    // Render `code`; the callback is called (async) with the result. Identical requests
+    // that are queued are merged.
     render(code: string, theme: DiagramTheme, callback: (result: DiagramResult) => void): void {
         const key = this.keyOf(code, theme);
         const hit = this.cache.get(key);
@@ -109,7 +109,7 @@ export class MermaidRenderer {
         return `${theme.dark ? 'd' : 'l'}${theme.bg}${theme.fg}${theme.accent}${theme.node}\n${code}`;
     }
 
-    // ---------- Antrean ----------
+    // ---------- Queue ----------
 
     private next(): void {
         if (this.current || !this.queue.length) return;
@@ -119,17 +119,17 @@ export class MermaidRenderer {
             for (const job of this.queue.splice(0)) this.finish(job, { ok: false, error: failure }, false);
             return;
         }
-        if (!this.ready) return;   // dilanjutkan oleh load-changed (atau setelah WebKit selesai dimuat)
+        if (!this.ready) return;   // continued by load-changed (or after WebKit finishes loading)
         this.current = this.queue.shift()!;
         this.timeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, TIMEOUT_SECONDS, () => {
             this.timeout = 0;
-            if (this.current) this.finish(this.current, { ok: false, error: _('Waktu merender habis') }, false);
+            if (this.current) this.finish(this.current, { ok: false, error: _('Rendering timed out') }, false);
             return GLib.SOURCE_REMOVE;
         });
         this.run(this.current);
     }
 
-    // cache = false untuk galat sementara (batas waktu, skrip hilang), supaya bisa dicoba lagi.
+    // cache = false for temporary errors (timeout, missing script), so it can be tried again.
     private finish(job: Job, result: DiagramResult, cache = true): void {
         if (this.current === job) {
             this.current = null;
@@ -152,7 +152,7 @@ export class MermaidRenderer {
         if (this.view || this.failure || this.loading) return;
         const script = findScript();
         if (!script) {
-            this.failure = 'mermaid.min.js tidak ditemukan (jalankan npm run build)';
+            this.failure = 'mermaid.min.js not found (run npm run build)';
             return;
         }
         if (!this.webkit) {
@@ -160,7 +160,7 @@ export class MermaidRenderer {
             import('gi://WebKit?version=6.0').then(module => {
                 this.webkit = module.default;
             }, () => {
-                this.failure = _('WebKitGTK tidak terpasang (paket gir1.2-webkit-6.0)');
+                this.failure = _('WebKitGTK is not installed (package gir1.2-webkit-6.0)');
             }).then(() => {
                 this.loading = false;
                 this.next();
@@ -184,26 +184,26 @@ export class MermaidRenderer {
             this.next();
         });
         view.connect('load-failed', () => {
-            this.failure = _('Gagal memuat Mermaid');
+            this.failure = _('Failed to load Mermaid');
             this.next();
         });
         const base = GLib.path_get_dirname(script);
         view.load_html('<!DOCTYPE html><html><head><meta charset="utf-8"><script src="mermaid.min.js"></script></head><body></body></html>',
-            // Garis miring di akhir wajib: tanpanya "mermaid.min.js" dicari di folder induk.
+            // The trailing slash is required: without it "mermaid.min.js" is looked up in the parent folder.
             `${Gio.File.new_for_path(base).get_uri()}/`);
     }
 
     private run(job: Job): void {
         const t = job.theme;
-        // JSON.stringify menghasilkan literal JavaScript yang aman untuk kode apa pun.
+        // JSON.stringify produces a JavaScript literal that is safe for any code.
         const script = `(async () => {
             const post = o => window.webkit.messageHandlers.nyerat.postMessage(JSON.stringify({ id: ${job.id}, ...o }));
             try {
                 document.body.innerHTML = '';
                 document.documentElement.style.background = ${JSON.stringify(t.bg)};
                 document.body.style.cssText = 'margin:0;padding:${PAD}px;background:' + ${JSON.stringify(t.bg)};
-                // Tema 'base' dengan warna dari palet editor: tema bawaan Mermaid kontrasnya kurang
-                // di latar gelap. Garis ditebalkan dan label tepi memakai warna latar.
+                // The 'base' theme with colors from the editor palette: Mermaid's default theme has too little contrast
+                // on a dark background. Lines are thickened and edge labels use the background color.
                 mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true,
                     theme: 'base', fontSize: 16,
                     themeVariables: {
@@ -222,7 +222,7 @@ export class MermaidRenderer {
                 const { svg } = await mermaid.render('diagram${job.id}', ${JSON.stringify(job.code)});
                 document.body.innerHTML = svg;
                 const el = document.querySelector('svg');
-                // Ukuran asli diagram, bukan "100%" dari lebar jendela.
+                // The diagram's real size, not "100%" of the window width.
                 const vb = el.viewBox && el.viewBox.baseVal;
                 if (vb && vb.width && vb.height) {
                     el.setAttribute('width', vb.width);
@@ -247,15 +247,15 @@ export class MermaidRenderer {
         } catch {
             return;
         }
-        if (msg.id !== job.id) return;   // sisa diagram yang sudah dibatalkan
+        if (msg.id !== job.id) return;   // leftovers of a diagram that was cancelled
         if (msg.error !== undefined) {
-            // Kesalahan sintaks Mermaid: pesannya berbaris-baris, ambil yang berguna.
+            // Mermaid syntax error: the message spans several lines, take the useful one.
             this.finish(job, { ok: false, error: msg.error.split('\n').find(l => l.trim()) ?? msg.error });
             return;
         }
         const w = Math.ceil(msg.w ?? 0) + 2 * PAD, h = Math.ceil(msg.h ?? 0) + 2 * PAD;
         if (w > MAX_SIZE || h > MAX_SIZE) {
-            this.finish(job, { ok: false, error: _('Diagram terlalu besar') });
+            this.finish(job, { ok: false, error: _('The diagram is too large') });
             return;
         }
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, SETTLE_MS, () => {
@@ -271,7 +271,7 @@ export class MermaidRenderer {
             if (this.current !== job) return;
             try {
                 const texture = view.get_snapshot_finish(res);
-                // Pada layar HiDPI snapshot berukuran piksel perangkat.
+                // On HiDPI screens the snapshot has device pixel size.
                 const sw = texture.get_width(), sh = texture.get_height();
                 const factor = Math.max(1, view.get_scale_factor());
                 const full = pixbufFromTexture(texture);
@@ -286,6 +286,6 @@ export class MermaidRenderer {
     }
 }
 
-// Satu perender dipakai bersama oleh semua jendela.
+// One renderer is shared by all windows.
 let shared: MermaidRenderer | null = null;
 export const mermaidRenderer = (): MermaidRenderer => shared ??= new MermaidRenderer();

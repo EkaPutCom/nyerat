@@ -1,5 +1,5 @@
-// Tab Riwayat di sidebar: commit git yang menyentuh file aktif, terbaru dulu.
-// Klik commit untuk melihat perubahan dan isinya (ui/historyviewer.ts, dibuka jendela).
+// The History tab in the sidebar: git commits that touch the active file, newest first.
+// Click a commit to see its changes and contents (ui/historyviewer.ts, opened by the window).
 
 import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
@@ -9,20 +9,20 @@ import Pango from 'gi://Pango';
 import { commitFiles, fileLog, repoChanges, workingState, type GitFailure } from '../git.js';
 import { relativeTime, type ChangeKind, type Commit, type FileChange } from '../gitlog.js';
 import { pack, removeChildren } from '../gtkutil.js';
-import { _, fmt } from '../i18n.js';
+import { _, fmt, ngettext } from '../i18n.js';
 
-// Commit yang dimuat per permintaan; riwayat panjang dimuat bertahap.
+// Commits loaded per request; a long history is loaded incrementally.
 const PAGE_SIZE = 100;
 
 const FAILURE_TEXT: Record<GitFailure, string> = {
-    'no-git': 'git tidak terpasang',
-    'no-repo': _('Berkas ini tidak berada di repositori git'),
-    'failed': _('Riwayat tidak dapat dibaca'),
+    'no-git': _('git is not installed'),
+    'no-repo': _('This file is not in a git repository'),
+    'failed': _('The history could not be read'),
 };
 
 const KIND_MARK: Record<ChangeKind, string> = { modified: 'M', added: 'A', deleted: 'D', renamed: 'R', untracked: 'U' };
 
-// Satu baris daftar commit. Datanya field biasa; tampilan dibaca ListView saat baris di-bind.
+// One commit list row. The data is plain fields; the display is read by the ListView when the row is bound.
 class CommitItem extends GObject.Object {
     static { GObject.registerClass({ GTypeName: 'NyeratCommitItem' }, this); }
     commit!: Commit;
@@ -34,26 +34,26 @@ export class History {
     readonly list: Gtk.ListView;
     readonly widget: Gtk.Box;
     readonly more: Gtk.Button;
-    readonly changes: Gtk.Button;              // baris "belum di-commit", tampil hanya jika file berubah
-    onOpen: (commit: Commit) => void = () => {};   // commit diklik
-    onOpenChanges: (file: string) => void = () => {};   // perubahan belum di-commit diklik (file aktif atau file dari daftar)
-    readonly changedList: Gtk.ListBox;         // semua file di repositori yang belum di-commit
+    readonly changes: Gtk.Button;              // the "uncommitted" row, shown only if the file changed
+    onOpen: (commit: Commit) => void = () => {};   // a commit was clicked
+    onOpenChanges: (file: string) => void = () => {};   // uncommitted changes were clicked (the active file or a file from the list)
+    readonly changedList: Gtk.ListBox;         // all uncommitted files in the repository
     readonly changedBox: Gtk.Expander;
     private changed: FileChange[] = [];
-    private readonly unchecked = new Set<string>();   // file daftar yang tidak ikut di-commit; sisanya dicentang
+    private readonly unchecked = new Set<string>();   // list files that are not committed; the rest are checked
     private readonly checks = new Map<string, Gtk.CheckButton>();
     readonly commitBar: Gtk.Box;
     readonly messageEntry: Gtk.Entry;
     readonly commitButton: Gtk.Button;
     readonly commitStatus: Gtk.Label;
-    beforeCommit: () => boolean = () => true;      // simpan dokumen dulu; false = batalkan commit
+    beforeCommit: () => boolean = () => true;      // save the document first; false = cancel the commit
     onCommitted: () => void = () => {};
 
-    private folder: string | null = null;     // folder yang dibuka; sumber daftar perubahan saat belum ada file
-    private file: string | null | undefined;   // undefined = belum pernah dimuat
+    private folder: string | null = null;     // the open folder; source of the changes list when there is no file yet
+    private file: string | null | undefined;   // undefined = never loaded
     private commits: Commit[] = [];
-    private token = 0;                         // hasil git yang basi (file sudah berganti) diabaikan
-    readonly note: Gtk.Label;                  // pesan saat daftar kosong
+    private token = 0;                         // stale git results (the file has changed) are ignored
+    readonly note: Gtk.Label;                  // message when the list is empty
 
     constructor() {
         this.list = new Gtk.ListView({ model: new Gtk.NoSelection({ model: this.store }), factory: this.createFactory(), single_click_activate: true });
@@ -62,17 +62,17 @@ export class History {
             const commit = this.commits[position];
             if (commit) this.onOpen(commit);
         });
-        // Daftar kosong: pesan (memuat, bukan repositori, belum ada commit) menggantikan daftar.
+        // Empty list: a message (loading, not a repository, no commits yet) replaces the list.
         this.note = new Gtk.Label({ margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16, wrap: true, xalign: 0, max_width_chars: 24, valign: Gtk.Align.START });
         this.note.add_css_class('dim-label');
 
-        // Judul mengembang di dalam header saja; sidebar tidak ikut mengembang karena lebarnya
-        // diatur width_request dan Box utama memberi sisa ruang ke kolom editor yang hexpand.
-        const title = new Gtk.Label({ label: _('RIWAYAT'), xalign: 0, margin_start: 16 });
+        // The title expands inside the header only; the sidebar does not expand along because its width
+        // is set by width_request and the main Box gives the remaining space to the hexpand editor column.
+        const title = new Gtk.Label({ label: _('HISTORY'), xalign: 0, margin_start: 16 });
         title.add_css_class('side-title');
         const refresh = Gtk.Button.new_from_icon_name('view-refresh-symbolic');
         refresh.set_has_frame(false);
-        refresh.set_tooltip_text(_('Muat ulang riwayat'));
+        refresh.set_tooltip_text(_('Reload history'));
         refresh.connect('clicked', () => this.refresh());
         const header = new Gtk.Box({ margin_top: 4, margin_bottom: 8, margin_end: 6 });
         pack(header, title, true);
@@ -80,7 +80,7 @@ export class History {
 
         this.changes = new Gtk.Button({ visible: false, margin_start: 8, margin_end: 8, margin_bottom: 8 });
         this.changes.set_has_frame(false);
-        this.changes.set_tooltip_text(_('Lihat perubahan terhadap commit terakhir'));
+        this.changes.set_tooltip_text(_('View changes against the last commit'));
         this.changes.connect('clicked', () => { if (this.file) this.onOpenChanges(this.file); });
 
         this.changedList = new Gtk.ListBox({ activate_on_single_click: true });
@@ -93,7 +93,7 @@ export class History {
             hscrollbar_policy: Gtk.PolicyType.NEVER, propagate_natural_height: true, max_content_height: 240,
         });
         changedScroll.set_child(this.changedList);
-        this.messageEntry = new Gtk.Entry({ placeholder_text: _('Pesan commit') });
+        this.messageEntry = new Gtk.Entry({ placeholder_text: _('Commit message') });
         this.commitButton = new Gtk.Button({ label: _('Commit') });
         this.commitButton.add_css_class('suggested-action');
         this.commitStatus = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 24, visible: false });
@@ -116,10 +116,10 @@ export class History {
         pages.add_named(this.note, 'note');
         pages.visible_child_name = 'note';
         this.store.connect('items-changed', () => { pages.visible_child_name = this.store.n_items ? 'list' : 'note'; });
-        this.more = new Gtk.Button({ label: _('Muat lebih banyak'), margin_top: 8, margin_bottom: 8, margin_start: 8, margin_end: 8, visible: false });
+        this.more = new Gtk.Button({ label: _('Load more'), margin_top: 8, margin_bottom: 8, margin_start: 8, margin_end: 8, visible: false });
         this.more.connect('clicked', () => this.load(this.commits.length, false));
 
-        // hexpand false: judul di header mengembang, dan GTK 4 meneruskannya ke atas sampai sidebar.
+        // hexpand false: the title in the header expands, and GTK 4 passes that up to the sidebar.
         this.widget = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: false });
         this.widget.append(header);
         this.widget.append(this.changes);
@@ -128,24 +128,24 @@ export class History {
         this.widget.append(this.more);
     }
 
-    // Tampilkan riwayat file ini. Memanggil lagi dengan file yang sama tidak melakukan apa-apa
-    // kecuali force, jadi aman dipanggil sering.
+    // Show this file's history. Calling again with the same file does nothing
+    // unless force, so it is safe to call often.
     setFile(file: string | null, force = false, folder: string | null = this.folder): void {
         if (!force && file === this.file && folder === this.folder) return;
         const same = file === this.file;
         this.file = file;
         this.folder = folder;
         this.token++;
-        // Muat ulang file yang sama tidak mengosongkan daftar dulu; daftar hanya diganti jika isinya berubah.
+        // Reloading the same file does not empty the list first; the list is only replaced if its contents changed.
         if (!same) this.clear();
         this.changes.set_visible(false);
         if (!same) this.setChanged([]);
         if (!file) {
-            this.note.set_text(_('Simpan dokumen ke berkas, lalu riwayat git-nya tampil di sini'));
+            this.note.set_text(_('Save the document to a file, and its git history will show up here'));
             this.loadChanges();
             return;
         }
-        if (!same) this.note.set_text(_('Memuat…'));
+        if (!same) this.note.set_text(_('Loading…'));
         this.load(0, same);
         this.loadChanges();
     }
@@ -154,12 +154,12 @@ export class History {
         if (this.file !== undefined) this.setFile(this.file, true);
     }
 
-    // Jendela ditutup: hasil git yang masih ditunggu diabaikan.
+    // Window closed: git results still being awaited are ignored.
     destroy(): void {
         this.token++;
     }
 
-    // Tombol perubahan hanya tampil jika isi file berbeda dari commit terakhir.
+    // The changes button only shows if the file contents differ from the last commit.
     private async loadChanges(): Promise<void> {
         const token = this.token, file = this.file;
         const dir = file ? GLib.path_get_dirname(file) : this.folder;
@@ -168,11 +168,11 @@ export class History {
         if (token !== this.token) return;
         this.setChanged(repo.ok ? repo.changes : []);
         if (!state || !state.ok || state.state === 'clean') return this.changes.set_visible(false);
-        this.changes.set_label(state.state === 'untracked' ? _('● File baru, belum di-commit') : _('● Perubahan belum di-commit'));
+        this.changes.set_label(state.state === 'untracked' ? _('● New file, not committed yet') : _('● Uncommitted changes'));
         this.changes.set_visible(true);
     }
 
-    // Daftar file berubah; tidak dibangun ulang jika sama, supaya posisi gulir tidak lompat saat muat ulang.
+    // The file list changed; it is not rebuilt if the same, so the scroll position does not jump on reload.
     private setChanged(changes: FileChange[]): void {
         const same = changes.length === this.changed.length
             && changes.every((c, i) => c.path === this.changed[i].path && c.kind === this.changed[i].kind);
@@ -185,7 +185,7 @@ export class History {
         for (const change of changes) {
             const rel = dir && change.path.startsWith(dir + '/') ? change.path.slice(dir.length + 1) : change.path;
             const check = new Gtk.CheckButton({ active: !this.unchecked.has(change.path) });
-            check.set_tooltip_text(_('Ikut di-commit'));
+            check.set_tooltip_text(_('Include in the commit'));
             check.connect('toggled', () => {
                 if (check.active) this.unchecked.delete(change.path); else this.unchecked.add(change.path);
                 this.updateCommitButton();
@@ -201,19 +201,19 @@ export class History {
             const row = new Gtk.ListBoxRow({ child: box, tooltip_text: change.path });
             this.changedList.insert(row, -1);
         }
-        this.changedBox.set_label(fmt(_('Belum di-commit ({count})'), { count: changes.length }));
+        this.changedBox.set_label(fmt(_('Uncommitted ({count})'), { count: changes.length }));
         this.updateCommitButton();
         this.changedBox.set_visible(changes.length > 0);
     }
 
-    // File yang dicentang; urutannya mengikuti daftar.
+    // The checked files; the order follows the list.
     private selected(): string[] {
         return this.changed.filter(c => !this.unchecked.has(c.path)).map(c => c.path);
     }
 
     private updateCommitButton(): void {
         const n = this.selected().length;
-        this.commitButton.set_label(n ? fmt(_('Commit {n} file'), { n }) : _('Commit'));
+        this.commitButton.set_label(n ? fmt(ngettext('Commit {n} file', 'Commit {n} files', n), { n }) : _('Commit'));
         this.commitButton.set_sensitive(n > 0);
     }
 
@@ -225,13 +225,13 @@ export class History {
     private async commitSelected(): Promise<void> {
         const files = this.selected();
         const message = this.messageEntry.get_text().trim();
-        if (!files.length) return this.showCommitStatus('Pilih file yang akan di-commit');
-        if (!message) return this.showCommitStatus('Isi pesan commit dulu');
-        if (!this.beforeCommit()) return this.showCommitStatus('Dokumen gagal disimpan; commit dibatalkan');
+        if (!files.length) return this.showCommitStatus('Select the files to commit');
+        if (!message) return this.showCommitStatus('Enter a commit message first');
+        if (!this.beforeCommit()) return this.showCommitStatus('The document failed to save; the commit was cancelled');
         this.commitButton.set_sensitive(false);
         const result = await commitFiles(files, message);
         this.updateCommitButton();
-        if (!result.ok) return this.showCommitStatus(fmt(_('Commit gagal: {message}'), { message: result.message }));
+        if (!result.ok) return this.showCommitStatus(fmt(_('Commit failed: {message}'), { message: result.message }));
         this.messageEntry.set_text('');
         this.commitStatus.set_visible(false);
         this.onCommitted();
@@ -254,11 +254,11 @@ export class History {
             return;
         }
         if (skip === 0) {
-            // Muat ulang yang hasilnya sama dengan yang tampil: biarkan daftar (dan posisi gulirnya).
+            // Reloading a result identical to what is displayed: leave the list (and its scroll position) alone.
             const shown = this.commits.slice(0, result.commits.length);
             if (keep && shown.length === result.commits.length && shown.every((c, i) => c.hash === result.commits[i].hash)) return;
             this.clear();
-            this.note.set_text(_('Belum ada commit untuk berkas ini'));
+            this.note.set_text(_('There are no commits for this file yet'));
         }
         const now = Math.floor(Date.now() / 1000);
         this.commits.push(...result.commits);
@@ -281,7 +281,7 @@ export class History {
             const listItem = item as Gtk.ListItem;
             const { commit, now } = listItem.item as CommitItem;
             const box = listItem.child as Gtk.Box;
-            (box.get_first_child() as Gtk.Label).label = commit.subject || _('(tanpa pesan)');
+            (box.get_first_child() as Gtk.Label).label = commit.subject || _('(no message)');
             (box.get_last_child() as Gtk.Label).label = `${commit.short} · ${commit.author} · ${relativeTime(commit.time, now)}`;
             box.set_tooltip_text(`${commit.subject}\n${commit.author}\n${GLib.DateTime.new_from_unix_local(commit.time).format('%d %b %Y %H:%M')}`);
         });

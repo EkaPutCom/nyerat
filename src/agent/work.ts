@@ -1,4 +1,4 @@
-// Status pekerjaan disimpan bersama percakapan; tidak memuat proses berpikir model.
+// The work state is saved together with the conversation; it does not include the model's thinking process.
 import type { Verification } from './verification.js';
 import type { ToolSpec } from './provider.js';
 
@@ -13,30 +13,30 @@ export interface WorkState {
 }
 
 export const WORK_TOOL: ToolSpec = {
-    name: 'atur_pekerjaan',
-    description: 'Catat tujuan dan rencana pekerjaan beberapa langkah. Perbarui status langkah saat ada kemajuan. Status ini tersimpan bersama percakapan untuk dilanjutkan setelah berhenti. Jangan nyatakan selesai sebelum hasil diperiksa.',
+    name: 'set_work',
+    description: 'Record the goal and plan of a multi-step piece of work. Update the step status as progress is made. This state is saved with the conversation so it can be resumed after stopping. Do not declare it finished before the result has been checked.',
     parameters: { type: 'object', properties: {
-        tujuan: { type: 'string' },
-        langkah: { type: 'array', maxItems: 20, items: { type: 'object', properties: {
-            teks: { type: 'string' }, status: { type: 'string', enum: ['pending', 'done', 'blocked'] },
-        }, required: ['teks', 'status'], additionalProperties: false } },
-        catatan: { type: 'string' },
-    }, required: ['tujuan', 'langkah', 'catatan'], additionalProperties: false },
+        goal: { type: 'string' },
+        steps: { type: 'array', maxItems: 20, items: { type: 'object', properties: {
+            text: { type: 'string' }, status: { type: 'string', enum: ['pending', 'done', 'blocked'] },
+        }, required: ['text', 'status'], additionalProperties: false } },
+        note: { type: 'string' },
+    }, required: ['goal', 'steps', 'note'], additionalProperties: false },
 };
 
 export function parseWork(raw: string): WorkState | null {
     try {
         const a = JSON.parse(raw);
-        if (typeof a.tujuan !== 'string' || !a.tujuan.trim() || a.tujuan.length > 2000 ||
-            typeof a.catatan !== 'string' || a.catatan.length > 4000 || !Array.isArray(a.langkah) ||
-            !a.langkah.length || a.langkah.length > 20) return null;
-        if (!a.langkah.every((s: any) => typeof s.teks === 'string' && s.teks.trim() && s.teks.length <= 1000 &&
+        if (typeof a.goal !== 'string' || !a.goal.trim() || a.goal.length > 2000 ||
+            typeof a.note !== 'string' || a.note.length > 4000 || !Array.isArray(a.steps) ||
+            !a.steps.length || a.steps.length > 20) return null;
+        if (!a.steps.every((s: any) => typeof s.text === 'string' && s.text.trim() && s.text.length <= 1000 &&
             ['pending', 'done', 'blocked'].includes(s.status))) return null;
-        return { goal: a.tujuan.trim(), status: 'running', steps: a.langkah.map((s: any) => ({ text: s.teks.trim(), status: s.status })), note: a.catatan };
+        return { goal: a.goal.trim(), status: 'running', steps: a.steps.map((s: any) => ({ text: s.text.trim(), status: s.status })), note: a.note };
     } catch { return null; }
 }
 
 export function workText(work: WorkState): string {
-    const status = { running: 'berjalan', paused: 'tertunda', failed: 'gagal', complete: 'selesai dan terverifikasi' }[work.status];
-    return `Pekerjaan: ${work.goal} (${status})\n${work.steps.map(s => `- [${s.status === 'done' ? 'x' : ' '}] ${s.text}${s.status === 'blocked' ? ' — tertunda' : ''}`).join('\n')}\n${work.note}`;
+    const status = { running: 'running', paused: 'paused', failed: 'failed', complete: 'finished and verified' }[work.status];
+    return `Work: ${work.goal} (${status})\n${work.steps.map(s => `- [${s.status === 'done' ? 'x' : ' '}] ${s.text}${s.status === 'blocked' ? ' — blocked' : ''}`).join('\n')}\n${work.note}`;
 }

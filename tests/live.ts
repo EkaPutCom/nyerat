@@ -1,12 +1,12 @@
-// Tes langsung ke API DeepSeek sungguhan (butuh internet dan key; berbayar tetapi sangat kecil). TIDAK ikut npm test.
+// Live tests against the real DeepSeek API (needs internet and a key; paid but very cheap). NOT part of npm test.
 //
-//   npm run test:live                  key dari .env (DEEPSEEK_API_KEY), tanpa mode berpikir
-//   npm run test:live -- --thinking    dengan mode berpikir
+//   npm run test:live                  key from .env (DEEPSEEK_API_KEY), without thinking mode
+//   npm run test:live -- --thinking    with thinking mode
 //   npm run test:live -- --model=deepseek-v4-pro
 //
-// Memakai naskah tests/samples/buku-contoh (sengaja berisi kontradiksi: usia Raka 17 vs 25, nama Hasan vs Hasyim,
-// kapal putih vs hitam) dan menjalankan ChatSession + DeepSeek + alat penelusuran yang sama dengan aplikasi.
-// Key tidak pernah dicetak.
+// Uses the manuscript tests/samples/sample-book (deliberately containing contradictions: Raka's age 17 vs 25, the name Hasan vs Hasyim,
+// white vs black ship) and runs ChatSession + DeepSeek + the same browsing tools as the app.
+// The key is never printed.
 
 import { liveAgentic } from './live-agentic.js';
 import GLib from 'gi://GLib';
@@ -27,40 +27,40 @@ interface Scenario {
     question: string;
     minTools: number;
     mustMention: RegExp[];
-    budget?: number;   // anggaran konteks awal; sangat kecil = model terpaksa menelusuri dengan alat
-    cite?: RegExp;   // nomor baris yang dikutip (berkas.md:N) harus menunjuk baris yang memuat pola ini
+    budget?: number;   // initial context budget; very small = the model is forced to browse with tools
+    cite?: RegExp;   // the quoted line number (file.md:N) must point to a line containing this pattern
 }
 
 const SCENARIOS: Scenario[] = [
-    { name: 'ringkas dokumen terbuka (tanpa alat)', question: 'Ringkas dokumen ini dalam tiga poin.', minTools: 0, mustMention: [/badai/i] },
-    { name: 'tokoh di seluruh buku', question: 'Siapa Hasan dan apa perannya di seluruh buku ini? Sebutkan berkas dan nomor barisnya.', minTools: 0, mustMention: [/nakhoda/i], cite: /hasan|hasyim|nakhoda/i },
-    { name: 'kontradiksi (konteks awal cukup)', question: 'Adakah kontradiksi tentang usia Raka atau tentang kapal di buku ini? Sebutkan berkas dan barisnya.', minTools: 0, mustMention: [/17|tujuh belas/i, /25|dua puluh lima/i], cite: /raka|kapal|lambung|layar|hasan|hasyim|nakhoda|camar/i },
-    // Anggaran 900 token hanya cukup untuk instruksi: tidak ada naskah di konteks awal, jadi jawaban hanya bisa datang dari alat.
-    { name: 'kontradiksi tanpa konteks awal (wajib alat)', question: 'Adakah kontradiksi tentang usia Raka atau tentang kapal di buku ini? Sebutkan berkas dan barisnya.', minTools: 1, budget: 900,
-        mustMention: [/17|tujuh belas/i, /25|dua puluh lima/i], cite: /raka|kapal|lambung|layar|hasan|hasyim|nakhoda|camar/i },
+    { name: 'summarize the open document (no tools)', question: 'Summarize this document in three points.', minTools: 0, mustMention: [/storm/i] },
+    { name: 'a character across the whole book', question: 'Who is Hasan and what is his role in this whole book? Give the file and line numbers.', minTools: 0, mustMention: [/captain/i], cite: /hasan|hasyim|captain/i },
+    { name: 'contradictions (the initial context is enough)', question: 'Are there contradictions about the age of Raka or about the ship in this book? Give the file and its lines.', minTools: 0, mustMention: [/17|seventeen/i, /25|twenty-five/i], cite: /raka|ship|hull|sail|hasan|hasyim|captain|seagull/i },
+    // A budget of 900 tokens is only enough for the instructions: there is no manuscript in the initial context, so the answer can only come from tools.
+    { name: 'contradictions without initial context (tools required)', question: 'Are there contradictions about the age of Raka or about the ship in this book? Give the file and its lines.', minTools: 1, budget: 900,
+        mustMention: [/17|seventeen/i, /25|twenty-five/i], cite: /raka|ship|hull|sail|hasan|hasyim|captain|seagull/i },
 ];
 
 async function main(): Promise<boolean> {
     const found = await systemKeyStore.get();
     if (!found?.key) {
-        print(`${RED}Tidak ada API key. Isi DEEPSEEK_API_KEY di .env (lihat .env.example), lalu jalankan npm run test:live.${RESET}`);
+        print(`${RED}No API key. Set DEEPSEEK_API_KEY in .env (see .env.example), then run npm run test:live.${RESET}`);
         return false;
     }
 
-    const root = GLib.build_filenamev([ROOT, 'tests', 'samples', 'buku-contoh']);
+    const root = GLib.build_filenamev([ROOT, 'tests', 'samples', 'sample-book']);
     const book = readProject(root, null);
     if (!book.length) {
-        print(`${RED}Naskah contoh tidak ditemukan di ${root}${RESET}`);
+        print(`${RED}The sample manuscript was not found in  ${root}${RESET}`);
         return false;
     }
-    const activeName = 'bab-2.md';
+    const activeName = 'chapter-2.md';
     const activeText = book.find(f => f.name === activeName)!.text;
     const files = book.filter(f => f.name !== activeName);
 
     const model = optVal('model') ?? DEEPSEEK_MODELS[0];
     const thinking = opt('thinking');
     const provider = new DeepSeek(found.key);
-    print(`${DIM}Model ${model}, berpikir ${thinking ? 'aktif' : 'mati'}, key dari ${found.source}, ${book.length} berkas${RESET}`);
+    print(`${DIM}Model ${model}, thinking ${thinking ? 'on' : 'off'}, key from ${found.source}, ${book.length} files${RESET}`);
 
     let failures = 0;
     for (const sc of SCENARIOS) {
@@ -73,35 +73,35 @@ async function main(): Promise<boolean> {
                 question: sc.question, active: { name: activeName, text: activeText, cursorLine: 4 }, selection: '', files, mentions: [],
                 options: { activeDocument: true, selection: true, project: true }, budget: sc.budget ?? DEFAULT_BUDGET,
             }, provider, model, {
-                onContext: b => print(`  ${DIM}konteks ≈${b.tokens} token${RESET}`),
+                onContext: b => print(`  ${DIM}context ≈${b.tokens} tokens${RESET}`),
                 onText: () => {},
                 onReasoning: () => {},
                 onTool: s => { if (s.summary) print(`  ${DIM}• ${s.label} → ${s.summary}${RESET}`); },
             });
             const secs = ((GLib.get_monotonic_time() - started) / 1e6).toFixed(1);
             print(`  A: ${r.text.trim().split('\n').join('\n     ')}`);
-            print(`  ${DIM}${secs} dtk · ${r.toolCalls} penelusuran · ${r.usage ? `${r.usage.prompt} masuk (${r.usage.cached} cache) / ${r.usage.completion} keluar` : 'usage tidak ada'}${RESET}`);
+            print(`  ${DIM}${secs} s · ${r.toolCalls} lookups · ${r.usage ? `${r.usage.prompt} in (${r.usage.cached} cached) / ${r.usage.completion} out` : 'no usage'}${RESET}`);
             const problems: string[] = [];
-            if (!r.text.trim()) problems.push('jawaban kosong');
-            if (r.toolCalls < sc.minTools) problems.push(`alat dipanggil ${r.toolCalls}x, harapan ≥ ${sc.minTools}`);
-            for (const re of sc.mustMention) if (!re.test(r.text)) problems.push(`jawaban tidak menyebut ${re}`);
+            if (!r.text.trim()) problems.push('empty answer');
+            if (r.toolCalls < sc.minTools) problems.push(`tools called ${r.toolCalls}x, expected ≥ ${sc.minTools}`);
+            for (const re of sc.mustMention) if (!re.test(r.text)) problems.push(`the answer does not mention ${re}`);
             if (sc.cite) {
-                // Kutipan lokasi seperti `bab-2.md:7` harus menunjuk baris yang benar-benar ada dan relevan (anti nomor karangan).
-                const cites = [...r.text.matchAll(/(bab-\d\.md)[:` ]*(?:baris\s*)?:?(\d+)/g)];
+                // A location citation such as `chapter-2.md:7` must point to a line that really exists and is relevant (against invented numbers).
+                const cites = [...r.text.matchAll(/(chapter-\d\.md)[:` ]*(?:line\s*)?:?(\d+)/g)];
                 for (const [, name, n] of cites) {
                     const line = book.find(f => f.name === name)?.text.split('\n')[Number(n) - 1] ?? '';
-                    if (!sc.cite.test(line)) problems.push(`kutipan ${name}:${n} menunjuk baris yang salah (“${line.slice(0, 40)}”)`);
+                    if (!sc.cite.test(line)) problems.push(`the citation ${name}:${n} points to the wrong line (“${line.slice(0, 40)}”)`);
                 }
-                if (!cites.length) problems.push('tidak ada kutipan nomor baris');
+                if (!cites.length) problems.push('no line number citation');
             }
             if (problems.length) { failures++; print(`  ${RED}✗ ${problems.join('; ')}${RESET}`); }
-            else print(`  ${GREEN}✓ lulus${RESET}`);
+            else print(`  ${GREEN}✓ passed${RESET}`);
         } catch (e) {
             failures++;
-            print(`  ${RED}✗ galat: ${errorMessage(e)}${RESET}`);
+            print(`  ${RED}✗ error:  ${errorMessage(e)}${RESET}`);
         }
     }
-    print(`\n${failures ? RED : GREEN}${SCENARIOS.length - failures}/${SCENARIOS.length} skenario lulus${RESET}`);
+    print(`\n${failures ? RED : GREEN}${SCENARIOS.length - failures}/${SCENARIOS.length} scenarios passed${RESET}`);
     if (opt('agentic')) failures += await liveAgentic(provider, model, thinking);
     return failures === 0;
 }

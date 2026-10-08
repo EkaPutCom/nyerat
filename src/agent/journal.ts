@@ -13,7 +13,7 @@ export interface ActionEvent {
 
 const STATUSES = ['proposed', 'applied', 'rejected', 'failed', 'interrupted', 'read', 'reverted'];
 
-// Metadata dapat disunting pengguna: hanya data yang valid dipulihkan, tidak pernah dieksekusi.
+// Metadata can be edited by the user: only valid data is restored, and it is never executed.
 export function parseEvents(value: unknown): ActionEvent[] {
     if (!Array.isArray(value)) return [];
     return value.filter((e: any) => e && typeof e.id === 'string' && typeof e.question === 'string' &&
@@ -30,11 +30,11 @@ export function reconcileEvents(events: ActionEvent[], files: SourceFile[]): voi
         if (e.status !== 'proposed') continue;
         const states = e.changes.map(c => changeState(c, read));
         if (e.changes.length && states.every(s => s === 'after')) {
-            e.status = 'applied'; e.summary = 'Hasil aktual cocok dengan seluruh usulan; dipulihkan setelah interupsi.';
+            e.status = 'applied'; e.summary = 'The actual result matches the whole proposal; restored after an interruption.';
         } else if (states.every(s => s === 'before')) {
-            e.status = 'interrupted'; e.summary = 'Proses berhenti sebelum penerapan; perlu usulan dan persetujuan baru.';
+            e.status = 'interrupted'; e.summary = 'The process stopped before applying; a new proposal and approval are needed.';
         } else {
-            e.status = 'failed'; e.summary = 'Isi aktual berbeda atau paket diterapkan sebagian; periksa berkas sebelum melanjutkan.';
+            e.status = 'failed'; e.summary = 'The actual contents differ or the batch was only partly applied; check the files before continuing.';
         }
     }
 }
@@ -45,7 +45,7 @@ export function journalText(events: ActionEvent[], maxChars = 8000): string {
     const lines: string[] = [];
     let size = 0;
     for (const e of [...events].reverse()) {
-        const status = { proposed: 'Diusulkan', applied: 'Diterapkan', rejected: 'Ditolak', failed: 'Gagal', interrupted: 'Terputus', read: 'Penelusuran', reverted: 'Diurungkan pengguna' }[e.status];
+        const status = { proposed: 'Proposed', applied: 'Applied', rejected: 'Rejected', failed: 'Failed', interrupted: 'Interrupted', read: 'Browsing', reverted: 'Undone by the user' }[e.status];
         const line = `${status}: ${e.tool} ${e.changes.map(fileLabel).join(', ')} — ${e.summary}`.slice(0, 1500);
         if (size + line.length > maxChars) break;
         lines.unshift(line); size += line.length;

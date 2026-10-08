@@ -1,13 +1,13 @@
-// Vite dipakai sebagai bundler saja (mode library): TypeScript → JavaScript, semua
-// modul digabung menjadi file ESM yang dijalankan GJS. Dev server dan HMR tidak
-// dipakai karena ini aplikasi GTK, bukan halaman web.
+// Vite is used as a bundler only (library mode): TypeScript → JavaScript, all
+// modules are merged into an ESM file that GJS runs. The dev server and HMR are
+// not used because this is a GTK app, not a web page.
 
 import { copyFileSync, cpSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { defineConfig, type Plugin } from 'vite';
 
-// Mermaid dijalankan di WebKitGTK (lihat src/editor/mermaid.ts), jadi yang dibutuhkan
-// adalah file skrip browsernya, bukan modul yang dibundel ke dalam kode GJS.
+// Mermaid runs in WebKitGTK (see src/editor/mermaid.ts), so what is needed
+// is its browser script file, not a module bundled into the GJS code.
 const copyMermaid = (): Plugin => ({
     name: 'copy-mermaid',
     writeBundle(options) {
@@ -15,7 +15,7 @@ const copyMermaid = (): Plugin => ({
     },
 });
 
-// Schema GSettings dikompilasi ke dist/, tempat settings.ts mencarinya saat runtime.
+// The GSettings schema is compiled into dist/, where settings.ts looks for it at runtime.
 const compileSchemas = (): Plugin => ({
     name: 'compile-gschemas',
     writeBundle(options) {
@@ -25,8 +25,8 @@ const compileSchemas = (): Plugin => ({
     },
 });
 
-// Ikon aplikasi disalin ke dist/icons supaya `npm start` tetap menampilkan ikon tanpa dipasang;
-// app.ts menambahkannya ke jalur pencarian tema ikon. Versi terpasang memakai hicolor sistem.
+// The app icon is copied to dist/icons so `npm start` still shows the icon without being installed;
+// app.ts adds it to the icon theme search path. The installed version uses the system hicolor.
 const copyIcons = (): Plugin => ({
     name: 'copy-icons',
     writeBundle(options) {
@@ -39,7 +39,7 @@ export default defineConfig({
     build: {
         outDir: 'dist',
         emptyOutDir: true,
-        // GJS 1.80 memakai SpiderMonkey 115 (setara Firefox 115).
+        // GJS 1.80 uses SpiderMonkey 115 (equivalent to Firefox 115).
         target: 'firefox115',
         minify: false,
         sourcemap: false,
@@ -56,7 +56,7 @@ export default defineConfig({
             fileName: (_format, name) => `${name}.js`,
         },
         rollupOptions: {
-            // Modul bawaan GJS: disediakan saat runtime, bukan dari node_modules.
+            // GJS built-in modules: provided at runtime, not from node_modules.
             external: [/^gi:\/\//, 'system', 'gettext', 'cairo', 'console'],
             output: {
                 chunkFileNames: 'chunks/[name].js',
