@@ -154,5 +154,5 @@ The details and the reasons are in the README, section "Technical things to know
 
 ## Git
 
-- Commit messages are in English, one short sentence in an imperative/descriptive form (e.g. "Fix the delete confirmation dialog when there is no extra detail").
+- Commit messages are in English, one short sentence in an imperative/descriptive form, written as `type(module): description` (e.g. `fix(dialogs): handle the delete confirmation when there is no extra detail`). `type` is one of `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`; `module` is the area changed, such as `filetree`, `editor`, `kanban`, `assistant`, `home`, `journal`, `build`, or `docs`.
 - One logical change per commit; include its tests in the same commit.
