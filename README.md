@@ -23,11 +23,15 @@ The next direction of development: expanding the context sources and adding othe
 
 ### An example workflow
 
-A sample work folder: a product launch project with `plans/launch.md`, `notes/meeting-1-oct.md`, a `research/` folder, and a `tasks.md` board.
+One day of work in a sample folder: a product launch project with `plans/launch.md`, `notes/meeting-1-oct.md`, a `research/` folder, and a `tasks.md` board.
 
-1. **Ask.** *"Is there a meeting decision that has not made it into the launch plan yet?"* The agent browses the files, then answers with quotes of the file and the line number: the 1 October meeting postponed the release to 22 November, while the plan still says 15 November.
-2. **Ask it to act.** *"Update the release date and move the release material card to In Progress."* The agent proposes two changes: one text replacement in the plan and one card move on the board.
-3. **Review and decide.** Every proposal opens a review window with a diff in the style of a Git diff. Press *Apply* or *Reject*; a change in the editor can be undone, and a file that changed since it was proposed is rejected.
+1. **Home.** Start the day on Home: the files to continue, today's journal, agents that are running, due dates from your boards, and the unprocessed inbox.
+2. **Inbox.** Capture ideas, links, and quick notes in one line, then process them later and turn the ones worth doing into kanban cards.
+3. **Journal.** Write short notes through the day with `Ctrl+Shift+J`. Nyerat adds the activity for you: cards moved, agent changes applied, harness results, and Git commits.
+4. **Kanban.** Plan the work on a board. Due dates show up on Home, and checking a task there writes `[x]` back to its board.
+5. **Agent.** Ask *"Is there a meeting decision that has not made it into the launch plan yet?"* and the agent answers with quotes and line numbers: the 1 October meeting postponed the release to 22 November, while the plan still says 15 November. Then ask *"Update the release date and move the release material card to In Progress."* Two proposals open in a review window with a Git-style diff; press *Apply* or *Reject*. A card marked `@pi` goes to the external harness instead.
+
+At the end of the day, *Summarize Journal with Assistant* proposes a summary that is only written after you apply it.
 
 ![The agent updates the plan and the task board after approval](docs/assets/agent-done.png)
 
