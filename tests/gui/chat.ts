@@ -203,7 +203,7 @@ export function chatTests(c: GuiContext): void {
         ok(!panel.sendButton.sensitive, 'send is active although empty');
         void panel.ask('   ', false);
         ok(!panel.sendButton.sensitive, 'send is active although only whitespace');
-        void panel.ask('Halo', false);
+        void panel.ask('Hello', false);
         ok(panel.sendButton.sensitive && panel.sendButton.has_css_class('suggested-action'), 'send is not active after text was entered');
         const prefix = optVal('shot-composer');
         if (prefix) {
@@ -357,7 +357,7 @@ export function chatTests(c: GuiContext): void {
         settle(panel.ask('History question two'));
         const chats = savedFiles();
         eq(chats.length, 2, 'number of files');
-        eq(chats.map(c => c.title).sort(), ['History question two', 'History question one']);
+        eq(chats.map(c => c.title).sort(), ['History question one', 'History question two']);
     });
 
     test('the history popover shows the title of each conversation', () => {

@@ -55,7 +55,7 @@ export function codeColorTests(c: GuiContext): void {
     });
     test('dark mode uses another color scheme', () => {
         setText('```js\nconst s = "hello";\n```');
-        const off = offsetIn(text(), '"halo"') + 1;
+        const off = offsetIn(text(), '"hello"') + 1;
         const light = colorAt(off);
         action('dark');
         const dark = colorAt(off);

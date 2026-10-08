@@ -265,7 +265,7 @@ export function agentTests(): void {
         const { text, usage } = settle(session.ask({ ...input(), question: 'Who is Laras?' }, fake('a girl who carries a letter', seen), 'm',
             { onContext: () => {}, onText: d => chunks.push(d), onReasoning: () => {} }));
         eq(text.trim(), 'a girl who carries a letter');
-        eq(chunks.length, 4);
+        eq(chunks.length, 6);
         eq(usage?.prompt, 10);
         eq(session.history.length, 2);
         settle(session.ask({ ...input(), question: 'And the father?' }, fake('not mentioned', seen), 'm', { onContext: () => {}, onText: () => {}, onReasoning: () => {} }));

@@ -6,14 +6,14 @@ import type { GuiContext } from './context.js';
 export function formatTests(c: GuiContext): void {
     const { buf, pump, text, setText, cursorTo, action, clickAt } = c;
 
-    section('Perintah format');
+    section('Format commands');
     test('Ctrl+B wraps the selection with **', () => {
-        setText('one word');
+        setText('some word');
         buf.select_range(buf.get_iter_at_offset(5), buf.get_iter_at_offset(9)); pump();
         action('bold');
-        eq(text(), 'one **word**');
+        eq(text(), 'some **word**');
     });
-    test('Ctrl+B again removes **', () => { action('bold'); eq(text(), 'one word'); });
+    test('Ctrl+B again removes **', () => { action('bold'); eq(text(), 'some word'); });
     test('undo restores the change', () => {
         setText('x');
         buf.select_range(buf.get_start_iter(), buf.get_end_iter()); pump();

@@ -192,7 +192,7 @@ export function harnessTests(c: GuiContext): void {
         GLib.file_set_contents(GLib.build_filenamev([dir, 'release']), '');
         ok(waitFor(() => runOf('Tidy up')?.status === 'done'), `second status: ${runOf('Tidy up')?.status}`);
         eq(read('order').trim().split('\n').map(l => l.split(' ')[0]), ['start', 'finish', 'start', 'finish'], 'did not run at the same time');
-        eq(titles(2).map(t => t.split(' ')[0]), ['Checkout', 'Tidy up']);
+        eq(titles(2).map(t => t.split(' ')[0]), ['Checkout', 'Tidy']);
     });
 
     test('stop and failure: the card stays in In Progress, a failure gets a note', () => {

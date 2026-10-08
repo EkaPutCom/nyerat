@@ -32,7 +32,7 @@ export function tableTests(): void {
         const t = parseTable(['| Name | N |', '| :-- | --: |', '| one | 1 |', '| thirty | 30 |']);
         eq(renderTable(t), [
             '| Name   |   N |',
-            '| :--------- | --: |',
+            '| :----- | --: |',
             '| one    |   1 |',
             '| thirty |  30 |',
         ]);
