@@ -25,7 +25,7 @@ import { findEntry } from '../src/ui/menu.js';
 // A sample work folder for the Assistant panel screenshots (a fake provider; no network and no API key):
 // a product launch project with a plan, meeting notes, research, and a task board.
 const WORK: Record<string, string> = {
-    'plans/launch.md': '# Catat 1.0 Launch Plan\n\n## Goal\n\nRelease Catat 1.0 for Linux users, complete with folder syncing.\n\n## Schedule\n\n- Closed beta: 20 October\n- Public release: 15 November\n- Evaluation: 30 November\n\n## Budget\n\nTotal $3,000, including the redesign and a test server.\n',
+    'plans/launch.md': '# Nyerat 1.0 Launch Plan\n\n## Goal\n\nRelease Nyerat 1.0 for Linux users, complete with folder syncing.\n\n## Schedule\n\n- Closed beta: 20 October\n- Public release: 15 November\n- Evaluation: 30 November\n\n## Budget\n\nTotal $3,000, including the redesign and a test server.\n',
     'notes/meeting-1-oct.md': '# Weekly meeting, 1 October\n\n## Decisions\n\n- The public release is postponed to **22 November** because the sync testing is not finished.\n- The budget does not change.\n- Sari prepares the release material.\n\n## Follow-up\n\n- [ ] Budi fixes the sync bug\n- [ ] Dewi schedules the beta trial\n',
     'notes/meeting-8-oct.md': '# Weekly meeting, 8 October\n\nThe sync bug is still open. The closed beta stays on 20 October.\n',
     'research/competitors.md': '# Competitor research\n\nThree similar note apps; all of them are paid and closed.\n',
@@ -426,7 +426,7 @@ function main(app: Adw.Application): void {
 
     // ───────── The Assistant panel ─────────
     // The folder name is shown in the Files tab and the window title, so give it a sensible name (not a temporary one).
-    const proj = GLib.build_filenamev([GLib.dir_make_tmp('nyerat-work-XXXXXX'), 'catat-launch']);
+    const proj = GLib.build_filenamev([GLib.dir_make_tmp('nyerat-work-XXXXXX'), 'nyerat-launch']);
     GLib.mkdir_with_parents(proj, 0o755);
     const put = (rel: string, text: string) => {
         const path = GLib.build_filenamev([proj, ...rel.split('/')]);
@@ -541,9 +541,9 @@ function main(app: Adw.Application): void {
     };
     const note = GLib.build_filenamev([repo, 'plan.md']);
     const versions = [
-        ['Create the plan outline', '# Launch Plan\n\n## Goal\n\nRelease Catat 1.0.\n'],
-        ['Add a schedule section', '# Launch Plan\n\n## Goal\n\nRelease Catat 1.0.\n\n## Schedule\n\n- Closed beta: October\n'],
-        ['Clarify the goal and the dates', '# Launch Plan\n\n## Goal\n\nRelease Catat 1.0 for Linux users, complete with folder syncing.\n\n## Schedule\n\n- Closed beta: 20 October\n- Public release: 15 November\n'],
+        ['Create the plan outline', '# Launch Plan\n\n## Goal\n\nRelease Nyerat 1.0.\n'],
+        ['Add a schedule section', '# Launch Plan\n\n## Goal\n\nRelease Nyerat 1.0.\n\n## Schedule\n\n- Closed beta: October\n'],
+        ['Clarify the goal and the dates', '# Launch Plan\n\n## Goal\n\nRelease Nyerat 1.0 for Linux users, complete with folder syncing.\n\n## Schedule\n\n- Closed beta: 20 October\n- Public release: 15 November\n'],
     ];
     git('init', '-q');
     for (const [msg, text] of versions) {
