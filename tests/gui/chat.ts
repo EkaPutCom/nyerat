@@ -1,4 +1,4 @@
-// Tes GUI: panel Asisten (chat) dengan penyedia model dan penyimpan key palsu.
+// GUI tests: the Assistant (chat) panel with a fake model provider and key store.
 
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -19,11 +19,11 @@ export function chatTests(c: GuiContext): void {
     section('Asisten (chat)');
 
     const seen: ChatRequest[] = [];
-    let reply = 'Laras menyembunyikan **surat** itu.';
+    let reply = 'Laras hid the **letter**.';
     const provider: Provider = {
         async chat(req) {
             seen.push(req);
-            req.onReasoning?.('Mencari di naskah. ');
+            req.onReasoning?.('Looking through the manuscript. ');
             for (const part of reply.match(/\S+\s*/g) ?? []) req.onText(part);
             return { usage: { prompt: 1500, cached: 1200, completion: 12 }, cancelled: false, toolCalls: [], reasoning: '' };
         },
@@ -37,10 +37,10 @@ export function chatTests(c: GuiContext): void {
     panel.makeProvider = () => provider;
     panel.keyStore = keyStore;
 
-    const book = GLib.build_filenamev([tmp, 'buku-asisten']);
+    const book = GLib.build_filenamev([tmp, 'assistant-book']);
     GLib.mkdir_with_parents(book, 0o755);
-    GLib.file_set_contents(GLib.build_filenamev([book, 'chapter-1.md']), '# Bab 1\n\nRaka bertemu Laras di dermaga. Laras membawa surat dari ayahnya.\n');
-    GLib.file_set_contents(GLib.build_filenamev([book, 'chapter-2.md']), '# Bab 2\n\nBadai menghantam kapal.\n');
+    GLib.file_set_contents(GLib.build_filenamev([book, 'chapter-1.md']), '# Chapter 1\n\nRaka met Laras on the pier. Laras carried a letter from her father.\n');
+    GLib.file_set_contents(GLib.build_filenamev([book, 'chapter-2.md']), '# Chapter 2\n\nThe storm hit the ship.\n');
     w.openFolder(book, false);
     w.load(GLib.build_filenamev([book, 'chapter-2.md']));
     pump();
@@ -50,7 +50,7 @@ export function chatTests(c: GuiContext): void {
         const walk = (widget: Gtk.Widget) => {
             if (widget instanceof Gtk.Label) out.push(widget.get_text());
             childrenOf(widget).forEach(walk);
-            // Expander GTK 4 baru memasang isinya sebagai anak saat dibuka.
+            // The GTK 4 Expander only attaches its contents as a child when opened.
             if (widget instanceof Gtk.Expander && !widget.expanded && widget.get_child()) walk(widget.get_child()!);
         };
         walk(panel.messages);
@@ -58,103 +58,103 @@ export function chatTests(c: GuiContext): void {
     };
     const all = () => labels().join('\n');
 
-    test('panel dibuka lewat opsi chat; pengaturan tersimpan', () => {
-        ok(!w.chatSplit.show_sidebar, 'awalnya tertutup');
-        w.setOption('chat', true);   // aksi aplikasi sudah diarahkan ke jendela tes folder, jadi lewat jendela ini langsung
-        // Tunggu panel selesai ditata: popover pengaturan (tes berikutnya) dari tombol yang belum punya
-        // posisi di monitor memicu Gdk-CRITICAL gdk_monitor_get_geometry.
+    test('the panel opens through the chat option; the setting is saved', () => {
+        ok(!w.chatSplit.show_sidebar, 'initially closed');
+        w.setOption('chat', true);   // the app action is already directed at the folder test window, so go through this window directly
+        // Wait for the panel to finish laying out: the settings popover (next test) from a button that has no
+        // position on the monitor yet triggers Gdk-CRITICAL gdk_monitor_get_geometry.
         for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
-        ok(w.chatSplit.show_sidebar, 'tidak terbuka');
+        ok(w.chatSplit.show_sidebar, 'did not open');
         eq(w.settings.chat, true);
     });
 
-    test('tanpa API key: pesan petunjuk muncul dan tidak ada permintaan ke model', () => {
+    test('without an API key: a hint message appears and no request goes to the model', () => {
         seen.length = 0;
-        settle(panel.ask('Apa kabar?'));
-        contains(all(), 'Belum ada API key DeepSeek');
+        settle(panel.ask('How are you?'));
+        contains(all(), 'There is no DeepSeek API key yet');
         eq(seen.length, 0);
         eq(panel.session.history.length, 0);
         panel.settingsButton.get_popover()?.popdown();
         pump();
     });
 
-    test('key bisa disimpan dari pengaturan', () => {
-        panel.keyEntry.set_text('sk-rahasia');
+    test('the key can be saved from the settings', () => {
+        panel.keyEntry.set_text('sk-secret');
         panel.keyEntry.emit('activate');
         for (let i = 0; i < 100 && panel.keyEntry.text; i++) { pump(); GLib.usleep(2000); }
-        eq(stored, 'sk-rahasia');
-        eq(panel.keyEntry.text, '');   // key tidak tertinggal di kolom isian
+        eq(stored, 'sk-secret');
+        eq(panel.keyEntry.text, '');   // the key does not remain in the entry field
         panel.keyStore = keyStore;
     });
 
-    test('pertanyaan terkirim dengan dokumen aktif, pilihan, dan potongan dari berkas lain', () => {
+    test('the question is sent with the active document, the selection, and snippets from other files', () => {
         seen.length = 0;
-        setText('# Bab 2\n\nBadai menghantam kapal. Laras menyembunyikan surat.\n');
+        setText('# Chapter 2\n\nThe storm hit the ship. Laras hid the letter.\n');
         const text = c.text();
-        const start = buf().get_iter_at_offset(c.offsetIn(text, 'Badai'));
-        const end = buf().get_iter_at_offset(c.offsetIn(text, 'kapal.') + 6);
+        const start = buf().get_iter_at_offset(c.offsetIn(text, 'The storm'));
+        const end = buf().get_iter_at_offset(c.offsetIn(text, 'ship.') + 5);
         buf().select_range(start, end);
         w.save();
-        settle(panel.ask('Siapa yang membawa surat dari ayahnya?'));
+        settle(panel.ask('Who carried the letter from her father?'));
         eq(seen.length, 1);
         eq(seen[0].model, 'deepseek-flash');
         const [system, user] = [seen[0].messages[0].content, seen[0].messages[1].content];
-        contains(system, 'Laras menyembunyikan surat');                   // dokumen aktif (isi buffer)
-        contains(user, '<pilihan>\nBadai menghantam kapal.\n</pilihan>');
-        contains(user, 'berkas="chapter-1.md"');                               // potongan relevan dari berkas lain
-        contains(user, 'Laras membawa surat dari ayahnya');
-        contains(system, '- chapter-1.md · ');                                 // peta proyek memuat berkas lain
-        ok(!system.includes('chapter-2.md · '), 'berkas aktif seharusnya di peta sebagai "sedang dibuka"');
+        contains(system, 'Laras hid the letter');                   // the active document (buffer contents)
+        contains(user, '<selection>\nThe storm hit the ship.\n</selection>');
+        contains(user, 'file="chapter-1.md"');                               // relevant snippet from another file
+        contains(user, 'Laras carried a letter from her father');
+        contains(system, '- chapter-1.md · ');                                 // the project map lists the other file
+        ok(!system.includes('chapter-2.md · '), 'the active file should be on the map as "currently open"');
     });
 
-    test('jawaban tampil sebagai markup, ada proses berpikir, rincian konteks, dan pemakaian token', () => {
+    test('the answer is shown as markup, with the thinking process, the context breakdown, and the token usage', () => {
         const text = all();
-        contains(text, 'Siapa yang membawa surat dari ayahnya?');
-        contains(text, 'Laras menyembunyikan surat itu.');          // tanda ** dibuang oleh markup
-        ok(!text.includes('**'), 'tanda markdown tampil mentah');
-        contains(text, 'Mencari di naskah.');
+        contains(text, 'Who carried the letter from her father?');
+        contains(text, 'Laras hid the letter.');          // the ** marks are removed by the markup
+        ok(!text.includes('**'), 'the markdown marks are shown raw');
+        contains(text, 'Looking through the manuscript.');
         contains(text, 'Konteks: ≈');
-        contains(text, 'potongan dari chapter-1.md');
-        contains(text, '1,5 rb masuk (1,2 rb dari cache) · 12 keluar');
-        ok(panel.contextButton.get_label()!.startsWith('Konteks · ≈'), `tombol konteks: ${panel.contextButton.get_label()}`);
+        contains(text, 'snippets from chapter-1.md');
+        contains(text, '1.5k in (1.2k from cache) · 12 out');
+        ok(panel.contextButton.get_label()!.startsWith('Context · ≈'), `context button: ${panel.contextButton.get_label()}`);
         eq(panel.session.history.length, 2);
-        ok(!panel.busy, 'masih sibuk');
-        eq(panel.sendButton.get_tooltip_text(), 'Kirim (Enter)');
+        ok(!panel.busy, 'still busy');
+        eq(panel.sendButton.get_tooltip_text(), 'Send (Enter)');
     });
 
-    test('jendela log agent menampilkan penalaran dan putaran model, lalu memperbarui diri', () => {
+    test('the agent log window shows the reasoning and the model rounds, then updates itself', () => {
         panel.showLog();
         const viewer = panel.logViewer!;
-        ok(viewer, 'jendela log tidak terbuka');
+        ok(viewer, 'the log window did not open');
         const text = () => { const out: string[] = []; const walk = (x: Gtk.Widget) => { if (x instanceof Gtk.Label) out.push(x.get_text()); if (x instanceof Gtk.Expander && x.get_child()) walk(x.get_child()!); childrenOf(x).forEach(walk); }; walk(viewer.list); return out.join('\n'); };
         for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
         contains(text(), 'Memanggil model');
-        contains(text(), 'Penalaran model');
-        contains(text(), 'Mencari di naskah.');
-        panel.session.trace.add('note', 'Kejadian baru');
-        for (let i = 0; i < 30 && !text().includes('Kejadian baru'); i++) { pump(); GLib.usleep(10000); }
-        contains(text(), 'Kejadian baru');
+        contains(text(), 'Model reasoning');
+        contains(text(), 'Looking through the manuscript.');
+        panel.session.trace.add('note', 'New event');
+        for (let i = 0; i < 30 && !text().includes('New event'); i++) { pump(); GLib.usleep(10000); }
+        contains(text(), 'New event');
         viewer.window.destroy();
         panel.logViewer = null;
     });
 
-    test('pertanyaan kedua membawa riwayat dan konteks tidak diulang di giliran lama', () => {
+    test('the second question carries the history and the context is not repeated in old turns', () => {
         seen.length = 0;
-        settle(panel.ask('Dan ayahnya?'));
+        settle(panel.ask('And her father?'));
         const roles = seen[0].messages.map(m => m.role);
         eq(roles, ['system', 'user', 'assistant', 'user']);
-        eq(seen[0].messages[1].content, 'Siapa yang membawa surat dari ayahnya?');
+        eq(seen[0].messages[1].content, 'Who carried the letter from her father?');
     });
 
-    test('@name melampirkan berkas utuh; name tak dikenal dilaporkan di rincian konteks', () => {
+    test('@name attaches the whole file; an unknown name is reported in the context breakdown', () => {
         seen.length = 0;
-        settle(panel.ask('Samakan gayanya dengan @chapter-1 dan @tidak-ada'));
+        settle(panel.ask('Match the style to @chapter-1 and @missing'));
         contains(seen[0].messages[seen[0].messages.length - 1].content, '<berkas name="chapter-1.md">');
-        contains(all(), 'tidak ditemukan: @tidak-ada');
+        contains(all(), 'not found: @missing');
     });
 
-    test('popover Konteks merinci apa yang akan dikirim untuk teks yang sedang diketik', () => {
-        panel.input.buffer.set_text('Siapa yang membawa surat?', -1);
+    test('the Context popover details what will be sent for the text being typed', () => {
+        panel.input.buffer.set_text('Who carried the letter?', -1);
         const popover = panel.contextButton.get_popover()!;
         popover.popup();
         pump();
@@ -167,44 +167,44 @@ export function chatTests(c: GuiContext): void {
         popover.popdown();
         pump();
         const shown = texts.join('\n');
-        contains(shown, 'Dokumen: chapter-2.md (utuh)');
-        contains(shown, 'Potongan: chapter-1.md');
+        contains(shown, 'Document: chapter-2.md (whole)');
+        contains(shown, 'Snippets: chapter-1.md');
         contains(shown, 'Total ≈');
         panel.input.buffer.set_text('', -1);
     });
 
-    test('mematikan opsi konteks mengubah apa yang dikirim', () => {
+    test('turning off the context options changes what is sent', () => {
         seen.length = 0;
         panel.options.activeDocument = false;
         panel.options.selection = false;
         panel.options.project = false;
-        settle(panel.ask('Pertanyaan umum saja'));
+        settle(panel.ask('Just a general question'));
         const msgs = seen[0].messages;
-        ok(!msgs[0].content.includes('Laras'), 'naskah masih terkirim');
-        eq(msgs[msgs.length - 1].content, 'Pertanyaan umum saja');
+        ok(!msgs[0].content.includes('Laras'), 'the manuscript was still sent');
+        eq(msgs[msgs.length - 1].content, 'Just a general question');
         Object.assign(panel.options, { activeDocument: true, selection: true, project: true });
     });
 
-    test('galat dari model ditampilkan di pesan asisten dan tidak masuk riwayat', () => {
+    test('an error from the model is shown in the assistant message and does not enter the history', () => {
         const before = panel.session.history.length;
-        panel.makeProvider = () => ({ chat: () => Promise.reject(new Error('Saldo akun DeepSeek tidak cukup')) });
-        settle(panel.ask('Coba lagi'));
-        contains(all(), 'Saldo akun DeepSeek tidak cukup');
+        panel.makeProvider = () => ({ chat: () => Promise.reject(new Error('Insufficient DeepSeek account balance')) });
+        settle(panel.ask('Try again'));
+        contains(all(), 'Insufficient DeepSeek account balance');
         eq(panel.session.history.length, before);
-        ok(!panel.busy, 'tombol kirim terkunci setelah galat');
+        ok(!panel.busy, 'the send button stayed locked after the error');
         panel.makeProvider = () => provider;
     });
 
-    test('tombol kirim di dalam kotak pesan: nonaktif saat kosong, tombol utama saat ada teks', () => {
+    test('the send button inside the message box: disabled when empty, primary button when there is text', () => {
         const composer = panel.sendButton.get_parent()!;
-        ok(composer.has_css_class('chat-composer'), 'tombol kirim tidak berada di kotak pesan');
-        ok(panel.input.is_ancestor(composer), 'kotak teks tidak berada di bingkai yang sama');
+        ok(composer.has_css_class('chat-composer'), 'the send button is not in the message box');
+        ok(panel.input.is_ancestor(composer), 'the text box is not in the same frame');
         void panel.ask('', false);
-        ok(!panel.sendButton.sensitive, 'kirim aktif padahal kosong');
+        ok(!panel.sendButton.sensitive, 'send is active although empty');
         void panel.ask('   ', false);
-        ok(!panel.sendButton.sensitive, 'kirim aktif padahal hanya spasi');
+        ok(!panel.sendButton.sensitive, 'send is active although only whitespace');
         void panel.ask('Halo', false);
-        ok(panel.sendButton.sensitive && panel.sendButton.has_css_class('suggested-action'), 'kirim tidak aktif setelah ada teks');
+        ok(panel.sendButton.sensitive && panel.sendButton.has_css_class('suggested-action'), 'send is not active after text was entered');
         const prefix = optVal('shot-composer');
         if (prefix) {
             const oldDark = w.dark;
@@ -218,29 +218,29 @@ export function chatTests(c: GuiContext): void {
         void panel.ask('', false);
     });
 
-    test('tombol hentikan membatalkan jawaban yang sedang mengalir; potongannya tetap tampil dan tersimpan', () => {
+    test('the stop button cancels the answer being streamed; its fragment stays shown and saved', () => {
         const before = panel.session.history.length;
         panel.makeProvider = () => ({
             chat: req => new Promise(resolve => {
-                req.onText('Separuh jawaban ');
+                req.onText('Half the answer ');
                 req.cancellable?.connect(() => resolve({ usage: null, cancelled: true, toolCalls: [], reasoning: '' }));
             }),
         });
-        const pending = panel.ask('Ceritakan panjang lebar');
-        for (let i = 0; i < 200 && !all().includes('Separuh jawaban'); i++) { pump(); GLib.usleep(5000); }
-        ok(panel.busy, 'seharusnya sedang sibuk');
+        const pending = panel.ask('Tell me at length');
+        for (let i = 0; i < 200 && !all().includes('Half the answer'); i++) { pump(); GLib.usleep(5000); }
+        ok(panel.busy, 'should be busy');
         eq(panel.sendButton.get_tooltip_text(), 'Hentikan');
-        ok(panel.sendButton.sensitive && !panel.sendButton.has_css_class('suggested-action'), 'tombol hentikan harus aktif dan bukan tombol utama');
+        ok(panel.sendButton.sensitive && !panel.sendButton.has_css_class('suggested-action'), 'the stop button must be active and not the primary button');
         panel.stop();
         settle(pending);
-        contains(all(), 'Separuh jawaban');
-        contains(all(), 'Dihentikan');
+        contains(all(), 'Half the answer');
+        contains(all(), 'Stopped');
         eq(panel.session.history.length, before + 2);
-        ok(!panel.busy, 'masih sibuk setelah dihentikan');
+        ok(!panel.busy, 'still busy after being stopped');
         panel.makeProvider = () => provider;
     });
 
-    test('mengetik pesan panjang tanpa spasi tidak melebarkan panel atau menggeser editor', () => {
+    test('typing a long message without spaces does not widen the panel or shift the editor', () => {
         w.win.set_default_size(1280, 760);
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
         const before = { panel: panel.widget.get_allocated_width(), editor: w.editor.widget.get_allocated_width() };
@@ -248,17 +248,17 @@ export function chatTests(c: GuiContext): void {
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
         eq(panel.widget.get_allocated_width(), before.panel);
         eq(w.editor.widget.get_allocated_width(), before.editor);
-        // Jawaban dengan satu kata sangat panjang (mis. URL) juga tidak boleh melebarkan panel.
+        // An answer with one very long word (e.g. a URL) must not widen the panel either.
         panel.makeProvider = () => ({ chat: async req => { req.onText('x'.repeat(500)); return { usage: null, cancelled: false, toolCalls: [], reasoning: '' }; } });
         panel.input.buffer.set_text('', -1);
-        settle(panel.ask('panjang'));
+        settle(panel.ask('long'));
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
         eq(panel.widget.get_allocated_width(), before.panel);
         panel.makeProvider = () => provider;
         panel.input.buffer.set_text('', -1);
     });
 
-    test('Enter mengirim, Shift+Enter tidak (baris baru)', () => {
+    test('Enter sends, Shift+Enter does not (new line)', () => {
         const press = (state: number) => panel.onInputKey(0xff0d, state);
         panel.input.buffer.set_text('baris', -1);
         eq(press(1), false);               // Shift
@@ -269,21 +269,21 @@ export function chatTests(c: GuiContext): void {
         for (let i = 0; i < 100 && panel.busy; i++) { pump(); GLib.usleep(2000); }
     });
 
-    test('percakapan baru mengosongkan pesan dan riwayat', () => {
+    test('a new conversation clears the messages and the history', () => {
         panel.reset();
         eq(panel.session.history.length, 0);
-        ok(!all().includes('Dan ayahnya?'), 'pesan lama masih tampil');
-        ok(panel.empty.get_visible(), 'keadaan kosong tidak tampil');
+        ok(!all().includes('And her father?'), 'the old message is still shown');
+        ok(panel.empty.get_visible(), 'the empty state is not shown');
     });
 
-    test('model yang dipilih disimpan ke pengaturan', () => {
+    test('the selected model is saved to the settings', () => {
         panel.setModel('deepseek-v4-pro');
         eq(panel.model, 'deepseek-v4-pro');
         panel.modelDrop.set_selected(0);  // deepseek-flash
         eq(w.settings.chatModel, 'deepseek-flash');
     });
 
-    test('asisten menelusuri naskah sendiri: langkah penelusuran tampil dan hasil alat sampai ke model', () => {
+    test('the assistant browses the manuscript itself: the browsing steps are shown and the tool results reach the model', () => {
         let round = 0;
         let toolResult = '';
         panel.makeProvider = () => ({
@@ -293,24 +293,24 @@ export function chatTests(c: GuiContext): void {
                 if (last.role === 'tool') toolResult = last.content;
                 if (round === 1) {
                     return { usage: { prompt: 100, cached: 0, completion: 5 }, cancelled: false, reasoning: '',
-                        toolCalls: [{ id: 'c1', name: 'search_text', arguments: '{"text":"Badai"}' }, { id: 'c2', name: 'read_file', arguments: '{"name":"chapter-2"}' }] };
+                        toolCalls: [{ id: 'c1', name: 'search_text', arguments: '{"text":"storm"}' }, { id: 'c2', name: 'read_file', arguments: '{"name":"chapter-2"}' }] };
                 }
-                req.onText('Badai ada di bab 2.');
+                req.onText('The storm is in chapter 2.');
                 return { usage: { prompt: 300, cached: 100, completion: 8 }, cancelled: false, toolCalls: [], reasoning: '' };
             },
         });
-        settle(panel.ask('Di bab mana ada badai?'));
+        settle(panel.ask('In which chapter is there a storm?'));
         const text = all();
-        contains(text, 'Mencari teks “Badai” → 1 baris');
+        contains(text, 'Searching text “storm” → 1 line');
         contains(text, 'Membaca chapter-2 → baris 1–');
-        contains(text, 'Badai ada di bab 2.');
-        contains(text, '400 masuk (100 dari cache) · 13 keluar · 2 penelusuran');
-        contains(toolResult, 'Badai menghantam kapal.');
+        contains(text, 'The storm is in chapter 2.');
+        contains(text, '400 in (100 from cache) · 13 out · 2 lookups');
+        contains(toolResult, 'The storm hit the ship.');
         panel.makeProvider = () => provider;
     });
 
-    test('model lama dinormalkan; mode berpikir tersimpan dan diteruskan ke sesi', () => {
-        panel.setModel('deepseek-chat');   // name dari pengaturan versi sebelumnya
+    test('the old model is normalized; the thinking mode is saved and passed on to the session', () => {
+        panel.setModel('deepseek-chat');   // name from the settings of a previous version
         eq(panel.model, 'deepseek-flash');
         panel.thinkingCheck.set_active(true);
         eq(panel.session.thinking, true);
@@ -319,18 +319,18 @@ export function chatTests(c: GuiContext): void {
         eq(w.settings.chatThinking, false);
     });
 
-    // ---------- Riwayat di disk ----------
+    // ---------- History on disk ----------
     const savedFiles = () => listChats(book);
     const rmChats = () => {
         for (const chat of savedFiles()) GLib.unlink(chat.path);
     };
 
-    test('percakapan tersimpan sebagai Markdown di .nyerat/chats dan folder itu tidak ikut Git', () => {
+    test('the conversation is saved as Markdown in .nyerat/chats and that folder is not part of Git', () => {
         rmChats();
         panel.reset();
         settle(panel.ask('Pertanyaan riwayat satu'));
         const chats = savedFiles();
-        eq(chats.length, 1, 'jumlah berkas');
+        eq(chats.length, 1, 'number of files');
         eq(chats[0].title, 'Pertanyaan riwayat satu');
         ok(chats[0].path.startsWith(chatsDir(book)), chats[0].path);
         ok(chats[0].path.endsWith('-pertanyaan-riwayat-satu.md'), chats[0].path);
@@ -341,26 +341,26 @@ export function chatTests(c: GuiContext): void {
         eq(readTextFile(GLib.build_filenamev([book, '.nyerat', '.gitignore'])), '*\n');
     });
 
-    test('giliran berikutnya menambah ke berkas yang sama', () => {
-        settle(panel.ask('Lanjutan satu'));
-        eq(savedFiles().length, 1, 'jumlah berkas');
+    test('the next turn appends to the same file', () => {
+        settle(panel.ask('Follow-up one'));
+        eq(savedFiles().length, 1, 'number of files');
         eq(savedFiles()[0].turns, 4);
     });
 
-    test('riwayat tidak dibaca asisten sebagai naskah', () => {
+    test('the history is not read by the assistant as manuscript', () => {
         w.openFolder(book, false);
-        ok(!w.chat.host.files().some(f => f.name.includes('.nyerat')), 'riwayat masuk daftar berkas naskah');
+        ok(!w.chat.host.files().some(f => f.name.includes('.nyerat')), 'the history entered the manuscript file list');
     });
 
-    test('Percakapan baru membuat berkas baru; daftar memuat keduanya, terbaru dulu', () => {
+    test('New conversation creates a new file; the list contains both, newest first', () => {
         panel.reset();
         settle(panel.ask('Pertanyaan riwayat dua'));
         const chats = savedFiles();
-        eq(chats.length, 2, 'jumlah berkas');
+        eq(chats.length, 2, 'number of files');
         eq(chats.map(c => c.title).sort(), ['Pertanyaan riwayat dua', 'Pertanyaan riwayat satu']);
     });
 
-    test('popover riwayat menampilkan judul tiap percakapan', () => {
+    test('the history popover shows the title of each conversation', () => {
         const popover = panel.historyButton.get_popover()!;
         popover.popup();
         pump();
@@ -376,47 +376,47 @@ export function chatTests(c: GuiContext): void {
         contains(texts.join('\n'), 'Pertanyaan riwayat dua');
     });
 
-    test('membuka percakapan lama memulihkan pesan dan riwayat, lalu melanjutkannya di berkas itu', () => {
+    test('opening an old conversation restores the messages and the history, then continues it in that file', () => {
         const first = savedFiles().find(c => c.title === 'Pertanyaan riwayat satu')!;
-        ok(panel.openChat(first.path), 'openChat() gagal');
+        ok(panel.openChat(first.path), 'openChat() failed');
         eq(panel.session.history.length, 4);
         contains(all(), 'Pertanyaan riwayat satu');
-        contains(all(), 'Lanjutan satu');
-        contains(all(), 'Laras menyembunyikan surat itu.');
+        contains(all(), 'Follow-up one');
+        contains(all(), 'Laras hid the letter.');
         ok(!all().includes('Pertanyaan riwayat dua'), 'percakapan lain ikut tampil');
         seen.length = 0;
-        settle(panel.ask('Lanjutan dua'));
-        eq(seen[0].messages.map(m => m.role), ['system', 'user', 'assistant', 'user', 'assistant', 'user']);   // riwayat lama ikut terkirim
-        eq(savedFiles().length, 2, 'berkas baru dibuat padahal melanjutkan');
+        settle(panel.ask('Follow-up two'));
+        eq(seen[0].messages.map(m => m.role), ['system', 'user', 'assistant', 'user', 'assistant', 'user']);   // the old history was sent along
+        eq(savedFiles().length, 2, 'a new file was created although continuing');
         eq(savedFiles().find(c => c.path === first.path)?.turns, 6);
     });
 
-    test('berkas yang bukan percakapan diabaikan dan tidak bisa dibuka', () => {
+    test('files that are not conversations are ignored and cannot be opened', () => {
         const stray = GLib.build_filenamev([chatsDir(book), 'catatan.md']);
         GLib.file_set_contents(stray, '# Catatan\n\nBukan percakapan.\n');
-        eq(savedFiles().length, 2, 'berkas asing masuk daftar');
-        ok(!panel.openChat(stray), 'openChat() seharusnya gagal');
+        eq(savedFiles().length, 2, 'a foreign file entered the list');
+        ok(!panel.openChat(stray), 'openChat() should have failed');
         GLib.unlink(stray);
         panel.reset();
     });
 
-    test('saklar simpan dimatikan: tidak ada yang ditulis, dan pilihan tersimpan di pengaturan', () => {
+    test('the save switch is turned off: nothing is written, and the choice is saved in the settings', () => {
         rmChats();
         panel.saveCheck.set_active(false);
         eq(w.settings.chatSave, false);
         panel.reset();
-        settle(panel.ask('Tidak untuk disimpan'));
-        eq(savedFiles().length, 0, 'berkas tertulis padahal dimatikan');
+        settle(panel.ask('Not to be saved'));
+        eq(savedFiles().length, 0, 'a file was written although it was turned off');
         panel.saveCheck.set_active(true);
         eq(w.settings.chatSave, true);
     });
 
-    test('tanpa folder naskah tidak ada yang ditulis', () => {
+    test('without a manuscript folder nothing is written', () => {
         const rootBefore = panel.host.root;
         panel.host.root = () => null;
         panel.reset();
         settle(panel.ask('Tanpa folder'));
-        eq(savedFiles().length, 0, 'berkas tertulis tanpa folder');
+        eq(savedFiles().length, 0, 'a file was written without a folder');
         panel.host.root = rootBefore;
         panel.reset();
     });
@@ -433,23 +433,23 @@ export function chatTests(c: GuiContext): void {
             },
         };
     };
-    // Kirim pertanyaan, tunggu jendela tinjau terbuka, ambil teks selisihnya, lalu tekan tombolnya dan tunggu giliran selesai.
+    // Send a question, wait for the review window to open, take its diff text, then press its button and wait for the turn to finish.
     let lastDiff = '';
     let shotCount = 0;
     const proposeAndPress = (provider: Provider, button: 'apply' | 'reject' | 'close', prepare?: (viewer: ProposalViewer) => void): void => {
         panel.makeProvider = () => provider;
         panel.reset();
-        const done = panel.ask('Tolong ubah');
+        const done = panel.ask('Please change');
         for (let i = 0; i < 300 && !panel.viewer; i++) { pump(); GLib.usleep(5000); }
         const viewer = panel.viewer;
-        ok(viewer, 'jendela tinjau tidak terbuka');
+        ok(viewer, 'the review window did not open');
         lastDiff = viewer.diffView.buffer.text;
-        // --shot-proposal=<prefix>: simpan tangkapan jendela tinjau dan jendela utama (<prefix>-<n>-tinjau.png) untuk diperiksa mata.
+        // --shot-proposal=<prefix>: save screenshots of the review window and the main window (<prefix>-<n>-review.png) for visual inspection.
         const prefix = optVal('shot-proposal');
         if (prefix) {
             for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
             const n = shotCount++;
-            widgetPixbuf(viewer.window)?.savev(`${prefix}-${n}-tinjau.png`, 'png', [], []);
+            widgetPixbuf(viewer.window)?.savev(`${prefix}-${n}-review.png`, 'png', [], []);
             widgetPixbuf(w.win)?.savev(`${prefix}-${n}-utama.png`, 'png', [], []);
         }
         const agenticShot = optVal('shot-agentic');
@@ -457,9 +457,9 @@ export function chatTests(c: GuiContext): void {
             const oldDark = w.dark;
             for (const dark of [false, true]) {
                 w.setDark(dark);
-                // Jendela tinjau yang terbuka harus mengikuti perubahan tema.
+                // An open review window must follow theme changes.
                 for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
-                widgetPixbuf(viewer.window)?.savev(`${agenticShot}-paquet-${dark ? 'dark' : 'light'}.png`, 'png', [], []);
+                widgetPixbuf(viewer.window)?.savev(`${agenticShot}-batch-${dark ? 'dark' : 'light'}.png`, 'png', [], []);
             }
             w.setDark(oldDark);
         }
@@ -472,108 +472,108 @@ export function chatTests(c: GuiContext): void {
     };
     const diskOf = (name: string) => readTextFile(GLib.build_filenamev([book, name]));
 
-    test('usulan ubah: kartu menampilkan selisih; Terapkan mengubah editor dan bisa dibatalkan, disk belum tersentuh', () => {
-        setText('# Bab 2\n\nBadai menghantam kapal.\n');
+    test('edit proposal: the card shows the diff; Apply changes the editor and can be undone, disk is not touched yet', () => {
+        setText('# Chapter 2\n\nThe storm hit the ship.\n');
         w.editor.buffer.set_modified(false);
         const diskBefore = diskOf('chapter-2.md');
-        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-2.md', old_text: 'Badai menghantam kapal.', new_text: 'Badai menghantam kapal itu.', reason: 'lebih jelas' }), 'apply');
+        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-2.md', old_text: 'The storm hit the ship.', new_text: 'The storm hit the ship hard.', reason: 'clearer' }), 'apply');
         const text = all();
-        contains(text, 'Ubah chapter-2.md');
+        contains(text, 'Edit chapter-2.md');
         contains(lastDiff, '@@ -1,3 +1,3 @@');
-        contains(lastDiff, '-Badai menghantam kapal.');
-        contains(lastDiff, '+Badai menghantam kapal itu.');
-        contains(text, 'Diterapkan.');
+        contains(lastDiff, '-The storm hit the ship.');
+        contains(lastDiff, '+The storm hit the ship hard.');
+        contains(text, 'Applied.');
         contains(text, '1 perubahan diterapkan');
-        eq(w.editor.getText(), '# Bab 2\n\nBadai menghantam kapal itu.\n');
+        eq(w.editor.getText(), '# Chapter 2\n\nThe storm hit the ship hard.\n');
         eq(diskOf('chapter-2.md'), diskBefore);
         w.editor.buffer.undo();
-        eq(w.editor.getText(), '# Bab 2\n\nBadai menghantam kapal.\n');
+        eq(w.editor.getText(), '# Chapter 2\n\nThe storm hit the ship.\n');
     });
 
-    test('usulan ubah pada berkas yang tidak terbuka ditulis ke disk setelah Terapkan', () => {
-        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-1', old_text: 'membawa surat dari ayahnya', new_text: 'membawa surat dari ibunya', reason: 'x' }), 'apply');
-        contains(diskOf('chapter-1.md'), 'membawa surat dari ibunya');
+    test('an edit proposal on a file that is not open is written to disk after Apply', () => {
+        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-1', old_text: 'carried a letter from her father', new_text: 'carried a letter from her mother', reason: 'x' }), 'apply');
+        contains(diskOf('chapter-1.md'), 'carried a letter from her mother');
     });
 
-    test('Tolak: berkas tidak berubah dan model diberi tahu', () => {
+    test('Reject: the file does not change and the model is told', () => {
         const before = diskOf('chapter-1.md');
-        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-1.md', old_text: 'Raka bertemu Laras', new_text: 'Raka bertemu Hasan', reason: 'x' }), 'reject');
+        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-1.md', old_text: 'Raka met Laras', new_text: 'Raka met Hasan', reason: 'x' }), 'reject');
         eq(diskOf('chapter-1.md'), before);
-        contains(all(), 'Ditolak.');
-        ok(!all().includes('perubahan diterapkan'), 'dihitung diterapkan');
+        contains(all(), 'Rejected.');
+        ok(!all().includes('changes applied'), 'counted as applied');
     });
 
-    test('menutup jendela tinjau sama dengan menolak', () => {
+    test('closing the review window is the same as rejecting', () => {
         const before = diskOf('chapter-1.md');
-        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-1.md', old_text: 'Raka bertemu Laras', new_text: 'Raka bertemu Hasan', reason: 'x' }), 'close');
+        proposeAndPress(proposalProvider('edit_file', { name: 'chapter-1.md', old_text: 'Raka met Laras', new_text: 'Raka met Hasan', reason: 'x' }), 'close');
         eq(diskOf('chapter-1.md'), before);
-        contains(all(), 'Ditolak.');
+        contains(all(), 'Rejected.');
     });
 
-    test('Hentikan saat usulan menunggu: jendela tinjau tertutup dan kartu menjadi Dibatalkan', () => {
-        panel.makeProvider = () => proposalProvider('edit_file', { name: 'chapter-1.md', old_text: 'Raka bertemu Laras', new_text: 'x', reason: 'x' });
+    test('Stop while a proposal is waiting: the review window closes and the card becomes Cancelled', () => {
+        panel.makeProvider = () => proposalProvider('edit_file', { name: 'chapter-1.md', old_text: 'Raka met Laras', new_text: 'x', reason: 'x' });
         panel.reset();
         const before = diskOf('chapter-1.md');
-        const done = panel.ask('Tolong ubah');
+        const done = panel.ask('Please change');
         for (let i = 0; i < 300 && !panel.viewer; i++) { pump(); GLib.usleep(5000); }
-        ok(panel.viewer, 'jendela tinjau tidak terbuka');
+        ok(panel.viewer, 'the review window did not open');
         panel.stop();
         settle(done);
-        contains(all(), 'Dibatalkan.');
+        contains(all(), 'Cancelled.');
         eq(panel.viewer, null);
         eq(diskOf('chapter-1.md'), before);
     });
 
-    test('usulan berkas baru: Terapkan menulis dan membukanya di tab', () => {
-        proposeAndPress(proposalProvider('create_file', { name: 'rencana/oktober', content: '# Oktober\n\n- Tulis bab 3\n', reason: 'rencana bulan ini' }), 'apply');
-        eq(diskOf('rencana/oktober.md'), '# Oktober\n\n- Tulis bab 3\n');
-        contains(all(), 'Berkas baru rencana/oktober.md');
+    test('new file proposal: Apply writes it and opens it in a tab', () => {
+        proposeAndPress(proposalProvider('create_file', { name: 'plans/october', content: '# October\n\n- Write chapter 3\n', reason: 'plan for this month' }), 'apply');
+        eq(diskOf('rencana/oktober.md'), '# October\n\n- Write chapter 3\n');
+        contains(all(), 'New file plans/october.md');
         contains(lastDiff, '@@ -0,0 +1,3 @@');
         ok(w.file?.endsWith('/rencana/oktober.md'), `tab aktif: ${w.file}`);
-        ok(w.closeTab(), 'closeTab() gagal');
+        ok(w.closeTab(), 'closeTab() failed');
         pump();
     });
 
-    test('usulan papan kanban: tambah dan pindah kartu muncul di papan yang sedang terbuka', () => {
-        const papan = GLib.build_filenamev([book, 'tugas.md']);
-        GLib.file_set_contents(papan, '---\nkanban: true\n---\n\n## Rencana\n\n- [ ] Tulis laporan #penting\n- [ ] Kirim undangan @{2026-10-20}\n\n## Dikerjakan\n\n- [ ] Riset pelabuhan\n\n## Selesai\n\n- [x] Pesan tempat\n');
-        w.openFile(papan);
+    test('kanban board proposal: adding and moving a card appears on the open board', () => {
+        const board =  GLib.build_filenamev([book, 'tasks.md']);
+        GLib.file_set_contents(board,  '---\nkanban: true\n---\n\n## Plan\n\n- [ ] Write report #important\n- [ ] Send invitations @{2026-10-20}\n\n## In Progress\n\n- [ ] Research the harbor\n\n## Done\n\n- [x] Book the venue\n');
+        w.openFile(board);
         for (let i = 0; i < 40; i++) { pump(); GLib.usleep(8000); }
-        ok(w.boardMode, 'papan tidak terbuka sebagai papan');
+        ok(w.boardMode, 'the board did not open as a board');
 
-        const press = (provider: Provider) => { proposeAndPress(provider, 'apply'); for (let i = 0; i < 40; i++) { pump(); GLib.usleep(8000); } };   // papan memuat ulang di idle
+        const press = (provider: Provider) => { proposeAndPress(provider, 'apply'); for (let i = 0; i < 40; i++) { pump(); GLib.usleep(8000); } };   // the board reloads in idle
         try {
-        press(proposalProvider('edit_kanban', { name: 'tugas', action: 'add', card: 'Susun jadwal revisi @{2026-11-02}', list: 'dikerjakan', reason: 'permintaan pengguna' }));
-        contains(lastDiff, '+- [ ] Susun jadwal revisi @{2026-11-02}');
-        eq(w.board.getBoard().columns[1].cards.map(c => c.text), ['Riset pelabuhan', 'Susun jadwal revisi @{2026-11-02}']);
+        press(proposalProvider('edit_kanban', { name: 'tasks', action: 'add', card: 'Draft the revision schedule @{2026-11-02}', list: 'in progress', reason: 'user request' }));
+        contains(lastDiff, '+- [ ] Draft the revision schedule @{2026-11-02}');
+        eq(w.board.getBoard().columns[1].cards.map(c => c.text), ['Research the harbor', 'Draft the revision schedule @{2026-11-02}']);
 
-        press(proposalProvider('edit_kanban', { name: 'tugas', action: 'move', card: 'Kirim undangan', list: 'Selesai', reason: 'sudah dikirim' }));
-        eq(w.board.getBoard().columns[2].cards.map(c => c.text), ['Pesan tempat', 'Kirim undangan @{2026-10-20}']);
-        eq(w.board.getBoard().columns[0].cards.map(c => c.text), ['Tulis laporan #penting']);
+        press(proposalProvider('edit_kanban', { name: 'tasks', action: 'move', card: 'Send invitations', list: 'Done', reason: 'already sent' }));
+        eq(w.board.getBoard().columns[2].cards.map(c => c.text), ['Book the venue', 'Send invitations @{2026-10-20}']);
+        eq(w.board.getBoard().columns[0].cards.map(c => c.text), ['Write report #important']);
         const prefix = optVal('shot-proposal');
         if (prefix) {
             for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
             widgetPixbuf(w.win)?.savev(`${prefix}-papan.png`, 'png', [], []);
         }
         } finally {
-            w.editor.buffer.set_modified(false);   // jangan memunculkan dialog simpan saat menutup tab
-            ok(w.closeTab(), 'closeTab() gagal');
+            w.editor.buffer.set_modified(false);   // do not show the save dialog when closing the tab
+            ok(w.closeTab(), 'closeTab() failed');
             pump();
         }
     });
 
-    test('paket beberapa file: satu keputusan menerapkan semua diff dan journal dipulihkan', () => {
-        const tindakan = ['rencana/paket-a', 'rencana/paket-b'].map(name => ({ tool: 'create_file', arguments: JSON.stringify({ name, content: '# Jadwal rilis\n\nRilis: 22 November\n', reason: 'Sinkronkan keputusan rapat dalam satu paket' }) }));
-        proposeAndPress(proposalProvider('propose_batch', { tindakan }), 'apply');
-        contains(lastDiff, 'Berkas: rencana/paket-a.md');
-        contains(lastDiff, 'Berkas: rencana/paket-b.md');
-        eq(diskOf('rencana/paket-a.md'), diskOf('rencana/paket-b.md'));
-        contains(all(), 'Diterapkan.');
+    test('multi-file batch: one decision applies all diffs and the journal is restored', () => {
+        const actions = ['plans/batch-a', 'plans/batch-b'].map(name => ({ tool: 'create_file', arguments: JSON.stringify({ name, content: '# Release schedule\n\nRelease: 22 November\n', reason: 'Sync the meeting decisions in one batch' }) }));
+        proposeAndPress(proposalProvider('propose_batch', { actions }), 'apply');
+        contains(lastDiff, 'File: plans/batch-a.md');
+        contains(lastDiff, 'File: plans/batch-b.md');
+        eq(diskOf('plans/batch-a.md'), diskOf('plans/batch-b.md'));
+        contains(all(), 'Applied.');
         const saved = listChats(book).find(chat => readTextFile(chat.path).includes('propose_batch'));
-        ok(saved, 'checkpoint paket tidak tersimpan');
-        ok(panel.openChat(saved.path), 'pemulihan gagal');
+        ok(saved, 'the batch checkpoint was not saved');
+        ok(panel.openChat(saved.path), 'restoring failed');
         eq(panel.session.events.find(e => e.tool === 'propose_batch')?.status, 'applied');
-        contains(all(), 'Diterapkan: propose_batch');
+        contains(all(), 'Applied: propose_batch');
         const prefix = optVal('shot-agentic');
         if (prefix) {
             for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
@@ -581,11 +581,11 @@ export function chatTests(c: GuiContext): void {
         }
     });
 
-    test('checkpoint rencana terbuka lagi dengan tombol lanjutkan, tema terang dan gelap', () => {
+    test('the plan checkpoint opens again with the resume button, light and dark theme', () => {
         panel.reset();
-        panel.makeProvider = () => proposalProvider('set_work', { destination: 'Sinkronkan jadwal rilis', langkah: [{ text: 'Baca keputusan rapat', status: 'done' }, { text: 'Periksa rencana dan kartu tugas', status: 'pending' }], catatan: 'Tanggal rilis: 22 November' });
-        settle(panel.ask('Sinkronkan jadwal rilis'));
-        // Rencana tampil sebagai daftar centang: satu baris per langkah, bukan teks "- [x]", dan tidak diulang di baris langkah.
+        panel.makeProvider = () => proposalProvider('set_work', { goal: 'Sync the release schedule', steps: [{ text: 'Read the meeting decisions', status: 'done' }, { text: 'Check the plan and task cards', status: 'pending' }], note: 'Release date: 22 November' });
+        settle(panel.ask('Sync the release schedule'));
+        // The plan is shown as a checklist: one row per step, not "- [x]" text, and not repeated in the step row.
         const workRows = (): Gtk.Widget[] => {
             const out: Gtk.Widget[] = [];
             const walk = (widget: Gtk.Widget) => {
@@ -596,17 +596,17 @@ export function chatTests(c: GuiContext): void {
             return out;
         };
         eq(workRows().length, 2);
-        ok(workRows()[0].get_first_child()?.has_css_class('work-done'), 'langkah selesai tidak dicentang');
-        ok(workRows()[1].get_first_child()?.has_css_class('work-pending'), 'langkah berikutnya tidak berupa lingkaran kosong');
+        ok(workRows()[0].get_first_child()?.has_css_class('work-done'), 'the finished step is not checked');
+        ok(workRows()[1].get_first_child()?.has_css_class('work-pending'), 'the next step is not an empty circle');
         contains(all(), '1/2 langkah');
-        ok(!all().includes('- [x]'), 'rencana masih tampil sebagai teks mentah');
-        ok(!all().includes('Rencana pekerjaan →'), 'rencana diulang di baris langkah');
+        ok(!all().includes('- [x]'), 'the plan is still shown as raw text');
+        ok(!all().includes('Work plan →'), 'the plan is repeated in the step row');
         const saved = listChats(book).find(chat => readTextFile(chat.path).includes('pekerjaan:'));
-        ok(saved, 'rencana tidak disimpan');
-        ok(panel.openChat(saved.path), 'rencana tidak dibuka');
+        ok(saved, 'the plan was not saved');
+        ok(panel.openChat(saved.path), 'the plan did not open');
         eq(panel.session.work?.status, 'paused');
-        const resume = childrenOf(panel.messages).find(w => w instanceof Gtk.Button && w.get_label() === 'Lanjutkan pekerjaan');
-        ok(resume, 'tombol lanjutkan hilang');
+        const resume = childrenOf(panel.messages).find(w => w instanceof Gtk.Button && w.get_label() === 'Resume work');
+        ok(resume, 'the resume button is missing');
         eq(workRows().length, 2);
         const prefix = optVal('shot-agentic');
         if (prefix) {
@@ -621,7 +621,7 @@ export function chatTests(c: GuiContext): void {
         panel.reset();
     });
 
-    // Provider yang mencatat hasil alat yang dikirim balik, untuk memeriksa catatan pengguna.
+    // A provider that records the tool results sent back, to check the user's note.
     const toolReplies: string[] = [];
     const recording = (name: string, args: object): Provider => {
         const inner = proposalProvider(name, args);
@@ -634,100 +634,100 @@ export function chatTests(c: GuiContext): void {
         return out;
     };
 
-    test('paket: hapus centang satu berkas → hanya yang dicentang diterapkan; Urungkan mengembalikannya', () => {
-        GLib.file_set_contents(GLib.build_filenamev([book, 'jadwal-a.md']), 'Rilis 15 November\n');
-        GLib.file_set_contents(GLib.build_filenamev([book, 'jadwal-b.md']), 'Rilis 15 November\n');
+    test('batch: uncheck one file → only the checked ones are applied; Undo restores them', () => {
+        GLib.file_set_contents(GLib.build_filenamev([book, 'schedule-a.md']), 'Rilis 15 November\n');
+        GLib.file_set_contents(GLib.build_filenamev([book, 'schedule-b.md']), 'Rilis 15 November\n');
         const tindakan = ['jadwal-a', 'jadwal-b'].map(name => ({ tool: 'edit_file', arguments: JSON.stringify({ name, old_text: '15 November', new_text: '22 November', reason: 'keputusan rapat' }) }));
         toolReplies.length = 0;
-        proposeAndPress(recording('propose_batch', { tindakan }), 'apply', viewer => {
+        proposeAndPress(recording('propose_batch', { actions }), 'apply', viewer => {
             eq(viewer.checks.length, 2);
             viewer.checks[1].set_active(false);
-            eq(viewer.applyButton.get_label(), 'Terapkan 1 dari 2');
-            viewer.noteEntry.set_text('jadwal-b menunggu konfirmasi');
+            eq(viewer.applyButton.get_label(), 'Apply 1 of 2');
+            viewer.noteEntry.set_text('schedule-b is waiting for confirmation');
             const prefix = optVal('shot-proposal');
             if (prefix) {
                 for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
                 widgetPixbuf(viewer.window)?.savev(`${prefix}-sebagian.png`, 'png', [], []);
             }
         });
-        contains(diskOf('jadwal-a.md'), '22 November');
-        contains(diskOf('jadwal-b.md'), '15 November');
-        contains(all(), 'Diterapkan 1 dari 2 berkas.');
-        ok(toolReplies.some(m => m.includes('Ditolak (jangan ulangi tanpa ditanya): jadwal-b.md') && m.includes('Catatan pengguna: jadwal-b menunggu konfirmasi')), toolReplies.join('\n'));
-        const undo = buttons().find(b => b.get_label() === 'Urungkan' && b.get_visible());
-        ok(undo, 'tombol Urungkan tidak ada');
+        contains(diskOf('schedule-a.md'), '22 November');
+        contains(diskOf('schedule-b.md'), '15 November');
+        contains(all(), 'Applied 1 of 2 files.');
+        ok(toolReplies.some(m => m.includes('Rejected (do not repeat without asking): schedule-b.md') && m.includes('User note: schedule-b is waiting for confirmation')), toolReplies.join('\n'));
+        const undo = buttons().find(b => b.get_label() === 'Undo' && b.get_visible());
+        ok(undo, 'the Undo button is missing');
         const prefix = optVal('shot-proposal');
         if (prefix) {
             for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
-            widgetPixbuf(w.win)?.savev(`${prefix}-urungkan.png`, 'png', [], []);
+            widgetPixbuf(w.win)?.savev(`${prefix}-undo.png`, 'png', [], []);
         }
         undo.emit('clicked');
-        eq(diskOf('jadwal-a.md'), 'Rilis 15 November\n');
-        contains(all(), 'Diurungkan.');
+        eq(diskOf('schedule-a.md'), 'Rilis 15 November\n');
+        contains(all(), 'Undone.');
         eq(panel.session.events.map(e => e.status), ['reverted', 'rejected']);
     });
 
-    test('Urungkan gagal tanpa menimpa bila berkas sudah disunting lagi', () => {
+    test('Undo fails without overwriting if the file has been edited again', () => {
         proposeAndPress(proposalProvider('edit_file', { name: 'jadwal-a', old_text: '15 November', new_text: '23 November', reason: 'x' }), 'apply');
-        GLib.file_set_contents(GLib.build_filenamev([book, 'jadwal-a.md']), 'Disunting pengguna\n');
-        buttons().find(b => b.get_label() === 'Urungkan')!.emit('clicked');
-        eq(diskOf('jadwal-a.md'), 'Disunting pengguna\n');
-        contains(all(), 'Tidak dapat diurungkan: jadwal-a.md berubah sejak diusulkan');
+        GLib.file_set_contents(GLib.build_filenamev([book, 'schedule-a.md']), 'Edited by the user\n');
+        buttons().find(b => b.get_label() === 'Undo')!.emit('clicked');
+        eq(diskOf('schedule-a.md'), 'Edited by the user\n');
+        contains(all(), 'Cannot be undone: schedule-a.md changed since it was proposed');
         eq(panel.session.events[0].status, 'applied');
     });
 
-    test('Tolak dengan catatan: catatan sampai ke model dan tampil di kartu', () => {
+    test('Reject with a note: the note reaches the model and appears on the card', () => {
         toolReplies.length = 0;
-        proposeAndPress(recording('edit_file', { name: 'chapter-1.md', old_text: 'Raka bertemu Laras', new_text: 'Raka bertemu Hasan', reason: 'x' }), 'reject', viewer => viewer.noteEntry.set_text('Namanya tetap Laras'));
-        contains(all(), 'Ditolak: Namanya tetap Laras');
-        ok(toolReplies.some(m => m.includes('Catatan pengguna: Namanya tetap Laras')), toolReplies.join('\n'));
+        proposeAndPress(recording('edit_file', { name: 'chapter-1.md', old_text: 'Raka met Laras', new_text: 'Raka met Hasan', reason: 'x' }), 'reject', viewer => viewer.noteEntry.set_text('The name stays Laras'));
+        contains(all(), 'Rejected: The name stays Laras');
+        ok(toolReplies.some(m => m.includes('User note: The name stays Laras')), toolReplies.join('\n'));
     });
 
-    test('pindah berkas yang terbuka: tab mengikuti path baru; Urungkan memindahkannya kembali', () => {
-        const from = GLib.build_filenamev([book, 'pindahan.md']);
-        GLib.file_set_contents(from, '# Pindahan\n');
+    test('move an open file: the tab follows the new path; Undo moves it back', () => {
+        const from = GLib.build_filenamev([book, 'moved.md']);
+        GLib.file_set_contents(from, '# Moved\n');
         w.openFile(from);
         pump();
         try {
-            proposeAndPress(proposalProvider('move_file', { name: 'pindahan', destination: 'arsip/pindahan', reason: 'arsipkan' }), 'apply');
-            contains(lastDiff, 'Pindah: pindahan.md → arsip/pindahan.md');
-            eq(diskOf('arsip/pindahan.md'), '# Pindahan\n');
-            ok(!GLib.file_test(from, GLib.FileTest.EXISTS), 'asal masih ada');
-            eq(w.file, GLib.build_filenamev([book, 'arsip', 'pindahan.md']));
-            buttons().find(b => b.get_label() === 'Urungkan')!.emit('clicked');
+            proposeAndPress(proposalProvider('move_file', { name: 'moved', destination: 'archive/moved', reason: 'archive it' }), 'apply');
+            contains(lastDiff, 'Move: moved.md → archive/moved.md (contents unchanged)');
+            eq(diskOf('archive/moved.md'), '# Moved\n');
+            ok(!GLib.file_test(from, GLib.FileTest.EXISTS), 'the source still exists');
+            eq(w.file, GLib.build_filenamev([book, 'archive', 'moved.md']));
+            buttons().find(b => b.get_label() === 'Undo')!.emit('clicked');
             eq(w.file, from);
-            ok(GLib.file_test(from, GLib.FileTest.EXISTS), 'tidak kembali');
+            ok(GLib.file_test(from, GLib.FileTest.EXISTS), 'did not move back');
         } finally {
             w.editor.buffer.set_modified(false);
-            ok(w.closeTab(), 'closeTab() gagal');
+            ok(w.closeTab(), 'closeTab() failed');
             pump();
         }
     });
 
-    test('hapus file: dibuang ke Tempat Sampah setelah Terapkan, ditolak tidak menyentuhnya', () => {
-        const path = GLib.build_filenamev([book, 'usang.md']);
-        GLib.file_set_contents(path, '# Usang\n');
-        proposeAndPress(proposalProvider('delete_file', { name: 'usang', reason: 'duplikat' }), 'reject');
-        ok(GLib.file_test(path, GLib.FileTest.EXISTS), 'terhapus padahal ditolak');
-        proposeAndPress(proposalProvider('delete_file', { name: 'usang', reason: 'duplikat' }), 'apply');
-        contains(lastDiff, 'Dibuang ke Tempat Sampah: usang.md');
-        contains(lastDiff, '-# Usang');
-        if (all().includes('Gagal diterapkan')) return;   // lingkungan tanpa Tempat Sampah
-        ok(!GLib.file_test(path, GLib.FileTest.EXISTS), 'berkas masih ada');
+    test('delete file: moved to the Trash after Apply, rejecting leaves it untouched', () => {
+        const path = GLib.build_filenamev([book, 'obsolete.md']);
+        GLib.file_set_contents(path, '# Obsolete\n');
+        proposeAndPress(proposalProvider('delete_file', { name: 'obsolete', reason: 'duplicate' }), 'reject');
+        ok(GLib.file_test(path, GLib.FileTest.EXISTS), 'deleted although rejected');
+        proposeAndPress(proposalProvider('delete_file', { name: 'obsolete', reason: 'duplicate' }), 'apply');
+        contains(lastDiff, 'Moved to the Trash: obsolete.md');
+        contains(lastDiff, '-# Obsolete');
+        if (all().includes('Failed to apply')) return;   // an environment without a Trash
+        ok(!GLib.file_test(path, GLib.FileTest.EXISTS), 'the file still exists');
     });
 
-    test('penerapan menolak isi yang berubah sejak diusulkan dan path di luar folder', () => {
+    test('applying rejects content that changed since it was proposed and paths outside the folder', () => {
         const apply = panel.host.applyChange!;
-        const stale = apply({ kind: 'edit', file: 'chapter-1.md', before: 'isi lama', after: 'isi baru', reason: '' });
-        contains(stale ?? '', 'berubah sejak diusulkan');
-        contains(apply({ kind: 'create', file: '../luar.md', before: '', after: 'x', reason: '' }) ?? '', 'di luar folder');
-        ok(!GLib.file_test(GLib.build_filenamev([tmp, 'luar.md']), GLib.FileTest.EXISTS), 'berkas tertulis di luar folder');
-        contains(apply({ kind: 'create', file: 'chapter-1.md', before: '', after: 'x', reason: '' }) ?? '', 'sudah ada');
+        const stale = apply({ kind: 'edit', file: 'chapter-1.md', before: 'old content', after: 'new content', reason: '' });
+        contains(stale ?? '', 'changed since it was proposed');
+        contains(apply({ kind: 'create', file: '../outside.md', before: '', after: 'x', reason: '' }) ?? '', 'outside the folder');
+        ok(!GLib.file_test(GLib.build_filenamev([tmp, 'outside.md']), GLib.FileTest.EXISTS), 'a file was written outside the folder');
+        contains(apply({ kind: 'create', file: 'chapter-1.md', before: '', after: 'x', reason: '' }) ?? '', 'already exists');
     });
 
-    test('jawaban panjang: panel menempel di bawah sampai baris terakhir dan footer terlihat', () => {
-        const long = Array.from({ length: 14 }, (_, i) => `${i + 1}. **Butir ${i + 1}** — contoh \`kode ${i}\` dengan kalimat cukup panjang supaya membungkus ke beberapa baris di panel sempit.`).join('\n')
-            + '\n\nKalau mau, saya bisa usulkan satu perubahan konkret. Mau saya buatkan usulannya?';
+    test('long answer: the panel sticks to the bottom down to the last line and the footer is visible', () => {
+        const long = Array.from({ length: 14 }, (_, i) => `${i + 1}. **Item ${i + 1}** — example \`code ${i}\` with a sentence long enough to wrap onto several lines in a narrow panel.`).join('\n')
+            + '\n\nIf you like, I can propose one concrete change. Shall I draft the proposal?';
         panel.makeProvider = () => ({
             async chat(req) {
                 for (const part of long.match(/\S+\s*/g) ?? []) req.onText(part);
@@ -735,33 +735,33 @@ export function chatTests(c: GuiContext): void {
             },
         });
         panel.reset();
-        settle(panel.ask('Beri masukan panjang'));
+        settle(panel.ask('Give long feedback'));
         const vadj = panel.scroller.get_vadjustment();
         for (let i = 0; i < 60; i++) { pump(); GLib.usleep(10000); }
-        ok(vadj.get_upper() > vadj.get_page_size(), 'jawaban tidak cukup panjang untuk menggulir');
-        // Nilai adjustment saja tidak cukup (pernah benar sementara gambarnya terpotong): periksa posisi footer sebenarnya
-        // di dalam area terlihat.
+        ok(vadj.get_upper() > vadj.get_page_size(), 'the answer is not long enough to scroll');
+        // The adjustment value alone is not enough (it was once right while the picture was cut off): check the actual footer position
+        // inside the visible area.
         let footer: Gtk.Label | null = null;
         const walk = (widget: Gtk.Widget) => {
             if (widget instanceof Gtk.Label && widget.get_text().startsWith('3,6 rb masuk')) footer = widget;
             childrenOf(widget).forEach(walk);
         };
         walk(panel.messages);
-        ok(footer, 'footer pemakaian token tidak ada');
+        ok(footer, 'the token usage footer is missing');
         const bounds = (footer as Gtk.Label).compute_bounds(panel.scroller);
-        ok(bounds[0], 'posisi footer tidak terbaca');
+        ok(bounds[0], 'the footer position could not be read');
         const bottom = bounds[1].get_y() + bounds[1].get_height();
-        ok(bounds[1].get_y() >= 0 && bottom <= panel.scroller.get_height() + 1, `footer di luar area terlihat: y=${bounds[1].get_y().toFixed(0)}, bawah=${bottom.toFixed(0)}, tinggi=${panel.scroller.get_height()}`);
+        ok(bounds[1].get_y() >= 0 && bottom <= panel.scroller.get_height() + 1, `footer outside the visible area: y=${bounds[1].get_y().toFixed(0)}, bottom=${bottom.toFixed(0)}, height=${panel.scroller.get_height()}`);
         const prefix = optVal('shot-chat');
         if (prefix) widgetPixbuf(w.win)?.savev(`${prefix}.png`, 'png', [], []);
         panel.makeProvider = () => provider;
         panel.reset();
     });
 
-    test('menutup panel', () => {
+    test('closing the panel', () => {
         w.setOption('chat', false);
         pump();
-        ok(!w.chatSplit.show_sidebar, 'tidak tertutup');
+        ok(!w.chatSplit.show_sidebar, 'did not close');
         eq(w.settings.chat, false);
     });
 
