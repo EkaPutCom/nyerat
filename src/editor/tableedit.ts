@@ -138,7 +138,7 @@ export function enterInTable(buffer: Gtk.TextBuffer): boolean {
     return true;
 }
 
-// ---------- Perintah menu ----------
+// ---------- Menu commands ----------
 
 const ALIGN_OF: Partial<Record<TableCommand, Align>> = { 'align-left': 'left', 'align-center': 'center', 'align-right': 'right' };
 

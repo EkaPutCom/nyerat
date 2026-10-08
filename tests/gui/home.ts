@@ -60,7 +60,7 @@ export function homeTests(c: GuiContext): void {
         const all = labels(win);
         ok(all.includes('2 days overdue') && all.includes('Today') && all.includes('Tomorrow'), `due-date labels: ${all.join('|')}`);
         ok(all.includes('nyerat · board'), 'project and board in the subtitle');
-        ok(!rowTitles(win).includes('Later') && !rowTitles(win).includes('Sudah'), 'a far/finished card is shown');
+        ok(!rowTitles(win).includes('Later') && !rowTitles(win).includes('Already done'), 'a far/finished card is not shown');
         close(win);
     });
     test('inbox: the number of unprocessed items', () => {

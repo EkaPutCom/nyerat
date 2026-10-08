@@ -1,4 +1,4 @@
-// Tes GUI: Perintah format.
+// GUI tests: format commands.
 
 import { section, test, eq, ok } from '../framework.js';
 import type { GuiContext } from './context.js';
@@ -18,9 +18,9 @@ export function formatTests(c: GuiContext): void {
         setText('x');
         buf.select_range(buf.get_start_iter(), buf.get_end_iter()); pump();
         action('italic');
-        eq(text(), '*x*', 'setelah Ctrl+I');
+        eq(text(), '*x*', 'after Ctrl+I');
         buf.undo(); pump();
-        eq(text(), 'x', 'setelah undo');
+        eq(text(), 'x', 'after undo');
     });
     test('Ctrl+2 and Ctrl+0 set the heading', () => {
         setText('title'); cursorTo(0);

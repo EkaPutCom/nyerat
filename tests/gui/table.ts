@@ -43,7 +43,7 @@ export function tableGridTests(c: GuiContext): void {
     test('cursor enters the table: the raw text is shown, the grid disappears', () => {
         cursorTo(4); settleT();
         const b = tBlock();
-        ok(!b.collapsed && !b.widget?.get_visible(), 'grid masih tampil');
+        ok(!b.collapsed && !b.widget?.get_visible(), 'the grid is still shown');
         ok(![2, 3, 4, 5].some(tableTag), 'the table lines are still shrunk');
     });
     test('cursor leaves again: the grid returns', () => {

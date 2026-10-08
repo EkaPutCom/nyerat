@@ -9,7 +9,7 @@
       <stop offset="1" stop-color="#62a0ea"/>
     </linearGradient>
   </defs>
-  <!-- bayangan dasar ala ikon GNOME -->
+  <!-- base shadow in the style of GNOME icons -->
   <rect x="20" y="16" width="80" height="100" rx="8" fill="#9a9996"/>
   <rect x="20" y="12" width="80" height="100" rx="8" fill="url(#page)"/>
   <!-- lines of Markdown text: heading and paragraph -->

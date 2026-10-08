@@ -95,7 +95,7 @@ export function deepseekTests(): void {
         let text = '';
         const result = settle(client('sk-test').chat({
             model: 'deepseek-flash', thinking: true, onText: d => { text += d; },
-            tools: [{ name: 'search_text', description: 'cari', parameters: { type: 'object', properties: {} } }],
+            tools: [{ name: 'search_text', description: 'search', parameters: { type: 'object', properties: {} } }],
             messages: [
                 { role: 'system', content: 'system' },
                 { role: 'user', content: 'question' },
@@ -108,7 +108,7 @@ export function deepseekTests(): void {
         eq(result.reasoning, 'need to look up');
         eq(result.usage, { prompt: 50, cached: 0, completion: 9 });
         eq(body.thinking, { type: 'enabled' });
-        eq(body.tools, [{ type: 'function', function: { name: 'search_text', description: 'cari', parameters: { type: 'object', properties: {} } } }]);
+        eq(body.tools, [{ type: 'function', function: { name: 'search_text', description: 'search', parameters: { type: 'object', properties: {} } } }]);
         eq(body.messages[2], { role: 'assistant', content: '', reasoning_content: 'think', tool_calls: [{ id: 'x', type: 'function', function: { name: 'list_files', arguments: '{}' } }] });
         eq(body.messages[3], { role: 'tool', tool_call_id: 'x', content: 'result' });
     });
