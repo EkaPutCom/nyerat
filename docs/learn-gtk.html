@@ -527,9 +527,9 @@ svg.ic { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor
   <p class="lede">Nyerat began as a single <code>GtkSourceView</code> in a GTK 3 window that hid Markdown syntax. Five days later it is a GNOME app on <b>GTK 4 + libadwaita</b> with tabs, panels that fold on narrow windows, dialogs that return a Promise, GSettings, list models, <code>.ui</code> templates, translations, and a Flatpak manifest. This page follows that path commit by commit. For each Nyerat feature it names the GTK pieces it uses and explains why. It also covers the third of the code that <b>never touches GTK</b>, which is why most of the app can be tested without a window.</p>
   <p class="lede" style="font-size:1rem">Because this page is about <b>building interfaces</b>, every chapter draws the widgets it talks about: Adwaita-style mock-ups you can click, resize, and inspect, with the GTK type of every part named next to it. Start with the <a href="#anatomy">window anatomy</a>, which maps each region of Nyerat's window to the widget that draws it.</p>
   <div class="kpis">
-    <div class="kpi"><div class="what">Lines in files that import GTK/Adw</div><div class="big">11,316</div><div class="from">from 1,235 · 6a0f03d → f74d5b5</div></div>
-    <div class="kpi"><div class="what">Lines without any GTK import</div><div class="big">4,668</div><div class="from">pure TypeScript in <code>markdown/</code>, <code>agent/</code>, …; plus 1,723 lines that use only Gio/GLib</div></div>
-    <div class="kpi"><div class="what"><code>Adw.*</code> references in <code>src/</code></div><div class="big">121</div><div class="from">from 0 before c85aa0d (October 6)</div></div>
+    <div class="kpi"><div class="what">Lines in files that import GTK/Adw</div><div class="big">10,945</div><div class="from">from 1,235 · 6a0f03d → de2924f</div></div>
+    <div class="kpi"><div class="what">Lines without any GTK import</div><div class="big">4,703</div><div class="from">pure TypeScript in <code>markdown/</code>, <code>agent/</code>, …; plus 2,384 lines that use only Gio/GLib</div></div>
+    <div class="kpi"><div class="what"><code>Adw.*</code> references in <code>src/</code></div><div class="big">123</div><div class="from">from 0 before c85aa0d (October 6)</div></div>
     <div class="kpi"><div class="what">Layouts written as <code>.ui</code> templates</div><div class="big">6</div><div class="from">header bar, status bar, find bar, chat, palette, preferences</div></div>
   </div>
   <nav class="toc" aria-label="Table of contents">
@@ -595,6 +595,8 @@ svg.ic { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor
     <li><span class="h">5877392</span><span><span class="era">Adw</span><b>Chapter 12</b> · Daily journal with quick capture and an activity log (JSONL, no GTK).</span></li>
     <li><span class="h">c237d7c</span><span><span class="era">Adw</span><b>Chapter 12</b> · Image files show in the file tree and open in the image viewer.</span></li>
     <li><span class="h">f74d5b5</span><span><span class="era">Adw</span><b>Chapter 13</b> · Home reads boards and inboxes past the first 300 files.</span></li>
+    <li><span class="h">1c44423</span><span><span class="era">Adw</span><b>Chapter 5</b> · Files dropped from a file manager: the tree's <code>Gtk.DropTarget</code> also accepts <code>Gdk.FileList</code> and copies them in with <code>Gdk.DragAction.COPY</code>.</span></li>
+    <li><span class="h">de2924f</span><span><span class="era">Adw</span><b>Layers, Chapter 13</b> · Journal, harness, Home, agent writes, and autosave leave <code>window.ts</code> for <code>window/</code> controllers that import only GLib/Gio; shared types move down (<code>colors.ts</code>, <code>gitlog.ts</code>) so no lower layer imports an upper one.</span></li>
   </ol>
 </section>
 
@@ -604,17 +606,21 @@ svg.ic { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor
   <h2>Three layers, one direction</h2>
   <p>The most important GTK decision in Nyerat is not a widget. It is <b>where GTK is allowed to appear</b>. The rule has held since the first commit: Markdown rules live in <code>src/markdown/</code> and never import GTK; the editor engine reports through callbacks and knows nothing about files or menus; <code>window.ts</code> is the only place that connects the components.</p>
   <div class="principle">
-    <div class="panel"><h4><span class="tag old">GTK</span></h4><p><code>editor/</code>, <code>ui/</code>, <code>window.ts</code>, <code>actions.ts</code>. Widgets, text tags, event controllers, dialogs. Tested with a real window on Xvfb (<code>tests/gui/</code>).</p></div>
-    <div class="panel"><h4><span class="tag new">Gio / GLib</span></h4><p><code>files.ts</code>, <code>fileops.ts</code>, <code>git.ts</code>, <code>settings.ts</code>, <code>orchestrator.ts</code>, <code>activity.ts</code>, the network part of <code>agent/</code>. No widgets, but the GLib main loop and its async I/O.</p></div>
-    <div class="panel"><h4><span class="tag pure">Pure</span></h4><p><code>markdown/</code>, most of <code>agent/</code>, <code>gitlog.ts</code>, <code>editor/offsets.ts</code>. Strings in, values out. Tested in <code>tests/unit/</code> with <code>--no-gui</code>.</p></div>
+    <div class="panel"><h4><span class="tag old">GTK</span></h4><p><code>editor/</code>, <code>ui/</code>, <code>window.ts</code>, <code>actions.ts</code>, <code>window/doc.ts</code> (types only). Widgets, text tags, event controllers, dialogs. Tested with a real window on Xvfb (<code>tests/gui/</code>).</p></div>
+    <div class="panel"><h4><span class="tag new">Gio / GLib</span></h4><p><code>files.ts</code>, <code>fileops.ts</code>, <code>git.ts</code>, <code>settings.ts</code>, <code>orchestrator.ts</code>, <code>activity.ts</code>, the <code>window/</code> controllers, the network part of <code>agent/</code>. No widgets, but the GLib main loop and its async I/O.</p></div>
+    <div class="panel"><h4><span class="tag pure">Pure</span></h4><p><code>markdown/</code>, most of <code>agent/</code>, <code>gitlog.ts</code>, <code>colors.ts</code>, <code>editor/offsets.ts</code>. Strings in, values out. Tested in <code>tests/unit/</code> with <code>--no-gui</code>.</p></div>
   </div>
   <div class="flow" aria-label="Direction of dependencies">
     <span class="node gtk">window.ts</span><span class="to">→</span>
+    <span class="node gio">window/* controllers</span><span class="to">→</span>
     <span class="node gtk">ui/* · editor/*</span><span class="to">→</span>
     <span class="node gio">files · git · settings</span><span class="to">→</span>
     <span class="node pure">markdown/* · agent/* (pure)</span>
   </div>
   <p class="note">A lower layer never imports an upper one. When you learn GTK from this code, start in a pure module (for example <code>markdown/kanban.ts</code>) to see the data, then read the widget that draws it (<code>ui/kanban.ts</code>). The widget is short because the decisions were made before GTK was involved.</p>
+  <h3>When the connecting layer grows: de2924f</h3>
+  <p>By October 8 <code>window.ts</code> had reached 1,642 lines and about 45 imports: tabs and files, but also the journal, harness runs, Home, applying agent changes, and autosave. Three imports also pointed the wrong way: <code>editor/</code> took the <code>Palette</code> type from <code>ui/theme.ts</code> (a file that loads Adw), <code>git.ts</code> took its request types from <code>agent/</code>, and <code>actions.ts</code> and <code>window.ts</code> imported each other. The fix moved no widget code. Shared types went down to the lowest layer that uses them (<code>colors.ts</code>, <code>gitlog.ts</code>); <code>actions.ts</code> now sees the window as a small <code>ActionHost</code> interface; and each feature became a controller in <code>window/</code> that receives a narrow host object built by <code>MainWindow.makeHost()</code> from closures, the same pattern as <code>ChatPanel.host</code>. The controllers import GLib and Gio but no GTK module, so 414 lines left the GTK layer (11,359 → 10,945) and <code>window.ts</code> dropped to about 1,190 lines. They still call widgets the window owns (the board, the chat panel, dialogs), so they are tested through the window in <code>tests/gui/</code>, not with <code>--no-gui</code>.</p>
+  <div class="lesson"><b>Lesson</b>The one place allowed to connect everything is the place most likely to swallow everything. Keep it as wiring: when a feature needs more than a few methods there, give it its own module and hand it only the part of the window it uses, never the window itself.</div>
 </section>
 
 <!-- ============================================================ -->
@@ -1005,7 +1011,7 @@ slots.release(slot);           // empty + hide,
     <tbody>
       <tr><td>Editor keys</td><td data-k="GTK" class="wrap"><code>Gtk.EventControllerKey</code> (<code>onKeyPress</code>)</td><td data-k="Why" class="wrap">Enter continues lists, Tab moves table cells, arrows drive the <code>[[</code> suggestion popover.</td></tr>
       <tr><td>Kanban drag</td><td data-k="GTK" class="wrap"><code>Gtk.GestureDrag</code>, <code>Gtk.Fixed</code> ghost layer, <code>Gtk.WidgetPaintable</code>, <code>Gtk.Overlay</code></td><td data-k="Why" class="wrap">Its own pointer handling instead of DnD: a ghost image of the card follows the pointer, a drop marker, auto scroll at the edges; testable with synthetic events.</td></tr>
-      <tr><td>File tree move</td><td data-k="GTK" class="wrap"><code>Gtk.DragSource</code>, <code>Gtk.DropTarget</code>, <code>Gdk.DragAction.MOVE</code></td><td data-k="Why" class="wrap">Real drag and drop between rows; folders open when hovered for 600 ms. The drag icon is a themed icon paintable passed to <code>set_icon()</code>, not a widget (<code>GtkDragIcon</code> gives a Gtk-CRITICAL).</td></tr>
+      <tr><td>File tree move</td><td data-k="GTK" class="wrap"><code>Gtk.DragSource</code>, <code>Gtk.DropTarget</code>, <code>Gdk.DragAction.MOVE</code></td><td data-k="Why" class="wrap">Real drag and drop between rows; folders open when hovered for 600 ms. The drag icon is a themed icon paintable passed to <code>set_icon()</code>, not a widget (<code>GtkDragIcon</code> gives a Gtk-CRITICAL). The same <code>DropTarget</code> accepts <code>Gdk.FileList</code> from a file manager and copies those files in (1c44423).</td></tr>
       <tr><td>Image viewer</td><td data-k="GTK" class="wrap"><code>EventControllerScroll</code>, <code>EventControllerMotion</code>, <code>GestureDrag</code>, a custom widget with <code>vfunc_snapshot</code></td><td data-k="Why" class="wrap">Zoom at the pointer, pan by dragging; the texture is drawn with <code>append_scaled_texture()</code> and a NEAREST filter above 300% instead of cairo + pixbuf (deprecated in 4.20).</td></tr>
       <tr><td>Context menus</td><td data-k="GTK" class="wrap"><code>Gtk.PopoverMenu</code> from a <code>Gio.Menu</code>, a <code>Gio.SimpleActionGroup</code></td><td data-k="Why" class="wrap">Menus are written as plain <code>MenuEntry[]</code> (<code>ui/menu.ts</code>); tests call the entry's <code>run()</code>.</td></tr>
     </tbody>
@@ -1234,7 +1240,7 @@ export function after&lt;T, R&gt;(value: Awaitable&lt;T&gt;, next: (v: T) =&gt; 
     app.add_action(a);
     if (accels) app.set_accels_for_action(`app.${name}`, accels);
 };
-action('journal-capture', ['&lt;Control&gt;&lt;Shift&gt;j'], () =&gt; w.captureJournal());</code></pre>
+action('journal-capture', ['&lt;Control&gt;&lt;Shift&gt;j'], () =&gt; w.journal.capture());</code></pre>
   <div class="ill">
     <h3>Illustration: four entry points, one stateful action <span class="kind">model of <code>app.chat</code> = <code>gsettings.create_action('chat')</code></span></h3>
     <p class="note">Use any of the four entry points on the left. They do not call each other: each one only activates <code>app.chat</code>, and each one shows the action's state by itself. Then turn the action off with <code>set_enabled(false)</code>.</p>
@@ -1453,9 +1459,9 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
 
 <!-- ============================================================ -->
 <section class="chapter" id="ch13">
-  <div class="chapnum">Chapter 13 · <code>src/markdown/</code>, <code>src/agent/</code>, <code>files.ts</code>, <code>git.ts</code>, <code>orchestrator.ts</code></div>
+  <div class="chapnum">Chapter 13 · <code>src/markdown/</code>, <code>src/agent/</code>, <code>files.ts</code>, <code>git.ts</code>, <code>orchestrator.ts</code>, <code>window/</code></div>
   <h2>The code that never touches GTK</h2>
-  <p>About 4,700 lines import nothing from GObject Introspection, and about 1,700 more use only Gio/GLib. This is deliberate. Code without widgets runs in <code>gjs -m dist/run-tests.js --no-gui</code> in a fraction of a second, has no main-loop timing, and can be read without knowing GTK.</p>
+  <p>About 4,700 lines import nothing from GObject Introspection, and about 2,400 more use only Gio/GLib. This is deliberate. Code without widgets runs in <code>gjs -m dist/run-tests.js --no-gui</code> in a fraction of a second, has no main-loop timing, and can be read without knowing GTK.</p>
   <h3>Pure modules (no <code>gi://</code>)</h3>
   <table class="data cards">
     <thead><tr><th>Module</th><th class="wrap">What it does</th><th class="wrap">Who draws it</th></tr></thead>
@@ -1465,7 +1471,8 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
       <tr><td><code>markdown/kanban.ts</code>, <code>inbox.ts</code>, <code>home.ts</code>, <code>journal.ts</code>, <code>wikilink.ts</code></td><td data-k="Does" class="wrap">Parse/serialize the workbench formats; every operation returns a new value</td><td data-k="Drawn by" class="wrap"><code>ui/kanban.ts</code>, <code>ui/inbox.ts</code>, <code>ui/home.ts</code>, editor</td></tr>
       <tr><td><code>markdown/dbml.ts</code>, <code>html.ts</code>, <code>lint.ts</code>, <code>chatmarkup.ts</code></td><td data-k="Does" class="wrap">DBML → Mermaid ER, HTML export, structure checks, chat Markdown → markup</td><td data-k="Drawn by" class="wrap">Mermaid layer, export action, agent, chat panel</td></tr>
       <tr><td><code>editor/offsets.ts</code></td><td data-k="Does" class="wrap">UTF-16 ↔ code point maps, allocation-free word count</td><td data-k="Drawn by" class="wrap">Every tag operation</td></tr>
-      <tr><td><code>gitlog.ts</code></td><td data-k="Does" class="wrap">Parse <code>git log</code>/<code>diff</code> output into commits and hunks</td><td data-k="Drawn by" class="wrap">History tab, diff viewer</td></tr>
+      <tr><td><code>colors.ts</code></td><td data-k="Does" class="wrap">The light and dark document palettes (plain values)</td><td data-k="Drawn by" class="wrap"><code>ui/theme.ts</code> CSS, editor tags, tables, board</td></tr>
+      <tr><td><code>gitlog.ts</code></td><td data-k="Does" class="wrap">Parse <code>git log</code>/<code>diff</code> output into commits and hunks; the agent's Git request types</td><td data-k="Drawn by" class="wrap">History tab, diff viewer</td></tr>
       <tr><td><code>agent/context.ts</code>, <code>tools.ts</code>, <code>changes.ts</code>, <code>batch.ts</code>, <code>harness.ts</code>, …</td><td data-k="Does" class="wrap">Context building, BM25, tools, change proposals, preflight, pi prompt/queue</td><td data-k="Drawn by" class="wrap"><code>ui/chat.ts</code>, proposal viewer (see <a href="learn-agent.html">Learn agents</a>)</td></tr>
     </tbody>
   </table>
@@ -1480,6 +1487,7 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
     <code class="gio">agent/deepseek.ts · libsoup streaming</code>
     <code class="gio">agent/apikey.ts · libsecret</code>
     <code class="gio">agent/project.ts · Gio.FileEnumerator</code>
+    <code class="gio">window/*.ts · feature controllers on a narrow host; GLib timers and paths</code>
   </div>
   <p class="note">One GJS detail from <code>orchestrator.ts</code>: after GTK is loaded, <code>Gio.Subprocess.get_stdout_pipe()</code> triggers a Gjs-WARNING about <code>Gio.UnixInputStream</code>, so the harness reads its pipes with <code>GLib.IOChannel</code> and writes bytes with an explicit length.</p>
   <h3>Why the split pays off</h3>
@@ -1588,7 +1596,8 @@ const layers = [
   ['222dc97', 'Oct 7', 'Adw', 'Inbox', 10216, 1653, 4280, 109, 6],
   ['79ad33d', 'Oct 7', 'Adw', 'Home', 10693, 1663, 4409, 120, 6],
   ['5877392', 'Oct 8', 'Adw', 'Journal', 11298, 1712, 4664, 121, 6],
-  ['f74d5b5', 'Oct 8', 'Adw', 'Now', 11316, 1723, 4668, 121, 6],
+  ['f74d5b5', 'Oct 8', 'Adw', 'Home past 300 files', 11316, 1723, 4668, 121, 6],
+  ['de2924f', 'Oct 9', 'Adw', 'window/ controllers', 10945, 2384, 4703, 123, 6],
 ];
 function fit(svg, H) {
   const W = Math.max(300, Math.round(svg.parentNode.clientWidth || 900));
