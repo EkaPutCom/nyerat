@@ -1,4 +1,4 @@
-// Tes GUI: Menyembunyikan sintaks.
+// GUI tests: Hiding syntax.
 
 import { section, test, eq, ok } from '../framework.js';
 import type { GuiContext } from './context.js';
@@ -6,47 +6,47 @@ import type { GuiContext } from './context.js';
 export function syntaxHidingTests(c: GuiContext): void {
     const { w, ed, setText, cursorTo, hidden, tagAt, action } = c;
 
-    section('Menyembunyikan sintaks');
-    test('marker heading tersembunyi saat kursor di baris lain', () => {
-        setText('# Judul\n\nteks **tebal** di sini');
+    section('Hiding syntax');
+    test('the heading marker is hidden when the cursor is on another line', () => {
+        setText('# Title\n\ntext **bold** here');
         cursorTo(2, -1);
-        ok(hidden(0), '"#" seharusnya tersembunyi');
-        ok(!hidden(17), '"**" di baris aktif seharusnya terlihat');
+        ok(hidden(0), '"#" should be hidden');
+        ok(!hidden(17), '"**" on the active line should be visible');
     });
-    test('marker muncul saat kursor pindah ke barisnya', () => {
+    test('the marker appears when the cursor moves to its line', () => {
         cursorTo(0);
         ok(!hidden(0), '"#" seharusnya terlihat');
-        ok(hidden(14), '"**" di baris lain seharusnya tersembunyi');
-        ok(tagAt(16, 'bold'), 'teks tebal tidak diberi tag bold');
+        ok(hidden(14), '"**" on another line should be hidden');
+        ok(tagAt(16, 'bold'), 'the bold text was not tagged bold');
     });
-    test('offset benar setelah emoji', () => {
+    test('the offset is correct after an emoji', () => {
         setText('🎉 **a**\n');
         cursorTo(1);
-        ok(hidden(2) && hidden(3), '"**" setelah emoji seharusnya tersembunyi');
-        ok(!hidden(4) && tagAt(4, 'bold'), 'huruf "a" seharusnya tebal dan terlihat');
+        ok(hidden(2) && hidden(3), '"**" after an emoji should be hidden');
+        ok(!hidden(4) && tagAt(4, 'bold'), 'the letter "a" should be bold and visible');
     });
-    test('baris pembatas blok kode tersembunyi di luar blok', () => {
-        setText('a\n```js\nkode\n```\nb');
+    test('the code block fence lines are hidden outside the block', () => {
+        setText('a\n```js\ncode\n```\nb');
         cursorTo(0);
-        ok(hidden(2) && hidden(13), 'pembatas ``` seharusnya tersembunyi');
-        ok(tagAt(9, 'codeblock') && !hidden(9), 'isi kode seharusnya terlihat');
+        ok(hidden(2) && hidden(13), 'the ``` fence should be hidden');
+        ok(tagAt(9, 'codeblock') && !hidden(9), 'the code contents should be visible');
     });
-    test('baris pembatas muncul saat kursor di dalam blok', () => {
+    test('the fence lines appear when the cursor is inside the block', () => {
         cursorTo(2);
-        ok(!hidden(2) && !hidden(13), 'pembatas ``` seharusnya terlihat');
+        ok(!hidden(2) && !hidden(13), 'the ``` fence should be visible');
     });
-    test('mode source menampilkan semua marker', () => {
+    test('source mode shows all markers', () => {
         setText('# a\n\n**b**');
         cursorTo(2);
-        ok(hidden(0), 'awal: "#" tersembunyi');
+        ok(hidden(0), 'start: "#" hidden');
         action('source');
         ok(!hidden(0), 'mode source: "#" seharusnya terlihat');
         action('source');
-        ok(hidden(0), 'setelah mode source dimatikan: "#" tersembunyi lagi');
+        ok(hidden(0), 'after source mode is turned off: "#" hidden again');
     });
     test('outline berisi heading', () => {
-        setText('# Satu\n## Dua\nteks\n### Tiga');
+        setText('# One\n## Two\ntext\n### Three');
         eq(ed.headings.map(h => [h.level, h.text, h.line]), [[1, 'Satu', 0], [2, 'Dua', 1], [3, 'Tiga', 3]]);
-        eq(w.outline.count, 3, 'jumlah baris outline');
+        eq(w.outline.count, 3, 'number of outline rows');
     });
 }
