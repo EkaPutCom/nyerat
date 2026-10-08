@@ -94,3 +94,15 @@ export function parseStatus(output: string): FileChange[] {
     }
     return changes;
 }
+
+// The agent's read-only Git requests (validated in agent/gittools.ts, run by git.ts) and their answers.
+export type GitRequest =
+    | { kind: 'log'; file: string | null; limit: number }
+    | { kind: 'show'; commit: string; file: string | null }
+    | { kind: 'file'; commit: string; file: string };
+
+export type GitAnswer = { ok: true; text: string } | { ok: false; message: string };
+
+// The `git log` record format for the agent: record separator \x1e and field separator \x1f, then --name-status lines.
+// agent/gittools.ts parses it back in formatGit().
+export const AGENT_LOG_FORMAT = '%x1e%h%x1f%ad%x1f%an%x1f%s';

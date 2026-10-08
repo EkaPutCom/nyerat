@@ -6,19 +6,12 @@ import { cleanNewName } from './changes.js';
 import { estimateTokens } from './context.js';
 import type { ToolSpec } from './provider.js';
 import { plural, type ToolOutcome } from './tools.js';
+import type { GitAnswer, GitRequest } from '../gitlog.js';
+
+export type { GitAnswer, GitRequest };
 
 export const MAX_GIT_TOKENS = 6000;
 const MAX_LOG = 50;
-
-export type GitRequest =
-    | { kind: 'log'; file: string | null; limit: number }
-    | { kind: 'show'; commit: string; file: string | null }
-    | { kind: 'file'; commit: string; file: string };
-
-export type GitAnswer = { ok: true; text: string } | { ok: false; message: string };
-
-// The `git log` record format used by the runner: record separator \x1e and field separator \x1f, then --name-status lines.
-export const AGENT_LOG_FORMAT = '%x1e%h%x1f%ad%x1f%an%x1f%s';
 
 export const GIT_TOOLS: ToolSpec[] = [
     {

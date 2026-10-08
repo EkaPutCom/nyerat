@@ -3,8 +3,7 @@
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { LOG_FORMAT, parseLog, parseStatus, type Commit, type FileChange } from './gitlog.js';
-import { AGENT_LOG_FORMAT, type GitAnswer, type GitRequest } from './agent/gittools.js';
+import { AGENT_LOG_FORMAT, LOG_FORMAT, parseLog, parseStatus, type Commit, type FileChange, type GitAnswer, type GitRequest } from './gitlog.js';
 
 export type GitFailure = 'no-git' | 'no-repo' | 'failed';
 
