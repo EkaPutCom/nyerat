@@ -1,13 +1,13 @@
-// Rencana pekerjaan agent (alat atur_pekerjaan) sebagai daftar centang di panel Asisten:
+// The agent's work plan (the set_work tool) as a checklist in the Assistant panel:
 //
-//   ▾ Sinkronkan jadwal rilis · 1/2 · 52 dtk
-//     ✔ Baca keputusan rapat
-//     ◌ Periksa rencana dan kartu tugas      (spinner selama agent bekerja)
-//     ⚠ Langkah yang tertunda
-//     Catatan agent
+//   ▾ Sync the release schedule · 1/2 · 52 s
+//     ✔ Read the meeting decision
+//     ◌ Check the plan and task cards      (spinner while the agent is working)
+//     ⚠ A blocked step
+//     Agent note
 //
-// Dibuat ulang tiap kali rencana berubah; isinya hanya dari WorkState, jadi sama untuk giliran berjalan
-// maupun percakapan yang dibuka lagi.
+// Rebuilt every time the plan changes; its contents come only from WorkState, so it is the same for a running turn
+// and for a conversation that is opened again.
 
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -16,15 +16,15 @@ import { childrenOf } from '../gtkutil.js';
 import { _, fmt } from '../i18n.js';
 
 const STATUS_TEXT: Record<WorkState['status'], string> = {
-    running: _('berjalan'),
-    paused: _('tertunda'),
-    failed: _('gagal'),
-    complete: _('selesai dan terverifikasi'),
+    running: _('running'),
+    paused: _('paused'),
+    failed: _('failed'),
+    complete: _('finished and verified'),
 };
 
 export function durationText(seconds: number): string {
     const s = Math.max(0, Math.round(seconds));
-    return s < 60 ? fmt(_('{s} dtk'), { s }) : fmt(_('{m} mnt {s} dtk'), { m: Math.floor(s / 60), s: s % 60 });
+    return s < 60 ? fmt(_('{s} s'), { s }) : fmt(_('{m} min {s} s'), { m: Math.floor(s / 60), s: s % 60 });
 }
 
 export class WorkList {
@@ -51,14 +51,14 @@ export class WorkList {
         this.widget.append(this.expander);
     }
 
-    // running = agent sedang mengerjakan giliran ini: langkah pending pertama diberi spinner.
-    // seconds = lama giliran berjalan, bila diketahui.
+    // running = the agent is working on this turn: the first pending step gets a spinner.
+    // seconds = how long the turn has been running, if known.
     update(work: WorkState, running: boolean, seconds?: number): void {
         const done = work.steps.filter(s => s.status === 'done').length;
         this.title.set_text(work.goal);
-        const parts = [fmt(_('{done}/{total} langkah'), { done, total: work.steps.length }), running ? _('sedang bekerja') : STATUS_TEXT[work.status]];
+        const parts = [fmt(_('{done}/{total} steps'), { done, total: work.steps.length }), running ? _('working') : STATUS_TEXT[work.status]];
         if (seconds !== undefined) parts.push(durationText(seconds));
-        if (work.verification && !work.verification.passed) parts.push(_('verifikasi gagal'));
+        if (work.verification && !work.verification.passed) parts.push(_('verification failed'));
         this.meta.set_text(parts.join(' · '));
 
         for (const child of childrenOf(this.steps)) this.steps.remove(child);
@@ -68,7 +68,7 @@ export class WorkList {
         this.note.set_visible(!!work.note.trim());
     }
 
-    // Teks seluruh daftar, untuk tes dan pembaca layar.
+    // The text of the whole list, for tests and screen readers.
     text(): string {
         return [this.title.get_text(), this.meta.get_text(), ...childrenOf(this.steps).map(r => stepTexts.get(r) ?? ''), this.note.get_text()].filter(Boolean).join('\n');
     }
@@ -76,7 +76,7 @@ export class WorkList {
 
 const stepTexts = new WeakMap<Gtk.Widget, string>();
 
-// Adw.Spinner (libadwaita 1.6+, runtime GNOME 50); Gtk.Spinner untuk libadwaita sistem yang lebih lama.
+// Adw.Spinner (libadwaita 1.6+, GNOME 50 runtime); Gtk.Spinner for older system libadwaita.
 function spinner(): Gtk.Widget {
     const AdwSpinner = (Adw as any).Spinner as (new () => Gtk.Widget) | undefined;
     return AdwSpinner ? new AdwSpinner() : new Gtk.Spinner({ spinning: true });
@@ -102,8 +102,8 @@ function stepRow(step: WorkStep, current: boolean): Gtk.Widget {
     mark.set_size_request(16, 16);
     const label = new Gtk.Label({ label: step.text, xalign: 0, wrap: true, max_width_chars: 38, selectable: true, hexpand: true });
     if (step.status === 'done') label.add_css_class('work-step-done');
-    const state = { pending: current ? _('sedang dikerjakan') : _('belum'), done: _('selesai'), blocked: _('tertunda') }[step.status];
-    // Status dibacakan pembaca layar, tidak hanya terlihat dari ikon dan warnanya.
+    const state = { pending: current ? _('in progress') : _('not yet'), done: _('done'), blocked: _('blocked') }[step.status];
+    // The status is read out by screen readers, not only visible from the icon and color.
     const text = `${step.text} — ${state}`;
     stepTexts.set(row, text);
     row.update_property([Gtk.AccessibleProperty.LABEL], [text]);

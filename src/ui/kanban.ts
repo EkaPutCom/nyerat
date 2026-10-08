@@ -1,20 +1,20 @@
-// Tampilan papan kanban ala Trello untuk dokumen kanban (markdown/kanban.ts).
+// A Trello-style kanban board view for kanban documents (markdown/kanban.ts).
 //
-//   ┌ Rencana ───┐ ┌ Dikerjakan ┐ ┌ Selesai ───┐
-//   │ ☐ kartu    │ │ ☐ kartu    │ │ ☑ kartu    │   seret kartu antar daftar,
-//   │ ☐ kartu    │ │            │ │            │   klik untuk menyunting,
-//   │ + Tambah   │ │ + Tambah   │ │ + Tambah   │   klik kanan untuk menu
-//   └────────────┘ └────────────┘ └────────────┘   + Tambah daftar
+//   ┌ Plan ──────┐ ┌ In Progress┐ ┌ Done ──────┐
+//   │ ☐ card     │ │ ☐ card     │ │ ☑ card     │   drag cards between lists,
+//   │ ☐ card     │ │            │ │            │   click to edit,
+//   │ + Add      │ │ + Add      │ │ + Add      │   right click for the menu
+//   └────────────┘ └────────────┘ └────────────┘   + Add list
 //
-// Komponen ini hanya memegang model papan dan tampilannya. Setiap perubahan lewat
-// commit(), yang mengganti model dan memanggil onChange; jendela yang menulis
-// hasilnya ke buffer dokumen (satu-satunya sumber kebenaran adalah teks Markdown).
+// This component only holds the board model and its display. Every change goes through
+// commit(), which replaces the model and calls onChange; the window writes
+// the result to the document buffer (the single source of truth is the Markdown text).
 //
-// Menyeret memakai penunjuk sendiri (Gtk.GestureDrag: tekan → gerak → lepas pada kartu),
-// bukan drag-and-drop bawaan GTK, supaya perilakunya terkendali dan bisa diuji dengan
-// memanggil onCardPress/onCardMotion/onCardRelease langsung: kartu bayangan (gambar kartu
-// di lapisan Overlay di atas papan) mengikuti penunjuk, dan penanda tujuan menunjukkan di
-// mana kartu akan jatuh.
+// Dragging uses its own pointer handling (Gtk.GestureDrag: press → move → release on a card),
+// not GTK's built-in drag-and-drop, so the behavior is controlled and can be tested by
+// calling onCardPress/onCardMotion/onCardRelease directly: a ghost card (an image of the card
+// in the Overlay layer above the board) follows the pointer, and a target marker shows where
+// the card will land.
 
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
@@ -33,27 +33,27 @@ import { popupMenu, separator, type MenuEntry } from './menu.js';
 import { _, fmt, pgettext } from '../i18n.js';
 
 const COLUMN_WIDTH = 290;
-const DRAG_THRESHOLD = 6;     // piksel penunjuk bergerak sebelum klik dianggap menyeret
-const EDGE = 48;              // jarak dari tepi (piksel) yang memicu gulir otomatis saat menyeret
+const DRAG_THRESHOLD = 6;     // pixels the pointer moves before a click is considered a drag
+const EDGE = 48;              // distance from the edge (pixels) that triggers autoscroll while dragging
 const SCROLL_SPEED = 14;
 const TAG_COLORS = 8;
 const RUN_ICON: Record<CardRunStatus, string> = { queued: '◌', working: '●', waiting: '⏸', done: '✓', failed: '✕', stopped: '■' };
-const RUN_LABEL: Record<CardRunStatus, string> = { queued: _('antre'), working: _('bekerja'), waiting: _('menunggu jawaban'), done: _('selesai'), failed: _('gagal'), stopped: _('dihentikan') };
-// Singkatan bulan untuk label tenggat; konteks gettext karena "Mei"/"Jan" sendirian ambigu bagi penerjemah.
+const RUN_LABEL: Record<CardRunStatus, string> = { queued: _('queued'), working: _('working'), waiting: _('waiting for an answer'), done: _('done'), failed: _('failed'), stopped: _('stopped') };
+// Month abbreviations for the due date label; gettext context because "May"/"Jan" alone are ambiguous for translators.
 const MONTHS = (): string[] => [
-    pgettext('bulan singkat', 'Jan'), pgettext('bulan singkat', 'Feb'), pgettext('bulan singkat', 'Mar'), pgettext('bulan singkat', 'Apr'),
-    pgettext('bulan singkat', 'Mei'), pgettext('bulan singkat', 'Jun'), pgettext('bulan singkat', 'Jul'), pgettext('bulan singkat', 'Agu'),
-    pgettext('bulan singkat', 'Sep'), pgettext('bulan singkat', 'Okt'), pgettext('bulan singkat', 'Nov'), pgettext('bulan singkat', 'Des'),
+    pgettext('short month', 'Jan'), pgettext('short month', 'Feb'), pgettext('short month', 'Mar'), pgettext('short month', 'Apr'),
+    pgettext('short month', 'May'), pgettext('short month', 'Jun'), pgettext('short month', 'Jul'), pgettext('short month', 'Aug'),
+    pgettext('short month', 'Sep'), pgettext('short month', 'Oct'), pgettext('short month', 'Nov'), pgettext('short month', 'Dec'),
 ];
 
-// Dialog bisa diganti (misalnya di tes dengan jawaban langsung); dialog asli menjawab lewat Promise.
+// Dialogs can be replaced (for example in tests with immediate answers); the real dialog answers through a Promise.
 export interface BoardDialogs {
     editCard(parent: Gtk.Window | null, card: CardDraft, title?: string, listNotes?: () => string[]): Awaitable<CardDraft | null>;
     prompt(parent: Gtk.Window | null, options: { title: string; label: string; value?: string }): Awaitable<string | null>;
     confirm(parent: Gtk.Window | null, message: string, detail?: string): Awaitable<boolean>;
 }
 
-// Penugasan kartu ke harness eksternal (diisi jendela). Kartu dikenali dari teksnya.
+// Assigning cards to external harnesses (filled in by the window). A card is recognized by its text.
 export type CardRunStatus = 'queued' | 'working' | 'waiting' | 'done' | 'failed' | 'stopped';
 export interface BoardHarness {
     status(card: Card): CardRunStatus | null;
@@ -68,7 +68,7 @@ export interface ColumnView {
     footer: Gtk.Button;
 }
 
-// Posisi penunjuk selalu dalam koordinat kartu yang ditekan.
+// The pointer position is always in the coordinates of the pressed card.
 interface PressState {
     column: number;
     index: number;
@@ -83,7 +83,7 @@ interface DragState {
     ghost: Gtk.Picture;
     placeholder: Gtk.Box;
     target: Position;
-    pointer: [number, number];   // posisi penunjuk di koordinat papan
+    pointer: [number, number];   // pointer position in board coordinates
     timer: number;
 }
 
@@ -92,13 +92,13 @@ type Adding = { kind: 'list' } | null;
 export class KanbanBoard {
     readonly widget: Gtk.Overlay;
     readonly scroller: Gtk.ScrolledWindow;
-    private readonly ghostLayer: Gtk.Fixed;   // tempat kartu bayangan saat menyeret
+    private readonly ghostLayer: Gtk.Fixed;   // where the ghost card lives while dragging
     columns: ColumnView[] = [];
     onChange: (board: Board) => void = () => {};
     dialogs: BoardDialogs = { editCard: editCardDialog, prompt: promptDialog, confirm: confirmDialog };
     today: () => string = () => GLib.DateTime.new_now_local().format('%Y-%m-%d') ?? '';
     harness: BoardHarness | null = null;
-    // [[catatan]] di kartu diklik, dan daftar berkas untuk saran [[ di dialog kartu (diisi jendela).
+    // a [[note]] on a card was clicked, and the file list for [[ suggestions in the card dialog (filled in by the window).
     onOpenNote: (link: WikiLink) => void = () => {};
     listNotes: (() => string[]) | null = null;
 
@@ -111,14 +111,14 @@ export class KanbanBoard {
     private drag: DragState | null = null;
 
     constructor() {
-        // Jarak ke tepi lewat padding CSS (.kanban-row), bukan margin widget: margin jatuh di luar
-        // alokasi widget dan tidak dicat oleh viewport, sehingga tampil hitam.
+        // Distance to the edge through CSS padding (.kanban-row), not widget margin: a margin falls outside
+        // the widget's allocation and is not painted by the viewport, so it shows up black.
         this.row = new Gtk.Box({ spacing: 14, valign: Gtk.Align.FILL });
         this.row.add_css_class('kanban-row');
         this.scroller = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.AUTOMATIC, vscrollbar_policy: Gtk.PolicyType.NEVER, hexpand: true, vexpand: true, can_focus: false });
         this.scroller.add_css_class('kanban-board');
         this.scroller.set_child(this.row);
-        // Lapisan kartu bayangan tidak menerima klik, jadi penunjuk tetap sampai ke papan.
+        // The ghost card layer does not receive clicks, so the pointer still reaches the board.
         this.ghostLayer = new Gtk.Fixed({ can_target: false });
         this.widget = new Gtk.Overlay({ child: this.scroller });
         this.widget.add_overlay(this.ghostLayer);
@@ -130,13 +130,13 @@ export class KanbanBoard {
         return this.board;
     }
 
-    // Ganti papan (misalnya dokumen dibuka atau undo) tanpa memanggil onChange.
+    // Replace the board (for example a document opened or undo) without calling onChange.
     setBoard(board: Board): void {
         this.board = board;
         this.render();
     }
 
-    // Terapkan perubahan dari pengguna: ganti model, gambar ulang, dan beri tahu pemilik.
+    // Apply a change from the user: replace the model, redraw, and notify the owner.
     commit(next: Board): void {
         if (next === this.board) return;
         this.board = next;
@@ -154,10 +154,10 @@ export class KanbanBoard {
         return top instanceof Gtk.Window ? top : null;
     }
 
-    // ---------- Menggambar ----------
+    // ---------- Drawing ----------
 
-    // Digambar ulang di idle: perubahan sering datang dari dalam penanganan klik widget yang
-    // akan dihancurkan, dan beberapa perubahan beruntun cukup digambar sekali.
+    // Redrawn at idle: changes often come from inside the handling of a click on a widget that
+    // is about to be destroyed, and several consecutive changes only need to be drawn once.
     queueRender(): void {
         if (this.renderQueued) return;
         this.renderQueued = true;
@@ -179,7 +179,7 @@ export class KanbanBoard {
         for (const col of this.columns) this.row.append(col.box);
         this.row.append(this.buildAddList());
 
-        // Posisi gulir baru berlaku setelah tata letak.
+        // The new scroll position only applies after layout.
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this.scroller.get_hadjustment().set_value(h);
             this.columns.forEach((col, c) => col.scroller.get_vadjustment().set_value(v[c] ?? 0));
@@ -193,12 +193,12 @@ export class KanbanBoard {
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, width_request: COLUMN_WIDTH, vexpand: true });
         box.add_css_class('kanban-column');
 
-        // Judul: klik ganda untuk mengganti nama.
+        // Title: double click to rename.
         const title = new Gtk.Label({ label: column.title, xalign: 0, ellipsize: Pango.EllipsizeMode.END, hexpand: true });
         title.add_css_class('kanban-column-title');
         const titleBox = new Gtk.Box();
         titleBox.append(title);
-        titleBox.set_tooltip_text(_('Klik ganda untuk mengganti nama'));
+        titleBox.set_tooltip_text(_('Double-click to rename'));
         onClick(titleBox, count => {
             if (count !== 2) return false;
             this.renameColumnPrompt(c);
@@ -206,7 +206,7 @@ export class KanbanBoard {
         });
         const count = new Gtk.Label({ label: String(column.cards.length) });
         count.add_css_class('kanban-count');
-        const more = new Gtk.Button({ label: '⋯', has_frame: false, tooltip_text: _('Menu daftar') });
+        const more = new Gtk.Button({ label: '⋯', has_frame: false, tooltip_text: _('List menu') });
         more.connect('clicked', () => popupMenu(more, this.columnMenu(c)));
         const header = new Gtk.Box({ spacing: 6 });
         pack(header, titleBox, true);
@@ -234,7 +234,7 @@ export class KanbanBoard {
         widget.add_css_class('kanban-card');
         if (card.done) widget.add_css_class('kanban-card-done');
 
-        const check = new Gtk.CheckButton({ active: card.done === true, valign: Gtk.Align.START, tooltip_text: _('Tandai selesai') });
+        const check = new Gtk.CheckButton({ active: card.done === true, valign: Gtk.Align.START, tooltip_text: _('Mark done') });
         check.connect('toggled', () => this.commit(toggleDone(this.board, { column: c, index: i })));
         const label = new Gtk.Label({ use_markup: true, xalign: 0, wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR, hexpand: true, width_chars: 10 });
         label.add_css_class('kanban-card-text');
@@ -247,17 +247,17 @@ export class KanbanBoard {
 
         const inner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
         inner.append(top);
-        // Tautan di catatan kartu tidak terlihat di judul, jadi ditampilkan sebagai chip yang bisa diklik.
+        // Links in the card notes are not visible in the title, so they are shown as clickable chips.
         const inTitle = new Set(wikiLinksIn(card.text).map(l => l.target.toLowerCase()));
         const noteLinks = card.notes.length ? wikiLinksIn(card.notes.join('\n')).filter(l => !inTitle.has(l.target.toLowerCase())) : [];
         const badges = this.buildBadges(card.notes.length > 0, meta.tags, meta.due, meta.agent, this.harness?.status(card) ?? null);
         if (badges) inner.append(badges);
-        // Satu baris per tautan supaya tautan yang banyak tidak melebarkan kartu.
+        // One row per link so many links do not widen the card.
         const linkBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 });
         if (noteLinks.length) inner.append(linkBox);
         for (const link of noteLinks) {
             const ref = `${link.target}${link.heading ? `#${link.heading}` : ''}`;
-            const label = new Gtk.Label({ xalign: 0, ellipsize: Pango.EllipsizeMode.END, tooltip_text: fmt(_('Buka catatan {ref} (ikut menjadi konteks agent)'), { ref }) });
+            const label = new Gtk.Label({ xalign: 0, ellipsize: Pango.EllipsizeMode.END, tooltip_text: fmt(_('Open note {ref} (also becomes agent context)'), { ref }) });
             label.add_css_class('kanban-note-link');
             label.set_markup(`<a href="${escapeMarkup(NOTE_URI + encodeURIComponent(ref))}">↗ ${escapeMarkup(link.alias || ref)}</a>`);
             label.connect('activate-link', (_l, uri: string) => this.activateNote(uri));
@@ -265,8 +265,8 @@ export class KanbanBoard {
         }
         widget.append(inner);
 
-        // Tekan-geser-lepas dengan tombol kiri. Kotak centang menangani kliknya sendiri lebih
-        // dulu (anak didahulukan), jadi mencentang tidak membuka dialog sunting.
+        // Press-drag-release with the left button. The checkbox handles its own click
+        // first (children come first), so checking does not open the edit dialog.
         const drag = new Gtk.GestureDrag({ button: 1 });
         let startX = 0, startY = 0;
         drag.connect('drag-begin', (_g, x, y) => {
@@ -295,7 +295,7 @@ export class KanbanBoard {
         };
         if (agent) {
             const label = chip(`${status ? RUN_ICON[status] : '◇'} ${agent}${status ? ` · ${RUN_LABEL[status]}` : ''}`, 'kanban-agent', `kanban-agent-${status ?? 'idle'}`);
-            label.set_tooltip_text(status === 'waiting' ? fmt(_('{agent} menunggu jawaban Anda: klik kanan kartu → Jawab {agent}…'), { agent }) : status ? fmt(_('{agent}: {status} (klik kanan kartu untuk log)'), { agent, status: RUN_LABEL[status] }) : fmt(_('Ditugaskan ke {agent}; klik kanan kartu → Kerjakan dengan {agent}'), { agent }));
+            label.set_tooltip_text(status === 'waiting' ? fmt(_('{agent} is waiting for your answer: right click the card → Answer {agent}…'), { agent }) : status ? fmt(_('{agent}: {status} (right click the card for the log)'), { agent, status: RUN_LABEL[status] }) : fmt(_('Assigned to {agent}; right click the card → Work on it with {agent}'), { agent }));
         }
         for (const tag of tags) chip(`#${tag}`, `kanban-tag-${this.tagColor(tag)}`);
         if (due) chip(`📅 ${this.formatDue(due)}`, 'kanban-due', `kanban-due-${dueStatus(due, this.today())}`);
@@ -303,21 +303,21 @@ export class KanbanBoard {
         return row;
     }
 
-    // Warna tag tetap untuk tag yang sama.
+    // A fixed color for the same tag.
     tagColor(tag: string): number {
         let hash = 0;
         for (const ch of tag) hash = (hash * 31 + ch.codePointAt(0)!) >>> 0;
         return hash % TAG_COLORS;
     }
 
-    // "2026-10-20" → "20 Okt" (dengan tahun jika bukan tahun ini).
+    // "2026-10-20" → "20 Oct" (with the year if it is not this year).
     formatDue(due: string): string {
         const [y, m, d] = due.split('-').map(Number);
         const sameYear = this.today().startsWith(`${y}-`);
         return `${d} ${MONTHS()[m - 1]}${sameYear ? '' : ` ${y}`}`;
     }
 
-    // ---------- Tambah kartu dan daftar ----------
+    // ---------- Adding cards and lists ----------
 
     private entryRow(placeholder: string, add: (text: string) => void, cancel: () => void): { box: Gtk.Box; entry: Gtk.Entry } {
         const entry = new Gtk.Entry({ placeholder_text: placeholder, hexpand: true });
@@ -327,9 +327,9 @@ export class KanbanBoard {
             cancel();
             return true;
         });
-        const ok = new Gtk.Button({ label: _('Tambah') });
+        const ok = new Gtk.Button({ label: _('Add') });
         ok.connect('clicked', () => { if (entry.text.trim()) add(entry.text); });
-        const close = new Gtk.Button({ label: '✕', has_frame: false, tooltip_text: _('Batal (Esc)') });
+        const close = new Gtk.Button({ label: '✕', has_frame: false, tooltip_text: _('Cancel (Esc)') });
         close.connect('clicked', cancel);
         const box = new Gtk.Box({ spacing: 4 });
         pack(box, entry, true);
@@ -339,7 +339,7 @@ export class KanbanBoard {
     }
 
     private buildAddCard(c: number): Gtk.Button {
-        const button = new Gtk.Button({ label: _('+ Tambah kartu'), has_frame: false, halign: Gtk.Align.FILL });
+        const button = new Gtk.Button({ label: _('+ Add card'), has_frame: false, halign: Gtk.Align.FILL });
         (button.get_child() as Gtk.Label).xalign = 0;
         button.add_css_class('kanban-add');
         button.connect('clicked', () => this.showAddCard(c));
@@ -349,9 +349,9 @@ export class KanbanBoard {
     private buildAddList(): Gtk.Box {
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, width_request: COLUMN_WIDTH, valign: Gtk.Align.START });
         box.add_css_class('kanban-add-list');
-        const button = new Gtk.Button({ label: _('+ Tambah daftar'), has_frame: false });
+        const button = new Gtk.Button({ label: _('+ Add list'), has_frame: false });
         button.connect('clicked', () => this.showAddList());
-        const { box: entryBox, entry } = this.entryRow('Nama daftar…', text => this.commit(addColumn(this.board, text)), () => this.hideAdd());
+        const { box: entryBox, entry } = this.entryRow('List name…', text => this.commit(addColumn(this.board, text)), () => this.hideAdd());
         entry.set_name('kanban-entry-list');
         const stack = new Gtk.Stack();
         stack.add_named(button, 'button');
@@ -361,9 +361,9 @@ export class KanbanBoard {
         return box;
     }
 
-    // Kartu baru diisi lewat dialog yang sama dengan sunting kartu.
+    // A new card is filled in through the same dialog as editing a card.
     showAddCard(column: number): void {
-        void after(this.dialogs.editCard(this.parent, { text: '', notes: [] }, _('Tambah Kartu'), this.listNotes ?? undefined), draft => {
+        void after(this.dialogs.editCard(this.parent, { text: '', notes: [] }, _('Add Card'), this.listNotes ?? undefined), draft => {
             if (!draft?.text) return;
             const index = this.board.columns[column]?.cards.length ?? 0;
             const added = addCard(this.board, column, draft.text);
@@ -381,7 +381,7 @@ export class KanbanBoard {
         this.queueRender();
     }
 
-    // Isian nama daftar yang sedang terbuka diberi fokus setelah digambar ulang.
+    // The list name entry that is open gets focus after being redrawn.
     private focusAddEntry(): void {
         if (this.adding?.kind === 'list') this.findByName(this.row, 'kanban-entry-list')?.grab_focus();
     }
@@ -395,13 +395,13 @@ export class KanbanBoard {
         return null;
     }
 
-    // ---------- Sunting ----------
+    // ---------- Editing ----------
 
     editCard(column: number, index: number): void {
         const card = this.board.columns[column]?.cards[index];
         if (!card) return;
         void after(this.dialogs.editCard(this.parent, { text: card.text, notes: card.notes }, undefined, this.listNotes ?? undefined), result => {
-            // Papan bisa berubah selama dialog terbuka; kartu yang sama dicari lagi lewat posisinya.
+            // The board can change while the dialog is open; the same card is found again through its position.
             if (result?.text && this.board.columns[column]?.cards[index]?.text === card.text)
                 this.commit(updateCard(this.board, { column, index }, { text: result.text, notes: result.notes }));
         });
@@ -410,7 +410,7 @@ export class KanbanBoard {
     renameColumnPrompt(column: number): void {
         const current = this.board.columns[column]?.title;
         if (current === undefined) return;
-        void after(this.dialogs.prompt(this.parent, { title: _('Ganti Nama Daftar'), label: _('Nama daftar'), value: current }), name => {
+        void after(this.dialogs.prompt(this.parent, { title: _('Rename List'), label: _('List name'), value: current }), name => {
             if (name && this.board.columns[column]?.title === current) this.commit(renameColumn(this.board, column, name));
         });
     }
@@ -418,8 +418,8 @@ export class KanbanBoard {
     deleteColumnConfirm(column: number): void {
         const col = this.board.columns[column];
         if (!col) return;
-        const detail = col.cards.length ? fmt(_('{count} kartu di dalamnya ikut terhapus.'), { count: col.cards.length }) : undefined;
-        void after(this.dialogs.confirm(this.parent, fmt(_('Hapus daftar “{title}”?'), { title: col.title }), detail), yes => {
+        const detail = col.cards.length ? fmt(_('The {count} cards in it will also be deleted.'), { count: col.cards.length }) : undefined;
+        void after(this.dialogs.confirm(this.parent, fmt(_('Delete the list “{title}”?'), { title: col.title }), detail), yes => {
             if (yes && this.board.columns[column]?.title === col.title) this.commit(deleteColumn(this.board, column));
         });
     }
@@ -435,30 +435,30 @@ export class KanbanBoard {
                 : { label: target.title, run: () => this.commit(moveCard(this.board, at, { column: t, index: Infinity })) })
             .filter((e): e is MenuEntry => e !== null);
         return [
-            { label: _('Sunting…'), run: () => this.editCard(column, index) },
-            { label: card.done ? _('Tandai Belum Selesai') : _('Tandai Selesai'), run: () => this.commit(toggleDone(this.board, at)) },
-            { label: _('Pindahkan ke'), enabled: this.board.columns.length > 1, submenu: move },
-            { label: _('Naik'), enabled: index > 0, run: () => this.commit(moveCard(this.board, at, { column, index: index - 1 })) },
-            { label: _('Turun'), enabled: index < col.cards.length - 1, run: () => this.commit(moveCard(this.board, at, { column, index: index + 1 })) },
+            { label: _('Edit…'), run: () => this.editCard(column, index) },
+            { label: card.done ? _('Mark Not Done') : _('Mark Done'), run: () => this.commit(toggleDone(this.board, at)) },
+            { label: _('Move to'), enabled: this.board.columns.length > 1, submenu: move },
+            { label: _('Move Up'), enabled: index > 0, run: () => this.commit(moveCard(this.board, at, { column, index: index - 1 })) },
+            { label: _('Move Down'), enabled: index < col.cards.length - 1, run: () => this.commit(moveCard(this.board, at, { column, index: index + 1 })) },
             ...(this.harness ? [separator(), ...this.harness.menu(card, at)] : []),
             separator(),
-            { label: _('Hapus'), run: () => this.commit(deleteCard(this.board, at)) },
+            { label: _('Delete'), run: () => this.commit(deleteCard(this.board, at)) },
         ];
     }
 
     columnMenu(column: number): MenuEntry[] {
         return [
-            { label: _('Ganti Nama…'), run: () => this.renameColumnPrompt(column) },
-            { label: _('Geser ke Kiri'), enabled: column > 0, run: () => this.commit(moveColumn(this.board, column, column - 1)) },
-            { label: _('Geser ke Kanan'), enabled: column < this.board.columns.length - 1, run: () => this.commit(moveColumn(this.board, column, column + 1)) },
+            { label: _('Rename…'), run: () => this.renameColumnPrompt(column) },
+            { label: _('Move Left'), enabled: column > 0, run: () => this.commit(moveColumn(this.board, column, column - 1)) },
+            { label: _('Move Right'), enabled: column < this.board.columns.length - 1, run: () => this.commit(moveColumn(this.board, column, column + 1)) },
             separator(),
-            { label: _('Hapus Daftar…'), run: () => this.deleteColumnConfirm(column) },
+            { label: _('Delete List…'), run: () => this.deleteColumnConfirm(column) },
         ];
     }
 
-    // ---------- Klik dan seret ----------
+    // ---------- Click and drag ----------
 
-    // Tautan [[catatan]] di kartu diklik. Penekanan kartu dibatalkan supaya lepasnya tidak membuka dialog sunting.
+    // A [[note]] link on a card was clicked. The card press is cancelled so releasing does not open the edit dialog.
     activateNote(uri: string): boolean {
         if (!uri.startsWith(NOTE_URI)) return false;
         this.press = null;
@@ -466,13 +466,13 @@ export class KanbanBoard {
         return true;
     }
 
-    // Tombol kiri ditekan di (x, y), koordinat kartu `widget`.
+    // Left button pressed at (x, y), coordinates of the card `widget`.
     onCardPress(column: number, index: number, widget: Gtk.Box, x: number, y: number): boolean {
         this.press = { column, index, widget, localX: x, localY: y };
         return true;
     }
 
-    // Penunjuk bergerak ke (x, y), koordinat kartu yang ditekan.
+    // The pointer moves to (x, y), coordinates of the pressed card.
     onCardMotion(x: number, y: number): boolean {
         const press = this.press;
         if (!press) return false;
@@ -489,7 +489,7 @@ export class KanbanBoard {
         this.press = null;
         if (!press) return false;
         if (this.drag) this.finishDrag();
-        else this.editCard(press.column, press.index);   // tidak bergeser: klik biasa
+        else this.editCard(press.column, press.index);   // did not move: a plain click
         return true;
     }
 
@@ -501,7 +501,7 @@ export class KanbanBoard {
         const { widget } = press;
         const height = widget.get_allocated_height();
 
-        // Kartu bayangan: gambar diam kartu saat ini (sebelum dibuat pudar), di lapisan Overlay.
+        // Ghost card: a still image of the card as it is now (before it is faded), in the Overlay layer.
         const image = new Gtk.WidgetPaintable({ widget }).get_current_image();
         const ghost = new Gtk.Picture({ paintable: image, can_shrink: false, opacity: 0.9 });
         this.ghostLayer.put(ghost, 0, 0);
@@ -525,7 +525,7 @@ export class KanbanBoard {
         this.retarget();
     }
 
-    // Hitung ulang tujuan jatuh dari posisi penunjuk, dan pindahkan penandanya bila berubah.
+    // Recompute the drop target from the pointer position, and move its marker if it changed.
     private retarget(): void {
         const drag = this.drag;
         if (!drag) return;
@@ -538,12 +538,12 @@ export class KanbanBoard {
         const before = others[target.index];
         const old = drag.placeholder.get_parent();
         if (old instanceof Gtk.Box) old.remove(drag.placeholder);
-        // Sisipkan tepat sebelum kartu tujuan (atau di akhir daftar).
+        // Insert right before the target card (or at the end of the list).
         if (before) col.cardsBox.insert_child_after(drag.placeholder, before.get_prev_sibling());
         else col.cardsBox.append(drag.placeholder);
     }
 
-    // Daftar yang melingkupi penunjuk (atau yang terdekat), dan posisi kartu di dalamnya.
+    // The list surrounding the pointer (or the nearest one), and the card position in it.
     targetAt(bx: number, by: number): Position | null {
         if (!this.columns.length) return null;
         let best = 0, bestDistance = Infinity;
@@ -580,7 +580,7 @@ export class KanbanBoard {
         drag.widget.set_opacity(1);
     }
 
-    // Menyeret dekat tepi menggulir papan (kiri/kanan) atau daftar tujuan (atas/bawah).
+    // Dragging near an edge scrolls the board (left/right) or the target list (up/down).
     autoscroll(): boolean {
         const drag = this.drag;
         if (!drag) return GLib.SOURCE_REMOVE;
@@ -591,7 +591,7 @@ export class KanbanBoard {
         const before = hadj.get_value();
         if (wx < EDGE) hadj.set_value(before - SCROLL_SPEED);
         else if (wx > this.scroller.get_allocated_width() - EDGE) hadj.set_value(before + SCROLL_SPEED);
-        drag.pointer = [bx + (hadj.get_value() - before), by];   // penunjuk diam di layar, papan yang bergeser
+        drag.pointer = [bx + (hadj.get_value() - before), by];   // the pointer is still on screen, the board moves
 
         const col = this.columns[Math.max(0, drag.target.column)];
         if (col) {
@@ -604,7 +604,7 @@ export class KanbanBoard {
         return GLib.SOURCE_CONTINUE;
     }
 
-    // ---------- Untuk tes dan pemanggil ----------
+    // ---------- For tests and callers ----------
 
     cardTexts(column: number): string[] {
         return this.board.columns[column]?.cards.map(c => c.text) ?? [];

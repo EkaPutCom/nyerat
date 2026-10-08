@@ -1,16 +1,16 @@
-// Tampilan inbox untuk dokumen inbox (markdown/inbox.ts).
+// The inbox view for inbox documents (markdown/inbox.ts).
 //
-//   Inbox                                        [+ Catatan Baru]
-//   Tempat menangkap ide, catatan, dan hal yang perlu diproses nanti.
-//   ┌ Tangkap cepat: ketik lalu Enter ───────────────────────┐
+//   Inbox                                        [+ New Note]
+//   A place to capture ideas, notes, and things to process later.
+//   ┌ Quick capture: type then Enter ────────────────────────┐
 //   ┌────────────────────────────────────────────────────────┐
-//   │ Ide: Muara bisa menggunakan SQLite…          #idea   ✕ │   klik untuk menyunting
-//   │ 10 menit lalu                                          │
+//   │ Idea: The estuary could use SQLite…          #idea   ✕ │   click to edit
+//   │ 10 minutes ago                                         │
 //   └────────────────────────────────────────────────────────┘
 //
-// Seperti papan kanban, komponen ini hanya memegang model dan tampilannya: setiap
-// perubahan lewat commit(), yang memanggil onChange supaya jendela menulisnya ke buffer
-// (teks Markdown tetap satu-satunya sumber kebenaran).
+// Like the kanban board, this component only holds the model and its display: every
+// change goes through commit(), which calls onChange so the window writes it to the buffer
+// (the Markdown text remains the single source of truth).
 
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
@@ -26,14 +26,14 @@ import { _, fmt, ngettext } from '../i18n.js';
 
 const MAX_WIDTH = 720;
 
-// "10 menit lalu", "1 jam lalu", "3 hari lalu"; lebih lama dari seminggu berupa tanggal. Dipakai juga Beranda.
+// "10 minutes ago", "1 hour ago", "3 days ago"; older than a week it becomes a date. Also used by Home.
 export function ageLabel(captured: Date, now: Date): string {
     const age: Age = ageOf(captured, now);
     switch (age.unit) {
-        case 'now': return _('baru saja');
-        case 'minutes': return fmt(ngettext('{n} menit lalu', '{n} menit lalu', age.n), { n: age.n });
-        case 'hours': return fmt(ngettext('{n} jam lalu', '{n} jam lalu', age.n), { n: age.n });
-        case 'days': return fmt(ngettext('{n} hari lalu', '{n} hari lalu', age.n), { n: age.n });
+        case 'now': return _('just now');
+        case 'minutes': return fmt(ngettext('{n} minute ago', '{n} minutes ago', age.n), { n: age.n });
+        case 'hours': return fmt(ngettext('{n} hour ago', '{n} hours ago', age.n), { n: age.n });
+        case 'days': return fmt(ngettext('{n} day ago', '{n} days ago', age.n), { n: age.n });
         default: return captured.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: captured.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
     }
 }
@@ -66,8 +66,8 @@ export class InboxView {
         this.description = new Gtk.Label({ xalign: 0, wrap: true, visible: false });
         this.description.add_css_class('dim-label');
 
-        const add = new Gtk.Button({ child: new Adw.ButtonContent({ icon_name: 'list-add-symbolic', label: _('Catatan Baru') }), valign: Gtk.Align.START });
-        add.set_tooltip_text(_('Tambah catatan dengan judul, tag, dan catatan lengkap'));
+        const add = new Gtk.Button({ child: new Adw.ButtonContent({ icon_name: 'list-add-symbolic', label: _('New Note') }), valign: Gtk.Align.START });
+        add.set_tooltip_text(_('Add a note with a title, tags, and full notes'));
         add.connect('clicked', () => this.showAddNote());
         const titles = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, hexpand: true });
         titles.append(this.title);
@@ -76,15 +76,15 @@ export class InboxView {
         header.append(titles);
         header.append(add);
 
-        this.entry = new Gtk.Entry({ placeholder_text: _('Tulis ide, tautan, atau catatan cepat…'), hexpand: true });
+        this.entry = new Gtk.Entry({ placeholder_text: _('Write an idea, link, or quick note…'), hexpand: true });
         this.entry.set_name('inbox-entry');
-        this.entry.update_property([Gtk.AccessibleProperty.LABEL], [_('Tangkap cepat ke inbox')]);
+        this.entry.update_property([Gtk.AccessibleProperty.LABEL], [_('Quick capture to the inbox')]);
         this.entry.connect('activate', () => this.capture(this.entry.text));
 
         this.list = new Gtk.ListBox({ selection_mode: Gtk.SelectionMode.NONE });
         this.list.add_css_class('inbox-list');
         this.list.connect('row-activated', (_l, row: Gtk.ListBoxRow) => this.editItem(row.get_index()));
-        this.empty = new Adw.StatusPage({ icon_name: 'mail-inbox-symbolic', title: _('Inbox kosong'), description: _('Tulis sesuatu di atas untuk menangkapnya.') });
+        this.empty = new Adw.StatusPage({ icon_name: 'mail-inbox-symbolic', title: _('The inbox is empty'), description: _('Write something above to capture it.') });
         this.empty.add_css_class('compact');
 
         this.page = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 16, margin_top: 24, margin_bottom: 24, margin_start: 16, margin_end: 16 });
@@ -104,7 +104,7 @@ export class InboxView {
         return this.inbox;
     }
 
-    // Ganti isi (dokumen dibuka atau undo) tanpa memanggil onChange.
+    // Replace the contents (document opened or undo) without calling onChange.
     setInbox(inbox: Inbox): void {
         this.inbox = inbox;
         this.render();
@@ -127,9 +127,9 @@ export class InboxView {
         return top instanceof Gtk.Window ? top : null;
     }
 
-    // ---------- Menggambar ----------
+    // ---------- Drawing ----------
 
-    // Ditunda ke idle: perubahan datang dari klik widget yang akan dihancurkan.
+    // Deferred to idle: the change comes from a click on a widget that is about to be destroyed.
     queueRender(): void {
         if (this.renderQueued) return;
         this.renderQueued = true;
@@ -151,7 +151,7 @@ export class InboxView {
         this.empty.set_visible(this.inbox.items.length === 0);
     }
 
-    // Judul dan deskripsi diambil dari bagian head setelah frontmatter.
+    // The title and description are taken from the head part after the frontmatter.
     private heading(): { title: string; description: string } {
         const lines = [...this.inbox.head];
         if (lines[0]?.trim() === '---') {
@@ -179,7 +179,7 @@ export class InboxView {
         text.append(title);
         const details: string[] = [];
         if (meta.captured) details.push(this.ageLabel(meta.captured));
-        if (item.notes.length) details.push(_('ada catatan'));
+        if (item.notes.length) details.push(_('has notes'));
         if (details.length) {
             const sub = new Gtk.Label({ label: details.join(' · '), xalign: 0 });
             sub.add_css_class('dim-label');
@@ -194,10 +194,10 @@ export class InboxView {
             chip.add_css_class('inbox-tag');
             box.append(chip);
         }
-        const remove = new Gtk.Button({ icon_name: 'window-close-symbolic', valign: Gtk.Align.CENTER, tooltip_text: _('Hapus catatan') });
+        const remove = new Gtk.Button({ icon_name: 'window-close-symbolic', valign: Gtk.Align.CENTER, tooltip_text: _('Delete note') });
         remove.add_css_class('flat');
         remove.add_css_class('circular');
-        remove.update_property([Gtk.AccessibleProperty.LABEL], [fmt(_('Hapus catatan: {title}'), { title: meta.title })]);
+        remove.update_property([Gtk.AccessibleProperty.LABEL], [fmt(_('Delete note: {title}'), { title: meta.title })]);
         remove.connect('clicked', () => this.commit(deleteItem(this.inbox, i)));
         box.append(remove);
 
@@ -211,9 +211,9 @@ export class InboxView {
         return true;
     }
 
-    // ---------- Aksi ----------
+    // ---------- Actions ----------
 
-    // Tangkap cepat: satu baris dari isian di atas daftar.
+    // Quick capture: one line from the entry above the list.
     capture(text: string): void {
         this.entry.set_text('');
         if (!text.trim()) return;
@@ -221,9 +221,9 @@ export class InboxView {
         this.entry.grab_focus();
     }
 
-    // Catatan baru lewat dialog, dengan tag dan catatan.
+    // A new note through the dialog, with tags and notes.
     showAddNote(): void {
-        void after(this.dialogs.editNote(this.parent, { text: '', notes: [] }, _('Catatan Baru'), this.listNotes ?? undefined), draft => {
+        void after(this.dialogs.editNote(this.parent, { text: '', notes: [] }, _('New Note'), this.listNotes ?? undefined), draft => {
             if (draft?.text) this.commit(captureItem(this.inbox, draft.text, this.now(), draft.notes));
         });
     }
@@ -232,7 +232,7 @@ export class InboxView {
         const item = this.inbox.items[index];
         if (!item) return;
         void after(this.dialogs.editNote(this.parent, { text: item.text, notes: item.notes }, undefined, this.listNotes ?? undefined), result => {
-            // Inbox bisa berubah selama dialog terbuka; item yang sama dicari lagi lewat posisinya.
+            // The inbox can change while the dialog is open; the same item is found again through its position.
             if (result?.text && this.inbox.items[index]?.text === item.text)
                 this.commit(updateItem(this.inbox, index, { text: result.text, notes: result.notes }));
         });
