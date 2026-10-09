@@ -384,7 +384,8 @@ src/
 ├── settings.ts           AppSettings: typed properties on top of Gio.Settings (schema in data/com.ekaput.Nyerat.gschema.xml)
 ├── commands.ts           action names for the command palette
 ├── activity.ts           daily activity log for the journal at <work folder>/.nyerat/activity (append-only JSONL)
-├── files.ts              read/write UTF-8 text files
+├── files.ts              read/write UTF-8 text files; background writes queued per path; onDiskChange for the app's own changes
+├── workspace.ts          WorkspaceRepository: the Markdown files of a work folder (snapshot watched by file monitors, LRU contents cache, unsaved overlay, background warming); used by chat, Home, [[ suggestions, harness (GLib/GIO)
 ├── fileops.ts            create, rename, delete (to the trash), and move files/folders on disk (no GTK; used by the file tree)
 ├── orchestrator.ts       runs the external harness (pi) for kanban cards in the project folder: process, queue, board updates
 ├── git.ts                the git history of a file and the list of uncommitted files through the `git` command (async; read-only, except committing selected files); also runs the agent's Git tools
@@ -410,7 +411,6 @@ src/
 │   ├── provider.ts       the Provider interface (used by the real client and the fake provider in tests)
 │   ├── sse.ts            pure: reads SSE stream lines (text, reasoning, tool-call chunks, usage) and HTTP error messages
 │   ├── deepseek.ts       DeepSeek client through libsoup 3 (GIO/GLib; loaded on use)
-│   ├── project.ts        reads Markdown files in the project folder with a cache, and lists their names for [[ suggestions (GLib/GIO)
 │   └── apikey.ts         API key: environment variable, keyring (libsecret), or a 0600 file
 │
 ├── markdown/             understanding Markdown (pure TypeScript, no GTK)
@@ -520,7 +520,7 @@ The code is divided into layers. Each layer may only use the layers below it, ne
         ├─ editor/*        the editor engine
         │    └─ markdown/* Markdown rules (no GTK)
         ├─ agent/*         manuscript context and model client (no GTK)
-        └─ settings.ts, files.ts, git.ts, gitlog.ts, config.ts, colors.ts
+        └─ settings.ts, files.ts, workspace.ts, git.ts, gitlog.ts, config.ts, colors.ts
 ```
 
 - **`agent/`** is also free of GTK. `ui/chat.ts` uses it, and the window only gives it a way to fetch the manuscript (`ChatHost`: the active document, the selection, project files, the manuscript folder). `agent/` knows nothing about the editor or widgets.
@@ -590,6 +590,8 @@ The size is **not 1** (a Pango unit, 1/1024 pt) but 256 (`TINY` in `editor/tags.
 **Incremental highlighting on open (`queueFill()` in `editor/view.ts`).** `setText()` still parses the whole document (the line structure, headings, and offsets are needed right away), but syntax tags and hidden markers are only applied for the first 200 lines. The rest are fed in by an idle with priority `HIGH_IDLE + 22` (≤8 ms per turn): above the GtkTextView background layout (125) so that lines are laid out once with their final tags, below drawing (120) so that the screen keeps updating. Each turn prioritizes the lines around the cursor and the visible ones (before GTK finishes the layout, the visible area cannot be trusted because lines not yet laid out are 0 high), so jumping to the end of the document still shows formatted text. `LineTagger.defer()`/`fill()` skip the deferred lines; edits during the feeding are still highlighted as usual. The outline is also built 50 lines per turn. Tests that check the tags of a long document wait for `MarkdownView.highlightComplete`.
 
 **Incremental hidden markers (`MarkerConcealer` in `editor/decorations.ts`).** Each keystroke and cursor move only checks the old and new active lines, the lines the highlighter re-parsed (`reparsed` in the `highlight()` result), and the lines whose tags are not yet known. A new ``` fence can change the markers of the lines below it without editing those lines, which is why the `reparsed` range must be passed on. The markers in the highlighter result are ordered by line (found by binary search), and the markers/headings/images are shifted in place after an edit because the old snapshot is no longer used.
+
+**Reading the work folder without walking it every time (`WorkspaceRepository` in `workspace.ts`).** Chat context, Home, `[[` suggestions, and harness prompts all read the Markdown files of the work folder. The repository keeps a snapshot per folder (names, sizes, modification times) and watches every folder in it with a `Gio.FileMonitor`, so the folder is only walked again after a change; a change to a file already listed (autosave) only refreshes that file's size and time. The app's own writes and file operations reach it at once through `onDiskChange()` in `files.ts`; outside changes arrive with the monitor events. Contents are cached by size and time up to a memory limit, least recently used first out, and unsaved documents are read from their editor. Opening a folder starts `warm()`, which walks and reads in 6 ms slices from an idle callback. A read states how current it must be: `cached` (Home, suggestions, the context preview), `current` (the start of a chat turn walks again, so a file changed outside the app a moment ago is seen), or `fresh` (verification reads every file from disk). A folder with more than 512 subfolders, or one that cannot be monitored, is walked on every request as before.
 
 **Background auto save (`writeTextFileAsync()` in `files.ts`).** Timer-driven auto save writes through Gio on a worker thread (a temporary file, fsync, then an atomic rename), so the fsync pause on a slow disk is not felt while the user keeps typing. Background writes to one path are queued: at most one runs, and a newer request replaces the one still waiting, so an older version can never finish last. All synchronous writes, moves, and deletions of files through `files.ts`/`fileops.ts` first flush the background writes to the same path (`flushWrites()`), so that old contents do not overwrite new ones. Background writes report back on their own `GLib.MainContext`, so a flush runs only write completions, never other application callbacks; their `done` callbacks follow later from the default main loop. The *modified* status is only reset if the text did not change while it was being written.
 

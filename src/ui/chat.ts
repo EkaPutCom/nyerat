@@ -19,6 +19,7 @@ import { systemKeyStore, type KeySource, type KeyStore } from '../agent/apikey.j
 import { buildContext, DEFAULT_BUDGET, findMentions, type BuiltContext, type ContextOptions, type SourceFile } from '../agent/context.js';
 import { deleteChat, listChats, loadChat, nowStamp, saveChat, titleFrom } from '../agent/chatstore.js';
 import { DEEPSEEK_MODELS, DeepSeek } from '../agent/deepseek.js';
+import type { Freshness } from '../workspace.js';
 import type { Provider, Usage } from '../agent/provider.js';
 import { ChatSession, type ProposalResult, type ToolStep } from '../agent/session.js';
 import { diffPreview, describeChange, invertChange, type Change } from '../agent/changes.js';
@@ -36,7 +37,7 @@ import { _, fmt, ngettext } from '../i18n.js';
 export interface ChatHost {
     active(): { name: string; text: string; cursorLine: number } | null;   // the open document (buffer contents, not disk)
     selection(): string;
-    files(fresh?: boolean): SourceFile[];                                                  // other files in the project folder
+    files(freshness?: Freshness): SourceFile[];                                            // other files in the project folder (default cached)
     // Apply a change the user has approved. Returns an error message, or null on success.
     applyChange?(change: Change): string | null;
     applyBatch?(changes: Change[]): string | null;
@@ -327,7 +328,7 @@ export class ChatPanel extends Gtk.Box {
         const elapsed = () => (GLib.get_monotonic_time() - started) / 1e6;
         let reasoning = '';
         try {
-            const result = await this.session.ask(this.turnInput(question), this.makeProvider(found.key), this.model, {
+            const result = await this.session.ask(this.turnInput(question, 'current'), this.makeProvider(found.key), this.model, {
                 onContext: built => {
                     this.setContextSummary(built);
                     answer.meta.set_text(this.describe(built));
@@ -342,7 +343,7 @@ export class ChatPanel extends Gtk.Box {
                 currentFiles: () => {
                     if (requestRoot !== this.host.root()) throw Error('The work folder changed during the request');
                     const active = this.options.activeDocument ? this.host.active() : null;
-                    return [...this.host.files(true).filter(f => f.name !== active?.name), ...(active ? [{ name: active.name, text: active.text }] : [])];
+                    return [...this.host.files('fresh').filter(f => f.name !== active?.name), ...(active ? [{ name: active.name, text: active.text }] : [])];
                 },
                 onState: () => {
                     if (generation !== this.generation) return;
@@ -499,12 +500,13 @@ export class ChatPanel extends Gtk.Box {
 
     // ---------- Context ----------
 
-    private turnInput(question: string) {
+    // A turn walks the folder again so it sees outside changes at once; the preview while typing uses the snapshot.
+    private turnInput(question: string, freshness: Freshness = 'cached') {
         return {
             question,
             active: this.host.active(),
             selection: this.host.selection(),
-            files: this.host.files(),
+            files: this.host.files(freshness),
             mentions: findMentions(question),
             options: { ...this.options },
             budget: this.budget,

@@ -14,6 +14,20 @@ export function readTextFile(path: string): string {
 export function writeTextFile(path: string, text: string): void {
     flushWrites(path);
     GLib.file_set_contents(path, enc.encode(text));
+    notifyDiskChange(path);
+}
+
+// Changes the app itself makes on disk (writes here, file operations in fileops.ts). Listeners (the
+// workspace snapshot) hear of them right away, before a file monitor would report them.
+const diskListeners = new Set<(path: string) => void>();
+
+export function onDiskChange(listener: (path: string) => void): () => void {
+    diskListeners.add(listener);
+    return () => diskListeners.delete(listener);
+}
+
+export function notifyDiskChange(...paths: string[]): void {
+    for (const listener of diskListeners) for (const path of paths) listener(path);
 }
 
 type Done = (error: unknown) => void;
@@ -58,6 +72,7 @@ function ensurePump(): void {
 
 function start(path: string, text: string, queue: Queue): void {
     const complete = (error: unknown) => {
+        if (!error) notifyDiskChange(path);
         finished.push({ done: queue.running, error });
         const next = queue.next;
         queue.next = null;

@@ -511,7 +511,7 @@ buildQuery: question ×1, selection ×0.5,
       <p style="margin:0;font-size:.88rem">The model's thinking process, the context breakdown, the full read results, and token usage. The document context is rebuilt every turn (file contents may change), so the history stays small.</p>
     </div>
   </div>
-  <div class="caveat"><b>A trap that is avoided:</b> the agent must not browse its own history as a document. <code>readProject</code> does not read dot folders, so <code>.nyerat/</code> never shows up in <code>search_documents</code> results. Without this rule, an old answer could be read as a "fact" from a document.</div>
+  <div class="caveat"><b>A trap that is avoided:</b> the agent must not browse its own history as a document. <code>WorkspaceRepository</code> does not read dot folders, so <code>.nyerat/</code> never shows up in <code>search_documents</code> results. Without this rule, an old answer could be read as a "fact" from a document.</div>
   <h3>3b. Tool names are part of the prompt</h3>
   <p>Nyerat was originally designed for writing books, so its prompt and tools talked about the "manuscript". After the vision was widened into a personal workbench (notes, meetings, research, plans), the name <code>search_manuscript</code> was changed to <code>search_documents</code> and all the tool descriptions were neutralized. The model picks tools by their names and descriptions. A name that is too narrow makes the model hesitate to use the tool for meeting minutes.</p>
   <div class="lesson"><b>Lesson</b>Treat tool names and descriptions like interface text for a very literal user. When the scope of the product changes, re-check the prompt and the tool descriptions, not just the UI.</div>
@@ -920,7 +920,7 @@ buildPrompt(card, project, board, notes)</code></pre>
 <pre><code>// host (window.ts), same rules as Ctrl+click
 linkedNotes(boardFile, links):
   root  = work folder (or the board's folder)
-  files = listMarkdownFiles(root)  // no dot folders,
+  files = workspace.names(root)    // no dot folders,
                                    // no symlinks
   file  = resolveWikiLink(target, files, board)
   text  = open editor ?? disk
@@ -938,7 +938,7 @@ linkedNotes(boardFile, links):
   <table class="data cards">
     <thead><tr><th>Risk</th><th>Safeguard</th></tr></thead>
     <tbody>
-      <tr><td data-k="Risk">A link is used to read files outside the work folder</td><td data-k="Safeguard">The target is only matched against the <code>listMarkdownFiles()</code> list: Markdown files in the work folder, without dot folders and without following symlinks. No path from Markdown is opened directly.</td></tr>
+      <tr><td data-k="Risk">A link is used to read files outside the work folder</td><td data-k="Safeguard">The target is only matched against the <code>workspace.names()</code> list: Markdown files in the work folder, without dot folders and without following symlinks. No path from Markdown is opened directly.</td></tr>
       <tr><td data-k="Risk">A long note inflates the prompt and pi's cost</td><td data-k="Safeguard">At most 10 links, 8,000 characters per note, and 24,000 in total. Whatever is cut is marked with the number of characters dropped. <code>#section</code> copies only a single section.</td></tr>
       <tr><td data-k="Risk">A note's contents hold <code>```</code> and "escape" the block, being read as instructions</td><td data-k="Safeguard">The block fence is made one backtick longer than the longest run of backticks in the contents. The prompt states that the contents are context, not commands.</td></tr>
       <tr><td data-k="Risk">The user does not know what was sent</td><td data-k="Safeguard">The full prompt, including the note contents, is recorded in the pi log. A link that is not found is mentioned as it is, not silently dropped.</td></tr>

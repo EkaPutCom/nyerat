@@ -4,7 +4,7 @@
 import GLib from 'gi://GLib';
 import { fileExists } from '../files.js';
 import type { AppSettings } from '../settings.js';
-import { readProject } from '../agent/project.js';
+import type { WorkspaceRepository } from '../workspace.js';
 import { cardProject, isActive } from '../agent/harness.js';
 import { isDirectory } from '../ui/filetree.js';
 import { RESUME_CARDS, type HomeData, type HomeEntry } from '../ui/home.js';
@@ -20,7 +20,7 @@ export interface HomeHost extends DocumentHost {
     readonly settings: AppSettings;
     readonly harness: HarnessController;
     readonly journal: JournalController;
-    projectName(path: string | null): string | null;
+    readonly workspace: WorkspaceRepository;
     updateBoardFile(file: string, edit: (board: Board) => Board): string | null;
     refreshHome(): void;
 }
@@ -32,18 +32,8 @@ export class HomeController {
         const root = this.host.root();
         const recent = this.host.settings.recentFiles.filter(r => fileExists(r.path) && !isDirectory(r.path));
         const { resume, others } = splitRecent(recent, RESUME_CARDS);
-        // Boards and inboxes are read through the readProject cache (by modification time); unsaved tabs are read from their editor.
-        const relevant = (text: string) => isKanban(text) || isInbox(text);
-        const files = root ? readProject(root, null, false, relevant) : [];
-        for (const doc of this.host.docs()) {
-            if (!root || !doc.file?.startsWith(`${root}/`) || !doc.editor.buffer.get_modified()) continue;
-            const name = this.host.projectName(doc.file)!;
-            const text = doc.editor.getText();
-            const at = files.findIndex(f => f.name === name);
-            if (!relevant(text)) { if (at >= 0) files.splice(at, 1); }
-            else if (at >= 0) files[at].text = text;
-            else files.push({ name, text });
-        }
+        // Boards and inboxes come from the workspace (cached by modification time; unsaved tabs from their editor).
+        const files = root ? this.host.workspace.files(root, { keep: text => isKanban(text) || isInbox(text) }) : [];
         const realName = GLib.get_real_name();
         return {
             now,

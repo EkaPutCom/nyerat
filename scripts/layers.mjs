@@ -9,7 +9,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const src = join(root, 'src');
 
 const GTK = /^gi:\/\/(Gtk|Gdk|GdkPixbuf|GdkX11|Gsk|Adw|GtkSource|WebKit|Pango|Graphene)(\?|$)/;
-const BASE = ['settings.ts', 'files.ts', 'git.ts', 'gitlog.ts', 'config.ts', 'colors.ts'];
+const BASE = ['settings.ts', 'files.ts', 'workspace.ts', 'git.ts', 'gitlog.ts', 'config.ts', 'colors.ts'];
 
 // [files the rule applies to, what they may not import, why]. Targets are src-relative paths of
 // local modules or gi:// specifiers.

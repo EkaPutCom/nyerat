@@ -1486,7 +1486,7 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
     <code class="gio">activity.ts · append-only JSONL</code>
     <code class="gio">agent/deepseek.ts · libsoup streaming</code>
     <code class="gio">agent/apikey.ts · libsecret</code>
-    <code class="gio">agent/project.ts · Gio.FileEnumerator</code>
+    <code class="gio">workspace.ts · Gio.FileEnumerator + FileMonitor</code>
     <code class="gio">window/*.ts · feature controllers on a narrow host; GLib timers and paths</code>
   </div>
   <p class="note">One GJS detail from <code>orchestrator.ts</code>: after GTK is loaded, <code>Gio.Subprocess.get_stdout_pipe()</code> triggers a Gjs-WARNING about <code>Gio.UnixInputStream</code>, so the harness reads its pipes with <code>GLib.IOChannel</code> and writes bytes with an explicit length.</p>

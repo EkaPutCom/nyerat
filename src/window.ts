@@ -35,7 +35,7 @@ import { remapPath } from './fileops.js';
 import { FileTree, isDirectory, isImageFile } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
 import { ChatPanel } from './ui/chat.js';
-import { listMarkdownFiles, readProject } from './agent/project.js';
+import { WorkspaceRepository } from './workspace.js';
 import { newNotePath, resolveWikiLink, type WikiLink } from './markdown/wikilink.js';
 import { agentGit } from './git.js';
 import { FindBar } from './ui/findbar.js';
@@ -111,6 +111,9 @@ export class MainWindow {
 
     private docs: Doc[] = [];
     private doc: Doc;                 // the active document
+    // The Markdown files of the work folder; documents with unsaved changes are read from their editor.
+    readonly workspace = new WorkspaceRepository(() => new Map(this.docs
+        .filter(d => d.file && d.editor.buffer.get_modified()).map(d => [d.file!, d.editor.getText()])));
     private nextId = 1;
     private restoring = false;        // a tab from the last session is being reopened: do not record it as newly opened
     private palette: Palette | null = null;
@@ -155,7 +158,7 @@ export class MainWindow {
         this.inbox.onOpenNote = link => this.openNote(link);
         this.inbox.listNotes = () => {
             const root = this.noteRoot(this.doc);
-            return root ? listMarkdownFiles(root) : [];
+            return root ? this.workspace.names(root) : [];
         };
         this.home.onOpenFile = path => this.openInTab(path);
         this.home.onOpenTask = task => this.homePage.openWorkspaceFile(task.file);
@@ -169,7 +172,7 @@ export class MainWindow {
         this.board.onOpenNote = link => this.openNote(link);
         this.board.listNotes = () => {
             const root = this.noteRoot(this.doc);
-            return root ? listMarkdownFiles(root) : [];
+            return root ? this.workspace.names(root) : [];
         };
         this.board.harness = {
             status: card => this.harness.status(card),
@@ -251,17 +254,8 @@ export class MainWindow {
             applyBatch: changes => applyChangeBatch(this.host, changes),
             git: request => this.fileTree.root ? agentGit(this.fileTree.root, request) : Promise.resolve({ ok: false, message: 'no work folder' }),
             window: () => this.win,
-            files: fresh => {
-                const files = this.fileTree.root ? readProject(this.fileTree.root, this.file, fresh) : [];
-                // Other unsaved tabs: the assistant reads the editor contents, not the version on disk.
-                for (const doc of this.docs) {
-                    if (doc === this.doc || !doc.file || !doc.editor.buffer.get_modified()) continue;
-                    const name = this.projectName(doc.file);
-                    const entry = files.find(f => f.name === name);
-                    if (entry) entry.text = doc.editor.getText();
-                }
-                return files;
-            },
+            // Other unsaved tabs are read from their editor, not the version on disk (see workspace).
+            files: freshness => this.fileTree.root ? this.workspace.files(this.fileTree.root, { except: this.file, freshness }) : [],
         };
         this.sidebar.onPageChanged = page => {
             this.settings.sidebarPage = page;
@@ -376,6 +370,7 @@ export class MainWindow {
             get board() { return w.board; },
             get harness() { return w.harness; },
             get journal() { return w.journal; },
+            get workspace() { return w.workspace; },
             root: () => this.fileTree.root,
             active: () => this.doc,
             docs: () => this.docs,
@@ -436,7 +431,7 @@ export class MainWindow {
         editor.onOpenDocument = path => this.openInTab(path);
         editor.listNotes = () => {
             const root = this.noteRoot(doc);
-            return root ? listMarkdownFiles(root) : [];
+            return root ? this.workspace.names(root) : [];
         };
         editor.buffer.connect('modified-changed', () => this.refreshTitle(doc));
         // Text changed while the board is shown and not by the board itself (undo/redo): re-read.
@@ -611,7 +606,7 @@ export class MainWindow {
 
     // ---------- Assistant ----------
 
-    // File name relative to the project folder (the same as the name in agent/project.ts); null if outside the folder or not saved.
+    // File name relative to the project folder (the same as the name in workspace.ts); null if outside the folder or not saved.
     private projectName(path: string | null): string | null {
         const root = this.fileTree.root;
         return path && root && path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path ? GLib.path_get_basename(path) : null;
@@ -640,7 +635,7 @@ export class MainWindow {
             return;
         }
         const from = doc.file?.startsWith(`${root}/`) ? doc.file.slice(root.length + 1) : null;
-        const found = resolveWikiLink(link.target, listMarkdownFiles(root), from);
+        const found = resolveWikiLink(link.target, this.workspace.names(root), from);
         const rel = found ?? newNotePath(link.target, from);
         if (!rel) {
             this.toast(fmt(_('Invalid note name: {target}'), { target: link.target }));
@@ -1079,6 +1074,7 @@ export class MainWindow {
     openFolder(path: string, show = true): void {
         const absolute = Gio.File.new_for_path(path).get_path() ?? path;
         this.fileTree.setRoot(absolute);
+        this.workspace.warm(absolute);
         this.fileTree.reveal(this.file);
         this.syncHistory();
         this.settings.folder = absolute;
@@ -1189,5 +1185,6 @@ export class MainWindow {
         this.chat.destroy();
         this.history.destroy();
         this.fileTree.destroy();
+        this.workspace.close();
     }
 }

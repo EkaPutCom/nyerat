@@ -5,7 +5,7 @@
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { readTextFile, writeTextFile, flushWrites, fileExists } from '../files.js';
+import { readTextFile, writeTextFile, flushWrites, fileExists, notifyDiskChange } from '../files.js';
 import { projectPath } from '../agent/path.js';
 import { applyBatch } from '../agent/batch.js';
 import { changeFiles, cleanNewName, type Change } from '../agent/changes.js';
@@ -36,6 +36,7 @@ export function applyChangeBatch(host: AgentWriteHost, changes: Change[]): strin
     const relocate = (from: string, to: string) => {
         GLib.mkdir_with_parents(GLib.path_get_dirname(to), 0o755);
         Gio.File.new_for_path(from).move(Gio.File.new_for_path(to), Gio.FileCopyFlags.NONE, null, null);
+        notifyDiskChange(from, to);
         const open = openDoc(from);
         if (open) { open.file = to; host.refreshTitle(open); }
     };
@@ -49,6 +50,7 @@ export function applyChangeBatch(host: AgentWriteHost, changes: Change[]): strin
             const path = pathOf(c.file);
             if (c.kind === 'delete') {
                 Gio.File.new_for_path(path).trash(null);
+                notifyDiskChange(path);
                 const open = openDoc(path);
                 if (open) { open.file = null; open.editor.buffer.set_modified(true); host.refreshTitle(open); detached.set(c, open); }
             } else if (c.kind === 'move') relocate(path, pathOf(c.to!));
@@ -56,7 +58,7 @@ export function applyChangeBatch(host: AgentWriteHost, changes: Change[]): strin
         },
         rollback: c => {
             const path = pathOf(c.file);
-            if (c.kind === 'create') { if (fileExists(path)) Gio.File.new_for_path(path).delete(null); }
+            if (c.kind === 'create') { if (fileExists(path)) { Gio.File.new_for_path(path).delete(null); notifyDiskChange(path); } }
             else if (c.kind === 'delete') {
                 writeTextFile(path, c.before);
                 const doc = detached.get(c);

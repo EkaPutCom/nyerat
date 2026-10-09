@@ -1,7 +1,7 @@
 // A complete-work evaluation with a deterministic provider, a virtual disk, and real checkpoints.
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { readProject } from '../../src/agent/project.js';
+import { WorkspaceRepository } from '../../src/workspace.js';
 import { projectPath } from '../../src/agent/path.js';
 import { ChatSession, type TurnHandlers } from '../../src/agent/session.js';
 import { applyBatch } from '../../src/agent/batch.js';
@@ -74,17 +74,18 @@ export function agenticTests(): void {
         const root = GLib.dir_make_tmp('nyerat-fresh-XXXXXX');
         const file = Gio.File.new_for_path(GLib.build_filenamev([root, 'a.md']));
         const link = Gio.File.new_for_path(GLib.build_filenamev([root, 'alias.md']));
+        const workspace = new WorkspaceRepository();
         try {
             GLib.file_set_contents(file.get_path()!, 'old');
-            eq(readProject(root, null)[0].text, 'old');
+            eq(workspace.files(root)[0].text, 'old');
             const info = file.query_info('time::modified,time::modified-usec', Gio.FileQueryInfoFlags.NONE, null);
             GLib.file_set_contents(file.get_path()!, 'new');
             file.set_attribute_uint64('time::modified', info.get_attribute_uint64('time::modified'), Gio.FileQueryInfoFlags.NONE, null);
             file.set_attribute_uint32('time::modified-usec', info.get_attribute_uint32('time::modified-usec'), Gio.FileQueryInfoFlags.NONE, null);
             link.make_symbolic_link(file.get_path()!, null);
-            const fresh = readProject(root, null, true);
+            const fresh = workspace.files(root, { freshness: 'fresh' });
             eq(fresh.map(f => f.name), ['a.md']); eq(fresh[0].text, 'new');
-        } finally { if (link.query_exists(null)) link.delete(null); file.delete(null); GLib.rmdir(root); }
+        } finally { workspace.close(); if (link.query_exists(null)) link.delete(null); file.delete(null); GLib.rmdir(root); }
     });
     test('plan → batch approval → verification of the actual result → finished; the checkpoint can be opened', () => {
         const h = harness();

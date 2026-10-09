@@ -3,7 +3,7 @@
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { flushWrites } from './files.js';
+import { flushWrites, notifyDiskChange } from './files.js';
 
 const MARKDOWN_EXTENSION = /\.(md|markdown|mdown|mkd)$/i;
 
@@ -34,6 +34,7 @@ export function createFile(dir: string, rawName: string, content = ''): string {
     } catch (e) {
         throw new Error(`Failed to create file: ${(e as Error).message}`);
     }
+    notifyDiskChange(path);
     return path;
 }
 
@@ -46,6 +47,7 @@ export function createFolder(dir: string, rawName: string): string {
     } catch (e) {
         throw new Error(`Failed to create folder: ${(e as Error).message}`);
     }
+    notifyDiskChange(path);
     return path;
 }
 
@@ -65,6 +67,7 @@ export function moveEntry(source: string, destDir: string): string | null {
     } catch (e) {
         throw new Error(`Failed to move: ${(e as Error).message}`);
     }
+    notifyDiskChange(source, target);
     return target;
 }
 
@@ -106,6 +109,7 @@ export function copyEntry(source: string, destDir: string): string {
     } catch (e) {
         throw new Error(`Failed to copy “${name}”: ${(e as Error).message}`);
     }
+    notifyDiskChange(target);
     return target;
 }
 
@@ -131,6 +135,7 @@ export function renameEntry(path: string, rawName: string): string | null {
     } catch (e) {
         throw new Error(`Failed to rename: ${(e as Error).message}`);
     }
+    notifyDiskChange(path, target);
     return target;
 }
 
@@ -142,4 +147,5 @@ export function trashEntry(path: string): void {
     } catch (e) {
         throw new Error(`Failed to delete: ${(e as Error).message}`);
     }
+    notifyDiskChange(path);
 }

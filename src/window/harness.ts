@@ -14,13 +14,14 @@ import type { MenuEntry } from '../ui/menu.js';
 import { harnessActivity, type ActivityKind } from '../markdown/journal.js';
 import { assignCard, cardMeta, updateCard, type Board, type Card, type Position } from '../markdown/kanban.js';
 import { noteSection, resolveWikiLink, type WikiLink } from '../markdown/wikilink.js';
-import { listMarkdownFiles } from '../agent/project.js';
+import type { WorkspaceRepository } from '../workspace.js';
 import { _, fmt } from '../i18n.js';
 import { docFor, type DocumentHost } from './doc.js';
 
 export interface HarnessHost extends DocumentHost {
     readonly settings: AppSettings;
     readonly board: KanbanBoard;
+    readonly workspace: WorkspaceRepository;
     boardShown(file: string): boolean;    // the board in `file` is the one on screen
     updateBoardFile(file: string, edit: (board: Board) => Board): string | null;
     record(kind: ActivityKind, text: string): void;
@@ -71,7 +72,7 @@ export class HarnessController {
         const workspace = this.host.root();
         const root = workspace && boardFile.startsWith(`${workspace}/`) ? workspace : GLib.path_get_dirname(boardFile);
         const from = boardFile.slice(root.length + 1);
-        const files = listMarkdownFiles(root);
+        const files = this.host.workspace.names(root);
         return links.map(link => {
             const file = resolveWikiLink(link.target, files, from);
             if (!file) return { link, file: null, text: null };
