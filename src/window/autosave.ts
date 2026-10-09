@@ -16,25 +16,48 @@ export interface AutosaveHost {
     toast(message: string): void;
 }
 
+// Autosave state of one document, kept here rather than on the document record.
+interface Pending {
+    timer: number;        // autosave timeout id, 0 = none
+    lastChange: number;   // time (µs, monotonic) of the last text change
+    changes: number;      // number of text changes; marks the contents written by a background autosave
+}
+
 export class Autosaver {
+    private readonly pending = new WeakMap<Doc, Pending>();
+
     constructor(private readonly host: AutosaveHost) {}
 
-    // Called on every text change, so it is kept cheap: it only records the time. The timer is not
+    private state(doc: Doc): Pending {
+        let state = this.pending.get(doc);
+        if (!state) this.pending.set(doc, state = { timer: 0, lastChange: 0, changes: 0 });
+        return state;
+    }
+
+    // The text of doc changed (every keystroke): count it and queue an autosave.
+    edited(doc: Doc): void {
+        this.state(doc).changes++;
+        this.queue(doc);
+    }
+
+    // Kept cheap because it runs on every keystroke: it only records the time. The timer is not
     // recreated per keystroke; when it fires, it postpones itself again if there are newer keystrokes.
     queue(doc: Doc): void {
         if (!this.host.settings.autosave || !doc.file) return;
-        doc.lastChange = GLib.get_monotonic_time();
-        if (doc.autosaveTimer) return;
-        doc.autosaveTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, AUTOSAVE_DELAY_MS, () => this.tick(doc));
+        const state = this.state(doc);
+        state.lastChange = GLib.get_monotonic_time();
+        if (state.timer) return;
+        state.timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, AUTOSAVE_DELAY_MS, () => this.tick(doc));
     }
 
     private tick(doc: Doc): boolean {
-        const waited = (GLib.get_monotonic_time() - doc.lastChange) / 1000;
+        const state = this.state(doc);
+        const waited = (GLib.get_monotonic_time() - state.lastChange) / 1000;
         if (waited < AUTOSAVE_DELAY_MS) {
-            doc.autosaveTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.ceil(AUTOSAVE_DELAY_MS - waited), () => this.tick(doc));
+            state.timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.ceil(AUTOSAVE_DELAY_MS - waited), () => this.tick(doc));
             return GLib.SOURCE_REMOVE;
         }
-        doc.autosaveTimer = 0;
+        state.timer = 0;
         this.inBackground(doc);
         return GLib.SOURCE_REMOVE;
     }
@@ -46,11 +69,11 @@ export class Autosaver {
         this.cancel(doc);
         const path = doc.file;
         if (!doc.editor.buffer.get_modified() || !this.host.settings.autosave || !path) return false;
-        const changes = doc.changes;
+        const state = this.state(doc), changes = state.changes;
         writeTextFileAsync(path, doc.editor.getText(), error => {
             if (error) {
                 this.host.toast(fmt(_('Autosave failed: {error}'), { error: errorMessage(error) }));
-            } else if (this.host.docs().includes(doc) && doc.file === path && doc.changes === changes) {
+            } else if (this.host.docs().includes(doc) && doc.file === path && state.changes === changes) {
                 // The text did not change while being written: the contents on disk equal the buffer.
                 doc.editor.buffer.set_modified(false);
             }
@@ -76,8 +99,9 @@ export class Autosaver {
     }
 
     cancel(doc: Doc): void {
-        if (!doc.autosaveTimer) return;
-        GLib.source_remove(doc.autosaveTimer);
-        doc.autosaveTimer = 0;
+        const state = this.pending.get(doc);
+        if (!state?.timer) return;
+        GLib.source_remove(state.timer);
+        state.timer = 0;
     }
 }

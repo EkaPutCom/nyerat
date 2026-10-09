@@ -360,7 +360,9 @@ export class MainWindow {
             write: (path, text) => this.documents.write(path, text),
             refreshTree: () => { if (this.fileTree.root) this.fileTree.refresh(this.fileTree.root); },
             refreshHome: () => this.refreshHome(),
-            refreshTitle: doc => this.refreshTitle(doc),
+            fileMoved: (doc, path) => this.documents.fileMoved(doc, path),
+            fileGone: doc => this.documents.fileGone(doc),
+            fileBack: (doc, path) => this.documents.fileBack(doc, path),
             filesMoved: () => { this.fileTree.reveal(this.file); this.syncHistory(true); },
             projectName: path => this.projectName(path),
             showChat: () => { this.settings.chat = true; },
@@ -382,7 +384,7 @@ export class MainWindow {
     }
 
     set file(path: string | null) {
-        this.doc.file = path;
+        this.documents.setFile(this.doc, path);
     }
 
     // The number of open documents (tabs).
@@ -429,7 +431,7 @@ export class MainWindow {
                 if (this.chatSplit.show_sidebar) this.chat.updateContextSummary();
             },
             contentChanged: doc => {
-                this.views.sync();
+                this.views.replaced(doc);
                 this.updateTitle();
                 this.fileTree.reveal(doc.file);
                 if (!doc.home) this.syncHistory();
@@ -471,9 +473,8 @@ export class MainWindow {
         editor.buffer.connect('modified-changed', () => this.refreshTitle(doc));
         // Text changed while the board is shown and not by the board itself (undo/redo): re-read.
         editor.buffer.connect('changed', () => {
-            doc.changes++;
             this.views.queueReload(doc);
-            this.autosaver.queue(doc);
+            this.autosaver.edited(doc);
         });
 
         // A new document inherits the mode and theme of the currently active document.

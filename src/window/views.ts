@@ -38,7 +38,22 @@ export interface ViewHost extends DocumentHost {
     newDocument(text: string): void;   // fill the active empty document, or a new tab, with text
 }
 
+// How one document is shown, kept here rather than on the document record.
+interface ViewState {
+    textOverride: boolean;   // the user chose the text view for this board or inbox
+    boardText: string;       // the text the board/inbox last wrote or read; to recognize outside changes (undo)
+    reloadQueued: boolean;
+}
+
 export class ViewController {
+    private readonly states = new WeakMap<Doc, ViewState>();
+
+    private state(doc: Doc): ViewState {
+        let state = this.states.get(doc);
+        if (!state) this.states.set(doc, state = { textOverride: false, boardText: '', reloadQueued: false });
+        return state;
+    }
+
     constructor(private readonly host: ViewHost) {
         host.board.onChange = board => this.writeBoard(board);
         host.inbox.onChange = inbox => this.writeInbox(inbox);
@@ -48,6 +63,13 @@ export class ViewController {
     get inboxMode(): boolean { return this.host.content.visible_child_name === 'inbox'; }
     get homeMode(): boolean { return this.host.content.visible_child_name === 'home'; }
 
+    // New contents were put into doc (opened, emptied, made Home): it is shown as what it is again, not as the
+    // text view the user chose for the previous contents.
+    replaced(doc: Doc): void {
+        this.state(doc).textOverride = false;
+        this.sync();
+    }
+
     // A kanban document is shown as a board and an inbox document as an inbox, unless the user chose the text view.
     sync(): void {
         const doc = this.host.active();
@@ -56,7 +78,7 @@ export class ViewController {
             return;
         }
         const text = doc.editor.getText();
-        const structured = !doc.textOverride;
+        const structured = !this.state(doc).textOverride;
         this.show(structured && isKanban(text) ? 'board' : structured && isInbox(text) ? 'inbox' : 'text');
     }
 
@@ -78,7 +100,7 @@ export class ViewController {
             const text = doc.editor.getText();
             if (view === 'board') host.board.setBoard(parseBoard(text));
             else host.inbox.setInbox(parseInbox(text));
-            doc.boardText = text;
+            this.state(doc).boardText = text;
             host.findBar.close();
             host.content.visible_child_name = view;
             this.showCounts(view);
@@ -127,7 +149,7 @@ export class ViewController {
             this.show('text');
             return;
         }
-        doc.textOverride = !on;
+        this.state(doc).textOverride = !on;
         this.sync();
     }
 
@@ -139,7 +161,7 @@ export class ViewController {
     private writeInbox(inbox: Inbox): void {
         const doc = this.host.active();
         const text = serializeInbox(inbox);
-        doc.boardText = text;
+        this.state(doc).boardText = text;
         doc.editor.replaceText(text);
         this.host.statusBar.setInboxCounts(inbox.items.length);
     }
@@ -147,9 +169,10 @@ export class ViewController {
     // Changes from the board → document text (one undo step).
     private writeBoard(board: Board): void {
         const doc = this.host.active();
-        if (doc.boardText) this.host.journal.recordBoard(doc.file, parseBoard(doc.boardText), board);
+        const state = this.state(doc);
+        if (state.boardText) this.host.journal.recordBoard(doc.file, parseBoard(state.boardText), board);
         const text = serializeBoard(board);
-        doc.boardText = text;   // recognize this change as the board's own
+        state.boardText = text;   // recognize this change as the board's own
         doc.editor.replaceText(text);
         this.showBoardCounts(board);
     }
@@ -180,25 +203,27 @@ export class ViewController {
 
     // The text of a document shown as a board or inbox changed (undo, for example): read it back into the view.
     queueReload(doc: Doc): void {
-        if (doc !== this.host.active() || !(this.boardMode || this.inboxMode) || doc.reloadQueued) return;
-        doc.reloadQueued = true;
+        const state = this.state(doc);
+        if (doc !== this.host.active() || !(this.boardMode || this.inboxMode) || state.reloadQueued) return;
+        state.reloadQueued = true;
         // Deferred: undo changes the text in several steps, and what is read must be the final result.
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            doc.reloadQueued = false;
+            state.reloadQueued = false;
             if (doc === this.host.active() && this.host.docs().includes(doc)) this.reload(doc);
             return GLib.SOURCE_REMOVE;
         });
     }
 
     private reload(doc: Doc): void {
+        const state = this.state(doc);
         const text = doc.editor.getText();
-        if (!(this.boardMode || this.inboxMode) || text === doc.boardText) return;
+        if (!(this.boardMode || this.inboxMode) || text === state.boardText) return;
         if (!(this.boardMode ? isKanban(text) : isInbox(text))) {
-            doc.textOverride = true;   // no longer a board/inbox (for example the frontmatter was removed)
+            state.textOverride = true;   // no longer a board/inbox (for example the frontmatter was removed)
             this.show('text');
             return;
         }
-        doc.boardText = text;
+        state.boardText = text;
         if (this.boardMode) this.host.board.setBoard(parseBoard(text));
         else this.host.inbox.setInbox(parseInbox(text));
         this.showCounts(this.boardMode ? 'board' : 'inbox');

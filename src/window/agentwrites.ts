@@ -13,7 +13,10 @@ import { agentActivity, type ActivityKind } from '../markdown/journal.js';
 import { docFor, errorMessage, type Doc, type DocumentHost } from './doc.js';
 
 export interface AgentWriteHost extends DocumentHost {
-    refreshTitle(doc: Doc): void;
+    // An open document's file was moved, deleted, or written back (see DocumentController).
+    fileMoved(doc: Doc, path: string): void;
+    fileGone(doc: Doc): void;
+    fileBack(doc: Doc, path: string): void;
     refreshTree(): void;
     filesMoved(): void;          // a delete or move happened: re-reveal the active file and reload its history
     record(kind: ActivityKind, text: string): void;
@@ -38,7 +41,7 @@ export function applyChangeBatch(host: AgentWriteHost, changes: Change[]): strin
         Gio.File.new_for_path(from).move(Gio.File.new_for_path(to), Gio.FileCopyFlags.NONE, null, null);
         notifyDiskChange(from, to);
         const open = openDoc(from);
-        if (open) { open.file = to; host.refreshTitle(open); }
+        if (open) host.fileMoved(open, to);
     };
     const detached = new Map<Change, Doc>();
     const error = applyBatch(changes, {
@@ -52,7 +55,7 @@ export function applyChangeBatch(host: AgentWriteHost, changes: Change[]): strin
                 Gio.File.new_for_path(path).trash(null);
                 notifyDiskChange(path);
                 const open = openDoc(path);
-                if (open) { open.file = null; open.editor.buffer.set_modified(true); host.refreshTitle(open); detached.set(c, open); }
+                if (open) { host.fileGone(open); detached.set(c, open); }
             } else if (c.kind === 'move') relocate(path, pathOf(c.to!));
             else writeText(path, c.after);
         },
@@ -62,7 +65,7 @@ export function applyChangeBatch(host: AgentWriteHost, changes: Change[]): strin
             else if (c.kind === 'delete') {
                 writeTextFile(path, c.before);
                 const doc = detached.get(c);
-                if (doc) { doc.file = path; doc.editor.buffer.set_modified(false); host.refreshTitle(doc); }
+                if (doc) host.fileBack(doc, path);
             } else if (c.kind === 'move') relocate(pathOf(c.to!), path);
             else writeText(path, c.before);
         },

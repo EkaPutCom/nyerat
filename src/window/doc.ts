@@ -5,18 +5,13 @@
 import type Adw from 'gi://Adw?version=1';
 import type { MarkdownView } from '../editor/view.js';
 
-// One open document (one tab).
+// One open document (one tab). The file and Home flag change only through DocumentController (window/documents.ts);
+// the view and autosave state of a document is kept by ViewController and Autosaver themselves.
 export interface Doc {
-    id: number;
-    editor: MarkdownView;
-    file: string | null;          // document path, null = never saved
-    home: boolean;                // Home tab: its editor is unused, the tab contents are a HomeView
-    textOverride: boolean;        // the user chose the text view for this kanban board
-    boardText: string;            // the text the board last wrote/read; to recognize outside changes (undo)
-    reloadQueued: boolean;
-    autosaveTimer: number;        // autosave timeout id, 0 = none
-    lastChange: number;           // time (µs, monotonic) of the last text change
-    changes: number;              // number of text changes; marks the contents written by a background autosave
+    readonly id: number;
+    readonly editor: MarkdownView;
+    readonly file: string | null;          // document path, null = never saved
+    readonly home: boolean;                // Home tab: its editor is unused, the tab contents are a HomeView
 }
 
 // The part of the window every controller needs: the open documents and the work folder.

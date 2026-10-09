@@ -47,6 +47,8 @@ export interface DocumentsHost {
     fileSaved(path: string): void;              // a new file was written through Save As: show it in the tree
 }
 
+type MutableDoc = { -readonly [K in keyof Doc]: Doc[K] };
+
 export class DocumentController {
     private docs: Doc[] = [];
     private current!: Doc;
@@ -71,7 +73,7 @@ export class DocumentController {
 
     // Create an empty document together with its editor, without activating it.
     add(): Doc {
-        const doc: Doc = { id: this.nextId++, editor: new MarkdownView(), file: null, home: false, textOverride: false, boardText: '', reloadQueued: false, autosaveTimer: 0, lastChange: 0, changes: 0 };
+        const doc: Doc = { id: this.nextId++, editor: new MarkdownView(), file: null, home: false };
         this.host.attach(doc);
         this.docs.push(doc);
         return doc;
@@ -164,11 +166,9 @@ export class DocumentController {
     // Empty doc (or fill it with text) as a new document without a file.
     reset(doc: Doc, text = ''): void {
         this.activate(doc);
-        doc.file = null;
-        doc.home = false;
+        this.set(doc, { file: null, home: false });
         this.host.setIcon(doc, null);
         doc.editor.setText(text);
-        doc.textOverride = false;
         this.host.contentChanged(doc);
     }
 
@@ -176,10 +176,9 @@ export class DocumentController {
     private show(absolute: string, text: string): void {
         const doc = this.current;
         // The file is set before setText(): relative image paths are resolved from its folder.
-        doc.file = absolute;
+        this.set(doc, { file: absolute });
         this.rememberRecent(absolute);
         doc.editor.setText(text);
-        doc.textOverride = false;
         this.host.contentChanged(doc);
     }
 
@@ -245,9 +244,7 @@ export class DocumentController {
     }
 
     private makeHome(doc: Doc): void {
-        doc.home = true;
-        doc.file = null;
-        doc.textOverride = false;
+        this.set(doc, { file: null, home: true });
         this.host.setIcon(doc, 'user-home-symbolic');
         this.activate(doc);
         this.host.contentChanged(doc);
@@ -289,7 +286,7 @@ export class DocumentController {
         if (!path || !this.docs.includes(doc)) return false;
         if (!/\.[^/]+$/.test(GLib.path_get_basename(path))) path += '.md';
         this.activate(doc);
-        doc.file = path;
+        this.set(doc, { file: path });
         this.host.refreshTitle(doc);
         if (!this.save()) return false;
         this.host.fileSaved(path);
@@ -313,15 +310,45 @@ export class DocumentController {
         return h?.text ? h.text.replace(/[\/\\:*?"<>|]/g, '').slice(0, 60) : UNTITLED;
     }
 
+    // ---------- The file of an open document ----------
+
+    // The only place the file and Home flag of a document change.
+    private set(doc: Doc, change: Partial<Pick<Doc, 'file' | 'home'>>): void {
+        Object.assign(doc as MutableDoc, change);
+    }
+
+    // Set the file without reading it, e.g. before saving a new document there (tests, the window's file setter).
+    setFile(doc: Doc, path: string | null): void {
+        this.set(doc, { file: path });
+    }
+
+    // The document's file was moved or renamed (in the tree, or by an agent change); the contents do not change.
+    fileMoved(doc: Doc, path: string): void {
+        this.set(doc, { file: path });
+        this.host.refreshTitle(doc);
+    }
+
+    // The document's file was deleted: its contents stay in the editor, marked as unsaved.
+    fileGone(doc: Doc): void {
+        this.set(doc, { file: null });
+        doc.editor.buffer.set_modified(true);
+        this.host.refreshTitle(doc);
+    }
+
+    // A deleted file was written back with the editor's contents (an undone delete): the document is saved again.
+    fileBack(doc: Doc, path: string): void {
+        this.set(doc, { file: path });
+        doc.editor.buffer.set_modified(false);
+        this.host.refreshTitle(doc);
+    }
+
     // ---------- Files moved or deleted in the tree ----------
 
     // Open documents under `from` move along to `to`; their contents do not change.
     filesMoved(from: string, to: string): void {
         for (const doc of this.docs) {
             const moved = doc.file ? remapPath(doc.file, from, to) : null;
-            if (!moved) continue;
-            doc.file = moved;
-            this.host.refreshTitle(doc);
+            if (moved) this.fileMoved(doc, moved);
         }
         this.host.settings.recentFiles = moveRecent(this.host.settings.recentFiles, from, to);
     }
@@ -329,10 +356,7 @@ export class DocumentController {
     // Open documents at or under `path` lose their file: their contents stay in the editor, marked as unsaved.
     fileDeleted(path: string): void {
         for (const doc of this.docs) {
-            if (!doc.file || !remapPath(doc.file, path, path)) continue;
-            doc.file = null;
-            doc.editor.buffer.set_modified(true);
-            this.host.refreshTitle(doc);
+            if (doc.file && remapPath(doc.file, path, path)) this.fileGone(doc);
         }
     }
 
