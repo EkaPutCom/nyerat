@@ -10,6 +10,7 @@ import { commitFiles, fileLog, repoChanges, workingState, type GitFailure } from
 import { relativeTime, type ChangeKind, type Commit, type FileChange } from '../gitlog.js';
 import { pack, removeChildren } from '../gtkutil.js';
 import { _, fmt, ngettext } from '../i18n.js';
+import { MessageWriter, setStatus } from './messagewriter.js';
 
 // Commits loaded per request; a long history is loaded incrementally.
 const PAGE_SIZE = 100;
@@ -46,6 +47,7 @@ export class History {
     readonly messageEntry: Gtk.Entry;
     readonly commitButton: Gtk.Button;
     readonly commitStatus: Gtk.Label;
+    readonly writer: MessageWriter;            // the assistant button next to the message
     beforeCommit: () => boolean = () => true;      // save the document first; false = cancel the commit
     onCommitted: () => void = () => {};
 
@@ -100,8 +102,15 @@ export class History {
         this.commitStatus.add_css_class('dim-label');
         this.commitButton.connect('clicked', () => this.commitSelected());
         this.messageEntry.connect('activate', () => this.commitSelected());
+        this.writer = new MessageWriter(this.messageEntry, this.commitStatus, () => this.selected(),
+            _('Write the message with the assistant (reads the checked changes)'));
+        this.writer.onBusy = () => this.updateCommitButton();
+        const messageRow = new Gtk.Box({ spacing: 6 });
+        pack(messageRow, this.messageEntry, true);
+        messageRow.append(this.writer.button);
+        messageRow.set_hexpand(false);   // the entry fills the row; the row does not pass that up to the sidebar
         this.commitBar = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: 8 });
-        this.commitBar.append(this.messageEntry);
+        this.commitBar.append(messageRow);
         this.commitBar.append(this.commitButton);
         this.commitBar.append(this.commitStatus);
         const changedContent = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
@@ -157,6 +166,7 @@ export class History {
     // Window closed: git results still being awaited are ignored.
     destroy(): void {
         this.token++;
+        this.writer.stop();
     }
 
     // The changes button only shows if the file contents differ from the last commit.
@@ -184,7 +194,7 @@ export class History {
         const dir = this.file ? GLib.path_get_dirname(this.file) : this.folder ?? '';
         for (const change of changes) {
             const rel = dir && change.path.startsWith(dir + '/') ? change.path.slice(dir.length + 1) : change.path;
-            const check = new Gtk.CheckButton({ active: !this.unchecked.has(change.path) });
+            const check = new Gtk.CheckButton({ active: !this.unchecked.has(change.path), sensitive: !this.writer.busy });
             check.set_tooltip_text(_('Include in the commit'));
             check.connect('toggled', () => {
                 if (check.active) this.unchecked.delete(change.path); else this.unchecked.add(change.path);
@@ -211,18 +221,22 @@ export class History {
         return this.changed.filter(c => !this.unchecked.has(c.path)).map(c => c.path);
     }
 
+    // Also the lock while the assistant writes: the files and the message must stay what it is describing.
     private updateCommitButton(): void {
         const n = this.selected().length;
+        const busy = this.writer.busy;
         this.commitButton.set_label(n ? fmt(ngettext('Commit {n} file', 'Commit {n} files', n), { n }) : _('Commit'));
-        this.commitButton.set_sensitive(n > 0);
+        this.commitButton.set_sensitive(n > 0 && !busy);
+        for (const check of this.checks.values()) check.set_sensitive(!busy);
+        this.writer.update();
     }
 
-    private showCommitStatus(text: string): void {
-        this.commitStatus.set_text(text);
-        this.commitStatus.set_visible(true);
+    private showCommitStatus(text: string, error = true): void {
+        setStatus(this.commitStatus, text, error);
     }
 
     private async commitSelected(): Promise<void> {
+        if (this.writer.busy) return;
         const files = this.selected();
         const message = this.messageEntry.get_text().trim();
         if (!files.length) return this.showCommitStatus('Select the files to commit');

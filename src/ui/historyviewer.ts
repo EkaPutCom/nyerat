@@ -11,6 +11,7 @@ import { parseDiff, type Commit, type DiffLine } from '../gitlog.js';
 import { replaceAllText } from '../editor/view.js';
 import { iterAtLine, onKeyPress, pack } from '../gtkutil.js';
 import { _, fmt } from '../i18n.js';
+import { MessageWriter, setStatus } from './messagewriter.js';
 
 const DIFF_COLORS = {
     light: { add: '#dafbe1', del: '#ffebe9', hunk: '#0969da' },
@@ -64,6 +65,7 @@ export class HistoryViewer {
     readonly messageEntry: Gtk.Entry;          // commit message (uncommitted-changes mode only)
     readonly commitButton: Gtk.Button;
     readonly status: Gtk.Label;
+    readonly writer: MessageWriter;            // the assistant button next to the message
     beforeCommit: () => boolean = () => true;  // save the document first; false = cancel the commit
     onCommitted: () => void = () => {};
 
@@ -104,9 +106,15 @@ export class HistoryViewer {
         this.commitButton = new Gtk.Button({ label: _('Commit this file') });
         this.commitButton.add_css_class('suggested-action');
         this.status = new Gtk.Label({ xalign: 0, wrap: true, visible: false, margin_start: 12, margin_end: 12, margin_bottom: 8 });
+        this.writer = new MessageWriter(this.messageEntry, this.status, () => commit ? [] : [file],
+            _("Write the message with the assistant (reads this file's changes)"));
+        this.writer.onBusy = busy => this.commitButton.set_sensitive(!busy);
         if (!commit) {
             const bar = new Gtk.Box({ spacing: 8, margin_top: 10, margin_bottom: 10, margin_start: 10, margin_end: 10 });
-            pack(bar, this.messageEntry, true);
+            const message = new Gtk.Box({ spacing: 6 });
+            pack(message, this.messageEntry, true);
+            message.append(this.writer.button);
+            pack(bar, message, true);
             bar.append(this.commitButton);
             body.append(new Gtk.Separator());
             body.append(bar);
@@ -119,7 +127,7 @@ export class HistoryViewer {
         this.window.set_content(view);
 
         // The window is destroyed (GTK 4 does not emit "destroy" while its object is held by JavaScript).
-        this.window.connect('unrealize', () => { this.closed = true; });
+        this.window.connect('unrealize', () => { this.closed = true; this.writer.stop(); });
         onKeyPress(this.window, keyval => {
             if (keyval !== Gdk.KEY_Escape) return false;
             this.window.destroy();
@@ -137,6 +145,7 @@ export class HistoryViewer {
     }
 
     private async doCommit(file: string): Promise<void> {
+        if (this.writer.busy) return;
         const message = this.messageEntry.get_text().trim();
         if (!message) return this.showStatus('Enter a commit message first');
         if (!this.beforeCommit()) return this.showStatus('The document failed to save; the commit was cancelled');
@@ -152,8 +161,7 @@ export class HistoryViewer {
     }
 
     private showStatus(text: string): void {
-        this.status.set_text(text);
-        this.status.set_visible(true);
+        setStatus(this.status, text, true);
     }
 
     show(): void {

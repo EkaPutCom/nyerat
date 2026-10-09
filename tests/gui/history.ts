@@ -1,14 +1,18 @@
 // GUI tests: the git History tab.
 
 import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
+import Gdk from 'gi://Gdk?version=4.0';
 import Gtk from 'gi://Gtk?version=4.0';
+import type { WriteResult } from '../../src/agent/commitmessage.js';
+import { setStatus } from '../../src/ui/messagewriter.js';
 import { HistoryViewer } from '../../src/ui/historyviewer.js';
 import type { Commit } from '../../src/gitlog.js';
-import { section, test, eq, ok, tmp } from '../framework.js';
+import { section, test, eq, ok, tmp, optVal } from '../framework.js';
 import type { GuiContext } from './context.js';
 import { iterAtLine } from '../../src/gtkutil.js';
 import { childrenOf } from '../../src/gtkutil.js';
-import { listRows } from '../widgets.js';
+import { listRows, widgetPixbuf } from '../widgets.js';
 
 export function historyTests(c: GuiContext): void {
     const { w, pump, setText } = c;
@@ -29,6 +33,13 @@ export function historyTests(c: GuiContext): void {
         return cond();
     };
     const rows = () => w.history.store.n_items;
+    // --shot-commit=<prefix>: save the commit form with the assistant button (<prefix>-<state>.png) for visual inspection.
+    const shotPrefix = optVal('shot-commit');
+    const shot = (name: string, widget: Gtk.Widget = w.win) => {
+        if (!shotPrefix) return;
+        for (let i = 0; i < 40; i++) { pump(); GLib.usleep(10000); }
+        widgetPixbuf(widget)?.savev(`${shotPrefix}-${name}.png`, 'png', [], []);
+    };
 
     const a = GLib.build_filenamev([repo, 'a.md']);
     const untracked = GLib.build_filenamev([repo, 'new.md']);
@@ -294,6 +305,109 @@ export function historyTests(c: GuiContext): void {
         ok(w.history.note.label.includes('Save the document'), 'the save hint vanished');
         w.history.setFile(null, true, null);
         ok(waitFor(() => listRows(w.history.changedList).length === 0), 'the list was not emptied without a folder');
+    });
+
+    test('the assistant writes the message from the checked files, streaming it into the box', () => {
+        const writer = w.history.writer;
+        const real = writer.write;
+        ok(real !== null && writer.button.get_visible(), 'the window did not connect the assistant button');
+        git('add', '-A');
+        git('commit', '-q', '-m', 'Add d');
+        const e = GLib.build_filenamev([repo, 'e.md']);
+        write(e, '# E\nnew line\n');
+        w.load(a);
+        w.history.refresh();
+        ok(waitFor(() => listRows(w.history.changedList).length === 1), 'the changed file is not listed');
+        const calls: string[][] = [];
+        let onText: (m: string) => void = () => {};
+        let finish: (r: WriteResult) => void = () => {};
+        let cancellable: Gio.Cancellable | null = null;
+        writer.write = (files, text, cancel) => {
+            calls.push(files); onText = text; cancellable = cancel;
+            return new Promise(resolve => { finish = resolve; });
+        };
+        try {
+            w.history.messageEntry.set_text('my draft');
+            writer.button.emit('clicked');
+            eq(calls, [[e]], 'the files sent');
+            onText('Add a line');
+            eq(w.history.messageEntry.get_text(), 'Add a line', 'the streamed text');
+            ok(!w.history.messageEntry.sensitive && !w.history.commitButton.sensitive, 'the box and Commit are not locked');
+            const check = listRows(w.history.changedList)[0].get_child()!.get_first_child() as Gtk.CheckButton;
+            ok(!check.sensitive, 'the checkbox is not locked');
+            eq(writer.button.get_tooltip_text(), 'Stop writing');
+            eq(w.history.commitStatus.get_text(), 'Writing from the changes in e.md…');
+            shot('writing');
+            finish({ ok: true, message: 'Add a line to E', shortened: false, cancelled: false });
+            ok(waitFor(() => w.history.messageEntry.sensitive), 'still locked');
+            eq(w.history.messageEntry.get_text(), 'Add a line to E');
+            ok(w.history.commitButton.sensitive && check.sensitive, 'not unlocked');
+            eq(w.history.commitStatus.get_text(), 'Written by the assistant from 1 file. Check it before committing.');
+            const [, start, end] = w.history.messageEntry.get_selection_bounds();
+            eq([start, end], [0, 'Add a line to E'.length], 'the message is not selected');
+            shot('done');
+            if (shotPrefix) { const dark = w.dark; w.setDark(true); shot('done-dark'); w.setDark(dark); }
+            // Ctrl+Z right after puts back the draft; GTK's own undo does not see text set by the program.
+            ok((writer as unknown as { undo(k: number, s: number): boolean }).undo(Gdk.KEY_z, Gdk.ModifierType.CONTROL_MASK), 'Ctrl+Z was not handled');
+            eq(w.history.messageEntry.get_text(), 'my draft');
+
+            // Stop keeps what was written so far.
+            writer.button.emit('clicked');
+            onText('Half');
+            writer.button.emit('clicked');
+            ok(cancellable!.is_cancelled(), 'Stop did not cancel');
+            finish({ ok: true, message: 'Half', shortened: false, cancelled: true });
+            ok(waitFor(() => !writer.busy), 'still busy');
+            eq(w.history.messageEntry.get_text(), 'Half');
+            ok(w.history.commitStatus.get_text().startsWith('Stopped'), w.history.commitStatus.get_text());
+
+            // A failure puts back the text and says why; no key links to the settings.
+            w.history.messageEntry.set_text('typed');
+            writer.button.emit('clicked');
+            onText('Partial');
+            finish({ ok: false, reason: 'failed', message: 'Cannot connect to DeepSeek' });
+            ok(waitFor(() => !writer.busy), 'still busy');
+            eq(w.history.messageEntry.get_text(), 'typed');
+            ok(w.history.commitStatus.has_css_class('error'), 'the failure is not an error');
+            ok(w.history.commitStatus.get_text().includes('Cannot connect to DeepSeek'), w.history.commitStatus.get_text());
+            writer.button.emit('clicked');
+            finish({ ok: false, reason: 'no-key', message: '' });
+            ok(waitFor(() => !writer.busy), 'still busy');
+            ok(w.history.commitStatus.get_label().includes('<a href="settings">'), w.history.commitStatus.get_label());
+            shot('no-key');
+
+            check.active = false;
+            ok(!writer.button.sensitive, 'the button can write without checked files');
+            eq(writer.button.get_tooltip_text(), 'Check the files to describe first');
+            check.active = true;
+        } finally {
+            writer.write = real;
+            w.history.messageEntry.set_text('');
+            setStatus(w.history.commitStatus, '');
+        }
+        git('add', '-A');
+        git('commit', '-q', '-m', 'Add e');
+        w.history.refresh();
+        ok(waitFor(() => !w.history.changedBox.get_visible()), 'the list did not vanish');
+    });
+    test('the changes window has the same assistant button, reading only its file', () => {
+        write(a, V2 + 'three\nfour\nfive\nsix\n');
+        const viewer = new HistoryViewer(w.win, a, null, false);
+        const calls: string[][] = [];
+        try {
+            ok(!viewer.writer.button.get_visible(), 'shown without an assistant');
+            viewer.writer.write = async (files, text) => { calls.push(files); text('Add line six'); return { ok: true, message: 'Add line six', shortened: false, cancelled: false }; };
+            ok(viewer.writer.button.get_visible() && viewer.writer.button.sensitive, 'the button is not usable');
+            viewer.writer.button.emit('clicked');
+            ok(waitFor(() => !viewer.writer.busy), 'still busy');
+            eq(viewer.messageEntry.get_text(), 'Add line six');
+            eq(calls, [[a]]);
+            ok(viewer.status.get_text().includes('from 1 file'), viewer.status.get_text());
+            if (shotPrefix) { viewer.show(); shot('viewer', viewer.window); }
+        } finally {
+            viewer.window.destroy();
+        }
+        git('commit', '-q', '-a', '-m', 'Add line six');
     });
 
     // Restore the state for the next tests.
