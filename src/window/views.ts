@@ -8,8 +8,8 @@ import GLib from 'gi://GLib';
 import type Gtk from 'gi://Gtk?version=4.0';
 import { readTextFile, writeTextFile, flushWrites } from '../files.js';
 import { TEXT_ACTIONS } from '../actions.js';
-import { isInbox, parseInbox, serializeInbox, type Inbox } from '../markdown/inbox.js';
-import { countCards, isKanban, parseBoard, serializeBoard, type Board } from '../markdown/kanban.js';
+import { isInbox, newInbox, parseInbox, serializeInbox, type Inbox } from '../markdown/inbox.js';
+import { countCards, isKanban, newBoard, parseBoard, serializeBoard, type Board } from '../markdown/kanban.js';
 import type { KanbanBoard } from '../ui/kanban.js';
 import type { InboxView } from '../ui/inbox.js';
 import type { HomeView } from '../ui/home.js';
@@ -35,6 +35,7 @@ export interface ViewHost extends DocumentHost {
     readonly statusBar: StatusBar;
     readonly findBar: FindBar;
     readonly journal: JournalController;
+    newDocument(text: string): void;   // fill the active empty document, or a new tab, with text
 }
 
 export class ViewController {
@@ -90,6 +91,17 @@ export class ViewController {
     private showCounts(view: 'board' | 'inbox'): void {
         if (view === 'board') this.showBoardCounts(this.host.board.getBoard());
         else this.host.statusBar.setInboxCounts(this.host.inbox.getInbox().items.length);
+    }
+
+    // A new document containing an empty kanban board.
+    newBoard(): void {
+        this.host.newDocument(serializeBoard(newBoard()));
+    }
+
+    // A new document containing an empty inbox, ready to capture.
+    newInbox(): void {
+        this.host.newDocument(serializeInbox(newInbox()));
+        this.host.inbox.focusCapture();
     }
 
     // Text editor actions are disabled while a board, inbox, or Home is shown (its text is hidden).

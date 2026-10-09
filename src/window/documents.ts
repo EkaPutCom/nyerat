@@ -12,7 +12,9 @@ import { readTextFile, writeTextFile, fileExists } from '../files.js';
 import { MarkdownView } from '../editor/view.js';
 import { isDirectory } from '../ui/filetree.js';
 import { chooseFile, askSaveChanges, showError } from '../ui/dialogs.js';
-import { rememberRecent } from '../markdown/home.js';
+import { moveRecent, rememberRecent } from '../markdown/home.js';
+import { markdownToHtml } from '../markdown/html.js';
+import { remapPath } from '../fileops.js';
 import { _, fmt, ngettext } from '../i18n.js';
 import { errorMessage, type Doc } from './doc.js';
 import type { Autosaver } from './autosave.js';
@@ -309,6 +311,58 @@ export class DocumentController {
     suggestName(): string {
         const h = this.current.editor.headings[0];
         return h?.text ? h.text.replace(/[\/\\:*?"<>|]/g, '').slice(0, 60) : UNTITLED;
+    }
+
+    // ---------- Files moved or deleted in the tree ----------
+
+    // Open documents under `from` move along to `to`; their contents do not change.
+    filesMoved(from: string, to: string): void {
+        for (const doc of this.docs) {
+            const moved = doc.file ? remapPath(doc.file, from, to) : null;
+            if (!moved) continue;
+            doc.file = moved;
+            this.host.refreshTitle(doc);
+        }
+        this.host.settings.recentFiles = moveRecent(this.host.settings.recentFiles, from, to);
+    }
+
+    // Open documents at or under `path` lose their file: their contents stay in the editor, marked as unsaved.
+    fileDeleted(path: string): void {
+        for (const doc of this.docs) {
+            if (!doc.file || !remapPath(doc.file, path, path)) continue;
+            doc.file = null;
+            doc.editor.buffer.set_modified(true);
+            this.host.refreshTitle(doc);
+        }
+    }
+
+    // ---------- Export and images ----------
+
+    async exportHtml(): Promise<void> {
+        const doc = this.current;
+        if (doc.home) return;
+        const base = doc.file ? this.nameOf(doc).replace(/\.[^.]+$/, '') : this.suggestName();
+        const text = doc.editor.getText(), title = doc.editor.headings[0]?.text || base;
+        const path = await chooseFile(this.host.win, {
+            title: _('Export HTML'), save: true, filters: ['html', 'all'], name: `${base}.html`,
+            folder: doc.file ? GLib.path_get_dirname(doc.file) : null,
+        });
+        if (!path) return;
+        const html = markdownToHtml(text, title);
+        if (this.write(path, html)) this.host.toast(fmt(_('Exported to {name}'), { name: GLib.path_get_basename(path) }));
+    }
+
+    // Insert ![name](path). The path is made relative to the file if possible.
+    async insertImage(): Promise<void> {
+        const doc = this.current;
+        let path = await chooseFile(this.host.win, { title: _('Choose Image'), filters: ['image'] });
+        if (!path || doc !== this.current) return;
+        if (doc.file) {
+            const dir = Gio.File.new_for_path(GLib.path_get_dirname(doc.file));
+            path = dir.get_relative_path(Gio.File.new_for_path(path)) ?? path;
+        }
+        const alt = GLib.path_get_basename(path).replace(/\.[^.]+$/, '');
+        doc.editor.buffer.insert_at_cursor(`![${alt}](${encodeURI(path)})`, -1);
     }
 
     // ---------- Tab restoration ----------

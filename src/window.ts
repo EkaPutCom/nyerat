@@ -24,13 +24,11 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import { APP_ID, APP_NAME } from './config.js';
 import { addBundledIcons, after, type Awaitable } from './gtkutil.js';
 import { type AppSettings } from './settings.js';
-import { markdownToHtml } from './markdown/html.js';
 import { WELCOME } from './welcome.js';
 import { MarkdownView, type Mode } from './editor/view.js';
 import { Outline } from './ui/outline.js';
 import { History } from './ui/history.js';
 import { HistoryViewer } from './ui/historyviewer.js';
-import { remapPath } from './fileops.js';
 import { FileTree, isDirectory, isImageFile } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
 import { ChatPanel } from './ui/chat.js';
@@ -49,9 +47,6 @@ import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
 import { InboxView } from './ui/inbox.js';
 import { HomeView } from './ui/home.js';
-import { moveRecent } from './markdown/home.js';
-import { newInbox, serializeInbox } from './markdown/inbox.js';
-import { newBoard, serializeBoard } from './markdown/kanban.js';
 import { _, fmt } from './i18n.js';
 import type { Doc } from './window/doc.js';
 import { Autosaver, type AutosaveHost } from './window/autosave.js';
@@ -179,23 +174,11 @@ export class MainWindow {
         };
         this.fileTree.onOpenFile = file => this.openFile(file);
         this.fileTree.onMoved = (from, to) => {
-            for (const doc of this.docs) {
-                const moved = doc.file ? remapPath(doc.file, from, to) : null;
-                if (!moved) continue;
-                doc.file = moved;  // the open document moves along; the buffer contents do not change
-                this.refreshTitle(doc);
-            }
-            this.settings.recentFiles = moveRecent(this.settings.recentFiles, from, to);
+            this.documents.filesMoved(from, to);
             this.syncHistory(true);
         };
         this.fileTree.onDeleted = path => {
-            for (const doc of this.docs) {
-                if (!doc.file || !remapPath(doc.file, path, path)) continue;
-                // The open document is discarded too: its contents stay in the editor, marked as unsaved.
-                doc.file = null;
-                doc.editor.buffer.set_modified(true);
-                this.refreshTitle(doc);
-            }
+            this.documents.fileDeleted(path);
             this.fileTree.reveal(this.file);
             this.syncHistory(true);
         };
@@ -368,6 +351,7 @@ export class MainWindow {
             get homePage() { return w.homePage; },
             get statusBar() { return w.statusBar; },
             get findBar() { return w.findBar; },
+            newDocument: text => this.documents.reset(this.documents.blank(), text),
             root: () => this.fileTree.root,
             active: () => this.doc,
             docs: () => this.docs,
@@ -605,13 +589,12 @@ export class MainWindow {
 
     // A new document containing an empty kanban board.
     newBoardDocument(): void {
-        this.documents.reset(this.documents.blank(), serializeBoard(newBoard()));
+        this.views.newBoard();
     }
 
     // A new document containing an empty inbox.
     newInboxDocument(): void {
-        this.documents.reset(this.documents.blank(), serializeInbox(newInbox()));
-        this.inbox.focusCapture();
+        this.views.newInbox();
     }
 
     // ---------- Home ----------
@@ -772,30 +755,12 @@ export class MainWindow {
         return this.documents.saveAs();
     }
 
-    async exportHtml(): Promise<void> {
-        if (this.doc.home) return;
-        const base = this.file ? this.documentName.replace(/\.[^.]+$/, '') : this.suggestName();
-        const text = this.editor.getText(), title = this.editor.headings[0]?.text || base;
-        const path = await chooseFile(this.win, {
-            title: _('Export HTML'), save: true, filters: ['html', 'all'], name: `${base}.html`,
-            folder: this.file ? GLib.path_get_dirname(this.file) : null,
-        });
-        if (!path) return;
-        const html = markdownToHtml(text, title);
-        if (this.documents.write(path, html)) this.toast(fmt(_('Exported to {name}'), { name: GLib.path_get_basename(path) }));
+    exportHtml(): Promise<void> {
+        return this.documents.exportHtml();
     }
 
-    // Insert ![name](path). The path is made relative to the file if possible.
-    async insertImage(): Promise<void> {
-        const doc = this.doc;
-        let path = await chooseFile(this.win, { title: _('Choose Image'), filters: ['image'] });
-        if (!path || doc !== this.doc) return;
-        if (this.file) {
-            const dir = Gio.File.new_for_path(GLib.path_get_dirname(this.file));
-            path = dir.get_relative_path(Gio.File.new_for_path(path)) ?? path;
-        }
-        const alt = GLib.path_get_basename(path).replace(/\.[^.]+$/, '');
-        this.editor.buffer.insert_at_cursor(`![${alt}](${encodeURI(path)})`, -1);
+    insertImage(): Promise<void> {
+        return this.documents.insertImage();
     }
 
     // true = the window may be closed. Every changed document is asked about one by one.
