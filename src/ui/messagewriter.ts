@@ -38,6 +38,7 @@ export class MessageWriter {
     private before: string | null = null;           // the text Ctrl+Z restores, while the box still holds the written message
     private written = '';
     private writeMessage: WriteMessage | null = null;
+    private held = false;                           // a commit is running: no new message until it ends
 
     // files: what would be committed now. idleTip: the button's tooltip when it can write.
     constructor(private readonly entry: Gtk.Entry, private readonly status: Gtk.Label,
@@ -61,12 +62,16 @@ export class MessageWriter {
     get write(): WriteMessage | null { return this.writeMessage; }
     set write(write: WriteMessage | null) { this.writeMessage = write; this.update(); }
 
+    // Set by the owner while it commits, so a message written meanwhile cannot unlock Commit halfway.
+    get locked(): boolean { return this.held; }
+    set locked(locked: boolean) { this.held = locked; this.update(); }
+
     // The checked files or the assistant changed: show, enable, and describe the button.
     update(): void {
         this.button.set_visible(this.write !== null);
-        const can = this.files().length > 0;
+        const can = this.files().length > 0 && !this.held;
         this.button.set_sensitive(this.busy || can);
-        const tip = this.busy ? _('Stop writing') : can ? this.idleTip : _('Check the files to describe first');
+        const tip = this.busy ? _('Stop writing') : this.held ? _('Committing…') : can ? this.idleTip : _('Check the files to describe first');
         this.button.set_tooltip_text(tip);
         this.button.update_property([Gtk.AccessibleProperty.LABEL], [this.busy ? _('Stop writing') : _('Write the message with the assistant')]);
     }
@@ -77,7 +82,7 @@ export class MessageWriter {
 
     private async run(): Promise<void> {
         const files = this.files();
-        if (!this.write || !files.length || this.busy) return;
+        if (!this.write || !files.length || this.busy || this.held) return;
         const before = this.entry.get_text();
         this.cancellable = new Gio.Cancellable();
         this.setBusy(true);
@@ -102,7 +107,7 @@ export class MessageWriter {
             if (result.reason === 'no-key') {
                 setStatus(this.status, `${GLib.markup_escape_text(_('There is no DeepSeek API key yet.'), -1)} <a href="settings">${GLib.markup_escape_text(_('Open the Assistant settings'), -1)}</a>`, true, true);
             } else {
-                setStatus(this.status, fmt(_('Could not write a message: {message}. The box keeps what you typed.'), { message: result.message }), true);
+                setStatus(this.status, fmt(_('Could not write a message: {message}. The box keeps what you typed.'), { message: result.message.replace(/[.\s]+$/, '') }), true);
             }
             return;
         }

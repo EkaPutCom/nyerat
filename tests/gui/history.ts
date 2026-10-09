@@ -365,16 +365,26 @@ export function historyTests(c: GuiContext): void {
             w.history.messageEntry.set_text('typed');
             writer.button.emit('clicked');
             onText('Partial');
-            finish({ ok: false, reason: 'failed', message: 'Cannot connect to DeepSeek' });
+            finish({ ok: false, reason: 'failed', message: 'Cannot connect to DeepSeek.' });
             ok(waitFor(() => !writer.busy), 'still busy');
             eq(w.history.messageEntry.get_text(), 'typed');
             ok(w.history.commitStatus.has_css_class('error'), 'the failure is not an error');
-            ok(w.history.commitStatus.get_text().includes('Cannot connect to DeepSeek'), w.history.commitStatus.get_text());
+            ok(w.history.commitStatus.get_text().includes('Cannot connect to DeepSeek. The box'), w.history.commitStatus.get_text());
             writer.button.emit('clicked');
             finish({ ok: false, reason: 'no-key', message: '' });
             ok(waitFor(() => !writer.busy), 'still busy');
             ok(w.history.commitStatus.get_label().includes('<a href="settings">'), w.history.commitStatus.get_label());
             shot('no-key');
+
+            // While a commit runs, a new message cannot start (and so cannot unlock Commit when it ends).
+            const before = calls.length;
+            writer.locked = true;
+            ok(!writer.button.sensitive, 'the button can write during a commit');
+            eq(writer.button.get_tooltip_text(), 'Committing…');
+            writer.button.emit('clicked');
+            eq(calls.length, before, 'a message was written during a commit');
+            writer.locked = false;
+            ok(writer.button.sensitive, 'the button stays locked after the commit');
 
             check.active = false;
             ok(!writer.button.sensitive, 'the button can write without checked files');

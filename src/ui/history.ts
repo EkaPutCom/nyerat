@@ -243,7 +243,9 @@ export class History {
         if (!message) return this.showCommitStatus('Enter a commit message first');
         if (!this.beforeCommit()) return this.showCommitStatus('The document failed to save; the commit was cancelled');
         this.commitButton.set_sensitive(false);
+        this.writer.locked = true;
         const result = await commitFiles(files, message);
+        this.writer.locked = false;
         this.updateCommitButton();
         if (!result.ok) return this.showCommitStatus(fmt(_('Commit failed: {message}'), { message: result.message }));
         this.messageEntry.set_text('');
