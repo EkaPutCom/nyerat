@@ -41,6 +41,7 @@ import { htmlTests } from './unit/html.js';
 import { dbmlTests } from './unit/dbml.js';
 import { gitLogTests } from './unit/gitlog.js';
 import { fileOpsTests } from './unit/fileops.js';
+import { fileWriteTests } from './unit/files.js';
 import { agentTests, apiKeyTests, toolTests } from './unit/agent.js';
 import { transcriptTests } from './unit/transcript.js';
 import { agenticTests } from './unit/agentic.js';
@@ -95,6 +96,7 @@ function runUnitTests(): void {
     dbmlTests();
     gitLogTests();
     fileOpsTests();
+    fileWriteTests();
     agentTests();
     apiKeyTests();
     toolTests();

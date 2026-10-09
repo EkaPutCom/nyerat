@@ -5,7 +5,7 @@
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { readTextFile, writeTextFile, waitForWrites, fileExists } from '../files.js';
+import { readTextFile, writeTextFile, flushWrites, fileExists } from '../files.js';
 import { projectPath } from '../agent/path.js';
 import { applyBatch } from '../agent/batch.js';
 import { changeFiles, cleanNewName, type Change } from '../agent/changes.js';
@@ -26,7 +26,7 @@ export function applyChangeBatch(host: AgentWriteHost, changes: Change[]): strin
     // Defense in depth: planChange() already rejects names like this, but writing to disk must not depend on it.
     if (changes.some(c => changeFiles(c).some(f => cleanNewName(f) !== f))) return 'path is outside the work folder or invalid';
     const pathOf = (file: string) => projectPath(root, file);
-    try { for (const c of changes) for (const f of changeFiles(c)) waitForWrites(pathOf(f)); } catch (e) { return errorMessage(e); }
+    try { for (const c of changes) for (const f of changeFiles(c)) flushWrites(pathOf(f)); } catch (e) { return errorMessage(e); }
     const openDoc = (path: string) => docFor(host, path);
     const writeText = (path: string, text: string) => {
         const open = openDoc(path);

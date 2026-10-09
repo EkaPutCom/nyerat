@@ -24,7 +24,7 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import { APP_ID, APP_NAME } from './config.js';
 import { addBundledIcons, after, type Awaitable } from './gtkutil.js';
 import { type AppSettings } from './settings.js';
-import { readTextFile, writeTextFile, waitForWrites, fileExists } from './files.js';
+import { readTextFile, writeTextFile, flushWrites, fileExists } from './files.js';
 import { markdownToHtml } from './markdown/html.js';
 import { WELCOME } from './welcome.js';
 import { MarkdownView, type Mode } from './editor/view.js';
@@ -825,7 +825,7 @@ export class MainWindow {
     private updateBoardFile(file: string, edit: (board: Board) => Board): string | null {
         const doc = this.docs.find(d => d.file === file);
         try {
-            if (!doc) waitForWrites(file);
+            if (!doc) flushWrites(file);
             const text = doc ? doc.editor.getText() : readTextFile(file);
             if (!isKanban(text)) return 'the board file is no longer a kanban board';
             const board = parseBoard(text);

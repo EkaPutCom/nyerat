@@ -3,7 +3,7 @@
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { waitForWrites } from './files.js';
+import { flushWrites } from './files.js';
 
 const MARKDOWN_EXTENSION = /\.(md|markdown|mdown|mkd)$/i;
 
@@ -60,7 +60,7 @@ export function moveEntry(source: string, destDir: string): string | null {
     const target = join(destDir, name);
     if (exists(target)) throw new Error(`“${name}” already exists in the destination folder.`);
     try {
-        waitForWrites(source);
+        flushWrites(source);
         Gio.File.new_for_path(source).move(Gio.File.new_for_path(target), Gio.FileCopyFlags.NONE, null, null);
     } catch (e) {
         throw new Error(`Failed to move: ${(e as Error).message}`);
@@ -126,7 +126,7 @@ export function renameEntry(path: string, rawName: string): string | null {
     const target = join(GLib.path_get_dirname(path), name);
     if (exists(target)) throw new Error(`“${name}” already exists in this folder.`);
     try {
-        waitForWrites(path);
+        flushWrites(path);
         Gio.File.new_for_path(path).move(Gio.File.new_for_path(target), Gio.FileCopyFlags.NONE, null, null);
     } catch (e) {
         throw new Error(`Failed to rename: ${(e as Error).message}`);
@@ -137,7 +137,7 @@ export function renameEntry(path: string, rawName: string): string | null {
 // Move to the Trash (recoverable), not a permanent delete.
 export function trashEntry(path: string): void {
     try {
-        waitForWrites(path);
+        flushWrites(path);
         Gio.File.new_for_path(path).trash(null);
     } catch (e) {
         throw new Error(`Failed to delete: ${(e as Error).message}`);
