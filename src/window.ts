@@ -34,7 +34,9 @@ import { Sidebar } from './ui/sidebar.js';
 import { ChatPanel } from './ui/chat.js';
 import { WorkspaceRepository } from './workspace.js';
 import type { WikiLink } from './markdown/wikilink.js';
-import { agentGit } from './git.js';
+import { agentGit, recentSubjects, workingDiff } from './git.js';
+import { writeCommitMessage } from './agent/commitmessage.js';
+import type { MessageWriter } from './ui/messagewriter.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
 import { TabBar } from './ui/tabbar.js';
@@ -191,8 +193,10 @@ export class MainWindow {
             this.toast(_('Committed successfully'));
             this.syncHistory(true);
         };
+        this.connectWriter(this.history.writer);
         this.history.onOpenChanges = file => {
             const viewer = new HistoryViewer(this.win, file, null, this.dark);
+            this.connectWriter(viewer.writer);
             viewer.beforeCommit = () => this.documents.saveOpenFiles();
             viewer.onCommitted = () => {
                 this.toast(_('Committed successfully'));
@@ -611,6 +615,18 @@ export class MainWindow {
     }
 
     // ---------- Git history ----------
+
+    // A commit form's assistant button writes with the Assistant panel's key and model.
+    private connectWriter(writer: MessageWriter): void {
+        writer.write = (files, onText, cancellable) => writeCommitMessage({
+            keyStore: this.chat.keyStore, makeProvider: this.chat.makeProvider, model: () => this.chat.model,
+            diff: workingDiff, subjects: recentSubjects,
+        }, files, onText, cancellable);
+        writer.onOpenSettings = () => {
+            this.settings.chat = true;
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { this.chat.openSettings(); return GLib.SOURCE_REMOVE; });
+        };
+    }
 
     // History is only loaded while its tab is visible, so git is not called needlessly.
     // force = re-read even for the same file.

@@ -52,6 +52,7 @@ import { workTests } from './unit/work.js';
 import { traceTests } from './unit/trace.js';
 import { changeTests } from './unit/changes.js';
 import { deepseekTests } from './unit/deepseek.js';
+import { commitMessageTests } from './unit/commitmessage.js';
 import { dialogTests } from './gui/dialogs.js';
 import { harnessTests as harnessModelTests } from './unit/harness.js';
 import { harnessTests } from './gui/harness.js';
@@ -111,6 +112,7 @@ function runUnitTests(): void {
     agentActionTests();
     changeTests();
     deepseekTests();
+    commitMessageTests();
     harnessModelTests();
 }
 

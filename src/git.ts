@@ -145,6 +145,13 @@ export async function repoChanges(dir: string): Promise<ChangesResult> {
     return { ok: true, changes: parseStatus(run.out).map(c => ({ ...c, path: GLib.build_filenamev([top, c.path]) })) };
 }
 
+// Subjects of the repository's latest commits, newest first; empty without git, a repo, or commits.
+// For the assistant that writes a commit message in the same style.
+export async function recentSubjects(file: string, limit: number): Promise<string[]> {
+    const run = await runGit(dirOf(file), ['log', '--no-merges', '--format=%s', '-n', String(limit)]);
+    return run?.status === 0 ? run.out.split('\n').filter(Boolean) : [];
+}
+
 // Uncommitted changes of the file, against HEAD. A new (untracked) file is shown
 // entirely as additions; a repo with no commits is compared with the index.
 export async function workingDiff(file: string): Promise<TextResult> {

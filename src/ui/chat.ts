@@ -219,6 +219,11 @@ export class ChatPanel extends Gtk.Box implements ChatView {
         for (const b of this.bubbles) this.render(b);
     }
 
+    // The settings popover with the API key, e.g. for a feature elsewhere that needs the key.
+    openSettings(): void {
+        this.settingsButton.get_popover()?.popup();
+    }
+
     focusInput(): void {
         this.input.grab_focus();
     }

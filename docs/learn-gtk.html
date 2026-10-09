@@ -518,6 +518,8 @@ svg.ic { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor
   <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M1.5 9 3.5 2.5h9l2 6.5v4.5h-13zM1.5 9H5l1 2h4l1-2h3.5"/></symbol>
   <symbol id="i-home" viewBox="0 0 16 16"><path d="M2 7.5 8 2l6 5.5M3.5 6.5v7h9v-7"/></symbol>
   <symbol id="i-send" viewBox="0 0 16 16"><path d="M2 8h11M9 4l4 4-4 4"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 16 16"><path d="M6.5 1.5l1.3 3.4 3.4 1.3-3.4 1.3-1.3 3.4-1.3-3.4-3.4-1.3 3.4-1.3zM12.5 9.5l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 16 16"><rect x="5" y="5" width="6" height="6" rx="1"/><circle cx="8" cy="8" r="6.5" stroke-dasharray="10 31"/></symbol>
 </svg>
 
 <div class="wrap">
@@ -527,9 +529,9 @@ svg.ic { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor
   <p class="lede">Nyerat began as a single <code>GtkSourceView</code> in a GTK 3 window that hid Markdown syntax. Five days later it is a GNOME app on <b>GTK 4 + libadwaita</b> with tabs, panels that fold on narrow windows, dialogs that return a Promise, GSettings, list models, <code>.ui</code> templates, translations, and a Flatpak manifest. This page follows that path commit by commit. For each Nyerat feature it names the GTK pieces it uses and explains why. It also covers the third of the code that <b>never touches GTK</b>, which is why most of the app can be tested without a window.</p>
   <p class="lede" style="font-size:1rem">Because this page is about <b>building interfaces</b>, every chapter draws the widgets it talks about: Adwaita-style mock-ups you can click, resize, and inspect, with the GTK type of every part named next to it. Start with the <a href="#anatomy">window anatomy</a>, which maps each region of Nyerat's window to the widget that draws it.</p>
   <div class="kpis">
-    <div class="kpi"><div class="what">Lines in files that import GTK/Adw</div><div class="big">10,945</div><div class="from">from 1,235 · 6a0f03d → de2924f</div></div>
-    <div class="kpi"><div class="what">Lines without any GTK import</div><div class="big">4,703</div><div class="from">pure TypeScript in <code>markdown/</code>, <code>agent/</code>, …; plus 2,384 lines that use only Gio/GLib</div></div>
-    <div class="kpi"><div class="what"><code>Adw.*</code> references in <code>src/</code></div><div class="big">123</div><div class="from">from 0 before c85aa0d (October 6)</div></div>
+    <div class="kpi"><div class="what">Lines in files that import GTK/Adw</div><div class="big">11,521</div><div class="from">from 1,235 · 6a0f03d → 1bac3b8</div></div>
+    <div class="kpi"><div class="what">Lines without any GTK import</div><div class="big">5,055</div><div class="from">pure TypeScript in <code>markdown/</code>, <code>agent/</code>, …; plus 3,397 lines that use only Gio/GLib</div></div>
+    <div class="kpi"><div class="what"><code>Adw.*</code> references in <code>src/</code></div><div class="big">125</div><div class="from">from 0 before c85aa0d (October 6)</div></div>
     <div class="kpi"><div class="what">Layouts written as <code>.ui</code> templates</div><div class="big">6</div><div class="from">header bar, status bar, find bar, chat, palette, preferences</div></div>
   </div>
   <nav class="toc" aria-label="Table of contents">
@@ -597,6 +599,7 @@ svg.ic { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor
     <li><span class="h">f74d5b5</span><span><span class="era">Adw</span><b>Chapter 13</b> · Home reads boards and inboxes past the first 300 files.</span></li>
     <li><span class="h">1c44423</span><span><span class="era">Adw</span><b>Chapter 5</b> · Files dropped from a file manager: the tree's <code>Gtk.DropTarget</code> also accepts <code>Gdk.FileList</code> and copies them in with <code>Gdk.DragAction.COPY</code>.</span></li>
     <li><span class="h">de2924f</span><span><span class="era">Adw</span><b>Layers, Chapter 13</b> · Journal, harness, Home, agent writes, and autosave leave <code>window.ts</code> for <code>window/</code> controllers that import only GLib/Gio; shared types move down (<code>colors.ts</code>, <code>gitlog.ts</code>) so no lower layer imports an upper one.</span></li>
+    <li><span class="h">1bac3b8</span><span><span class="era">Adw</span><b>Chapter 12</b> · The assistant writes the commit message: a shared <code>MessageWriter</code> button whose <code>Gtk.Stack</code> swaps a bundled symbolic icon for a spinner with a stop mark, a capture-phase key controller for Ctrl+Z, and a status <code>Gtk.Label</code> with the <code>error</code> class and a markup link.</span></li>
   </ol>
 </section>
 
@@ -1387,7 +1390,7 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
 
 <!-- ============================================================ -->
 <section class="chapter" id="ch12">
-  <div class="chapnum">Chapter 12 · commits 36ae571, e87b422, 222dc97, 79ad33d, 5877392, c237d7c</div>
+  <div class="chapnum">Chapter 12 · commits 36ae571, e87b422, 222dc97, 79ad33d, 5877392, c237d7c, 1bac3b8</div>
   <h2>Workbench features: each one is a pure model plus a thin view</h2>
   <p>The newest features follow one recipe. A pure module in <code>markdown/</code> parses and serializes the file; a view in <code>ui/</code> draws it and reports changes through a callback; the window writes the change back into the buffer as one undo step. The GTK part is the smallest part.</p>
   <table class="data cards">
@@ -1398,6 +1401,7 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
       <tr><td>Inbox</td><td data-k="Model" class="wrap"><code>markdown/inbox.ts</code>: frontmatter <code>inbox: true</code>, one bullet per item, <code>➕ date time</code></td><td data-k="GTK" class="wrap"><code>Adw.Clamp</code>, <code>Adw.StatusPage</code> for the empty state, <code>Gtk.Entry</code> quick capture, <code>Gtk.ListBox</code> rows, <code>Adw.ButtonContent</code></td></tr>
       <tr><td>Home</td><td data-k="Model" class="wrap"><code>markdown/home.ts</code>: due cards, unprocessed inbox items, recent files, greeting</td><td data-k="GTK" class="wrap"><code>Gtk.FlowBox</code> of folder cards (<code>card</code> style), <code>Adw.ActionRow</code>s, <code>Gtk.CheckButton</code> to finish a card in place, its own <code>Adw.TabPage</code></td></tr>
       <tr><td>Daily journal</td><td data-k="Model" class="wrap"><code>markdown/journal.ts</code> + <code>activity.ts</code> (JSONL log in <code>.nyerat/activity</code>, merged into the Activity section)</td><td data-k="GTK" class="wrap">Quick capture through an action (Ctrl+Shift+J) and a small <code>Adw.Dialog</code>; the journal itself is a normal editor tab</td></tr>
+      <tr><td>Commit message writer</td><td data-k="Model" class="wrap"><code>agent/commitmessage.ts</code>: the diff budget, the prompt, and <code>cleanMessage()</code>; git and the key come in as <code>CommitSources</code></td><td data-k="GTK" class="wrap"><code>ui/messagewriter.ts</code>: a <code>Gtk.Button</code> holding a <code>Gtk.Stack</code> (a bundled <code>com.ekaput.Nyerat-sparkle-symbolic</code> icon ↔ a <code>Gtk.Overlay</code> of <code>Adw.Spinner</code> and a stop icon), a capture-phase <code>Gtk.EventControllerKey</code> on the entry, a status <code>Gtk.Label</code> with <code>error</code> and an <code>activate-link</code> markup link; used by the History tab and the single-file window</td></tr>
       <tr><td>Images in the file tree</td><td data-k="Model" class="wrap"><code>isImageFile()</code></td><td data-k="GTK" class="wrap">Same <code>ListView</code> rows; activation opens the <code>ImageViewer</code> (<code>Adw.Window</code>) instead of a tab</td></tr>
     </tbody>
   </table>
@@ -1453,6 +1457,33 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
     </div>
     <p class="note">The board's <code>Gtk.Overlay</code> holds a <code>Gtk.Fixed</code> on top, where the ghost image of a dragged card (a <code>Gtk.WidgetPaintable</code> of the card) follows the pointer (Chapter 5).</p>
   </div>
+  <div class="ill">
+    <h3>Illustration: the commit form with the assistant button <span class="kind">widget names from <code>ui/history.ts</code>, <code>ui/messagebox.ts</code>, <code>ui/messagewriter.ts</code></span></h3>
+    <p class="note">The first form is before writing, the second while the model writes. Only the <code>Gtk.Stack</code> page changes; the box, the checkboxes, and Commit are made insensitive by the owner through <code>onBusy</code>. The Inspector button above also labels these.</p>
+    <div class="grid2">
+      <div class="mock inspect v-mock" style="background:var(--m-side,var(--m-view))">
+        <div data-w="Gtk.Box (commitBar)" style="padding:14px 8px 8px;display:grid;gap:8px">
+          <div class="m-entry" data-w="MessageBox: Gtk.Overlay › Gtk.ScrolledWindow › Gtk.TextView (wraps)" style="height:52px;align-items:flex-start;padding-top:7px;margin-top:12px">Commit message</div>
+          <div data-w="Gtk.Box (commit row) · hexpand false" style="display:flex;gap:6px">
+            <span class="m-btn suggested" data-w="Gtk.Button .suggested-action · hexpand" style="height:30px;flex:1">Commit 2 files</span>
+            <span class="m-btn raised" data-w="Gtk.Button › Gtk.Stack 'idle'" style="width:30px;height:30px"><svg class="ic"><use href="#i-sparkle"/></svg></span>
+          </div>
+          <div class="m-dim m-small" data-w="Gtk.Label (status) .dim-label" style="padding-top:12px">Written by the assistant from 2 files. Check it before committing.</div>
+        </div>
+      </div>
+      <div class="mock inspect v-mock" style="background:var(--m-side,var(--m-view))">
+        <div data-w="Gtk.Box (commitBar)" style="padding:14px 8px 8px;display:grid;gap:8px">
+          <div class="m-entry dis" data-w="MessageBox · insensitive" style="height:52px;align-items:flex-start;padding-top:7px;margin-top:12px;opacity:.55;color:var(--m-fg)">Move the public release to 22 November</div>
+          <div data-w="Gtk.Box (commit row)" style="display:flex;gap:6px">
+            <span class="m-btn suggested" data-w="Gtk.Button · insensitive" style="height:30px;flex:1;opacity:.45">Commit 2 files</span>
+            <span class="m-btn raised" data-w="Gtk.Stack 'busy' › Gtk.Overlay" style="width:30px;height:30px"><svg class="ic"><use href="#i-stop"/></svg></span>
+          </div>
+          <div class="m-dim m-small" data-w="Gtk.Label (status)" style="padding-top:12px">Writing from the changes in 2 files…</div>
+        </div>
+      </div>
+    </div>
+    <p class="note">The message is a <code>Gtk.TextView</code> that wraps, not a <code>Gtk.Entry</code>: a 72-character subject did not fit a one-line entry in the narrow sidebar. <code>MessageBox</code> keeps it one line (Enter commits from a capture-phase key handler; a pasted line break becomes a space) and draws the placeholder as a dim <code>Gtk.Label</code> in a <code>Gtk.Overlay</code>, since a TextView has none. The commit row is a horizontal <code>Gtk.Box</code> in which Commit has <code>hexpand</code>. GTK 4 passes <code>hexpand</code> up to the parents, which would widen the sidebar; an explicit <code>set_hexpand(false)</code> on the row stops it there (see Pitfalls).</p>
+  </div>
   <figure><img src="assets/home.gif" alt="The Home tab with folder cards, due dates, and inbox items" loading="lazy" width="1200" height="750"><figcaption>Home: <code>Adw.Clamp</code> keeps the column readable, <code>Gtk.FlowBox</code> wraps the folder cards.</figcaption></figure>
   <div class="lesson"><b>Lesson</b>“The Markdown text is the only source of truth” is a GTK design rule too: the board and inbox never hold state that the buffer does not have, so undo, autosave, Git, and the agent all keep working without knowing those views exist.</div>
 </section>
@@ -1461,7 +1492,7 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
 <section class="chapter" id="ch13">
   <div class="chapnum">Chapter 13 · <code>src/markdown/</code>, <code>src/agent/</code>, <code>files.ts</code>, <code>git.ts</code>, <code>orchestrator.ts</code>, <code>window/</code></div>
   <h2>The code that never touches GTK</h2>
-  <p>About 4,700 lines import nothing from GObject Introspection, and about 2,400 more use only Gio/GLib. This is deliberate. Code without widgets runs in <code>gjs -m dist/run-tests.js --no-gui</code> in a fraction of a second, has no main-loop timing, and can be read without knowing GTK.</p>
+  <p>About 5,000 lines import nothing from GObject Introspection, and about 3,400 more use only Gio/GLib. This is deliberate. Code without widgets runs in <code>gjs -m dist/run-tests.js --no-gui</code> in a fraction of a second, has no main-loop timing, and can be read without knowing GTK.</p>
   <h3>Pure modules (no <code>gi://</code>)</h3>
   <table class="data cards">
     <thead><tr><th>Module</th><th class="wrap">What it does</th><th class="wrap">Who draws it</th></tr></thead>
@@ -1473,7 +1504,7 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
       <tr><td><code>editor/offsets.ts</code></td><td data-k="Does" class="wrap">UTF-16 ↔ code point maps, allocation-free word count</td><td data-k="Drawn by" class="wrap">Every tag operation</td></tr>
       <tr><td><code>colors.ts</code></td><td data-k="Does" class="wrap">The light and dark document palettes (plain values)</td><td data-k="Drawn by" class="wrap"><code>ui/theme.ts</code> CSS, editor tags, tables, board</td></tr>
       <tr><td><code>gitlog.ts</code></td><td data-k="Does" class="wrap">Parse <code>git log</code>/<code>diff</code> output into commits and hunks; the agent's Git request types</td><td data-k="Drawn by" class="wrap">History tab, diff viewer</td></tr>
-      <tr><td><code>agent/context.ts</code>, <code>tools.ts</code>, <code>changes.ts</code>, <code>batch.ts</code>, <code>harness.ts</code>, …</td><td data-k="Does" class="wrap">Context building, BM25, tools, change proposals, preflight, pi prompt/queue</td><td data-k="Drawn by" class="wrap"><code>ui/chat.ts</code>, proposal viewer (see <a href="learn-agent.html">Learn agents</a>)</td></tr>
+      <tr><td><code>agent/context.ts</code>, <code>tools.ts</code>, <code>changes.ts</code>, <code>batch.ts</code>, <code>harness.ts</code>, <code>commitmessage.ts</code>, …</td><td data-k="Does" class="wrap">Context building, BM25, tools, change proposals, preflight, pi prompt/queue, the commit message prompt and budget</td><td data-k="Drawn by" class="wrap"><code>ui/chat.ts</code>, proposal viewer (see <a href="learn-agent.html">Learn agents</a>)</td></tr>
     </tbody>
   </table>
   <h3>Gio/GLib without widgets</h3>
@@ -1492,7 +1523,7 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
   <p class="note">One GJS detail from <code>orchestrator.ts</code>: after GTK is loaded, <code>Gio.Subprocess.get_stdout_pipe()</code> triggers a Gjs-WARNING about <code>Gio.UnixInputStream</code>, so the harness reads its pipes with <code>GLib.IOChannel</code> and writes bytes with an explicit length.</p>
   <h3>Why the split pays off</h3>
   <ul>
-    <li><b>Tests</b>: 24 unit test files run without a display; 29 GUI test files cover what only a window can show.</li>
+    <li><b>Tests</b>: 28 unit test files run without a display; 29 GUI test files cover what only a window can show.</li>
     <li><b>Performance</b>: the parser and tag diff are measured by <code>npm run bench</code> without GTK in the way (<a href="learn-performance.html">Learn performance</a>).</li>
     <li><b>The GTK 4 migration</b> did not touch <code>markdown/</code> at all: the pure line count went from 2,265 to 2,268 in commit 295d7b9.</li>
   </ul>
@@ -1519,6 +1550,8 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
       <tr><td>Answer cut off in the chat panel</td><td data-k="Cause" class="wrap"><code>set_value()</code> inside an adjustment's <code>changed</code> during allocation</td><td data-k="Rule" class="wrap">Scroll from an idle (<code>stickIdle</code>)</td></tr>
       <tr><td>Gtk-CRITICAL when dragging a file</td><td data-k="Cause" class="wrap">A widget as <code>GtkDragIcon</code></td><td data-k="Rule" class="wrap"><code>DragSource.set_icon()</code> with a paintable</td></tr>
       <tr><td>GLib-CRITICAL on exit</td><td data-k="Cause" class="wrap"><code>Gtk.AlertDialog</code> / <code>destroy_with_parent</code></td><td data-k="Rule" class="wrap"><code>Adw.AlertDialog</code> through <code>alert()</code></td></tr>
+      <tr><td>Ctrl+Z does not bring back the user's draft after the program filled the box</td><td data-k="Cause" class="wrap"><code>Gtk.TextBuffer.set_text()</code> (like <code>Gtk.Entry.set_text()</code>) is an irreversible action for the undo history; only typing is recorded</td><td data-k="Rule" class="wrap">Keep the one step yourself: a capture-phase <code>EventControllerKey</code> restores the saved text while the entry still holds what was set, and forgets it on the first edit (<code>MessageWriter</code>)</td></tr>
+      <tr><td>A bundled SVG icon shows as “missing” in tests</td><td data-k="Cause" class="wrap">No SVG loader for gdk-pixbuf (librsvg) on the test machine, although <code>IconTheme.has_icon()</code> is true</td><td data-k="Rule" class="wrap">Check the icon's shape separately and report it as not visually verified; never conclude the icon is wrong from that screenshot</td></tr>
       <tr><td>Gdk-CRITICAL <code>gdk_monitor_get_geometry</code> in tests</td><td data-k="Cause" class="wrap">A popover from a button outside the Xvfb monitor</td><td data-k="Rule" class="wrap">Keep test windows within 1280×800</td></tr>
     </tbody>
   </table>
@@ -1598,6 +1631,7 @@ const layers = [
   ['5877392', 'Oct 8', 'Adw', 'Journal', 11298, 1712, 4664, 121, 6],
   ['f74d5b5', 'Oct 8', 'Adw', 'Home past 300 files', 11316, 1723, 4668, 121, 6],
   ['de2924f', 'Oct 9', 'Adw', 'window/ controllers', 10945, 2384, 4703, 123, 6],
+  ['1bac3b8', 'Oct 9', 'Adw', 'Commit message writer', 11521, 3397, 5055, 125, 6],
 ];
 function fit(svg, H) {
   const W = Math.max(300, Math.round(svg.parentNode.clientWidth || 900));
