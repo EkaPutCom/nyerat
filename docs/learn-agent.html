@@ -309,8 +309,8 @@ input[type=text] { width: 100%; }
   <p class="lede">In two days, the Nyerat assistant grew from a chat panel with <b>4 read tools</b> into an agent with <b>16 tools</b>. It can now plan work, propose batches of changes, check the result, and pick the work back up after an interruption. One principle has been held since the first commit: <b>the agent may read freely, but every file change must be approved by the user first</b>. The last chapter shows the next step: Nyerat assigns kanban cards to another agent (pi) that works in a separate project folder, while Nyerat only holds the board. This page explains how that principle is kept at every stage. It covers data structures, the loop flow, safety limits, costs, and small simulations you can try yourself.</p>
   <div class="kpis">
     <div class="kpi"><div class="what">Tools offered to the model</div><div class="big">16</div><div class="from">from 4 · f6a4cc7 → 8d0cdec</div></div>
-    <div class="kpi"><div class="what">Assistant tests (unit + GUI)</div><div class="big">200</div><div class="from">from 65 · all without a paid API</div></div>
-    <div class="kpi"><div class="what">Code in <code>src/agent/</code></div><div class="big">3,594 lines</div><div class="from">from 1,099 lines in 8 files → 20 files</div></div>
+    <div class="kpi"><div class="what">Assistant tests (unit + GUI)</div><div class="big">212</div><div class="from">from 65 · all without a paid API</div></div>
+    <div class="kpi"><div class="what">Code in <code>src/agent/</code></div><div class="big">3,726 lines</div><div class="from">from 1,099 lines in 8 files → 21 files</div></div>
     <div class="kpi"><div class="what">Work folder writes without approval</div><div class="big">0</div><div class="from">all through <code>Change</code> + preflight; the external harness only in another project folder (Chapter 9)</div></div>
   </div>
   <nav class="toc" aria-label="Table of contents">
@@ -325,6 +325,7 @@ input[type=text] { width: 100%; }
     <a href="#ch7">7 · Agent log</a>
     <a href="#ch8">8 · Broader actions</a>
     <a href="#ch9">9 · Orchestrator</a>
+    <a href="#ch10">10 · Commit messages</a>
     <a href="#cost">Cost</a>
     <a href="#lessons">Lessons</a>
   </nav>
@@ -357,6 +358,7 @@ input[type=text] { width: 100%; }
     <li><span class="h">9d6ea05</span><span><b>Chapter 8d</b> · The Git tools always answer: a watchdog in <code>runGit</code> ends a run whose result the runtime lost, or a git that hangs, as a failure the model can read.</span></li>
     <li><span class="h">2dbf902</span><span><b>Four rules</b> · The conversation life cycle (send, stop, folder-change guards, saving and reopening history, undo) moves from the panel into <code>agent/chatcontroller.ts</code>; the panel only draws through <code>ChatView</code>. The workspace files now come from <code>WorkspaceRepository</code> (e4e3d91), with an explicit freshness per read.</span></li>
     <li><span class="h">84dccdd</span><span><b>Four rules</b> · The Assistant panel is split into its parts: settings, history, the context popover, and the proposal cards with their review window and Undo (<code>ui/proposalcard.ts</code>). Earlier commits split <code>ChatSession.ask</code> into a <code>TurnRun</code> with one method per tool (76acf0d), and <code>planChange</code>/<code>planKanban</code> into handlers per tool and action (1caf08a); every function is now at most complexity 15.</span></li>
+    <li><span class="h">3fc49f5</span><span><b>Chapter 10</b> · The assistant writes the commit message: one request without tools from the checked files' diffs within a 30,000-character budget, streamed into the commit box, which the user still reviews and commits.</span></li>
   </ol>
 </section>
 
@@ -979,6 +981,39 @@ Not decided yet.</textarea>
 </section>
 
 <!-- ============================================================ -->
+<section class="chapter" id="ch10">
+  <div class="chapnum">Chapter 10 · commit 3fc49f5 · <code>agent/commitmessage.ts</code>, <code>ui/messagewriter.ts</code></div>
+  <h2>The smallest model call: one line for the commit box</h2>
+  <p><b>The need.</b> The History tab can commit several files at once, but the message is still typed by hand, and a writer's commits easily turn into "update plan.md". The model can see what changed, so it can suggest a better line. This needs no conversation, no tools, and no proposal. It is one request whose answer goes into a box the user already reviews.</p>
+  <div class="grid2">
+    <div class="panel"><h4><span class="tag new">What is sent</span></h4><p>Only the diffs of the <b>checked</b> files against HEAD (<code>workingDiff</code>) and the subjects of the last 10 commits (<code>recentSubjects</code>), so the message follows their language and style. No tools are offered, and <i>Deep thinking</i> is off: the answer is one line, so speed matters more than reasoning.</p></div>
+    <div class="panel"><h4><span class="tag old">Where the answer goes</span></h4><p>Into the commit message box, streamed and cleaned with <code>cleanMessage()</code> (first line, no code fence, label, quotes, or trailing period). The box is selected afterwards, and <kbd>Ctrl</kbd>+<kbd>Z</kbd> restores the previous text. The commit itself still needs the Commit button.</p></div>
+  </div>
+<pre><code>// agent/commitmessage.ts: no GTK; git and the key come in as CommitSources
+writeCommitMessage(sources, files, onText, cancellable)
+  key   = sources.keyStore.get()            → none: { ok: false, reason: 'no-key' }
+  diffs = files.map(sources.diff)           → one unreadable diff is named, not fatal
+  fit   = fitDiffs(diffs, 30_000 chars)     → small diffs whole, the largest cut to whole lines
+  chat({ messages: commitPrompt(fit, subjects), thinking: false, onText })
+  return { ok: true, message: cleanMessage(answer), shortened, cancelled }</code></pre>
+  <p><b>The budget.</b> A diff can be as long as a book. <code>fitDiffs()</code> shares a fixed budget out fairly: going from the smallest diff up, each gets at most an equal share of what is left, so small diffs are sent whole and only the largest ones are cut. The cut ends on a whole line and says how many lines were left out, and the prompt tells the model that some diffs were shortened. The status line under the box tells the user the same thing.</p>
+  <div class="sim" id="sim10">
+    <h3>Simulation 10: sharing the diff budget <span class="kind">Interactive · real logic</span></h3>
+    <p>Three checked files with diffs of different sizes. What runs is a copy of <code>fitDiffs()</code>. The dark part of each bar is sent; the light part is cut.</p>
+    <div class="controls">
+      <label>Budget <input type="range" id="s10-b" min="2000" max="40000" step="1000" value="12000"><output id="s10-b-out"></output></label>
+      <label>Size of <code>book.md</code> <input type="range" id="s10-big" min="1000" max="60000" step="1000" value="30000"><output id="s10-big-out"></output></label>
+    </div>
+    <div id="s10-bars" style="display:grid;gap:8px;margin:10px 0"></div>
+    <p class="note" id="s10-note"></p>
+  </div>
+  <p><b>The boundary.</b> The button reads only what the user is about to commit, which is the same set the user already chose with the checkboxes. While it writes, <code>MessageWriter</code> locks the box, the checkboxes, and Commit, so the files and the message cannot change under it. The button becomes Stop, and Stop keeps the text written so far. A missing key, a network error, or an empty answer puts the previous text back and says why in the status line. Without a key, the status line links to the Assistant settings. The window gives the button its writer (<code>connectWriter</code>) using the Assistant's key store, provider, and model, so tests swap in a fake writer without touching the network.</p>
+  <p><b>One GTK detail.</b> <code>Gtk.Entry.set_text()</code> is not recorded in the entry's undo history, so GTK's own <kbd>Ctrl</kbd>+<kbd>Z</kbd> cannot step back to the user's draft. <code>MessageWriter</code> keeps that one step itself: a capture-phase key handler restores the previous text while the box still holds exactly the written message, and forgets it as soon as the user edits.</p>
+  <div class="caveat"><b>What has been measured and what has not:</b> 10 unit tests (the budget and its line-aligned cut, the cleanup, names relative to the common folder, the prompt, a fake provider that streams, no key, one or all diffs unreadable, a provider error) and 2 GUI tests with a fake writer (streaming into the box, the lock, Stop, Ctrl+Z, the failure and no-key states, the disabled button without checked files, and the same button in the single-file window). It has not been run against the real DeepSeek API, so the quality of the messages and how well they follow the style of earlier commits are not measured. The 30,000-character budget is a judgment, not a measurement.</div>
+  <div class="lesson"><b>Lesson</b>Not every model feature needs the agent loop. When the input is already chosen by the user and the output lands somewhere the user reviews anyway, the safest shape is the smallest one: a single request without tools, a hard budget on what is sent, and an answer that only fills a field. The user stays the one who acts.</div>
+</section>
+
+<!-- ============================================================ -->
 <section class="chapter" id="cost">
   <div class="chapnum">Cost · <code>bench/AGENTIC.md</code> · <code>npm run bench:agentic</code></div>
   <h2>What does that safety cost?</h2>
@@ -1027,6 +1062,7 @@ Not decided yet.</textarea>
       <tr><td data-k="Pattern">A return channel for the delegated agent</td><td data-k="Structure">requests with an id are answered exactly; text questions are guessed + a way out</td><td data-k="In Nyerat"><code>HarnessAsk</code>, <code>answer</code>, <code>resume</code></td></tr>
       <tr><td data-k="Pattern">Context sent as contents, not access</td><td data-k="Structure">links in the data are resolved by the host, the contents copied with limits</td><td data-k="In Nyerat"><code>linkedNotes</code>, <code>linkedNotesSection</code></td></tr>
       <tr><td data-k="Pattern">One writer per resource</td><td data-k="Structure">a queue per key (folder)</td><td data-k="In Nyerat"><code>RunQueue</code></td></tr>
+      <tr><td data-k="Pattern">The smallest call that does the job</td><td data-k="Structure">one request without tools, a hard input budget, the answer only fills a field the user reviews</td><td data-k="In Nyerat"><code>writeCommitMessage</code>, <code>fitDiffs</code>, <code>MessageWriter</code></td></tr>
       <tr><td data-k="Pattern">Every wait has its own end</td><td data-k="Structure">a watchdog that does not depend on the awaited callback; the first to finish wins</td><td data-k="In Nyerat"><code>runGit</code>, <code>gitLimits</code></td></tr>
     </tbody>
   </table>
@@ -1142,6 +1178,7 @@ const journey = [
   { c: '9d6ea05', t: 'Git tools always answer', read: 7, propose: 7, control: 2, tests: 192, lines: 3086, files: 20 },
   { c: '2dbf902', t: 'ChatController without GTK', read: 7, propose: 7, control: 2, tests: 198, lines: 3266, files: 20 },
   { c: '84dccdd', t: 'panel split, complexity ≤ 15', read: 7, propose: 7, control: 2, tests: 200, lines: 3594, files: 20 },
+  { c: '3fc49f5', t: 'commit message writer', read: 7, propose: 7, control: 2, tests: 212, lines: 3726, files: 21 },
 ];
 function toolsChart() {
   const svg = $('#chart-tools');
@@ -1672,6 +1709,53 @@ function sim8() {
 $('#s8-card').addEventListener('input', sim8);
 $('#s8-note').addEventListener('input', sim8);
 
+/* ---------- simulation 10: fitDiffs (a copy of agent/commitmessage.ts) ---------- */
+function s10cut(diff, limit) {
+  const kept = diff.slice(0, limit);
+  const end = kept.lastIndexOf('\n');
+  const head = end > 0 ? kept.slice(0, end) : kept;
+  const omitted = diff.slice(head.length).split('\n').filter(Boolean).length;
+  return head + '\n… (' + omitted + ' more lines not shown)';
+}
+function s10fit(diffs, budget) {
+  const sizes = diffs.map(d => d.diff.length);
+  const share = new Map();
+  let left = budget;
+  const order = sizes.map((size, i) => i).sort((a, b) => sizes[a] - sizes[b]);
+  order.forEach((i, n) => {
+    const fair = Math.floor(left / (order.length - n));
+    share.set(i, Math.min(sizes[i], fair));
+    left -= share.get(i);
+  });
+  const fitted = diffs.map((d, i) => share.get(i) >= sizes[i] ? d : { name: d.name, diff: s10cut(d.diff, share.get(i)) });
+  return { diffs: fitted, shortened: fitted.some((d, i) => d !== diffs[i]) };
+}
+function s10diff(chars) {
+  const line = '+A line of the manuscript that changed in this draft.\n';
+  return line.repeat(Math.max(1, Math.round(chars / line.length)));
+}
+function sim10() {
+  const budget = +$('#s10-b').value, big = +$('#s10-big').value;
+  $('#s10-b-out').textContent = budget.toLocaleString('en-US') + ' chars';
+  $('#s10-big-out').textContent = big.toLocaleString('en-US') + ' chars';
+  const diffs = [{ name: 'plan.md', diff: s10diff(1500) }, { name: 'ideas.md', diff: s10diff(6000) }, { name: 'book.md', diff: s10diff(big) }];
+  const fit = s10fit(diffs, budget);
+  const max = Math.max(...diffs.map(d => d.diff.length));
+  $('#s10-bars').innerHTML = diffs.map((d, i) => {
+    const sent = fit.diffs[i] === d ? d.diff.length : fit.diffs[i].diff.lastIndexOf('\n…');
+    const whole = d.diff.length;
+    const w = n => (100 * n / max).toFixed(2) + '%';
+    return '<div><div style="display:flex;justify-content:space-between;gap:8px;font-size:.85rem;flex-wrap:wrap"><code>' + esc(d.name) + '</code><span style="color:var(--text-2)">'
+      + sent.toLocaleString('en-US') + ' of ' + whole.toLocaleString('en-US') + ' chars sent' + (sent < whole ? ' · cut' : ' · whole') + '</span></div>'
+      + '<div style="position:relative;height:14px;border-radius:4px;overflow:hidden;background:var(--line)"><div style="position:absolute;inset:0 auto 0 0;width:' + w(whole) + ';background:var(--after-soft)"></div>'
+      + '<div style="position:absolute;inset:0 auto 0 0;width:' + w(sent) + ';background:var(--after)"></div></div></div>';
+  }).join('');
+  const total = fit.diffs.reduce((n, d) => n + d.diff.length, 0);
+  $('#s10-note').textContent = (fit.shortened ? 'Shortened: the status line says the largest diffs were shortened, and the prompt tells the model so. ' : 'Everything fits; nothing is cut. ')
+    + 'Sent in total: ' + total.toLocaleString('en-US') + ' characters (each cut adds a one-line marker).';
+}
+$('#s10-b').addEventListener('input', sim10);
+$('#s10-big').addEventListener('input', sim10);
 /* ---------- simulation 9: WorkList (a copy of the rules in ui/worklist.ts and workText in agent/work.ts) ---------- */
 const s9 = {
   goal: 'Sync the release schedule with the October 1 meeting decisions',
@@ -1717,6 +1801,7 @@ sim5();
 sim7();
 sim8();
 sim9();
+sim10();
 let resizeTimer = 0;
 addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawAll, 120); });
 /* redraw when the theme changes so the SVG colors follow */
