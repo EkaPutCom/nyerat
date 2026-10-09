@@ -231,6 +231,7 @@ export class MainWindow {
             applyBatch: changes => applyChangeBatch(this.host, changes),
             git: request => this.fileTree.root ? agentGit(this.fileTree.root, request) : Promise.resolve({ ok: false, message: 'no work folder' }),
             window: () => this.win,
+            insertText: text => this.insertIntoNote(text),
             // Other unsaved tabs are read from their editor, not the version on disk (see workspace).
             files: freshness => this.fileTree.root ? this.workspace.files(this.fileTree.root, { except: this.file, freshness }) : [],
         };
@@ -565,6 +566,16 @@ export class MainWindow {
     }
 
     // ---------- Views: text, board, inbox, Home ----------
+
+    // The assistant's answer goes into the open note at the cursor, as one undo step. false: no editable note is shown.
+    private insertIntoNote(text: string): boolean {
+        if (this.boardMode || this.inboxMode || this.homeMode) return false;
+        const buffer = this.editor.buffer;
+        buffer.begin_user_action();
+        const inserted = buffer.insert_interactive_at_cursor(`${text.trim()}\n`, -1, true);
+        buffer.end_user_action();
+        return inserted;
+    }
 
     get boardMode(): boolean {
         return this.views.boardMode;

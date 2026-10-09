@@ -59,6 +59,14 @@ export function chatTests(c: GuiContext): void {
         return out;
     };
     const all = () => labels().join('\n');
+    // The last button in the messages whose labels include the text (e.g. an action under an answer).
+    const button = (text: string): Gtk.Button | null => {
+        let found: Gtk.Button | null = null;
+        const inside = (widget: Gtk.Widget): boolean => (widget instanceof Gtk.Label && widget.get_text() === text) || childrenOf(widget).some(inside);
+        const walk = (widget: Gtk.Widget) => { if (widget instanceof Gtk.Button && inside(widget)) found = widget; childrenOf(widget).forEach(walk); };
+        walk(panel.messages);
+        return found;
+    };
 
     test('the panel opens through the chat option; the setting is saved', () => {
         ok(!w.chatSplit.show_sidebar, 'initially closed');
@@ -116,6 +124,8 @@ export function chatTests(c: GuiContext): void {
         ok(!text.includes('**'), 'the markdown marks are shown raw');
         contains(text, 'Looking through the manuscript.');
         contains(text, 'Context: ≈');
+        contains(text, 'Answered');   // the status card of the finished turn
+        for (const action of ['Copy', 'Retry', 'Log']) ok(button(action) !== null, `no ${action} action under the answer`);
         contains(text, 'excerpt from chapter-1.md');
         contains(text, '1.5k in (1.2k from cache) · 12 out');
         ok(panel.contextButton.get_label()!.startsWith('Context · ≈'), `context button: ${panel.contextButton.get_label()}`);
@@ -170,6 +180,27 @@ export function chatTests(c: GuiContext): void {
         const shot = optVal('shot-log');
         if (shot) { viewer.list.select_row(viewer.list.get_row_at_index(2)); for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); } widgetPixbuf(viewer.window)?.savev(`${shot}-log.png`, 'png', [], []); }
         viewer.window.destroy();
+    });
+
+    test('the answer actions: Insert into note passes the answer to the window; Retry asks the same question again', () => {
+        const historyBefore = panel.session.history.length;
+        const inserted: string[] = [];
+        panel.host = { ...panel.host, insertText: text => { inserted.push(text); return true; } };
+        const asked: string[] = [];
+        panel.makeProvider = () => ({ chat: async req => { asked.push(String(req.messages[req.messages.length - 1].content)); req.onText('The answer.'); return { usage: null, cancelled: false, toolCalls: [], reasoning: '' }; } });
+        settle(panel.ask('A question for the actions'));
+        ok(button('Insert into note') !== null, 'the insert action is missing although the window can insert');
+        button('Insert into note')!.emit('clicked');
+        eq(inserted, ['The answer.']);
+        contains(all(), 'Inserted');
+        button('Retry')!.emit('clicked');
+        for (let i = 0; i < 200 && asked.length < 2; i++) { pump(); GLib.usleep(5000); }
+        for (let i = 0; i < 200 && panel.busy; i++) { pump(); GLib.usleep(5000); }
+        eq(asked.length, 2);
+        contains(asked[1], 'A question for the actions');
+        panel.host = { ...panel.host, insertText: undefined };
+        panel.session.history.splice(historyBefore);   // the next tests expect the earlier conversation
+        panel.makeProvider = () => provider;
     });
 
     test('the second question carries the history and the context is not repeated in old turns', () => {
@@ -269,6 +300,7 @@ export function chatTests(c: GuiContext): void {
         settle(pending);
         contains(all(), 'Half the answer');
         contains(all(), 'Stopped');
+        ok(button('Retry') !== null, 'no Retry after stopping');
         eq(panel.session.history.length, before + 2);
         ok(!panel.busy, 'still busy after being stopped');
         panel.makeProvider = () => provider;
@@ -339,6 +371,7 @@ export function chatTests(c: GuiContext): void {
         contains(text, 'Reading chapter-2 → lines 1–');
         contains(text, 'The storm is in chapter 2.');
         contains(text, '400 in (100 from cache) · 13 out · 2 lookups');
+        contains(text, '2 lookups');   // the status card of the finished turn
         contains(toolResult, 'The storm hit the ship.');
         panel.makeProvider = () => provider;
     });

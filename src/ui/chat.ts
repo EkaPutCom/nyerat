@@ -20,7 +20,7 @@ import type { KeyStore } from '../agent/apikey.js';
 import type { BuiltContext, ContextOptions } from '../agent/context.js';
 import { ChatController, type ChatControllerHost, type ChatView, type TurnOutcome, type TurnView } from '../agent/chatcontroller.js';
 import type { Provider, Usage } from '../agent/provider.js';
-import type { ChatSession, ProposalResult, ToolStep } from '../agent/session.js';
+import type { ChatSession, ProposalResult } from '../agent/session.js';
 import type { Change } from '../agent/changes.js';
 import type { ProposalViewer } from './proposalviewer.js';
 import { ChatSettings } from './chatsettings.js';
@@ -28,6 +28,7 @@ import { ChatHistoryList } from './chathistory.js';
 import { ContextPreview, describeContext, fmtTokens } from './chatcontext.js';
 import { ProposalCards } from './proposalcard.js';
 import { LogViewer } from './logviewer.js';
+import { actionBar, TurnStatus } from './chatturn.js';
 import { chatMarkup } from '../markdown/chatmarkup.js';
 import { escapeMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from '../colors.js';
@@ -38,6 +39,7 @@ import { _, fmt, ngettext } from '../i18n.js';
 // What the panel needs to know from the window: the controller's host plus a parent for its windows.
 export interface ChatHost extends ChatControllerHost {
     window?(): Gtk.Window | null;                                           // parent of the proposal review and log windows
+    insertText?(text: string): boolean;                                     // put text into the open note, at the cursor
 }
 
 const SUGGESTIONS = [
@@ -117,7 +119,6 @@ export class ChatPanel extends Gtk.Box implements ChatView {
     private stickIdle = 0;
     private stick = true;            // stay stuck to the bottom as long as the user has not scrolled up
     private summaryTimer = 0;
-    private readonly stepLabels = new Map<string, Gtk.Label>();   // tool call id → its step row
 
     constructor() {
         super();
@@ -170,6 +171,7 @@ export class ChatPanel extends Gtk.Box implements ChatView {
     private updateSendButton(): void {
         const busy = this.busy;
         this.sendButton.set_icon_name(busy ? 'media-playback-stop-symbolic' : 'go-up-symbolic');
+        if (busy) this.sendButton.add_css_class('destructive-action'); else this.sendButton.remove_css_class('destructive-action');
         this.sendButton.set_tooltip_text(busy ? _('Stop') : _('Send (Enter)'));
         this.sendButton.update_property([Gtk.AccessibleProperty.LABEL], [busy ? _('Stop') : _('Send')]);
         if (busy) this.sendButton.remove_css_class('suggested-action');
@@ -237,7 +239,6 @@ export class ChatPanel extends Gtk.Box implements ChatView {
     }
 
     private clearMessages(): void {
-        this.stepLabels.clear();   // the labels are discarded below; the same tool id must not reuse them
         this.bubbles.length = 0;
         for (const child of childrenOf(this.messages)) if (child !== this.empty) this.messages.remove(child);
         this.empty.show();
@@ -284,37 +285,37 @@ export class ChatPanel extends Gtk.Box implements ChatView {
         this.input.buffer.set_text('', -1);
         this.empty.hide();
         this.addUser(question);
-        const answer = this.addAssistant();
+        const answer = this.addAssistant(question);
         this.cardsBox = answer.cards;
         this.stick = true;
         let reasoning = '';
         return {
             context: built => {
                 this.contextPart.setSummary(built);
-                answer.meta.set_text(describeContext(built));
-                answer.meta.show();
+                answer.status.setContext(describeContext(built));
             },
-            text: delta => { answer.bubble.text += delta; this.queueRender(answer.bubble); },
+            text: delta => { answer.status.writing(); answer.bubble.text += delta; this.queueRender(answer.bubble); },
             reasoning: delta => {
                 reasoning += delta;
-                answer.thinking.show();
-                answer.thinkingLabel.set_text(reasoning.trim());
+                answer.status.setReasoning(reasoning.trim());
             },
-            step: step => this.showStep(answer.steps, step),
+            step: step => answer.status.step(step),
             work: (work, running, elapsed) => {
                 answer.work.update(work, running, elapsed);
                 answer.work.widget.show();
             },
             end: (outcome: TurnOutcome) => {
                 this.render(answer.bubble);
+                answer.actions.set_visible(!!answer.bubble.text.trim());
                 if ('error' in outcome) {
+                    answer.status.finish('failed');
                     answer.footer.set_markup(`<span foreground="#c9372c">${escapeMarkup(outcome.error)}</span>`);
                     answer.footer.show();
                     if (!answer.bubble.text) answer.bubble.label.hide();
                     return;
                 }
-                if (outcome.cancelled) answer.footer.set_text(answer.bubble.text || outcome.toolCalls ? _('Stopped') : _('Stopped before any answer'));
-                else if (outcome.usage) answer.footer.set_text(usageText(outcome.usage, outcome.toolCalls, outcome.applied));
+                answer.status.finish(outcome.cancelled ? 'stopped' : 'done', !!answer.bubble.text.trim());
+                if (!outcome.cancelled && outcome.usage) answer.footer.set_text(usageText(outcome.usage, outcome.toolCalls, outcome.applied));
                 answer.footer.set_visible(!!answer.footer.get_text());
             },
         };
@@ -435,49 +436,34 @@ export class ChatPanel extends Gtk.Box implements ChatView {
         this.messages.append(row);
     }
 
-    private addAssistant() {
+    // The parts of one answer. question = a live turn (it gets the status card and can be retried); without it, a saved answer.
+    private addAssistant(question?: string) {
         const bubble = this.bubble(true, 'chat-assistant');
-        const meta = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, visible: false });
-        meta.add_css_class('side-meta');
+        const status = new TurnStatus(() => { if (question) void this.ask(question); });
         const work = new WorkList();
         work.widget.hide();
-        const steps = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, visible: false });
-        // Proposal cards of agent changes: between the browsing steps and the answer, in the order they happened.
+        // Proposal cards of agent changes: between the status and the answer, in the order they happened.
         const cards = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, visible: false });
-        const thinkingLabel = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 40, selectable: true });
-        thinkingLabel.add_css_class('chat-thinking');
-        const thinking = new Gtk.Expander({ label: _('Thinking process'), visible: false });
-        thinking.set_child(thinkingLabel);
+        const actions = actionBar({
+            text: () => bubble.text,
+            insert: this.host.insertText ? text => this.host.insertText?.(text) ?? false : undefined,
+            retry: () => { if (question) void this.ask(question); },
+            log: () => this.showLog(),
+        });
+        actions.set_visible(false);
         const footer = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, selectable: true, visible: false, use_markup: true });
         footer.add_css_class('side-meta');
         const row = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 });
-        row.append(meta);
+        row.append(status.widget);
         row.append(work.widget);
-        row.append(steps);
         row.append(cards);
-        row.append(thinking);
         row.append(bubble.label);
+        row.append(actions);
         row.append(footer);
-        meta.hide();
-        thinking.hide();
         footer.hide();
         this.messages.append(row);
-        return { bubble, meta, work, steps, cards, thinking, thinkingLabel, footer };
-    }
-
-    // One row per assistant lookup: "Searching “letter”…" and then, once finished, "… → 5 snippets".
-    // Called twice per tool (start and finish) with the same id.
-    private showStep(box: Gtk.Box, step: ToolStep): void {
-        let label = this.stepLabels.get(step.id);
-        if (!label) {
-            label = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, selectable: true });
-            label.add_css_class('chat-step');
-            this.stepLabels.set(step.id, label);
-            box.append(label);
-        }
-        label.set_text(step.summary ? `${step.label} → ${step.summary}` : `${step.label}…`);
-        label.show();
-        box.show();
+        if (question) status.begin();
+        return { bubble, status, work, cards, actions, footer };
     }
 
     // Change proposal: a card in the panel and the review window (see ProposalCards).

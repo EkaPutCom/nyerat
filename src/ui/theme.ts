@@ -38,6 +38,12 @@ const buildCss = (p: Palette): string => `
     .work-pending { border: 1.5px solid alpha(currentColor, 0.45); border-radius: 50%; min-width: 13px; min-height: 13px; margin: 1px; }
     .work-blocked { color: @warning_color; }
     .work-step-done { color: alpha(currentColor, 0.7); }
+    .chat-status { background-color: alpha(currentColor, 0.06); border-radius: 10px; }
+    .chat-status.stopped { background-color: alpha(@warning_color, 0.18); }
+    .chat-status.failed { background-color: alpha(@error_color, 0.14); }
+    .chat-status-head { font-size: 12px; padding: 4px 10px; min-height: 0; }
+    .chat-status .done-icon { color: @success_color; }
+    .chat-actions button { font-size: 12px; min-height: 0; padding: 2px 8px; }
     .chat-step { color: alpha(currentColor, 0.55); font-size: 12px; }
     .chat-proposal { background-color: @card_bg_color; color: @card_fg_color; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
     .chat-diff { font-family: monospace; font-size: 12px; }
