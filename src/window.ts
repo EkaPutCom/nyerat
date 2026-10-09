@@ -24,7 +24,6 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import { APP_ID, APP_NAME } from './config.js';
 import { addBundledIcons, after, type Awaitable } from './gtkutil.js';
 import { type AppSettings } from './settings.js';
-import { readTextFile, writeTextFile, flushWrites } from './files.js';
 import { markdownToHtml } from './markdown/html.js';
 import { WELCOME } from './welcome.js';
 import { MarkdownView, type Mode } from './editor/view.js';
@@ -36,7 +35,7 @@ import { FileTree, isDirectory, isImageFile } from './ui/filetree.js';
 import { Sidebar } from './ui/sidebar.js';
 import { ChatPanel } from './ui/chat.js';
 import { WorkspaceRepository } from './workspace.js';
-import { newNotePath, resolveWikiLink, type WikiLink } from './markdown/wikilink.js';
+import type { WikiLink } from './markdown/wikilink.js';
 import { agentGit } from './git.js';
 import { FindBar } from './ui/findbar.js';
 import { StatusBar } from './ui/statusbar.js';
@@ -45,25 +44,25 @@ import { HeaderBar } from './ui/headerbar.js';
 import type { Palette } from './colors.js';
 import { applyTheme, systemPrefersDark } from './ui/theme.js';
 import { chooseFile, showError } from './ui/dialogs.js';
-import { registerActions, TEXT_ACTIONS, type Option } from './actions.js';
+import { registerActions, type Option } from './actions.js';
 import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
 import { InboxView } from './ui/inbox.js';
 import { HomeView } from './ui/home.js';
 import { moveRecent } from './markdown/home.js';
-import { isInbox, newInbox, parseInbox, serializeInbox, type Inbox } from './markdown/inbox.js';
-import { countCards, isKanban, newBoard, parseBoard, serializeBoard, type Board } from './markdown/kanban.js';
+import { newInbox, serializeInbox } from './markdown/inbox.js';
+import { newBoard, serializeBoard } from './markdown/kanban.js';
 import { _, fmt } from './i18n.js';
-import { errorMessage, type Doc } from './window/doc.js';
+import type { Doc } from './window/doc.js';
 import { Autosaver, type AutosaveHost } from './window/autosave.js';
 import { JournalController, type JournalHost } from './window/journal.js';
 import { HarnessController, type HarnessHost } from './window/harness.js';
 import { HomeController, type HomeHost } from './window/home.js';
+import { ViewController, type ViewHost } from './window/views.js';
+import { NoteLinks, type NoteHost } from './window/notes.js';
 import { DocumentController, UNTITLED, type DocumentsHost } from './window/documents.js';
 import { applyChange, applyChangeBatch, type AgentWriteHost } from './window/agentwrites.js';
 
-// Actions that are meaningless on Home (there is no text to save or undo).
-const DOCUMENT_ACTIONS = ['save', 'save-as', 'export-html', 'undo', 'redo', 'kanban-view'];
 // The saved window size may be larger than the screen (for example after moving
 // to a smaller monitor); limit it to the monitor size. GTK 4 no longer gives the general
 // work area (without panels), so the size of the first monitor is used.
@@ -76,7 +75,7 @@ function fitToScreen(width: number, height: number): [number, number] {
 const MODE_LABELS: Record<Mode, string> = { source: _('Source'), focus: _('Focus'), typewriter: _('Typewriter') };
 
 // The window as seen by its controllers; each controller is typed with only the part it needs.
-type WindowHost = AutosaveHost & JournalHost & HarnessHost & HomeHost & AgentWriteHost;
+type WindowHost = AutosaveHost & JournalHost & HarnessHost & HomeHost & AgentWriteHost & ViewHost & NoteHost;
 
 export class MainWindow {
     readonly app: Adw.Application;
@@ -97,6 +96,8 @@ export class MainWindow {
     readonly journal: JournalController;
     readonly harness: HarnessController;
     readonly homePage: HomeController;
+    private readonly views: ViewController;
+    private readonly notes: NoteLinks;
     private readonly autosaver: Autosaver;
     private readonly host: WindowHost;
     private closing = false;   // closing the window has been confirmed through a dialog
@@ -140,6 +141,8 @@ export class MainWindow {
         this.journal = new JournalController(this.host);
         this.harness = new HarnessController(this.host);
         this.homePage = new HomeController(this.host);
+        this.views = new ViewController(this.host);
+        this.notes = new NoteLinks(this.host);
 
         this.documents = new DocumentController(this.documentsHost());
         this.documents.start();
@@ -148,13 +151,8 @@ export class MainWindow {
         this.findBar = new FindBar(this.doc.editor.buffer, this.doc.editor.view);
 
         // The components do not know each other; the window is what connects them.
-        this.board.onChange = board => this.writeBoard(board);
-        this.inbox.onChange = inbox => this.writeInbox(inbox);
         this.inbox.onOpenNote = link => this.openNote(link);
-        this.inbox.listNotes = () => {
-            const root = this.noteRoot(this.doc);
-            return root ? this.workspace.names(root) : [];
-        };
+        this.inbox.listNotes = () => this.notes.names(this.doc);
         this.home.onOpenFile = path => this.openInTab(path);
         this.home.onOpenTask = task => this.homePage.openWorkspaceFile(task.file);
         this.home.onToggleTask = (task, done) => this.homePage.toggleTask(task, done);
@@ -165,10 +163,7 @@ export class MainWindow {
         this.home.onOpenJournal = () => this.journal.open();
         this.home.onCaptureJournal = () => this.journal.capture();
         this.board.onOpenNote = link => this.openNote(link);
-        this.board.listNotes = () => {
-            const root = this.noteRoot(this.doc);
-            return root ? this.workspace.names(root) : [];
-        };
+        this.board.listNotes = () => this.notes.names(this.doc);
         this.board.harness = {
             status: card => this.harness.status(card),
             menu: (card, at) => this.harness.menu(card, at),
@@ -343,7 +338,7 @@ export class MainWindow {
         } else {
             this.editor.setText('');
         }
-        this.syncMode();
+        this.views.sync();
         this.updateTitle();
         this.win.present();
         this.syncHistory();
@@ -366,6 +361,13 @@ export class MainWindow {
             get harness() { return w.harness; },
             get journal() { return w.journal; },
             get workspace() { return w.workspace; },
+            get app() { return w.app; },
+            get content() { return w.content; },
+            get inbox() { return w.inbox; },
+            get home() { return w.home; },
+            get homePage() { return w.homePage; },
+            get statusBar() { return w.statusBar; },
+            get findBar() { return w.findBar; },
             root: () => this.fileTree.root,
             active: () => this.doc,
             docs: () => this.docs,
@@ -379,7 +381,7 @@ export class MainWindow {
             projectName: path => this.projectName(path),
             showChat: () => { this.settings.chat = true; },
             boardShown: file => this.boardMode && this.file === file,
-            updateBoardFile: (file, edit) => this.updateBoardFile(file, edit),
+            updateBoardFile: (file, edit) => this.views.updateBoardFile(file, edit),
             record: (kind, text) => this.journal.record(kind, text),
         };
     }
@@ -436,14 +438,14 @@ export class MainWindow {
                 this.findBar.setTarget(doc.editor.buffer, doc.editor.view);
                 this.tabBar.setActive(doc.id);
                 this.outline.update(doc.editor.headings);
-                this.syncMode();
+                this.views.sync();
                 this.updateTitle();
                 this.fileTree.reveal(doc.file);
                 this.syncHistory();
                 if (this.chatSplit.show_sidebar) this.chat.updateContextSummary();
             },
             contentChanged: doc => {
-                this.syncMode();
+                this.views.sync();
                 this.updateTitle();
                 this.fileTree.reveal(doc.file);
                 if (!doc.home) this.syncHistory();
@@ -481,15 +483,12 @@ export class MainWindow {
         editor.getBaseDir = () => doc.file ? GLib.path_get_dirname(doc.file) : GLib.get_home_dir();
         editor.onOpenNote = link => this.openNote(link, doc);
         editor.onOpenDocument = path => this.openInTab(path);
-        editor.listNotes = () => {
-            const root = this.noteRoot(doc);
-            return root ? this.workspace.names(root) : [];
-        };
+        editor.listNotes = () => this.notes.names(doc);
         editor.buffer.connect('modified-changed', () => this.refreshTitle(doc));
         // Text changed while the board is shown and not by the board itself (undo/redo): re-read.
         editor.buffer.connect('changed', () => {
             doc.changes++;
-            this.queueBoardReload(doc);
+            this.views.queueReload(doc);
             this.autosaver.queue(doc);
         });
 
@@ -571,129 +570,37 @@ export class MainWindow {
 
     // ---------- [[note]] links ----------
 
-    // The folder where [[notes]] are looked up: the work folder if the document is inside it (or not saved yet),
-    // otherwise the document's own folder.
-    private noteRoot(doc: Doc): string | null {
-        const root = this.fileTree.root;
-        if (root && (!doc.file || doc.file.startsWith(`${root}/`))) return root;
-        return doc.file ? GLib.path_get_dirname(doc.file) : null;
-    }
-
-    // Ctrl+click [[note]]: open its file in a tab. A note that does not exist yet is opened as an empty document
-    // next to the source document and only written to disk when saved, so a mistaken click leaves no file behind.
+    // Ctrl+click [[note]]: see NoteLinks.open.
     openNote(link: WikiLink, doc = this.doc): void {
-        if (!link.target) {
-            if (link.heading) this.jumpToHeading(doc, link.heading);
-            return;
-        }
-        const root = this.noteRoot(doc);
-        if (!root) {
-            this.toast(_('Open a folder or save the document first to follow [[note]] links'));
-            return;
-        }
-        const from = doc.file?.startsWith(`${root}/`) ? doc.file.slice(root.length + 1) : null;
-        const found = resolveWikiLink(link.target, this.workspace.names(root), from);
-        const rel = found ?? newNotePath(link.target, from);
-        if (!rel) {
-            this.toast(fmt(_('Invalid note name: {target}'), { target: link.target }));
-            return;
-        }
-        const path = GLib.build_filenamev([root, ...rel.split('/')]);
-        if (!found) GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
-        if (!this.openInTab(path)) return;
-        if (!found) this.toast(fmt(_('New note: {rel} (saved once filled in)'), { rel }));
-        else if (link.heading) this.jumpToHeading(this.doc, link.heading);
+        this.notes.open(link, doc);
     }
 
-    private jumpToHeading(doc: Doc, heading: string): void {
-        const want = heading.trim().toLowerCase();
-        const found = doc.editor.headings.find(h => h.text.trim().toLowerCase() === want);
-        if (found) doc.editor.jumpToLine(found.line);
-        else this.toast(fmt(_('Section not found: {heading}'), { heading }));
-    }
-
-    // ---------- Kanban board ----------
+    // ---------- Views: text, board, inbox, Home ----------
 
     get boardMode(): boolean {
-        return this.content.visible_child_name === 'board';
+        return this.views.boardMode;
     }
 
     get inboxMode(): boolean {
-        return this.content.visible_child_name === 'inbox';
+        return this.views.inboxMode;
     }
 
     get homeMode(): boolean {
-        return this.content.visible_child_name === 'home';
-    }
-
-    // A kanban document is shown as a board and an inbox document as an inbox, unless the user chose the text view.
-    private syncMode(): void {
-        if (this.doc.home) {
-            this.setView('home');
-            return;
-        }
-        const text = this.editor.getText();
-        const structured = !this.doc.textOverride;
-        this.setView(structured && isKanban(text) ? 'board' : structured && isInbox(text) ? 'inbox' : 'text');
+        return this.views.homeMode;
     }
 
     setBoardMode(on: boolean): void {
-        this.setView(on ? 'board' : 'text');
+        this.views.show(on ? 'board' : 'text');
     }
 
-    private setView(view: 'board' | 'inbox' | 'home' | 'text'): void {
-        this.statusBar.set_visible(view !== 'home');
-        if (view === 'home') {
-            this.findBar.close();
-            this.content.visible_child_name = 'home';
-            this.home.render(this.homePage.data());
-        } else if (view === 'board') {
-            this.board.setBoard(parseBoard(this.editor.getText()));
-            this.doc.boardText = this.editor.getText();
-            this.findBar.close();
-            this.content.visible_child_name = 'board';
-            this.showBoardCounts(this.board.getBoard());
-        } else if (view === 'inbox') {
-            this.inbox.setInbox(parseInbox(this.editor.getText()));
-            this.doc.boardText = this.editor.getText();
-            this.findBar.close();
-            this.content.visible_child_name = 'inbox';
-            this.statusBar.setInboxCounts(this.inbox.getInbox().items.length);
-        } else {
-            this.content.visible_child_name = `doc-${this.doc.id}`;
-            this.statusBar.setCounts(this.editor.getText());
-            this.editor.updateCursor(true);
-            this.editor.view.grab_focus();
-        }
-        const action = this.app.lookup_action('kanban-view');
-        if (action instanceof Gio.SimpleAction) action.set_state(GLib.Variant.new_boolean(view === 'board' || view === 'inbox'));
-        this.syncActionsEnabled();
-    }
-
-    // Text editor actions are disabled while the kanban board is shown (its text is hidden).
+    // Text editor actions are disabled while a board, inbox, or Home is shown.
     syncActionsEnabled(): void {
-        const home = this.homeMode;
-        const board = this.boardMode || this.inboxMode || home;
-        for (const name of TEXT_ACTIONS) {
-            const action = this.app.lookup_action(name);
-            if (action instanceof Gio.SimpleAction) action.set_enabled(!board);
-        }
-        for (const name of DOCUMENT_ACTIONS) {
-            const action = this.app.lookup_action(name);
-            if (action instanceof Gio.SimpleAction) action.set_enabled(!home);
-        }
+        this.views.syncActionsEnabled();
     }
 
-    // The "Board View" menu/shortcut: toggles between board/inbox and text for a kanban or inbox document.
+    // The "Board View" menu/shortcut.
     toggleBoardView(on: boolean): void {
-        const text = this.editor.getText();
-        if (on && !isKanban(text) && !isInbox(text)) {
-            this.toast(_('This document is not a kanban board or inbox (it needs "kanban: true" or "inbox: true" in the frontmatter)'));
-            this.setBoardMode(false);
-            return;
-        }
-        this.doc.textOverride = !on;
-        this.syncMode();
+        this.views.toggle(on);
     }
 
     // A new document containing an empty kanban board.
@@ -726,79 +633,6 @@ export class MainWindow {
     syncHistory(force = false): void {
         if (!this.sidebar.visible || this.sidebar.page !== 'history') return;
         this.history.setFile(this.file, force, this.fileTree.root);
-    }
-
-    private showBoardCounts(board: Board): void {
-        this.statusBar.setBoardCounts(board.columns.length, countCards(board));
-    }
-
-    // Changes from the inbox → document text (one undo step).
-    private writeInbox(inbox: Inbox): void {
-        const text = serializeInbox(inbox);
-        this.doc.boardText = text;
-        this.editor.replaceText(text);
-        this.statusBar.setInboxCounts(inbox.items.length);
-    }
-
-    // Changes from the board → document text (one undo step).
-    private writeBoard(board: Board): void {
-        if (this.doc.boardText) this.journal.recordBoard(this.file, parseBoard(this.doc.boardText), board);
-        const text = serializeBoard(board);
-        this.doc.boardText = text;   // recognize this change as the board's own
-        this.editor.replaceText(text);
-        this.showBoardCounts(board);
-    }
-
-    // ---------- Boards and inboxes ----------
-
-    // Change the board in `file` for the orchestrator: through its editor if open (one undo step), otherwise directly on disk.
-    private updateBoardFile(file: string, edit: (board: Board) => Board): string | null {
-        const doc = this.docs.find(d => d.file === file);
-        try {
-            if (!doc) flushWrites(file);
-            const text = doc ? doc.editor.getText() : readTextFile(file);
-            if (!isKanban(text)) return 'the board file is no longer a kanban board';
-            const board = parseBoard(text);
-            const next = edit(board);
-            if (next === board) return null;
-            if (doc === this.doc && this.boardMode) {
-                this.board.setBoard(next);
-                this.writeBoard(next);   // records its own activity
-                return null;
-            }
-            if (doc) doc.editor.replaceText(serializeBoard(next));
-            else writeTextFile(file, serializeBoard(next));
-            this.journal.recordBoard(file, board, next);
-            return null;
-        } catch (e) {
-            return errorMessage(e);
-        }
-    }
-
-    private queueBoardReload(doc: Doc): void {
-        if (doc !== this.doc || !(this.boardMode || this.inboxMode) || doc.reloadQueued) return;
-        doc.reloadQueued = true;
-        // Deferred: undo changes the text in several steps, and what is read must be the final result.
-        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            doc.reloadQueued = false;
-            if (doc !== this.doc || !this.docs.includes(doc)) return GLib.SOURCE_REMOVE;
-            const text = doc.editor.getText();
-            if (!(this.boardMode || this.inboxMode) || text === doc.boardText) return GLib.SOURCE_REMOVE;
-            if (this.boardMode ? isKanban(text) : isInbox(text)) {
-                doc.boardText = text;
-                if (this.boardMode) {
-                    this.board.setBoard(parseBoard(text));
-                    this.showBoardCounts(this.board.getBoard());
-                } else {
-                    this.inbox.setInbox(parseInbox(text));
-                    this.statusBar.setInboxCounts(this.inbox.getInbox().items.length);
-                }
-            } else {
-                doc.textOverride = true;   // no longer a board/inbox (for example the frontmatter was removed)
-                this.setView('text');
-            }
-            return GLib.SOURCE_REMOVE;
-        });
     }
 
     // Change a view option. All but source mode are GSettings keys: writing them is enough,

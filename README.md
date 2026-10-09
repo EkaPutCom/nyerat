@@ -378,7 +378,9 @@ src/
 │   ├── home.ts           the data behind the Home tab and the actions taken from it
 │   ├── agentwrites.ts    applying approved Assistant changes (editor for open files, disk otherwise, rollback)
 │   ├── autosave.ts       autosave timers and quiet saves
-│   └── documents.ts      DocumentController: the open documents/tabs, the active one, open/save/Save As, asking before discarding, the Home tab, restoring tabs
+│   ├── documents.ts      DocumentController: the open documents/tabs, the active one, open/save/Save As, asking before discarding, the Home tab, restoring tabs
+│   ├── views.ts          ViewController: text, board, inbox, or Home for the active document; board/inbox changes ↔ document text; updateBoardFile for the orchestrator
+│   └── notes.ts          NoteLinks: following [[note]] links and the note names for [[ suggestions
 ├── actions.ts            all the app's Gio.Actions and their shortcuts (setting toggles use Gio.Settings.create_action); sees the window only as `ActionHost`
 ├── colors.ts             the document color palettes (pure data, shared by editor/ and ui/)
 ├── config.ts             app name, ID, version, and fonts
@@ -517,7 +519,7 @@ The code is divided into layers. Each layer may only use the layers below it, ne
 ```
  app.ts
    └─ window.ts ── actions.ts
-        ├─ window/*        feature controllers (documents, journal, harness, Home, agent writes, autosave)
+        ├─ window/*        feature controllers (documents, views, note links, journal, harness, Home, agent writes, autosave)
         ├─ ui/*            interface components
         ├─ editor/*        the editor engine
         │    └─ markdown/* Markdown rules (no GTK)
