@@ -316,116 +316,144 @@ export function findMentions(text: string): string[] {
 }
 
 export function buildContext(input: ContextInput): BuiltContext {
-    const { options, budget } = input;
-    const items: ContextItem[] = [];
-    const intro = instructions(options.project, input.canPropose, input.canGit);
-    let left = budget - estimateTokens(intro);
-    const take = (cap: number): number => Math.max(0, Math.min(cap, left));
-    const spend = (kind: ItemKind, label: string, text: string) => {
-        const tokens = estimateTokens(text);
-        left -= tokens;
-        items.push({ kind, label, tokens });
-    };
+    return new ContextBuilder(input).build();
+}
 
-    const active = options.activeDocument ? input.active : null;
-    const noteParts: string[] = [];
+// One context build. Each part takes its share of what is left of the token budget, in this order.
+class ContextBuilder {
+    private readonly items: ContextItem[] = [];
+    private readonly noteParts: string[] = [];
+    private readonly intro: string;
+    private readonly active: ContextInput['active'];
+    private readonly budget: number;
+    private left: number;
+
+    constructor(private readonly input: ContextInput) {
+        this.intro = instructions(input.options.project, input.canPropose, input.canGit);
+        this.budget = input.budget;
+        this.left = input.budget - estimateTokens(this.intro);
+        this.active = input.options.activeDocument ? input.active : null;
+    }
+
+    build(): BuiltContext {
+        const project = this.input.options.project;
+        this.selection();
+        const { block: activeBlock, window } = this.activeDocument();
+        const { attached, unknown } = project ? this.mentions() : { attached: new Set<string>(), unknown: [] };
+        const map = project ? this.map() : '';
+        if (project) this.excerpts(attached, window);
+
+        const system = [
+            this.intro,
+            map ? `<project_map>\n${map}\n</project_map>` : '',
+            activeBlock ? `<active_document>\n${activeBlock}\n</active_document>` : '',
+        ].filter(Boolean).join('\n\n');
+        // The selection and cursor already went into noteParts first; the order: selection, cursor, attachments, excerpts.
+        const note = this.noteParts.length ? `<extra_context>\n${this.noteParts.join('\n\n')}\n</extra_context>` : '';
+        return { system, note, items: this.items, tokens: estimateTokens(system) + estimateTokens(note), unknownMentions: unknown };
+    }
+
+    private take(share: number): number {
+        return Math.max(0, Math.min(this.budget * share, this.left));
+    }
+
+    private spend(kind: ItemKind, label: string, text: string): void {
+        const tokens = estimateTokens(text);
+        this.left -= tokens;
+        this.items.push({ kind, label, tokens });
+    }
 
     // 1. The user's selection: the most specific, so it comes first.
-    const selection = options.selection ? input.selection.trim() : '';
-    if (selection) {
-        const { text } = clip(selection, take(budget * 0.08));
-        noteParts.push(`The text the user currently has selected${active ? ` in ${active.name}` : ''}:\n<selection>\n${text}\n</selection>`);
-        spend('selection', `Selection (${[...selection].length} characters)`, text);
+    private selection(): void {
+        const { input, active } = this;
+        const selection = input.options.selection ? input.selection.trim() : '';
+        if (!selection) return;
+        const { text } = clip(selection, this.take(0.08));
+        this.noteParts.push(`The text the user currently has selected${active ? ` in ${active.name}` : ''}:\n<selection>\n${text}\n</selection>`);
+        this.spend('selection', `Selection (${[...selection].length} characters)`, text);
     }
 
     // 2. Active document: in full if it fits; otherwise a window around the cursor (the rest is found through excerpts).
-    let activeBlock = '';
-    let activeWindow: { from: number; to: number } | null = null;
-    if (active) {
-        const cap = take(budget * 0.4);
+    private activeDocument(): { block: string; window: { from: number; to: number } | null } {
+        const active = this.active;
+        if (!active) return { block: '', window: null };
+        const cap = this.take(0.4);
         const full = numbered(active.text);
+        let block: string, window: { from: number; to: number } | null = null;
         if (estimateTokens(full) <= cap) {
-            activeBlock = fileTag(active.name, full);
-            spend('active', `${active.name} (in full)`, full);
+            block = fileTag(active.name, full);
+            this.spend('active', `${active.name} (in full)`, full);
         } else {
             const w = windowAround(active.text, active.cursorLine, cap);
-            activeWindow = w;
-            activeBlock = fileTag(active.name, w.text, ' partial="yes"');
-            spend('active', `${active.name} (lines ${w.from + 1}–${w.to + 1} of ${active.text.split('\n').length})`, w.text);
+            window = w;
+            block = fileTag(active.name, w.text, ' partial="yes"');
+            this.spend('active', `${active.name} (lines ${w.from + 1}–${w.to + 1} of ${active.text.split('\n').length})`, w.text);
         }
-        const chunks = splitChunks(active.name, active.text);
-        const here = chunks.find(c => active.cursorLine >= c.start && active.cursorLine <= c.end);
-        noteParts.push(`The user's cursor is in ${active.name}, line ${active.cursorLine + 1}${here?.heading ? `, section “${here.heading}”` : ''}.`);
+        const here = splitChunks(active.name, active.text).find(c => active.cursorLine >= c.start && active.cursorLine <= c.end);
+        this.noteParts.push(`The user's cursor is in ${active.name}, line ${active.cursorLine + 1}${here?.heading ? `, section “${here.heading}”` : ''}.`);
+        return { block, window };
     }
 
-    // 3. Files attached through @mention.
-    const unknownMentions: string[] = [];
-    const attached = new Set<string>();
-    if (options.project) {
+    // 3. Files attached through @mention. A mention of the active document is not unknown, just already there.
+    private mentions(): { attached: Set<string>; unknown: string[] } {
+        const { input, active } = this;
+        const unknown: string[] = [];
+        const attached = new Set<string>();
         for (const mention of input.mentions) {
             const file = matchMention(mention, input.files);
             if (!file) {
-                if (!(active && matchMention(mention, [{ name: active.name, text: '' }]))) unknownMentions.push(mention);
+                if (!(active && matchMention(mention, [{ name: active.name, text: '' }]))) unknown.push(mention);
                 continue;
             }
             if (attached.has(file.name)) continue;
             attached.add(file.name);
-            const cap = take(budget * 0.2);
+            const cap = this.take(0.2);
             if (cap < 200) continue;
             const { text, clipped } = clip(numbered(file.text), cap);
-            noteParts.push(`Files attached by the user:\n${fileTag(file.name, text, clipped ? ' partial="yes"' : '')}`);
-            spend('mention', `@${file.name}${clipped ? ' (truncated)' : ''}`, text);
+            this.noteParts.push(`Files attached by the user:\n${fileTag(file.name, text, clipped ? ' partial="yes"' : '')}`);
+            this.spend('mention', `@${file.name}${clipped ? ' (truncated)' : ''}`, text);
         }
+        return { attached, unknown };
     }
 
     // 4. Project map: the skeleton of the whole book, cheap but gives the model the big picture.
-    let map = '';
-    if (options.project && (input.files.length || active)) {
+    private map(): string {
+        const { input, active } = this;
+        if (!input.files.length && !active) return '';
         const entries = [...input.files.map(f => ({ ...f, opened: false })), ...(active ? [{ name: active.name, text: active.text, opened: true }] : [])]
             .sort((a, b) => naturalCompare(a.name, b.name));
-        if (entries.length > 1) {
-            map = projectMap(entries, take(budget * 0.06));
-            spend('map', `Project map (${entries.length} files)`, map);
-        }
+        if (entries.length <= 1) return '';
+        const map = projectMap(entries, this.take(0.06));
+        this.spend('map', `Project map (${entries.length} files)`, map);
+        return map;
     }
 
     // 5. The most relevant excerpts from other files (and from truncated parts of the active document).
-    if (options.project) {
+    private excerpts(attached: Set<string>, window: { from: number; to: number } | null): void {
+        const { input, active } = this;
         const pool: Chunk[] = [];
         for (const f of input.files) if (!attached.has(f.name)) pool.push(...splitChunks(f.name, f.text));
-        if (active && activeWindow) {
-            const w = activeWindow;
-            pool.push(...splitChunks(active.name, active.text).filter(c => c.end < w.from || c.start > w.to));
-        }
-        const ranked = rankChunks(pool, buildQuery(input));
-        let room = take(budget * 0.4);
-        const picked: Chunk[] = [];
-        for (const { chunk } of ranked) {
-            if (picked.length >= 10) break;
-            const cost = estimateTokens(chunk.text) + 20;
-            if (cost > room) continue;
-            room -= cost;
-            picked.push(chunk);
-        }
-        // A sensible reading order: per file, then per line.
-        picked.sort((a, b) => naturalCompare(a.file, b.file) || a.start - b.start);
-        if (picked.length) {
-            const blocks = picked.map(c =>
-                `<excerpt file="${c.file}" section="${c.heading || '(start of file)'}" lines="${c.start + 1}-${c.end + 1}">\n${numbered(c.text, c.start + 1)}\n</excerpt>`);
-            noteParts.push(`Excerpts from other files that seem related to the question:\n${blocks.join('\n')}`);
-            for (const c of picked) spend('excerpt', `${c.file} › ${c.heading || 'start'}`, numbered(c.text, c.start + 1));
-        }
+        if (active && window) pool.push(...splitChunks(active.name, active.text).filter(c => c.end < window.from || c.start > window.to));
+        const picked = pickChunks(rankChunks(pool, buildQuery(input)).map(r => r.chunk), this.take(0.4));
+        if (!picked.length) return;
+        const blocks = picked.map(c =>
+            `<excerpt file="${c.file}" section="${c.heading || '(start of file)'}" lines="${c.start + 1}-${c.end + 1}">\n${numbered(c.text, c.start + 1)}\n</excerpt>`);
+        this.noteParts.push(`Excerpts from other files that seem related to the question:\n${blocks.join('\n')}`);
+        for (const c of picked) this.spend('excerpt', `${c.file} › ${c.heading || 'start'}`, numbered(c.text, c.start + 1));
     }
+}
 
-    const system = [
-        intro,
-        map ? `<project_map>\n${map}\n</project_map>` : '',
-        activeBlock ? `<active_document>\n${activeBlock}\n</active_document>` : '',
-    ].filter(Boolean).join('\n\n');
-
-    // The selection and cursor already went into noteParts first; the order: selection, cursor, attachments, excerpts.
-    const note = noteParts.length ? `<extra_context>\n${noteParts.join('\n\n')}\n</extra_context>` : '';
-    return { system, note, items, tokens: estimateTokens(system) + estimateTokens(note), unknownMentions };
+// The best-ranked chunks that fit in `room` tokens (at most 10), in reading order: per file, then per line.
+function pickChunks(ranked: Chunk[], room: number): Chunk[] {
+    const picked: Chunk[] = [];
+    for (const chunk of ranked) {
+        if (picked.length >= 10) break;
+        const cost = estimateTokens(chunk.text) + 20;
+        if (cost > room) continue;
+        room -= cost;
+        picked.push(chunk);
+    }
+    return picked.sort((a, b) => naturalCompare(a.file, b.file) || a.start - b.start);
 }
 
 // ---------- Conversation history ----------

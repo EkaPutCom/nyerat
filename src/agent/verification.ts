@@ -58,33 +58,50 @@ export function structureCheck(file: SourceFile, files: SourceFile[], baseline: 
     return { label, passed: !found.length };
 }
 
+type Check = Verification['checks'][number];
+const KINDS = ['present', 'absent', 'kanban', 'structure'];
+
 export function verifyWork(raw: string, files: SourceFile[], baseline: (file: string) => string | null = () => null): Verification {
     try {
         const a = JSON.parse(raw);
         if (!Array.isArray(a.checks) || !a.checks.length || a.checks.length > 40) throw Error();
-        const checks = a.checks.map((c: any) => {
-            if (!c || typeof c.file !== 'string' || !['present', 'absent', 'kanban', 'structure'].includes(c.kind)) throw Error();
-            const text: string = typeof c.text === 'string' ? c.text : '';
-            if (c.kind !== 'structure' && (!text.trim() || text.length > 10000)) throw Error();
-            if (c.file === '*') {
-                if (c.kind !== 'present' && c.kind !== 'absent') throw Error();
-                const hits = files.flatMap(f => occurrences(f, text));
-                const passed = c.kind === 'present' ? hits.length > 0 : !hits.length;
-                return { file: '*', label: `${c.kind} in the whole folder: ${text}${hits.length && c.kind === 'absent' ? ` — still present in ${listLines(hits)}` : ''}`, passed };
-            }
-            const file = files.find(f => f.name === c.file);
-            if (!file) return { file: c.file, label: `${c.kind}: file does not exist`, passed: false };
-            if (c.kind === 'structure') return { file: c.file, ...structureCheck(file, files, baseline(c.file)) };
-            let passed = false;
-            if (c.kind === 'present') passed = file.text.includes(text);
-            if (c.kind === 'absent') passed = !file.text.includes(text);
-            if (c.kind === 'kanban' && isKanban(file.text) && typeof c.list === 'string' && typeof c.done === 'boolean') {
-                const cards = parseBoard(file.text).columns.filter(l => l.title === c.list).flatMap(l => l.cards).filter(card => card.text === text);
-                passed = cards.length === 1 && cards[0].done === c.done;
-            }
-            const where = !passed && c.kind === 'absent' ? ` — still present in ${listLines(occurrences(file, text))}` : '';
-            return { file: c.file, label: `${c.kind}: ${text}${c.kind === 'kanban' ? ` → ${c.list} (${c.done ? 'done' : 'not done'})` : ''}${where}`, passed };
-        });
-        return { passed: checks.every((c: { passed: boolean }) => c.passed), checks };
+        const checks: Check[] = a.checks.map((c: any) => runCheck(c, files, baseline));
+        return { passed: checks.every(c => c.passed), checks };
     } catch { return { passed: false, checks: [{ file: '', label: 'Invalid check', passed: false }] }; }
+}
+
+// One criterion. Throws on a malformed one: the whole call is then reported as invalid.
+function runCheck(c: any, files: SourceFile[], baseline: (file: string) => string | null): Check {
+    if (!c || typeof c.file !== 'string' || !KINDS.includes(c.kind)) throw Error();
+    const text: string = typeof c.text === 'string' ? c.text : '';
+    if (c.kind !== 'structure' && (!text.trim() || text.length > 10000)) throw Error();
+    if (c.file === '*') return folderCheck(c.kind, text, files);
+    const file = files.find(f => f.name === c.file);
+    if (!file) return { file: c.file, label: `${c.kind}: file does not exist`, passed: false };
+    if (c.kind === 'structure') return { file: c.file, ...structureCheck(file, files, baseline(c.file)) };
+    return fileCheck(c, text, file);
+}
+
+// present/absent over the whole folder, e.g. an old date that must remain nowhere.
+function folderCheck(kind: string, text: string, files: SourceFile[]): Check {
+    if (kind !== 'present' && kind !== 'absent') throw Error();
+    const hits = files.flatMap(f => occurrences(f, text));
+    const passed = kind === 'present' ? hits.length > 0 : !hits.length;
+    return { file: '*', label: `${kind} in the whole folder: ${text}${hits.length && kind === 'absent' ? ` — still present in ${listLines(hits)}` : ''}`, passed };
+}
+
+// present, absent, or kanban in one file.
+function fileCheck(c: any, text: string, file: SourceFile): Check {
+    const passed = c.kind === 'present' ? file.text.includes(text)
+        : c.kind === 'absent' ? !file.text.includes(text)
+        : cardMatches(file, text, c.list, c.done);
+    const where = !passed && c.kind === 'absent' ? ` — still present in ${listLines(occurrences(file, text))}` : '';
+    return { file: c.file, label: `${c.kind}: ${text}${c.kind === 'kanban' ? ` → ${c.list} (${c.done ? 'done' : 'not done'})` : ''}${where}`, passed };
+}
+
+// Exactly one card with this text in the list, with the expected done status.
+function cardMatches(file: SourceFile, text: string, list: unknown, done: unknown): boolean {
+    if (!isKanban(file.text) || typeof list !== 'string' || typeof done !== 'boolean') return false;
+    const cards = parseBoard(file.text).columns.filter(l => l.title === list).flatMap(l => l.cards).filter(card => card.text === text);
+    return cards.length === 1 && cards[0].done === done;
 }

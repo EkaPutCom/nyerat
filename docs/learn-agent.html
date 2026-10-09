@@ -309,8 +309,8 @@ input[type=text] { width: 100%; }
   <p class="lede">In two days, the Nyerat assistant grew from a chat panel with <b>4 read tools</b> into an agent with <b>16 tools</b>. It can now plan work, propose batches of changes, check the result, and pick the work back up after an interruption. One principle has been held since the first commit: <b>the agent may read freely, but every file change must be approved by the user first</b>. The last chapter shows the next step: Nyerat assigns kanban cards to another agent (pi) that works in a separate project folder, while Nyerat only holds the board. This page explains how that principle is kept at every stage. It covers data structures, the loop flow, safety limits, costs, and small simulations you can try yourself.</p>
   <div class="kpis">
     <div class="kpi"><div class="what">Tools offered to the model</div><div class="big">16</div><div class="from">from 4 · f6a4cc7 → 8d0cdec</div></div>
-    <div class="kpi"><div class="what">Assistant tests (unit + GUI)</div><div class="big">192</div><div class="from">from 65 · all without a paid API</div></div>
-    <div class="kpi"><div class="what">Code in <code>src/agent/</code></div><div class="big">3,078 lines</div><div class="from">from 1,099 lines in 8 files → 20 files</div></div>
+    <div class="kpi"><div class="what">Assistant tests (unit + GUI)</div><div class="big">200</div><div class="from">from 65 · all without a paid API</div></div>
+    <div class="kpi"><div class="what">Code in <code>src/agent/</code></div><div class="big">3,594 lines</div><div class="from">from 1,099 lines in 8 files → 20 files</div></div>
     <div class="kpi"><div class="what">Work folder writes without approval</div><div class="big">0</div><div class="from">all through <code>Change</code> + preflight; the external harness only in another project folder (Chapter 9)</div></div>
   </div>
   <nav class="toc" aria-label="Table of contents">
@@ -355,6 +355,8 @@ input[type=text] { width: 100%; }
     <li><span class="h">b31556d</span><span><b>Chapter 5d</b> · The <code>set_work</code> plan is shown as a checklist (<code>WorkList</code>): progress, a spinner on the step being worked on, turn duration; tidied to GNOME idioms in 4a35bc8 (<code>Adw.Spinner</code>, accessible labels).</span></li>
     <li><span class="h">a8dd69a</span><span><b>Chapter 5d</b> · The Assistant message box: the send button inside the message frame (6037ab4), the context summary appears immediately when the panel is open from the start.</span></li>
     <li><span class="h">9d6ea05</span><span><b>Chapter 8d</b> · The Git tools always answer: a watchdog in <code>runGit</code> ends a run whose result the runtime lost, or a git that hangs, as a failure the model can read.</span></li>
+    <li><span class="h">2dbf902</span><span><b>Four rules</b> · The conversation life cycle (send, stop, folder-change guards, saving and reopening history, undo) moves from the panel into <code>agent/chatcontroller.ts</code>; the panel only draws through <code>ChatView</code>. The workspace files now come from <code>WorkspaceRepository</code> (e4e3d91), with an explicit freshness per read.</span></li>
+    <li><span class="h">84dccdd</span><span><b>Four rules</b> · The Assistant panel is split into its parts: settings, history, the context popover, and the proposal cards with their review window and Undo (<code>ui/proposalcard.ts</code>). Earlier commits split <code>ChatSession.ask</code> into a <code>TurnRun</code> with one method per tool (76acf0d), and <code>planChange</code>/<code>planKanban</code> into handlers per tool and action (1caf08a); every function is now at most complexity 15.</span></li>
   </ol>
 </section>
 
@@ -371,11 +373,12 @@ input[type=text] { width: 100%; }
   </div>
   <div class="flow" aria-label="Direction of dependencies">
     <span class="node pure">agent/* (pure)</span><span class="to">→ used by</span>
+    <span class="node">agent/chatcontroller.ts</span><span class="to">→ ChatView</span>
     <span class="node">ui/chat.ts</span><span class="to">→ asks for a decision</span>
     <span class="node user">the user</span><span class="to">→ Apply</span>
     <span class="node ctl">window.ts: preflight + write</span>
   </div>
-  <p class="note">The direction of calls is never reversed. <code>agent/</code> knows nothing about the editor or widgets. The window only gives it a way to read files (<code>ChatHost</code>) and a way to ask for the user's decision (<code>onProposal</code>, <code>onBatchProposal</code>).</p>
+  <p class="note">The direction of calls is never reversed. <code>agent/</code> knows nothing about the editor or widgets. The window only gives it a way to read files (<code>ChatHost</code>) and a way to ask for the user's decision (<code>onProposal</code>, <code>onBatchProposal</code>). Since 2dbf902 the turn itself (sending, stopping, refusing proposals after a folder change, saving, undo) is run by <code>ChatController</code>, and the panel only draws what <code>ChatView</code> tells it, so these paths are tested without a window.</p>
 </section>
 
 <!-- ============================================================ -->
@@ -511,7 +514,7 @@ buildQuery: question ×1, selection ×0.5,
       <p style="margin:0;font-size:.88rem">The model's thinking process, the context breakdown, the full read results, and token usage. The document context is rebuilt every turn (file contents may change), so the history stays small.</p>
     </div>
   </div>
-  <div class="caveat"><b>A trap that is avoided:</b> the agent must not browse its own history as a document. <code>readProject</code> does not read dot folders, so <code>.nyerat/</code> never shows up in <code>search_documents</code> results. Without this rule, an old answer could be read as a "fact" from a document.</div>
+  <div class="caveat"><b>A trap that is avoided:</b> the agent must not browse its own history as a document. <code>WorkspaceRepository</code> does not read dot folders, so <code>.nyerat/</code> never shows up in <code>search_documents</code> results. Without this rule, an old answer could be read as a "fact" from a document.</div>
   <h3>3b. Tool names are part of the prompt</h3>
   <p>Nyerat was originally designed for writing books, so its prompt and tools talked about the "manuscript". After the vision was widened into a personal workbench (notes, meetings, research, plans), the name <code>search_manuscript</code> was changed to <code>search_documents</code> and all the tool descriptions were neutralized. The model picks tools by their names and descriptions. A name that is too narrow makes the model hesitate to use the tool for meeting minutes.</p>
   <div class="lesson"><b>Lesson</b>Treat tool names and descriptions like interface text for a very literal user. When the scope of the product changes, re-check the prompt and the tool descriptions, not just the UI.</div>
@@ -920,7 +923,7 @@ buildPrompt(card, project, board, notes)</code></pre>
 <pre><code>// host (window.ts), same rules as Ctrl+click
 linkedNotes(boardFile, links):
   root  = work folder (or the board's folder)
-  files = listMarkdownFiles(root)  // no dot folders,
+  files = workspace.names(root)    // no dot folders,
                                    // no symlinks
   file  = resolveWikiLink(target, files, board)
   text  = open editor ?? disk
@@ -938,7 +941,7 @@ linkedNotes(boardFile, links):
   <table class="data cards">
     <thead><tr><th>Risk</th><th>Safeguard</th></tr></thead>
     <tbody>
-      <tr><td data-k="Risk">A link is used to read files outside the work folder</td><td data-k="Safeguard">The target is only matched against the <code>listMarkdownFiles()</code> list: Markdown files in the work folder, without dot folders and without following symlinks. No path from Markdown is opened directly.</td></tr>
+      <tr><td data-k="Risk">A link is used to read files outside the work folder</td><td data-k="Safeguard">The target is only matched against the <code>workspace.names()</code> list: Markdown files in the work folder, without dot folders and without following symlinks. No path from Markdown is opened directly.</td></tr>
       <tr><td data-k="Risk">A long note inflates the prompt and pi's cost</td><td data-k="Safeguard">At most 10 links, 8,000 characters per note, and 24,000 in total. Whatever is cut is marked with the number of characters dropped. <code>#section</code> copies only a single section.</td></tr>
       <tr><td data-k="Risk">A note's contents hold <code>```</code> and "escape" the block, being read as instructions</td><td data-k="Safeguard">The block fence is made one backtick longer than the longest run of backticks in the contents. The prompt states that the contents are context, not commands.</td></tr>
       <tr><td data-k="Risk">The user does not know what was sent</td><td data-k="Safeguard">The full prompt, including the note contents, is recorded in the pi log. A link that is not found is mentioned as it is, not silently dropped.</td></tr>
@@ -1137,6 +1140,8 @@ const journey = [
   { c: 'b31556d', t: 'plan as a checklist', read: 7, propose: 7, control: 2, tests: 189, lines: 3078, files: 20 },
   { c: 'a8dd69a', t: 'message box + context summary', read: 7, propose: 7, control: 2, tests: 191, lines: 3078, files: 20 },
   { c: '9d6ea05', t: 'Git tools always answer', read: 7, propose: 7, control: 2, tests: 192, lines: 3086, files: 20 },
+  { c: '2dbf902', t: 'ChatController without GTK', read: 7, propose: 7, control: 2, tests: 198, lines: 3266, files: 20 },
+  { c: '84dccdd', t: 'panel split, complexity ≤ 15', read: 7, propose: 7, control: 2, tests: 200, lines: 3594, files: 20 },
 ];
 function toolsChart() {
   const svg = $('#chart-tools');

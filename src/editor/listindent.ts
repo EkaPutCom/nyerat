@@ -8,7 +8,6 @@
 import Gtk from 'gi://Gtk?version=4.0';
 import GLib from 'gi://GLib';
 import { FONT_MONO } from '../config.js';
-import type { Tags } from './tags.js';
 
 const TAB_WIDTH = 4;
 
@@ -53,15 +52,4 @@ export class ListIndent {
         this.widths.set(key, width);
         return width;
     }
-}
-
-const registry = new WeakMap<Tags, ListIndent>();
-
-// Called by the editor: highlighter.ts finds ListIndent through its own Tags object.
-export function registerListIndent(tags: Tags, indent: ListIndent): void {
-    registry.set(tags, indent);
-}
-
-export function listIndentFor(tags: Tags): ListIndent | undefined {
-    return registry.get(tags);
 }

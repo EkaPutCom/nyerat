@@ -373,6 +373,28 @@ function textArea(prefill = ''): { widget: Gtk.Widget; text: () => string; view:
     return { widget: frame, text, view };
 }
 
+// The field for the answer, appended to box: a text area (question, editor), an entry (input), or radio buttons
+// (select); a confirmation has none. focus = the widget that should take the keyboard focus.
+function answerField(ask: HarnessAsk, box: Gtk.Box): { value: () => string; focus: Gtk.Widget | null } {
+    if (ask.kind === 'question' || ask.kind === 'editor') {
+        const area = textArea(ask.prefill);
+        box.append(new Gtk.Label({ label: ask.kind === 'question' ? _('Your answer') : _('Contents'), xalign: 0 }));
+        box.append(area.widget);
+        return { value: area.text, focus: area.view };
+    }
+    if (ask.kind === 'input') {
+        const entry = new Gtk.Entry({ placeholder_text: ask.message, activates_default: true, hexpand: true });
+        box.append(entry);
+        return { value: () => entry.text, focus: entry };
+    }
+    if (ask.kind === 'select') {
+        const options = ask.options.map((label, i) => new Gtk.CheckButton({ label, active: i === 0 }));
+        options.forEach((o, i) => { if (i) o.set_group(options[0]); box.append(o); });
+        return { value: () => ask.options[options.findIndex(o => o.active)] ?? '', focus: null };
+    }
+    return { value: () => '', focus: null };
+}
+
 // Answer a harness request. null = "Later" (the harness keeps waiting).
 export async function harnessAskDialog(parent: Gtk.Window | null, ask: HarnessAsk, agent: string): Promise<HarnessReply | null> {
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, vexpand: true });
@@ -381,25 +403,7 @@ export async function harnessAskDialog(parent: Gtk.Window | null, ask: HarnessAs
     box.append(heading);
     if (ask.message && ask.kind !== 'input') box.append(quoted(ask.message, ask.kind === 'question' ? 320 : 160));
 
-    let value: () => string = () => '';
-    let options: Gtk.CheckButton[] = [];
-    let focus: Gtk.Widget | null = null;
-    if (ask.kind === 'question' || ask.kind === 'editor') {
-        const area = textArea(ask.prefill);
-        box.append(new Gtk.Label({ label: ask.kind === 'question' ? _('Your answer') : _('Contents'), xalign: 0 }));
-        box.append(area.widget);
-        value = area.text;
-        focus = area.view;
-    } else if (ask.kind === 'input') {
-        const entry = new Gtk.Entry({ placeholder_text: ask.message, activates_default: true, hexpand: true });
-        box.append(entry);
-        value = () => entry.text;
-        focus = entry;
-    } else if (ask.kind === 'select') {
-        options = ask.options.map((label, i) => new Gtk.CheckButton({ label, active: i === 0 }));
-        options.forEach((o, i) => { if (i) o.set_group(options[0]); box.append(o); });
-        value = () => ask.options[options.findIndex(o => o.active)] ?? '';
-    }
+    const { value, focus } = answerField(ask, box);
     if (ask.timeout) {
         const hint = new Gtk.Label({ label: fmt(_('{agent} uses its default answer if not answered within {seconds} seconds.'), { agent, seconds: Math.round(ask.timeout / 1000) }), xalign: 0, wrap: true });
         hint.add_css_class('dim-label');

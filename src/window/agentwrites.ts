@@ -5,7 +5,7 @@
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { readTextFile, writeTextFile, waitForWrites, fileExists } from '../files.js';
+import { readTextFile, writeTextFile, flushWrites, fileExists, notifyDiskChange } from '../files.js';
 import { projectPath } from '../agent/path.js';
 import { applyBatch } from '../agent/batch.js';
 import { changeFiles, cleanNewName, type Change } from '../agent/changes.js';
@@ -13,7 +13,10 @@ import { agentActivity, type ActivityKind } from '../markdown/journal.js';
 import { docFor, errorMessage, type Doc, type DocumentHost } from './doc.js';
 
 export interface AgentWriteHost extends DocumentHost {
-    refreshTitle(doc: Doc): void;
+    // An open document's file was moved, deleted, or written back (see DocumentController).
+    fileMoved(doc: Doc, path: string): void;
+    fileGone(doc: Doc): void;
+    fileBack(doc: Doc, path: string): void;
     refreshTree(): void;
     filesMoved(): void;          // a delete or move happened: re-reveal the active file and reload its history
     record(kind: ActivityKind, text: string): void;
@@ -26,7 +29,7 @@ export function applyChangeBatch(host: AgentWriteHost, changes: Change[]): strin
     // Defense in depth: planChange() already rejects names like this, but writing to disk must not depend on it.
     if (changes.some(c => changeFiles(c).some(f => cleanNewName(f) !== f))) return 'path is outside the work folder or invalid';
     const pathOf = (file: string) => projectPath(root, file);
-    try { for (const c of changes) for (const f of changeFiles(c)) waitForWrites(pathOf(f)); } catch (e) { return errorMessage(e); }
+    try { for (const c of changes) for (const f of changeFiles(c)) flushWrites(pathOf(f)); } catch (e) { return errorMessage(e); }
     const openDoc = (path: string) => docFor(host, path);
     const writeText = (path: string, text: string) => {
         const open = openDoc(path);
@@ -36,8 +39,9 @@ export function applyChangeBatch(host: AgentWriteHost, changes: Change[]): strin
     const relocate = (from: string, to: string) => {
         GLib.mkdir_with_parents(GLib.path_get_dirname(to), 0o755);
         Gio.File.new_for_path(from).move(Gio.File.new_for_path(to), Gio.FileCopyFlags.NONE, null, null);
+        notifyDiskChange(from, to);
         const open = openDoc(from);
-        if (open) { open.file = to; host.refreshTitle(open); }
+        if (open) host.fileMoved(open, to);
     };
     const detached = new Map<Change, Doc>();
     const error = applyBatch(changes, {
@@ -49,18 +53,19 @@ export function applyChangeBatch(host: AgentWriteHost, changes: Change[]): strin
             const path = pathOf(c.file);
             if (c.kind === 'delete') {
                 Gio.File.new_for_path(path).trash(null);
+                notifyDiskChange(path);
                 const open = openDoc(path);
-                if (open) { open.file = null; open.editor.buffer.set_modified(true); host.refreshTitle(open); detached.set(c, open); }
+                if (open) { host.fileGone(open); detached.set(c, open); }
             } else if (c.kind === 'move') relocate(path, pathOf(c.to!));
             else writeText(path, c.after);
         },
         rollback: c => {
             const path = pathOf(c.file);
-            if (c.kind === 'create') { if (fileExists(path)) Gio.File.new_for_path(path).delete(null); }
+            if (c.kind === 'create') { if (fileExists(path)) { Gio.File.new_for_path(path).delete(null); notifyDiskChange(path); } }
             else if (c.kind === 'delete') {
                 writeTextFile(path, c.before);
                 const doc = detached.get(c);
-                if (doc) { doc.file = path; doc.editor.buffer.set_modified(false); host.refreshTitle(doc); }
+                if (doc) host.fileBack(doc, path);
             } else if (c.kind === 'move') relocate(pathOf(c.to!), path);
             else writeText(path, c.before);
         },

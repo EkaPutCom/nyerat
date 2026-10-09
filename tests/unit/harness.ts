@@ -127,6 +127,12 @@ export function harnessTests(): void {
         eq(locateCard(dup, 'X'), null, 'duplicate cards are not picked arbitrarily');
     });
 
+    test('PiReader: JSON that is not an event, a null message, and inherited names are ignored', () => {
+        const r = new PiReader(new AgentTrace(() => 0, () => '2026-10-05T10:00:00'));
+        for (const l of ['null', '5', '"text"', '[]', '{"type":"toString"}', '{"type":"constructor"}', '{"type":"message_end","message":null}']) eq(r.line(l), null, l);
+        eq(r.finish(0, '').error, 'pi finished without an answer');
+    });
+
     test('PiReader: tools, answers, cost, and session become the log and the result', () => {
         const trace = new AgentTrace(() => 0, () => '2026-10-05T10:00:00');
         const r = new PiReader(trace);
@@ -245,7 +251,11 @@ export function harnessTests(): void {
         eq(q.find('/p.md', 'B')?.status, 'failed');
         const again = q.add({ ...base, card: 'B', folder: '/a' });
         eq(q.find('/p.md', 'B'), again, 'an active run takes precedence');
-        again.status = 'waiting';
+        q.wait(again, { kind: 'confirm', id: 'x', title: 'Allow?', message: '', options: [], prefill: '', timeout: null });
+        eq(again.status, 'waiting');
+        q.resume(again);
+        eq([again.status, again.ask], ['working', null], 'resume clears the question');
+        q.wait(again, { kind: 'confirm', id: 'y', title: 'Allow?', message: '', options: [], prefill: '', timeout: null });
         eq(q.add({ ...base, card: 'E', folder: '/a' }).status, 'queued', 'a run waiting for an answer still holds the folder');
         eq(q.active('/p.md', 'B'), again);
         eq(q.end(again, 'done')?.card, 'E', 'finishing the wait → the next turn');

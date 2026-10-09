@@ -354,6 +354,7 @@ package.json              npm scripts and development dependencies
 tsconfig.json             TypeScript type-checking settings
 vite.config.ts            Vite build settings
 scripts/dev.mjs           npm run dev: rebuild + reopen the app + type check
+scripts/layers.mjs        npm run layers (also in build/typecheck): forbidden imports between layers, and cyclomatic complexity ≤ 15 per function
 scripts/capture.ts        capture the editor and make the PNG/GIF files for docs/assets/
 scripts/gifenc.d.ts       gifenc type declarations for the capture script
 scripts/pot.sh            npm run pot: the translation template po/nyerat.pot
@@ -369,21 +370,25 @@ src/
 ├── gtkutil.ts            GTK 4 helpers for all layers: line iterators, widget children, click/key handlers, modal dialogs without a nested main loop (modal(), after()), pack(), pixbuf ↔ Gdk.Texture, icons from dist/
 ├── i18n.ts               gettext: _(), fmt(), pgettext(), ngettext(); the domain is bound before the other modules are evaluated
 ├── app.ts                creates the Gtk.Application and the window
-├── window.ts             MainWindow: assembles the components, manages documents/tabs, open/save/export
+├── window.ts             MainWindow: assembles the components and connects them; shows the documents kept by window/documents.ts; export
 ├── window/               feature controllers of the window, each given a narrow host instead of MainWindow
 │   ├── doc.ts            the open document record (Doc) and the shared DocumentHost
 │   ├── journal.ts        today's journal, quick capture, end-of-day summary, the activity log
 │   ├── harness.ts        @pi cards: card menu, project folders, answer/steer/reply, run logs; owns the Orchestrator
 │   ├── home.ts           the data behind the Home tab and the actions taken from it
 │   ├── agentwrites.ts    applying approved Assistant changes (editor for open files, disk otherwise, rollback)
-│   └── autosave.ts       autosave timers and quiet saves
+│   ├── autosave.ts       autosave timers and quiet saves
+│   ├── documents.ts      DocumentController: the open documents/tabs, the active one, open/save/Save As, asking before discarding, the Home tab, restoring tabs
+│   ├── views.ts          ViewController: text, board, inbox, or Home for the active document; board/inbox changes ↔ document text; updateBoardFile for the orchestrator
+│   └── notes.ts          NoteLinks: following [[note]] links and the note names for [[ suggestions
 ├── actions.ts            all the app's Gio.Actions and their shortcuts (setting toggles use Gio.Settings.create_action); sees the window only as `ActionHost`
 ├── colors.ts             the document color palettes (pure data, shared by editor/ and ui/)
 ├── config.ts             app name, ID, version, and fonts
 ├── settings.ts           AppSettings: typed properties on top of Gio.Settings (schema in data/com.ekaput.Nyerat.gschema.xml)
 ├── commands.ts           action names for the command palette
 ├── activity.ts           daily activity log for the journal at <work folder>/.nyerat/activity (append-only JSONL)
-├── files.ts              read/write UTF-8 text files
+├── files.ts              read/write UTF-8 text files; background writes queued per path; onDiskChange for the app's own changes
+├── workspace.ts          WorkspaceRepository: the Markdown files of a work folder (snapshot watched by file monitors, LRU contents cache, unsaved overlay, background warming); used by chat, Home, [[ suggestions, harness (GLib/GIO)
 ├── fileops.ts            create, rename, delete (to the trash), and move files/folders on disk (no GTK; used by the file tree)
 ├── orchestrator.ts       runs the external harness (pi) for kanban cards in the project folder: process, queue, board updates
 ├── git.ts                the git history of a file and the list of uncommitted files through the `git` command (async; read-only, except committing selected files); also runs the agent's Git tools
@@ -394,6 +399,7 @@ src/
 │   ├── tools.ts          pure: browsing tools for the model (list_files, search_documents, search_text, read_file)
 │   ├── context.ts        pure: splitting the manuscript per heading, BM25 search, building the context within a token budget, trimming the history
 │   ├── session.ts        pure: one conversation (history) and the one-turn agent loop (model ↔ tools, including waiting for approval of proposals)
+│   ├── chatcontroller.ts the conversation life cycle without widgets: send/stop, folder-change guards, saving and reopening history, undo, context preview; drives the panel through ChatView
 │   ├── changes.ts        pure: the proposal tools (create, edit, insert, delete, move, kanban), validation into a `Change`, change inversion and preflight, diff preview; never writes
 │   ├── gittools.ts       pure: the agent's Git history tools (git_log, show_commit, file_at_commit): argument validation and output tidying
 │   ├── work.ts           pure: goal, plan, work status and the set_work tool
@@ -409,7 +415,6 @@ src/
 │   ├── provider.ts       the Provider interface (used by the real client and the fake provider in tests)
 │   ├── sse.ts            pure: reads SSE stream lines (text, reasoning, tool-call chunks, usage) and HTTP error messages
 │   ├── deepseek.ts       DeepSeek client through libsoup 3 (GIO/GLib; loaded on use)
-│   ├── project.ts        reads Markdown files in the project folder with a cache, and lists their names for [[ suggestions (GLib/GIO)
 │   └── apikey.ts         API key: environment variable, keyring (libsecret), or a 0600 file
 │
 ├── markdown/             understanding Markdown (pure TypeScript, no GTK)
@@ -468,7 +473,11 @@ src/
     ├── kanban.ts         kanban board view: lists, cards, menus, drag and drop
     ├── inbox.ts          inbox view: quick capture, note list, age, tags
     ├── home.ts           Home tab: Continue card, agent, deadlines, inbox, recent files
-    ├── chat.ts           Assistant panel on the right: messages, the Context button, key and model settings
+    ├── chat.ts           Assistant panel on the right: draws the messages and the input (implements ChatView)
+    ├── chatsettings.ts   its settings popover: API key, model, thinking mode, saving conversations
+    ├── chathistory.ts    its history popover: saved conversations to reopen or delete
+    ├── chatcontext.ts    its Context button and popover: token estimate, parts, switches
+    ├── proposalcard.ts   change proposal cards, the review window they open, and Undo
     └── theme.ts          fonts and CSS from the palette in colors.ts (named Adwaita colors for the interface, the system accent if available)
 tests/
 ├── run-tests.ts          entry point and registration of unit/GUI tests
@@ -514,20 +523,25 @@ The code is divided into layers. Each layer may only use the layers below it, ne
 ```
  app.ts
    └─ window.ts ── actions.ts
-        ├─ window/*        feature controllers (journal, harness, Home, agent writes, autosave)
+        ├─ window/*        feature controllers (documents, views, note links, journal, harness, Home, agent writes, autosave)
         ├─ ui/*            interface components
         ├─ editor/*        the editor engine
         │    └─ markdown/* Markdown rules (no GTK)
+        ├─ orchestrator.ts runs harness processes (pi) for window/harness.ts (GLib, no GTK)
+        │    └─ agent/harness.ts  prompts, RPC, the pi stream reader, the run queue
         ├─ agent/*         manuscript context and model client (no GTK)
-        └─ settings.ts, files.ts, git.ts, gitlog.ts, config.ts, colors.ts
+        └─ settings.ts, files.ts, workspace.ts, git.ts, gitlog.ts, config.ts, colors.ts
 ```
 
-- **`agent/`** is also free of GTK. `ui/chat.ts` uses it, and the window only gives it a way to fetch the manuscript (`ChatHost`: the active document, the selection, project files, the manuscript folder). `agent/` knows nothing about the editor or widgets.
+- **`agent/`** is also free of GTK. `ui/chat.ts` uses it, and the window only gives it a way to fetch the manuscript (`ChatHost`: the active document, the selection, project files, the manuscript folder). `agent/` knows nothing about the editor or widgets. The panel only draws: `agent/chatcontroller.ts` owns the conversation's life cycle and tells the panel what to show through the `ChatView` interface, so sending, stopping, a folder change mid-request, and reopening a saved conversation are tested without GTK (`tests/unit/chatcontroller.ts`).
 - **`markdown/`** does not import GTK at all. It only contains string → data functions, so it is the easiest to study and test.
 - **`editor/`** knows nothing about files, menus, or the sidebar. `MarkdownView` only reports through callbacks (`onHighlighted`, `onCursorMoved`, `onMessage`).
 - **`ui/`** holds self-contained components. `Outline` does not know the editor; it only receives a list of headings and calls `onJump(line)` when clicked. `FileTree` is the same: it only displays folders and calls `onOpenFile(path)`; the window decides how to open the file (a new tab, switching to an existing tab, or reusing an empty document).
-- **`window.ts`** is the only place where components are connected to each other. For example: after highlighting, the editor calls `onHighlighted`, and then the window passes the headings to `Outline` and the text to `StatusBar`. Features that span several components (the journal, harness runs, Home, applying agent changes, autosave) live in `window/*` controllers; each receives a narrow host interface built by the window from closures, never `MainWindow` itself, so they do not import `window.ts`. `actions.ts` likewise types the window as `ActionHost`.
+- **`window.ts`** is the only place where components are connected to each other. For example: after highlighting, the editor calls `onHighlighted`, and then the window passes the headings to `Outline` and the text to `StatusBar`. The open documents (tabs, open/save, the Home tab, restoring tabs) are kept by `window/documents.ts`, which tells the window what must follow a document on screen through `DocumentsHost`. Features that span several components (the journal, harness runs, Home, applying agent changes, autosave) live in `window/*` controllers too; each receives a narrow host interface built by the window from closures, never `MainWindow` itself, so they do not import `window.ts`. `actions.ts` likewise types the window as `ActionHost`.
+- **`orchestrator.ts`** sits between `window/harness.ts` and `agent/harness.ts`: it spawns the harness process and moves cards, using the pure parts in `agent/` and translated strings, but no GTK and no widgets.
 - **Lower layers do not reach up.** `editor/` takes the `Palette` type from `colors.ts`, not from `ui/theme.ts`; `git.ts` takes the agent's Git request types from `gitlog.ts`, not from `agent/`.
+- **The rules are checked.** [`scripts/layers.mjs`](scripts/layers.mjs) runs in `npm run build` and `npm run typecheck` and fails on a forbidden import: GI or anything outside `markdown/` in `markdown/`, GTK or `ui/`/`editor/`/`window/` in `agent/`, `ui/`/`window/`/`agent/` in `editor/`, `window.ts` in `ui/`, `window/`, or `actions.ts`, and any upper layer in the base modules.
+- **Function complexity is checked too.** The same script parses `src/` and `scripts/` with the oxc parser that Vite already ships (`rolldown/parseAst`) and fails on a function whose cyclomatic complexity (counted like ESLint's `complexity` rule; nested functions on their own) is above 15 (lowered from 20 once every function met it). The functions that were above the limit have all been split, so `COMPLEXITY_ALLOWED` is empty; an exception listed there may not grow, and its entry has to go once the function is split.
 
 ### The editor workflow
 
@@ -589,7 +603,9 @@ The size is **not 1** (a Pango unit, 1/1024 pt) but 256 (`TINY` in `editor/tags.
 
 **Incremental hidden markers (`MarkerConcealer` in `editor/decorations.ts`).** Each keystroke and cursor move only checks the old and new active lines, the lines the highlighter re-parsed (`reparsed` in the `highlight()` result), and the lines whose tags are not yet known. A new ``` fence can change the markers of the lines below it without editing those lines, which is why the `reparsed` range must be passed on. The markers in the highlighter result are ordered by line (found by binary search), and the markers/headings/images are shifted in place after an edit because the old snapshot is no longer used.
 
-**Background auto save (`writeTextFileAsync()` in `files.ts`).** Timer-driven auto save writes through Gio on a worker thread (a temporary file, fsync, then an atomic rename), so the fsync pause on a slow disk is not felt while the user keeps typing. All synchronous writes, moves, and deletions of files through `files.ts`/`fileops.ts` first wait for background writes to the same path (`waitForWrites()`), so that old contents do not overwrite new ones. The *modified* status is only reset if the text did not change while it was being written.
+**Reading the work folder without walking it every time (`WorkspaceRepository` in `workspace.ts`).** Chat context, Home, `[[` suggestions, and harness prompts all read the Markdown files of the work folder. The repository keeps a snapshot per folder (names, sizes, modification times) and watches every folder in it with a `Gio.FileMonitor`, so the folder is only walked again after a change; a change to a file already listed (autosave) only refreshes that file's size and time. The app's own writes and file operations reach it at once through `onDiskChange()` in `files.ts`; outside changes arrive with the monitor events. Contents are cached by size and time up to a memory limit, least recently used first out, and unsaved documents are read from their editor. Opening a folder starts `warm()`, which walks and reads in 6 ms slices from an idle callback. A read states how current it must be: `cached` (Home, suggestions, the context preview), `current` (the start of a chat turn walks again, so a file changed outside the app a moment ago is seen), or `fresh` (verification reads every file from disk). A folder with more than 512 subfolders, or one that cannot be monitored, is walked on every request as before.
+
+**Background auto save (`writeTextFileAsync()` in `files.ts`).** Timer-driven auto save writes through Gio on a worker thread (a temporary file, fsync, then an atomic rename), so the fsync pause on a slow disk is not felt while the user keeps typing. Background writes to one path are queued: at most one runs, and a newer request replaces the one still waiting, so an older version can never finish last. All synchronous writes, moves, and deletions of files through `files.ts`/`fileops.ts` first flush the background writes to the same path (`flushWrites()`), so that old contents do not overwrite new ones. Background writes report back on their own `GLib.MainContext`, so a flush runs only write completions, never other application callbacks; their `done` callbacks follow later from the default main loop. The *modified* status is only reset if the text did not change while it was being written.
 
 ### GTK 4 notes
 

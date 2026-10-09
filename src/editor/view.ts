@@ -31,7 +31,7 @@ import GLib from 'gi://GLib';
 import type GdkPixbuf from 'gi://GdkPixbuf';
 import { onClick, onKeyPress } from '../gtkutil.js';
 
-import { ListIndent, registerListIndent } from './listindent.js';
+import { ListIndent } from './listindent.js';
 import { createTags, paintTags, setTagMargins, SYNTAX_TAGS } from './tags.js';
 import { LineTagger } from './tagsync.js';
 import { highlight, HighlightCache } from './highlighter.js';
@@ -123,7 +123,7 @@ export class MarkdownView {
     private cursorKey = '';
     private highlightQueued = 0;
     private resetHighlight = false;
-    private highlightCache = new HighlightCache();
+    private highlightCache: HighlightCache;
     private cursorQueued = 0;
     private fillQueued = 0;
     private destroyed = false;
@@ -150,7 +150,7 @@ export class MarkdownView {
         const syntaxTags = SYNTAX_TAGS.map(n => this.tags[n]);
         // List indent tags are created on demand; LineTagger needs to know in order to clear them.
         this.listIndent = new ListIndent(this.view, this.buffer, tag => syntaxTags.push(tag));
-        registerListIndent(this.tags, this.listIndent);
+        this.highlightCache = new HighlightCache(this.listIndent);
         this.syntaxTagger = new LineTagger(this.buffer, syntaxTags);
         this.concealer = new MarkerConcealer(new LineTagger(this.buffer, [this.tags.hidden]), this.tags.hidden);
         this.dirtyStart = this.buffer.create_mark(null, this.buffer.get_start_iter(), true);
@@ -551,25 +551,24 @@ export class MarkdownView {
         if (this.completer.onKey(keyval)) return true;
         if (this.buffer.get_has_selection()) return false;
         const shift = (state & Gdk.ModifierType.SHIFT_MASK) !== 0;
-
-        // Inside a table: Tab/Shift+Tab move between cells, Enter moves between rows.
+        const tab = keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_ISO_Left_Tab;
+        const enter = keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter;
+        // Shift+Tab arrives as ISO_Left_Tab.
+        const back = shift || keyval === Gdk.KEY_ISO_Left_Tab;
         const line = this.buffer.get_iter_at_mark(this.buffer.get_insert()).get_line();
-        if (this.tables.some(t => line >= t.start && line <= t.end)) {
-            if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_ISO_Left_Tab)
-                return tabInTable(this.buffer, shift || keyval === Gdk.KEY_ISO_Left_Tab);
-            if ((keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) && !shift) return enterInTable(this.buffer);
-        }
+        const inTable = this.tables.some(t => line >= t.start && line <= t.end);
+        // Inside a table: Tab/Shift+Tab move between cells, Enter moves between rows.
+        if (inTable && tab) return tabInTable(this.buffer, back);
+        if (inTable && enter && !shift) return enterInTable(this.buffer);
+        if (enter) return !shift && this.enter(line);
+        return tab && indentListItem(this.buffer, back);
+    }
 
-        if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
-            if (shift) return false;
-            if (isInCodeBlock(this.lines, line)) return false;
-            if (!continueBlock(this.buffer)) return false;
-            this.view.scroll_mark_onscreen(this.buffer.get_insert());
-            return true;
-        }
-        if (keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_ISO_Left_Tab)
-            return indentListItem(this.buffer, shift || keyval === Gdk.KEY_ISO_Left_Tab);
-        return false;
+    // Enter outside a table: continue a list, quote, or task on the next line (not inside a code block).
+    private enter(line: number): boolean {
+        if (isInCodeBlock(this.lines, line) || !continueBlock(this.buffer)) return false;
+        this.view.scroll_mark_onscreen(this.buffer.get_insert());
+        return true;
     }
 
     // Left button pressed at (x, y), TextView widget coordinates. count = which click it is

@@ -209,7 +209,9 @@ export function homeTests(c: GuiContext): void {
     if (!shot) return;
     const { win } = open({ width: 1100, height: 760 });
     for (const file of [architecture, summary, journal, board]) win.openFile(file);
-    win.harness.orchestrator.queue.add({ board: board, card: 'Tidy up README @pi', title: 'Tidy up README', agent: 'pi', project: 'shop', folder: '/tmp/shop', prompt: '', session: null }).status = 'waiting';
+    const queue = win.harness.orchestrator.queue;
+    queue.wait(queue.add({ board: board, card: 'Tidy up README @pi', title: 'Tidy up README', agent: 'pi', project: 'shop', folder: '/tmp/shop', prompt: '', session: null }),
+        { kind: 'question', id: null, title: 'Which README?', message: '', options: [], prefill: '', timeout: null });
     win.openHome();
     for (const [name, dark, width] of [['light', false, 1100], ['dark', true, 1100], ['narrow', false, 480]] as const) {
         win.setDark(dark);

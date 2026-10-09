@@ -283,68 +283,72 @@ export class PiReader {
         if (!text.trim()) return null;
         let e: PiEvent;
         try { e = JSON.parse(text) as PiEvent; } catch { this.trace.add('note', 'pi output', text); return null; }
-        switch (e.type) {
-        case 'session':   // JSON mode; RPC mode gives the session id through get_state
-            this.setSession(e.id ?? null);
-            break;
-        case 'response':
-            if (e.command === 'get_state' && e.success) this.setSession(e.data?.sessionId ?? null);
-            else if (e.success === false) {
-                this.error = e.error || `command ${e.command ?? ''} rejected by pi`;
-                this.trace.add('error', `pi rejected the command ${e.command ?? ''}`, this.error, { round: this.turn });
-                return { type: 'rejected', error: this.error };
-            }
-            break;
-        case 'extension_ui_request': {
-            const message = typeof e.message === 'string' ? e.message : '';
-            if (e.method === 'notify') { this.trace.add(e.notifyType === 'error' ? 'error' : 'note', 'pi message', message); break; }
-            if (!e.id || !DIALOGS.has(e.method ?? '')) break;   // setStatus, setWidget, ...: TUI only
-            const ask: HarnessAsk = {
-                kind: e.method as HarnessAsk['kind'], id: e.id, title: e.title ?? 'pi asks for an answer',
-                message: message || (e.placeholder ?? ''), options: e.options ?? [], prefill: e.prefill ?? '',
-                timeout: typeof e.timeout === 'number' ? e.timeout : null,
-            };
-            this.trace.add('note', `pi is waiting: ${ask.title}`, [ask.message, ask.options.length ? `Options: ${ask.options.join(' / ')}` : ''].filter(Boolean).join('\n'), { round: this.turn });
-            return { type: 'ask', ask };
-        }
-        case 'turn_start':
+        const type = typeof e?.type === 'string' ? e.type : '';
+        // The type comes from pi's output: only the table's own entries, never an inherited property.
+        return Object.hasOwn(this.handlers, type) ? this.handlers[type](e) ?? null : null;
+    }
+
+    // One handler per event type; other types (e.g. agent_start) are ignored. A signal = the orchestrator must respond.
+    private readonly handlers: Record<string, (e: PiEvent) => PiSignal | null | void> = {
+        session: e => this.setSession(e.id ?? null),   // JSON mode; RPC mode gives the session id through get_state
+        response: e => this.response(e),
+        extension_ui_request: e => this.uiRequest(e),
+        turn_start: () => {
             this.turn++;
             this.trace.add('round', `Round ${this.turn}`, '', { round: this.turn });
-            break;
-        case 'message_update': {
+        },
+        message_update: e => {
             const m = e.assistantMessageEvent;
-            if (m?.type === 'text_delta' && m.delta) this.trace.append('text', this.turn, m.delta);
-            else if (m?.type === 'thinking_delta' && m.delta) this.trace.append('reasoning', this.turn, m.delta);
-            break;
-        }
-        case 'message_end': {
-            const m = typeof e.message === 'object' ? e.message : undefined;
-            if (m?.role !== 'assistant') break;
-            const answer = contentText(m.content).trim();
-            if (answer) this.summary = answer;
-            this.stopReason = m.stopReason ?? '';
-            this.cost += m.usage?.cost?.total ?? 0;
-            this.tokens += m.usage?.totalTokens ?? 0;
-            if (m.stopReason === 'error' || m.stopReason === 'aborted') {
-                this.error = m.errorMessage || (m.stopReason === 'aborted' ? 'cancelled' : 'model error');
-                this.trace.add('error', 'pi stopped with an error', this.error, { round: this.turn });
-            }
-            break;
-        }
-        case 'tool_execution_start':
-            this.trace.begin('tool', e.toolCallId ?? '', `${e.toolName ?? 'tool'}`, prettyArguments(JSON.stringify(e.args ?? {})), this.turn);
-            break;
-        case 'tool_execution_end':
-            this.trace.finish('tool', e.toolCallId ?? '', e.isError ? 'failed' : 'ok', contentText(e.result?.content));
-            break;
-        case 'compaction_start':
-            this.trace.add('note', 'pi summarized the context', e.reason ?? '');
-            break;
-        case 'agent_settled':
+            if (!m?.delta) return;
+            if (m.type === 'text_delta') this.trace.append('text', this.turn, m.delta);
+            else if (m.type === 'thinking_delta') this.trace.append('reasoning', this.turn, m.delta);
+        },
+        message_end: e => { if (typeof e.message === 'object' && e.message?.role === 'assistant') this.assistantMessage(e.message); },   // message may be null
+        tool_execution_start: e => { this.trace.begin('tool', e.toolCallId ?? '', `${e.toolName ?? 'tool'}`, prettyArguments(JSON.stringify(e.args ?? {})), this.turn); },
+        tool_execution_end: e => { this.trace.finish('tool', e.toolCallId ?? '', e.isError ? 'failed' : 'ok', contentText(e.result?.content)); },
+        compaction_start: e => { this.trace.add('note', 'pi summarized the context', e.reason ?? ''); },
+        agent_settled: () => {
             this.settled = true;
             return { type: 'settled' };
+        },
+    };
+
+    // A command answer: get_state carries the session id; a failed command is reported to the orchestrator.
+    private response(e: PiEvent): PiSignal | null {
+        if (e.command === 'get_state' && e.success) this.setSession(e.data?.sessionId ?? null);
+        if (e.success !== false) return null;
+        this.error = e.error || `command ${e.command ?? ''} rejected by pi`;
+        this.trace.add('error', `pi rejected the command ${e.command ?? ''}`, this.error, { round: this.turn });
+        return { type: 'rejected', error: this.error };
+    }
+
+    // An extension asks for something: a notification is only recorded; a dialog waits for the user's answer.
+    private uiRequest(e: PiEvent): PiSignal | null {
+        const message = typeof e.message === 'string' ? e.message : '';
+        if (e.method === 'notify') {
+            this.trace.add(e.notifyType === 'error' ? 'error' : 'note', 'pi message', message);
+            return null;
         }
-        return null;
+        if (!e.id || !DIALOGS.has(e.method ?? '')) return null;   // setStatus, setWidget, ...: TUI only
+        const ask: HarnessAsk = {
+            kind: e.method as HarnessAsk['kind'], id: e.id, title: e.title ?? 'pi asks for an answer',
+            message: message || (e.placeholder ?? ''), options: e.options ?? [], prefill: e.prefill ?? '',
+            timeout: typeof e.timeout === 'number' ? e.timeout : null,
+        };
+        this.trace.add('note', `pi is waiting: ${ask.title}`, [ask.message, ask.options.length ? `Options: ${ask.options.join(' / ')}` : ''].filter(Boolean).join('\n'), { round: this.turn });
+        return { type: 'ask', ask };
+    }
+
+    // The end of an assistant message: its text is the latest answer; usage adds up; an error or abort is recorded.
+    private assistantMessage(m: PiMessage): void {
+        const answer = contentText(m.content).trim();
+        if (answer) this.summary = answer;
+        this.stopReason = m.stopReason ?? '';
+        this.cost += m.usage?.cost?.total ?? 0;
+        this.tokens += m.usage?.totalTokens ?? 0;
+        if (m.stopReason !== 'error' && m.stopReason !== 'aborted') return;
+        this.error = m.errorMessage || (m.stopReason === 'aborted' ? 'cancelled' : 'model error');
+        this.trace.add('error', 'pi stopped with an error', this.error, { round: this.turn });
     }
 
     private setSession(id: string | null): void {
@@ -396,11 +400,14 @@ export interface Run {
     folder: string;         // project folder; one harness per folder at a time
     prompt: string;
     session: string | null; // the harness session being continued (a reply after finishing), null = new session
-    status: RunStatus;
-    ask: HarnessAsk | null; // what is awaited from the user while the status is 'waiting'
+    // Changed only through RunQueue (wait, resume, end), so the status, the question, and the result stay consistent.
+    readonly status: RunStatus;
+    readonly ask: HarnessAsk | null; // what is awaited from the user while the status is 'waiting'
     trace: AgentTrace;
-    result: HarnessResult | null;
+    readonly result: HarnessResult | null;
 }
+
+type MutableRun = { -readonly [K in keyof Run]: Run[K] };
 
 // A project folder is worked on by only one harness at a time so they do not overwrite each other; other cards wait.
 export class RunQueue {
@@ -425,14 +432,31 @@ export class RunQueue {
         return run && isActive(run.status) ? run : null;
     }
 
-    // Mark finished, then return the next run in the same folder (already marked working), if any.
-    end(run: Run, status: 'done' | 'failed' | 'stopped'): Run | null {
+    // The harness asks the user something; the run waits (its process stays alive and keeps the folder).
+    wait(run: Run, ask: HarnessAsk): void {
+        const r = run as MutableRun;
+        r.status = 'waiting';
+        r.ask = ask;
+    }
+
+    // The question was answered, skipped, or timed out: the harness works again.
+    resume(run: Run): void {
+        const r = run as MutableRun;
+        r.status = 'working';
+        r.ask = null;
+    }
+
+    // Mark finished (with the harness result, if it ran), then return the next run in the same folder (already
+    // marked working), if any.
+    end(run: Run, status: 'done' | 'failed' | 'stopped', result: HarnessResult | null = run.result): Run | null {
+        const r = run as MutableRun;
         const wasWorking = run.status === 'working' || run.status === 'waiting';
-        run.status = status;
-        run.ask = null;
+        r.status = status;
+        r.ask = null;
+        r.result = result;
         if (!wasWorking) return null;   // cancelling from the queue does not give a turn: that folder is still being worked on by another
-        const next = this.runs.find(r => r.folder === run.folder && r.status === 'queued');
-        if (next) next.status = 'working';
+        const next = this.runs.find(other => other.folder === run.folder && other.status === 'queued');
+        if (next) (next as MutableRun).status = 'working';
         return next ?? null;
     }
 

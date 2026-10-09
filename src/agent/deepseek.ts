@@ -73,16 +73,13 @@ export class DeepSeek implements Provider {
             message.set_request_body_from_bytes('application/json', new GLib.Bytes(encoder.encode(JSON.stringify(body))));
 
             const cancelled = () => !!cancellable?.is_cancelled();
-            let usage: Usage | null = null;
-            let reasoning = '';
-            const calls: ToolCall[] = [];   // indexed by ToolDelta.index
-
+            const collected = new StreamCollector(onText, onReasoning);
             session.send_async(message, GLib.PRIORITY_DEFAULT, cancellable ?? null, (_session, result) => {
                 let stream: Gio.InputStream;
                 try {
                     stream = session.send_finish(result);
                 } catch (e) {
-                    if (cancelled()) resolve({ usage, cancelled: true, toolCalls: [], reasoning });
+                    if (cancelled()) resolve({ ...collected.result(true), toolCalls: [] });
                     else reject(new TemporaryProviderError(`Cannot connect to DeepSeek: ${e instanceof Error ? e.message : e}`));
                     return;
                 }
@@ -91,7 +88,7 @@ export class DeepSeek implements Provider {
                 const finish = (error?: Error) => {
                     try { reader.close(null); } catch (e) { /* already closed */ }
                     if (error) reject(error);
-                    else resolve({ usage, cancelled: cancelled(), toolCalls: calls.filter(Boolean), reasoning });
+                    else resolve(collected.result(cancelled()));
                 };
 
                 // A status other than 200: the whole body is a JSON error, not a stream.
@@ -106,32 +103,53 @@ export class DeepSeek implements Provider {
                         return;
                     }
                     if (line === null) {
-                        finish(status === 200 ? new TemporaryProviderError('The DeepSeek stream ended before the completion marker; the work can be resumed from the checkpoint.') : (status === 429 || status >= 500 ? new TemporaryProviderError(httpErrorMessage(status, errorBody)) : new Error(httpErrorMessage(status, errorBody))));
+                        finish(endOfStreamError(status, errorBody));
                         return;
                     }
-                    if (status !== 200) {
-                        errorBody += line;
-                    } else {
-                        const event = parseStreamLine(line);
-                        if (event?.kind === 'chunk') {
-                            if (event.reasoning) { reasoning += event.reasoning; onReasoning?.(event.reasoning); }
-                            if (event.text) onText(event.text);
-                            for (const t of event.tools) {
-                                const call = calls[t.index] ??= { id: '', name: '', arguments: '' };
-                                if (t.id) call.id = t.id;
-                                if (t.name) call.name += t.name;
-                                if (t.arguments) call.arguments += t.arguments;
-                            }
-                            if (event.usage) usage = event.usage;
-                        } else if (event?.kind === 'done') {
-                            finish();
-                            return;
-                        }
-                    }
+                    if (status !== 200) errorBody += line;
+                    else if (collected.add(line)) { finish(); return; }
                     readLine();
                 });
                 readLine();
             });
         });
+    }
+}
+
+// The stream ended without the completion marker. A cut-off answer or an overloaded server (429, 5xx) is temporary
+// and may be retried; other HTTP errors are not.
+function endOfStreamError(status: number, errorBody: string): Error {
+    if (status === 200) return new TemporaryProviderError('The DeepSeek stream ended before the completion marker; the work can be resumed from the checkpoint.');
+    const message = httpErrorMessage(status, errorBody);
+    return status === 429 || status >= 500 ? new TemporaryProviderError(message) : new Error(message);
+}
+
+// The answer as it streams in: text and reasoning are passed on at once; tool calls arriving in pieces are joined per index.
+class StreamCollector {
+    private usage: Usage | null = null;
+    private reasoning = '';
+    private readonly calls: ToolCall[] = [];   // indexed by ToolDelta.index
+
+    constructor(private readonly onText: (delta: string) => void, private readonly onReasoning?: (delta: string) => void) {}
+
+    // One line of the stream. true = the completion marker.
+    add(line: string): boolean {
+        const event = parseStreamLine(line);
+        if (event?.kind === 'done') return true;
+        if (event?.kind !== 'chunk') return false;
+        if (event.reasoning) { this.reasoning += event.reasoning; this.onReasoning?.(event.reasoning); }
+        if (event.text) this.onText(event.text);
+        for (const t of event.tools) {
+            const call = this.calls[t.index] ??= { id: '', name: '', arguments: '' };
+            if (t.id) call.id = t.id;
+            if (t.name) call.name += t.name;
+            if (t.arguments) call.arguments += t.arguments;
+        }
+        if (event.usage) this.usage = event.usage;
+        return false;
+    }
+
+    result(cancelled: boolean): ChatResult {
+        return { usage: this.usage, cancelled, toolCalls: this.calls.filter(Boolean), reasoning: this.reasoning };
     }
 }

@@ -19,50 +19,101 @@ interface Token { kind: Kind; text: string; line: number }
 // ---------- Tokenizer ----------
 
 function tokenize(src: string): Token[] {
-    const tokens: Token[] = [];
-    let line = 1, i = 0;
-    const push = (kind: Kind, text: string, at: number) => tokens.push({ kind, text, line: at });
-    while (i < src.length) {
-        const c = src[i];
-        if (c === '\n') { line++; i++; continue; }
-        if (/\s/.test(c)) { i++; continue; }
-        if (src.startsWith('//', i)) { while (i < src.length && src[i] !== '\n') i++; continue; }
-        if (src.startsWith('/*', i)) {
-            const end = src.indexOf('*/', i + 2);
-            if (end < 0) throw new DbmlError('Unclosed /* comment', line);
-            for (const ch of src.slice(i, end)) if (ch === '\n') line++;
-            i = end + 2;
-            continue;
-        }
-        if (src.startsWith("'''", i)) {
-            const end = src.indexOf("'''", i + 3);
-            if (end < 0) throw new DbmlError("Unclosed ''' text", line);
-            const text = src.slice(i + 3, end), at = line;
-            for (const ch of text) if (ch === '\n') line++;
-            push('str', text, at);
-            i = end + 3;
-            continue;
-        }
-        if (c === "'" || c === '"' || c === '`') {
-            let j = i + 1, text = '';
-            while (j < src.length && src[j] !== c && src[j] !== '\n') {
-                if (src[j] === '\\' && j + 1 < src.length) j++;
-                text += src[j++];
-            }
-            if (src[j] !== c) throw new DbmlError('Unclosed quote', line);
-            // "name" is an identifier; 'text' is a string; `expression` is an expression.
-            push(c === '"' ? 'word' : c === "'" ? 'str' : 'expr', text, line);
-            i = j + 1;
-            continue;
-        }
-        if (src.startsWith('<>', i)) { push('punct', '<>', line); i += 2; continue; }
-        if (/[{}[\](),:.<>\-]/.test(c)) { push('punct', c, line); i++; continue; }
-        const m = /^[^\s{}[\](),:.<>'"`\-/]+/.exec(src.slice(i));
-        if (!m) throw new DbmlError(`Unrecognized character: ${c}`, line);
-        push('word', m[0], line);
-        i += m[0].length;
+    const lexer = new Lexer(src);
+    while (lexer.next()) { /* until the end of the source */ }
+    return lexer.tokens;
+}
+
+// One pass over the source; each method reads one kind of token at the current position, or returns false.
+class Lexer {
+    readonly tokens: Token[] = [];
+    private line = 1;
+    private i = 0;
+
+    constructor(private readonly src: string) {}
+
+    // Read the next token (or skip whitespace or a comment). false = the end of the source.
+    next(): boolean {
+        if (this.i >= this.src.length) return false;
+        if (this.space() || this.comment() || this.blockText() || this.quoted() || this.punct()) return true;
+        this.word();
+        return true;
     }
-    return tokens;
+
+    private push(kind: Kind, text: string, line = this.line): void {
+        this.tokens.push({ kind, text, line });
+    }
+
+    // Count the newlines in src[from, to) and move to `to`.
+    private skipTo(from: number, to: number): void {
+        for (let k = from; k < to; k++) if (this.src[k] === '\n') this.line++;
+        this.i = to;
+    }
+
+    private space(): boolean {
+        const c = this.src[this.i];
+        if (c === '\n') { this.line++; this.i++; return true; }
+        if (!/\s/.test(c)) return false;
+        this.i++;
+        return true;
+    }
+
+    private comment(): boolean {
+        const { src, i } = this;
+        if (src.startsWith('//', i)) {
+            const end = src.indexOf('\n', i);
+            this.i = end < 0 ? src.length : end;
+            return true;
+        }
+        if (!src.startsWith('/*', i)) return false;
+        const end = src.indexOf('*/', i + 2);
+        if (end < 0) throw new DbmlError('Unclosed /* comment', this.line);
+        this.skipTo(i, end + 2);
+        return true;
+    }
+
+    // '''text''' may span lines; the token gets the line it starts on.
+    private blockText(): boolean {
+        const { src, i } = this;
+        if (!src.startsWith("'''", i)) return false;
+        const end = src.indexOf("'''", i + 3);
+        if (end < 0) throw new DbmlError("Unclosed ''' text", this.line);
+        this.push('str', src.slice(i + 3, end));
+        this.skipTo(i, end + 3);
+        return true;
+    }
+
+    // "name" is an identifier; 'text' is a string; `expression` is an expression. A backslash escapes one character.
+    private quoted(): boolean {
+        const { src } = this;
+        const c = src[this.i];
+        if (c !== "'" && c !== '"' && c !== '`') return false;
+        let j = this.i + 1, text = '';
+        while (j < src.length && src[j] !== c && src[j] !== '\n') {
+            if (src[j] === '\\' && j + 1 < src.length) j++;
+            text += src[j++];
+        }
+        if (src[j] !== c) throw new DbmlError('Unclosed quote', this.line);
+        this.push(c === '"' ? 'word' : c === "'" ? 'str' : 'expr', text);
+        this.i = j + 1;
+        return true;
+    }
+
+    private punct(): boolean {
+        if (this.src.startsWith('<>', this.i)) { this.push('punct', '<>'); this.i += 2; return true; }
+        const c = this.src[this.i];
+        if (!/[{}[\](),:.<>\-]/.test(c)) return false;
+        this.push('punct', c);
+        this.i++;
+        return true;
+    }
+
+    private word(): void {
+        const m = /^[^\s{}[\](),:.<>'"`\-/]+/.exec(this.src.slice(this.i));
+        if (!m) throw new DbmlError(`Unrecognized character: ${this.src[this.i]}`, this.line);
+        this.push('word', m[0]);
+        this.i += m[0].length;
+    }
 }
 
 // ---------- Model ----------
@@ -302,8 +353,16 @@ export function dbmlToMermaid(src: string): string {
     const alias = new Map<string, string>();
     for (const t of schema.tables) if (t.alias) alias.set(t.alias, t.name);
     const resolve = (name: string): string => alias.get(name) ?? name;
+    markForeignKeys(schema, resolve);
+    return [
+        'erDiagram',
+        ...schema.tables.flatMap(tableLines),
+        ...schema.relations.map(r => `    ${quote(resolve(r.from))} ${CARDINALITY[r.op]} ${quote(resolve(r.to))} : ${quote((r.op === '<' ? r.toCol : r.fromCol) || ' ')}`),
+    ].join('\n');
+}
 
-    // A column on the "many" side of a relation is a foreign key.
+// A column on the "many" side of a relation is a foreign key.
+function markForeignKeys(schema: Schema, resolve: (name: string) => string): void {
     const byName = new Map(schema.tables.map(t => [t.name, t]));
     const mark = (table: string, col: string): void => {
         const c = byName.get(resolve(table))?.columns.find(c => c.name === col);
@@ -313,19 +372,13 @@ export function dbmlToMermaid(src: string): string {
         if (r.op === '>') mark(r.from, r.fromCol);
         else if (r.op === '<') mark(r.to, r.toCol);
     }
+}
 
-    const out = ['erDiagram'];
-    for (const t of schema.tables) {
-        out.push(`    ${quote(t.name)} {`);
-        for (const c of t.columns) {
-            const keys = [c.pk ? 'PK' : '', c.fk ? 'FK' : '', c.unique && !c.pk ? 'UK' : ''].filter(Boolean).join(', ');
-            out.push(`        ${ident(c.type)} ${ident(c.name)}${keys ? ` ${keys}` : ''}${c.note ? ` ${quote(c.note.replace(/\s+/g, ' '))}` : ''}`);
-        }
-        out.push('    }');
-    }
-    for (const r of schema.relations) {
-        const label = r.op === '<' ? r.toCol : r.fromCol;
-        out.push(`    ${quote(resolve(r.from))} ${CARDINALITY[r.op]} ${quote(resolve(r.to))} : ${quote(label || ' ')}`);
-    }
-    return out.join('\n');
+// One entity block: a line per column with its type, name, keys, and note.
+function tableLines(t: Table): string[] {
+    const column = (c: Column): string => {
+        const keys = [c.pk ? 'PK' : '', c.fk ? 'FK' : '', c.unique && !c.pk ? 'UK' : ''].filter(Boolean).join(', ');
+        return `        ${ident(c.type)} ${ident(c.name)}${keys ? ` ${keys}` : ''}${c.note ? ` ${quote(c.note.replace(/\s+/g, ' '))}` : ''}`;
+    };
+    return [`    ${quote(t.name)} {`, ...t.columns.map(column), '    }'];
 }

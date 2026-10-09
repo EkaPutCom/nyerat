@@ -1,6 +1,6 @@
 // Daily activity log for the journal: one JSONL file per day in <work folder>/.nyerat/activity/.
 // Append-only, so no index can go stale and an interrupted write corrupts at most
-// one line (skipped when read). Dot folders are not read by readProject, so the agent does not
+// one line (skipped when read). Dot folders are not read by the workspace (workspace.ts), so the agent does not
 // traverse them; their contents reach the agent only through the Activity section of the journal file.
 
 import GLib from 'gi://GLib';

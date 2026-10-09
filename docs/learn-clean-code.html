@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learning Clean Code with Nyerat</title>
+<meta name="description" content="Learning notes on keeping a GTK and GJS code base easy to change: layers checked by the build, small functions, cohesion, coupling, local reasoning, and proving that a refactor changed nothing, all taken from Nyerat's own refactors.">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f5f2;
+  --surface: #fcfcfb;
+  --surface-2: #efeee9;
+  --line: #dcdad3;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --text-3: #7a7974;
+  --before: #eb6834;
+  --before-soft: #fbe3d8;
+  --after: #2a78d6;
+  --after-soft: #dbe8f8;
+  --ok: #2f8f4e;
+  --ok-soft: #dcefe2;
+  --code-bg: #efeee9;
+  --warn-bg: #fff6df;
+  --warn-line: #e3c472;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211;
+    --surface: #1a1a19;
+    --surface-2: #242422;
+    --line: #34342f;
+    --text: #ffffff;
+    --text-2: #c3c2b7;
+    --text-3: #93928a;
+    --before: #d95926;
+    --before-soft: #3a2419;
+    --after: #3987e5;
+    --after-soft: #17263a;
+    --ok: #4fb56f;
+    --ok-soft: #173022;
+    --code-bg: #242422;
+    --warn-bg: #2e2715;
+    --warn-line: #8a7433;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211;
+  --surface: #1a1a19;
+  --surface-2: #242422;
+  --line: #34342f;
+  --text: #ffffff;
+  --text-2: #c3c2b7;
+  --text-3: #93928a;
+  --before: #d95926;
+  --before-soft: #3a2419;
+  --after: #3987e5;
+  --after-soft: #17263a;
+  --ok: #4fb56f;
+  --ok-soft: #173022;
+  --code-bg: #242422;
+  --warn-bg: #2e2715;
+  --warn-line: #8a7433;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Cantarell, Ubuntu, sans-serif; }
+a { color: var(--after); }
+code, pre, textarea { font-family: ui-monospace, Menlo, Consolas, monospace; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: .88em; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: .8rem; line-height: 1.5; margin: 10px 0; }
+pre code { background: none; padding: 0; font-size: inherit; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+header.top { border-bottom: 1px solid var(--line); background: var(--surface); }
+header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
+header.top nav { display: flex; gap: 14px; flex-wrap: wrap; font-size: .9rem; }
+header.top nav a { color: var(--text-2); text-decoration: none; }
+header.top nav a:hover { color: var(--text); }
+.brand { font-weight: 700; text-decoration: none; color: var(--text); }
+.hero { padding: 40px 0 18px; }
+.eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; color: var(--text-3); font-weight: 600; }
+h1 { font-size: clamp(1.8rem, 4.5vw, 2.6rem); line-height: 1.15; margin: 6px 0 12px; }
+h2 { font-size: 1.5rem; line-height: 1.25; margin: 0 0 10px; }
+h3 { font-size: 1.1rem; margin: 22px 0 8px; }
+.lede { font-size: 1.12rem; color: var(--text-2); max-width: 46em; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 24px 0 8px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow); }
+.kpi .what { font-size: .8rem; color: var(--text-2); }
+.kpi .big { font-size: 1.7rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.kpi .from { font-size: .78rem; color: var(--text-3); }
+.toc { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 6px 18px; padding: 0; list-style: none; margin: 18px 0 0; font-size: .92rem; }
+.toc a { text-decoration: none; color: var(--text-2); }
+.toc a:hover { color: var(--text); }
+.toc .n { color: var(--text-3); font-variant-numeric: tabular-nums; margin-right: 6px; }
+section.chapter { padding: 34px 0; border-top: 1px solid var(--line); }
+.chapnum { font-size: .8rem; color: var(--text-3); font-weight: 600; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+.grid2 > * { min-width: 0; }
+.panel { border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--surface); min-width: 0; }
+.panel h4 { margin: 0 0 8px; font-size: .95rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tag { display: inline-block; font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+.tag.old { background: var(--before-soft); color: var(--text); border: 1px solid var(--before); }
+.tag.new { background: var(--after-soft); color: var(--text); border: 1px solid var(--after); }
+.lesson { border-left: 3px solid var(--after); background: var(--after-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.lesson b:first-child { display: block; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); margin-bottom: 2px; }
+.caveat { border-left: 3px solid var(--warn-line); background: var(--warn-bg); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: .93rem; }
+.note { font-size: .88rem; color: var(--text-2); }
+.scroll-x { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); font-weight: 600; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.layers { display: grid; gap: 6px; margin: 14px 0; }
+.layer { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--surface); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: .9rem; }
+.layer b { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; }
+.layer span { color: var(--text-2); font-size: .84rem; }
+.layer.base { border-style: dashed; }
+.down { text-align: center; color: var(--text-3); font-size: .8rem; line-height: 1; }
+.sim { border: 1px solid var(--after); border-radius: 12px; padding: 16px; margin: 20px 0 6px; background: linear-gradient(var(--after-soft), var(--surface) 90px); }
+.sim > h3 { margin-top: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sim .kind { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--text-2); background: var(--surface); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 10px 0; font-size: .88rem; }
+button { font: inherit; font-size: .88rem; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; }
+button:hover { border-color: var(--text-3); }
+button.primary { background: var(--after); border-color: var(--after); color: #fff; }
+textarea { width: 100%; min-height: 220px; resize: vertical; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--surface); color: var(--text); font-size: .82rem; line-height: 1.5; tab-size: 4; }
+.meter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.meter .val { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 2ch; }
+.meter .bar { flex: 1 1 200px; height: 12px; border-radius: 6px; background: var(--surface-2); position: relative; overflow: hidden; min-width: 120px; }
+.meter .fill { position: absolute; inset: 0 auto 0 0; border-radius: 6px; transition: width .2s, background .2s; }
+.meter .verdict { font-size: .88rem; color: var(--text-2); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: .78rem; }
+.chips span { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; background: var(--surface); color: var(--text-2); }
+.lanes { display: grid; gap: 8px; margin: 10px 0; }
+.lane { display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center; font-size: .82rem; }
+.lane .label { color: var(--text-2); }
+@media (max-width: 500px) { .lane { grid-template-columns: 74px 1fr; gap: 8px; } }
+.track { position: relative; height: 26px; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
+.track.rows3 { height: 70px; }
+.track.rows2 { height: 48px; }
+.job { position: absolute; height: 18px; border-radius: 4px; font-size: .7rem; color: #fff; display: flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden; }
+.job.v1 { background: #8a8780; }
+.job.v2 { background: var(--before); }
+.job.v3 { background: var(--after); }
+.job.merged { background: transparent; color: var(--text-3); border: 1px dashed var(--text-3); }
+.result { margin-top: 8px; font-size: .9rem; }
+.result .bad { color: var(--before); font-weight: 700; }
+.result .good { color: var(--ok); font-weight: 700; }
+.owners { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 12px 0; }
+.owner { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); }
+.owner h4 { margin: 0 0 6px; font-size: .88rem; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.owner ul { margin: 0; padding-left: 18px; font-size: .84rem; color: var(--text-2); }
+.timeline-steps { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
+.timeline-steps li { display: grid; grid-template-columns: 86px 1fr; gap: 10px; font-size: .9rem; }
+.timeline-steps .h { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem; color: var(--text-3); padding-top: 2px; }
+.checklist { list-style: none; padding: 0; display: grid; gap: 6px; }
+.checklist li { padding-left: 26px; position: relative; }
+.checklist li::before { content: "✓"; position: absolute; left: 4px; color: var(--ok); font-weight: 700; }
+footer { border-top: 1px solid var(--line); padding: 26px 0 40px; color: var(--text-3); font-size: .85rem; }
+footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.theme-toggle { font-size: .82rem; padding: 4px 10px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="index.html">Nyerat</a>
+    <nav>
+      <a href="docs/">Documentation</a>
+      <a href="learn-agent.html">Learn agents</a>
+      <a href="learn-performance.html">Learn performance</a>
+      <a href="learn-gtk.html">Learn GTK</a>
+      <button class="theme-toggle" id="theme" type="button" aria-label="Switch between light and dark">◐ Theme</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+  <div class="hero">
+    <div class="eyebrow">Learning notes · from Nyerat's own refactors</div>
+    <h1>Learning clean code with Nyerat</h1>
+    <p class="lede">Clean code here means one practical thing: a change can be made by reading a small part of the code, and the build tells you when a change breaks a rule. Every chapter below starts from a real problem in Nyerat (a GTK 4 + GJS workbench in TypeScript), shows the code before and after, and states how we checked that the behavior did not change.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="what">Highest cyclomatic complexity of a function</div><div class="big">15</div><div class="from">from 132 (<code>ChatSession.ask</code>) · limit checked by the build</div></div>
+      <div class="kpi"><div class="what">Functions in src/ and scripts/</div><div class="big">2,656</div><div class="from">median 1 · mean 2.45 · 90% at 5 or less</div></div>
+      <div class="kpi"><div class="what">Import cycles between modules</div><div class="big">0</div><div class="from">106 modules · 319 runtime imports</div></div>
+      <div class="kpi"><div class="what">Modules that write a document's file</div><div class="big">1</div><div class="from">from 5 · the others call named operations</div></div>
+    </div>
+    <ul class="toc">
+      <li><a href="#ch1"><span class="n">1</span>Rules the build checks</a></li>
+      <li><a href="#ch2"><span class="n">2</span>Small functions</a></li>
+      <li><a href="#ch3"><span class="n">3</span>Prove the refactor changed nothing</a></li>
+      <li><a href="#ch4"><span class="n">4</span>Cohesion: one job per class</a></li>
+      <li><a href="#ch5"><span class="n">5</span>Coupling: a narrow host</a></li>
+      <li><a href="#ch6"><span class="n">6</span>Local reasoning: one owner per state</a></li>
+      <li><a href="#ch7"><span class="n">7</span>Make time and order explicit</a></li>
+      <li><a href="#ch8"><span class="n">8</span>Checklist for a change</a></li>
+    </ul>
+  </div>
+</div>
+
+<section class="chapter" id="ch1">
+<div class="wrap">
+  <div class="chapnum">Chapter 1</div>
+  <h2>Rules the build checks</h2>
+  <p>The README has always described Nyerat's layers: <code>markdown/</code> knows no GTK, <code>agent/</code> knows no widgets, controllers never see <code>MainWindow</code>. A rule that only lives in prose holds as long as every contributor remembers it. <code>scripts/layers.mjs</code> turns it into a check that runs in <code>npm run build</code> and <code>npm run typecheck</code>.</p>
+  <div class="layers" aria-label="Layers, from top to bottom">
+    <div class="layer"><b>app.ts → window.ts</b><span>composes the widgets and connects them; the only place that knows every component</span></div>
+    <div class="down">↓ may use</div>
+    <div class="layer"><b>window/*</b><span>controllers (documents, views, notes, journal, harness, Home, autosave) on a narrow host</span></div>
+    <div class="down">↓</div>
+    <div class="layer"><b>ui/* · editor/*</b><span>widgets that report through callbacks; the editor knows no files or menus</span></div>
+    <div class="down">↓</div>
+    <div class="layer"><b>orchestrator.ts · agent/*</b><span>harness processes; the assistant's logic without GTK</span></div>
+    <div class="down">↓</div>
+    <div class="layer"><b>markdown/*</b><span>string → data, nothing else: no GI, no imports outside markdown/</span></div>
+    <div class="layer base"><b>files.ts · workspace.ts · settings.ts · git.ts · …</b><span>base modules any layer may use; they never reach up</span></div>
+  </div>
+  <p>Each rule is three things: which files it applies to, which imports are forbidden, and why. The "why" is printed when the build fails, so the message teaches instead of just refusing.</p>
+<pre><code>// scripts/layers.mjs
+const rules = [
+    [f => f.startsWith('markdown/'), t => t.startsWith('gi://') || !t.startsWith('markdown/'),
+        'markdown/ only holds string → data functions: no GI, nothing outside markdown/'],
+    [f => f.startsWith('agent/'), t => GTK.test(t) || /^(ui|editor|window)\//.test(t) || t === 'window.ts',
+        'agent/ is free of GTK and knows nothing about the editor, widgets, or the window'],
+    [f => f.startsWith('ui/') || f.startsWith('window/') || f === 'actions.ts', t => t === 'window.ts',
+        'only app.ts composes MainWindow; components and controllers get a host interface'],
+    // …
+];</code></pre>
+  <p>The same script also limits the cyclomatic complexity of every function to 15 (chapter 2). It needs a TypeScript parser, and TypeScript 7 has no JavaScript API, so it uses the oxc parser that Vite already ships (<code>rolldown/parseAst</code>): no new dependency.</p>
+  <div class="lesson"><b>Lesson</b>Write the architecture down as a check, not only as a diagram. Put the reason in the failure message: the person who breaks the rule is the one who needs to read it.</div>
+  <div class="caveat"><b>An exception list that only shrinks.</b> When the complexity limit was introduced, 15 functions were above it. They went into <code>COMPLEXITY_ALLOWED</code> with their value at that time. The check fails if one grows, and also if one went down without its entry being lowered or removed, so the list could only get shorter. It is empty now.</div>
+</div>
+</section>
+
+<section class="chapter" id="ch2">
+<div class="wrap">
+  <div class="chapnum">Chapter 2</div>
+  <h2>Small functions: complexity as a signal</h2>
+  <p>Cyclomatic complexity counts the paths through a function: 1, plus one for every <code>if</code>, <code>?:</code>, <code>&amp;&amp;</code>, <code>||</code>, <code>??</code>, <code>case</code>, loop, and <code>catch</code>. It is the minimum number of tests needed to run every branch once. The usual reading:</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Complexity</th><th>Meaning</th><th class="num">Nyerat functions</th></tr></thead>
+    <tbody>
+      <tr><td>1–5</td><td>simple; easy to read and test</td><td class="num">2,398</td></tr>
+      <tr><td>6–10</td><td>fine; McCabe's own limit (1976)</td><td class="num">210</td></tr>
+      <tr><td>11–15</td><td>worth a second look; Nyerat's build limit</td><td class="num">48</td></tr>
+      <tr><td>above 15</td><td>refused by the build</td><td class="num">0</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The worst case: one method that did a whole turn</h3>
+  <p><code>ChatSession.ask</code> was 242 lines with a complexity of <b>132</b>: it built the context, recovered saved work, ran the model loop, counted usage, and executed every kind of tool inline. The fix was not to cut it into arbitrary pieces, but to notice that all those pieces shared the state of one turn. That state became a class, and each step a method.</p>
+  <div class="grid2">
+    <div class="panel"><h4><span class="tag old">Before</span> one method, 132 paths</h4>
+<pre><code>async ask(input, provider, model, handlers, cancellable) {
+    // context, recovery messages, journal …
+    for (let round = 0; round &lt; MAX_ROUNDS; round++) {
+        // call the model, count usage …
+        for (const call of result.toolCalls) {
+            if (useTools &amp;&amp; call.name === VERIFY_TOOL.name …) { … continue; }
+            if (useTools &amp;&amp; canPropose &amp;&amp; … BATCH_TOOL …) { … continue; }
+            if (useTools &amp;&amp; … WORK_TOOL …) { … continue; }
+            if (useTools &amp;&amp; canPropose &amp;&amp; isChangeTool(…)) { … continue; }
+            // read and git tools …
+        }
+    }
+}</code></pre></div>
+    <div class="panel"><h4><span class="tag new">After</span> a TurnRun, highest method 15</h4>
+<pre><code>ask(input, provider, model, handlers, cancellable) {
+    const generation = this.generation;
+    return new TurnRun(this, () => generation !== this.generation,
+        input, provider, model, handlers, cancellable).run();
+}
+
+private async runTool(call: ToolCall, useTools: boolean) {
+    const project = this.input.options.project;
+    if (useTools &amp;&amp; project &amp;&amp; call.name === VERIFY_TOOL.name) return this.verify(call);
+    if (useTools &amp;&amp; this.canPropose &amp;&amp; … BATCH_TOOL.name) return this.proposeBatch(call, …);
+    if (useTools &amp;&amp; project &amp;&amp; call.name === WORK_TOOL.name) return this.setWork(call);
+    if (useTools &amp;&amp; this.canPropose &amp;&amp; isChangeTool(call.name)) return this.proposeChange(call);
+    return this.read(call, useTools);
+}</code></pre></div>
+  </div>
+  <p>A turn whose conversation was cleared meanwhile used to <code>return</code> early from five places deep inside the loop. Now any step calls <code>checkStale()</code>, which throws a private <code>StaleTurn</code>; <code>run()</code> catches it once and drops the result. One rule, one place.</p>
+
+  <h3>A table instead of a long switch</h3>
+  <p><code>planChange</code> (45), <code>planKanban</code> (34), <code>PiReader.line</code> (54), and <code>describeCall</code> (17) all dispatched on a name. Each became a lookup table of small handlers:</p>
+<pre><code>const KANBAN_ACTIONS: Record&lt;string, (k: KanbanTarget) =&gt; Board | PlanResult&gt; = {
+    add: k =&gt; { … return addCard(k.board, column, k.cardText); },
+    move: k =&gt; { … return moveCard(k.board, from, { column, index: Infinity }); },
+    mark: k =&gt; { … },
+    // …
+};
+const action = lookup(KANBAN_ACTIONS, asText(args.action));
+if (!action) return fail('The "action" argument must be one of: …', 'invalid action');</code></pre>
+  <div class="caveat"><b>A trap tables bring.</b> The key comes from outside: the model picks the tool and action names, pi's output picks the event type. With a plain <code>TABLE[name]</code>, the name <code>"toString"</code> or <code>"constructor"</code> finds a function inherited from <code>Object.prototype</code> and calls it. Every lookup goes through <code>Object.hasOwn</code>, and a test feeds those names on purpose. The old <code>switch</code> never had this problem: a refactor can add a bug the original could not have.</div>
+
+  <div class="sim" id="cc-sim">
+    <h3>Try it: count the paths of a function <span class="kind">real rule, simplified counter</span></h3>
+    <p class="note">Edit the function below. The counter follows the same rule as <code>scripts/layers.mjs</code> (if, ?:, &amp;&amp;, ||, ??, case, loops, catch), but with a token scan instead of a parser, and it counts the whole text as one function. Comments and strings are ignored.</p>
+    <textarea id="cc-src" spellcheck="false" aria-label="Function source"></textarea>
+    <div class="controls">
+      <button type="button" data-sample="before">Load: a long dispatcher</button>
+      <button type="button" data-sample="after">Load: the table version</button>
+    </div>
+    <div class="meter" aria-live="polite">
+      <div class="val" id="cc-val">1</div>
+      <div class="bar"><div class="fill" id="cc-fill"></div></div>
+      <div class="verdict" id="cc-verdict"></div>
+    </div>
+    <div class="chips" id="cc-chips"></div>
+  </div>
+
+  <div class="lesson"><b>Lesson</b>Split a large function along the state it shares (a class for one turn, one parse, one board edit), not by line count. Dispatch on names with a table, and guard the lookup.</div>
+  <div class="caveat"><b>The number is a signal, not the goal.</b> A flat parser with complexity 14 can be clearer than four functions passing state between them. Nyerat's limit is 15, not 10: lowering it to 10 would refuse 48 functions, most of them parsers and event maps that read better whole.</div>
+</div>
+</section>
+
+<section class="chapter" id="ch3">
+<div class="wrap">
+  <div class="chapnum">Chapter 3</div>
+  <h2>Prove the refactor changed nothing</h2>
+  <p>"The tests still pass" says that the tested paths still work. A refactor of a function with 42 paths needs more than that. Nyerat's refactors used <b>differential testing</b>: bundle the old version (from <code>git show HEAD:…</code>) and the new one side by side, feed both the same random inputs, and compare the outputs exactly.</p>
+<pre><code>// node eq.mjs &lt;src path&gt; &lt;generator.mjs&gt;
+for (let i = 0; i &lt; count; i++) {
+    const input = gen.input(rnd, pick);
+    const a = run(Old, input), b = run(New, input);
+    if (a !== b) { console.log('DIFF for', input); process.exit(1); }
+}</code></pre>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Function</th><th>Where it ran</th><th class="num">Random inputs</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td><code>parseChat</code></td><td>Node</td><td class="num">20,000 files</td><td>identical</td></tr>
+      <tr><td><code>scanDocument</code> (lint)</td><td>Node</td><td class="num">30,000 documents</td><td>identical</td></tr>
+      <tr><td>DBML tokenizer</td><td>Node, private function exported to a temporary copy</td><td class="num">30,000 sources</td><td>identical, including every error and its line</td></tr>
+      <tr><td><code>markdownToHtml</code></td><td>Node</td><td class="num">30,000 documents</td><td>identical</td></tr>
+      <tr><td><code>parseInline</code></td><td>Node</td><td class="num">40,000 lines</td><td>identical</td></tr>
+      <tr><td><code>HighlightCache.update</code></td><td>GJS, a real <code>Gtk.TextBuffer</code></td><td class="num">9,000 incremental edits</td><td>identical, including how many lines were re-parsed</td></tr>
+      <tr><td><code>LineTagger</code></td><td>GJS, a real buffer, tag ranges read back</td><td class="num">8,328 operations</td><td>identical</td></tr>
+      <tr><td><code>PiReader.line</code></td><td>Node</td><td class="num">3,000 event streams</td><td>identical, except one case on purpose (below)</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Check what the generator really reached</h3>
+  <p>The first generator for <code>parseChat</code> passed 20,000 files, but counting its outputs showed only 49 with a saved work plan and none with a verification or the status <i>complete</i>: <code>parseWork</code> requires a <code>note</code> string the generator rarely produced. The branches that mattered most had not run at all. After fixing the generator: 2,586 plans, 1,839 with a verification, 116 complete, still identical.</p>
+  <div class="caveat"><b>A difference can be the point.</b> For <code>PiReader.line</code>, 180 of 3,000 streams differed: a line that is the JSON <code>null</code> made the old version throw inside the orchestrator's stream callback; the new one ignores it like other JSON that is not an event. The comparison made that change visible, so it was named in the commit and given its own test instead of slipping in.</div>
+  <div class="lesson"><b>Lesson</b>For a refactor, compare the old and the new code, not the new code and your expectations. Then count what the inputs covered: "identical on 20,000 inputs" means little if they never reached the branch you changed.</div>
+</div>
+</section>
+
+<section class="chapter" id="ch4">
+<div class="wrap">
+  <div class="chapnum">Chapter 4</div>
+  <h2>Cohesion: one job per class</h2>
+  <p>LCOM4 measures cohesion: draw a line between two methods when they use the same field or one calls the other, then count the groups. One group means the class does one thing; two groups are usually two classes sharing a file. Static helpers, callback hooks set from outside, and methods that do not touch <code>this</code> are left out, because they say nothing about cohesion.</p>
+  <div class="grid2">
+    <div class="panel"><h4><span class="tag old">Before</span> HighlightCache, two groups</h4>
+      <p class="note">update, full, parseRange: the parsed snapshot of the document.<br>begin, get, put, end: a cache of parsed lines.<br>No method of one group used a field of the other.</p></div>
+    <div class="panel"><h4><span class="tag new">After</span> LineCache owned by HighlightCache</h4>
+<pre><code>export class HighlightCache {
+    private snapshot: Parsed | null = null;
+    private readonly lineCache = new LineCache();
+    constructor(private readonly indent?: ListIndent) {}
+    …
+}
+export class LineCache { begin() get() put() end() }</code></pre></div>
+  </div>
+  <h3>A view that only draws</h3>
+  <p><code>ChatPanel</code> sent requests, cancelled them, refused proposals after a folder change, saved and reopened history, undid changes, and drew all of it. The life cycle moved into <code>agent/chatcontroller.ts</code>, which has no GTK; the panel implements a small <code>ChatView</code> interface and draws what it is told. Its popovers and proposal cards then became helpers that own their template widgets.</p>
+<pre><code>export interface ChatView {
+    noKey(): void;
+    saveFailed(error: string): void;
+    busyChanged(busy: boolean): void;
+    startTurn(question: string): TurnView;   // text, reasoning, steps, work, end
+    review(change, apply, cancelled): Promise&lt;ProposalResult&gt;;
+}</code></pre>
+  <p>The payoff is in the tests: a missing key, a folder change in the middle of a request, stopping, and a reset during a turn are now tested with a recording view and a fake provider, without opening a window.</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Class</th><th class="num">Methods before</th><th class="num">after</th><th>Moved out</th></tr></thead>
+    <tbody>
+      <tr><td><code>ChatPanel</code></td><td class="num">52</td><td class="num">38</td><td>ChatController, ChatSettings, ChatHistoryList, ContextPreview, ProposalCards</td></tr>
+      <tr><td><code>MainWindow</code></td><td class="num">60</td><td class="num">51</td><td>DocumentController, ViewController, NoteLinks</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Today 52 of the 59 classes with three or more methods have LCOM4 1. The other seven are small and read fine: <code>StatusBar</code> has a left and a right half, <code>Sidebar</code> a page and its contents, <code>ProposalViewer</code> a dark-mode setter. One is the counter's own blind spot: <code>DocumentController.setFile</code> only calls a helper that does not touch <code>this</code>.</p>
+  <div class="lesson"><b>Lesson</b>When a class has two groups of methods that never meet, it is two classes. When a widget makes decisions, move the decisions behind an interface the widget implements; the decisions become testable and the widget becomes boring.</div>
+</div>
+</section>
+
+<section class="chapter" id="ch5">
+<div class="wrap">
+  <div class="chapnum">Chapter 5</div>
+  <h2>Coupling: a narrow host, and one place that knows everyone</h2>
+  <p>Nyerat has no import cycle. Its fan-out is concentrated where it belongs: <code>window.ts</code> imports 32 modules because it is the <b>composition root</b>, the one place that creates the widgets and connects their callbacks. Everything else stays narrow.</p>
+  <p>A controller never receives <code>MainWindow</code>. It declares what it needs as a host interface, and the window builds that host from closures:</p>
+<pre><code>// window/views.ts
+export interface ViewHost extends DocumentHost {
+    readonly content: Gtk.Stack;
+    readonly board: KanbanBoard;
+    readonly inbox: InboxView;
+    readonly statusBar: StatusBar;
+    newDocument(text: string): void;
+    // …
+}</code></pre>
+  <p>Reading <code>ViewHost</code> tells you everything the view controller can touch; nothing else is reachable. The layer check (chapter 1) forbids importing <code>window.ts</code> from <code>window/</code>, so this cannot erode.</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Module</th><th class="num">Fan-in</th><th class="num">Fan-out</th><th>Reading</th></tr></thead>
+    <tbody>
+      <tr><td><code>gtkutil.ts</code></td><td class="num">33</td><td class="num">0</td><td>stable foundation: many depend on it, it depends on nothing</td></tr>
+      <tr><td><code>i18n.ts</code></td><td class="num">30</td><td class="num">0</td><td>same</td></tr>
+      <tr><td><code>window.ts</code></td><td class="num">1</td><td class="num">32</td><td>composition root (was 38 before views, notes, and file operations moved to controllers)</td></tr>
+      <tr><td><code>markdown/*</code></td><td class="num">—</td><td class="num">—</td><td>every import stays inside markdown/: fully self-contained</td></tr>
+    </tbody>
+  </table></div>
+  <div class="lesson"><b>Lesson</b>Let exactly one module know everybody, and keep it free of decisions. Give every other part an interface listing what it may use; the interface is the documentation of its coupling.</div>
+</div>
+</section>
+
+<section class="chapter" id="ch6">
+<div class="wrap">
+  <div class="chapnum">Chapter 6</div>
+  <h2>Local reasoning: one owner per piece of state</h2>
+  <p>You can reason locally when the code in front of you is enough to know what a value means. Nyerat's biggest obstacle was the <code>Doc</code> record for an open tab: ten fields, written by five modules. To know when <code>textOverride</code> is reset, or what <code>file === null</code> means after an agent deleted a file, you had to read all five.</p>
+  <div class="grid2">
+    <div class="panel"><h4><span class="tag old">Before</span> any module writes any field</h4>
+<pre><code>export interface Doc {
+    id: number; editor: MarkdownView;
+    file: string | null; home: boolean;
+    textOverride: boolean; boardText: string; reloadQueued: boolean;
+    autosaveTimer: number; lastChange: number; changes: number;
+}
+// window/agentwrites.ts
+if (open) { open.file = to; host.refreshTitle(open); }</code></pre></div>
+    <div class="panel"><h4><span class="tag new">After</span> readonly, with named operations</h4>
+<pre><code>export interface Doc {
+    readonly id: number;
+    readonly editor: MarkdownView;
+    readonly file: string | null;   // DocumentController only
+    readonly home: boolean;         // DocumentController only
+}
+// window/agentwrites.ts
+if (open) host.fileMoved(open, to);</code></pre></div>
+  </div>
+  <div class="owners">
+    <div class="owner"><h4>DocumentController</h4><ul><li>file, home</li><li>fileMoved, fileGone, fileBack, setFile</li></ul></div>
+    <div class="owner"><h4>ViewController</h4><ul><li>textOverride, boardText, reloadQueued</li><li>in a <code>WeakMap&lt;Doc, ViewState&gt;</code></li></ul></div>
+    <div class="owner"><h4>Autosaver</h4><ul><li>timer, last change, change count</li><li>in a <code>WeakMap&lt;Doc, Pending&gt;</code>; <code>edited(doc)</code> counts</li></ul></div>
+    <div class="owner"><h4>RunQueue</h4><ul><li>a harness run's status, question, result</li><li>wait, resume, end; the fields are readonly</li></ul></div>
+  </div>
+  <p><code>readonly</code> makes the rule enforceable: an assignment from anywhere else is a compile error. The owner keeps a private writable view (<code>type MutableDoc = { -readonly [K in keyof Doc]: Doc[K] }</code>) used in exactly one method.</p>
+  <h3>No hidden inputs</h3>
+  <p>The highlighter used to find the editor's list indentation through a module-level <code>WeakMap</code> that <code>MarkdownView</code> filled: a parse depended on a registration done elsewhere, invisible in its signature. Now <code>HighlightCache</code> takes the <code>ListIndent</code> in its constructor. Likewise, the line parser's methods took <code>(i, off, lineEnd, nl)</code> positionally, four numbers easy to swap; they now take one <code>Row</code>.</p>
+  <div class="lesson"><b>Lesson</b>Give every piece of mutable state one owner and name the changes it allows. Per-document state that belongs to a feature goes into that feature's own <code>WeakMap</code>, not onto a shared record. Pass dependencies in; never look them up from a global.</div>
+</div>
+</section>
+
+<section class="chapter" id="ch7">
+<div class="wrap">
+  <div class="chapnum">Chapter 7</div>
+  <h2>Make time and order explicit</h2>
+  <p>Autosave writes in a worker thread so typing never waits for fsync. The first version started every write at once and only counted how many were pending. Two overlapping writes could finish in the wrong order, leaving an older version on disk. Waiting for them pumped the whole main loop, so timers and input could run in the middle of a save.</p>
+  <div class="sim" id="q-sim">
+    <h3>Simulation: three autosaves of one file <span class="kind">model of files.ts</span></h3>
+    <p class="note">Versions v1, v2, v3 are requested 40 ms apart; each write takes a random time on a busy disk. Without a queue the last write to <i>finish</i> wins. With the per-path queue, one write runs at a time and a newer request replaces the one still waiting (✕).</p>
+    <div class="controls"><button type="button" class="primary" id="q-run">Run again with new timings</button></div>
+    <div class="lanes">
+      <div class="lane"><div class="label">Start at once</div><div class="track rows3" id="q-old"></div></div>
+      <div class="lane"><div class="label">Queue per path</div><div class="track rows2" id="q-new"></div></div>
+    </div>
+    <div class="result" id="q-result" aria-live="polite"></div>
+  </div>
+  <p>The fix made order a data structure instead of luck: per path, one running write and at most one waiting, which a newer request replaces. Completions report on their own <code>GLib.MainContext</code>, so <code>flushWrites()</code> iterates only that context; no unrelated callback can run while it waits.</p>
+<pre><code>export function writeTextFileAsync(path: string, text: string, done: Done): void {
+    const queue = queues.get(path);
+    if (queue) queue.next = { text, done: [...queue.next?.done ?? [], done] };   // the newest text wins
+    else { const fresh = { running: [done], next: null }; queues.set(path, fresh); start(path, text, fresh); }
+    ensurePump();
+}</code></pre>
+  <h3>Freshness as a parameter</h3>
+  <p>Reading the work folder has the same shape of problem: how current must the answer be? <code>WorkspaceRepository</code> makes the caller say it, instead of every caller re-walking the folder or silently trusting a cache:</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Freshness</th><th>Cost</th><th>Used by</th></tr></thead>
+    <tbody>
+      <tr><td><code>cached</code></td><td>the monitored snapshot</td><td>Home, [[note]] suggestions, the context preview while typing</td></tr>
+      <tr><td><code>current</code></td><td>walk again; contents from cache by size and time</td><td>the start of a chat turn</td></tr>
+      <tr><td><code>fresh</code></td><td>walk again and read every file</td><td>verifying the result of a change</td></tr>
+    </tbody>
+  </table></div>
+  <div class="lesson"><b>Lesson</b>When correctness depends on order or on how old the data is, encode it: a queue with a rule for what replaces what, a flush that cannot run unrelated code, a freshness argument the caller must choose.</div>
+</div>
+</section>
+
+<section class="chapter" id="ch8">
+<div class="wrap">
+  <div class="chapnum">Chapter 8</div>
+  <h2>Checklist for a change in Nyerat</h2>
+  <ul class="checklist">
+    <li><code>npm run typecheck</code> passes: it includes the layer rules and the complexity limit of 15.</li>
+    <li>A new module has a place in the layer diagram in the README, and a rule in <code>scripts/layers.mjs</code> if its place is not obvious from its folder.</li>
+    <li>A function above 10 has a reason; a dispatcher on names is a guarded table (<code>Object.hasOwn</code>).</li>
+    <li>A new controller receives a host interface that lists what it uses, never <code>MainWindow</code>.</li>
+    <li>New per-document state lives with the feature that owns it, not on <code>Doc</code>; a shared field is <code>readonly</code> outside its owner.</li>
+    <li>A refactor of a pure function is compared with the old version on generated inputs, and the generator's coverage of the changed branches is counted.</li>
+    <li>Decisions live outside widgets, so they can be tested without a window; <code>npm test</code> runs unit and GUI tests under Xvfb.</li>
+  </ul>
+  <h3>The journey</h3>
+  <ol class="timeline-steps">
+    <li><span class="h">c4e0a49</span><span>Background writes queued per path and flushed explicitly (chapter 7).</span></li>
+    <li><span class="h">28b9bad</span><span>The layer rules checked on every build (chapter 1).</span></li>
+    <li><span class="h">e4e3d91</span><span><code>WorkspaceRepository</code>: a monitored snapshot and explicit freshness.</span></li>
+    <li><span class="h">2dbf902</span><span><code>ChatController</code>: the conversation life cycle without GTK (chapter 4).</span></li>
+    <li><span class="h">95f68f4</span><span><code>DocumentController</code>: tabs and documents out of the window.</span></li>
+    <li><span class="h">76acf0d</span><span><code>ChatSession.ask</code> (132) split into a <code>TurnRun</code> (chapter 2).</span></li>
+    <li><span class="h">07b4862</span><span>Complexity limit 20, with an exception list that may only shrink.</span></li>
+    <li><span class="h">a45026a</span><span>The last ten functions above 20 split; each compared with its old version (chapter 3).</span></li>
+    <li><span class="h">a8dc264</span><span>Limit lowered to 15; eleven more functions split.</span></li>
+    <li><span class="h">84dccdd</span><span><code>ChatPanel</code> split into its parts; every class with LCOM4 above 1 reviewed.</span></li>
+    <li><span class="h">85f18bb</span><span>One owner per piece of document state; <code>RunQueue</code> owns run status (chapter 6).</span></li>
+  </ol>
+</div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Nyerat · learning notes for developers</span>
+    <span><a href="index.html">Home</a> · <a href="docs/">Documentation</a> · <a href="https://github.com/EkaPutCom/nyerat">GitHub</a></span>
+  </div>
+</footer>
+
+<script>
+// Theme toggle: follows the system until chosen; the choice is remembered when storage is available.
+(() => {
+  const root = document.documentElement, key = 'nyerat-learn-theme';
+  try { const saved = localStorage.getItem(key); if (saved) root.dataset.theme = saved; } catch (e) { /* no storage */ }
+  document.getElementById('theme').addEventListener('click', () => {
+    const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark';
+    try { localStorage.setItem(key, root.dataset.theme); } catch (e) { /* no storage */ }
+  });
+})();
+
+// ---------- Complexity counter ----------
+(() => {
+  const SAMPLES = {
+    before: `function describe(name, a) {
+    switch (name) {
+        case 'list_files': return 'Viewing the file list';
+        case 'search_text': return \`Searching "\${a.text}"\${a.file ? \` in \${a.file}\` : ''}\`;
+        case 'read_file': return \`Reading \${a.name || 'file'}\${a.from_line ? ' (from a line)' : ''}\`;
+        case 'create_file': return \`Proposing new file \${a.name}\`;
+        case 'edit_file': return \`Proposing changes to \${a.name}\`;
+        case 'delete_file': return \`Proposing to delete \${a.name}\`;
+        case 'move_file': return \`Proposing to move \${a.name} to \${a.destination}\`;
+        default:
+            if (name && name.startsWith('git_')) return 'Reading history';
+            return name;
+    }
+}`,
+    after: `const DESCRIBE = {
+    list_files: () => 'Viewing the file list',
+    search_text: a => describeSearch(a),
+    read_file: a => describeRead(a),
+    create_file: a => \`Proposing new file \${a.name}\`,
+    edit_file: a => \`Proposing changes to \${a.name}\`,
+};
+
+function describe(name, a) {
+    return Object.hasOwn(DESCRIBE, name) ? DESCRIBE[name](a) : name;
+}`,
+  };
+  const src = document.getElementById('cc-src');
+  const val = document.getElementById('cc-val'), fill = document.getElementById('cc-fill');
+  const verdict = document.getElementById('cc-verdict'), chips = document.getElementById('cc-chips');
+  // Remove comments and the text of string and template literals (keeping the code inside ${…}), then count decisions.
+  const strip = s => {
+    let out = '', i = 0;
+    const stack = [];   // 'tpl' inside a template literal's text; a number = brace depth inside its ${…}
+    while (i < s.length) {
+      const c = s[i], n = s[i + 1], top = stack[stack.length - 1];
+      if (top === 'tpl') {
+        if (c === '\\') { i += 2; continue; }
+        if (c === '`') { stack.pop(); i++; out += '""'; continue; }
+        if (c === '$' && n === '{') { stack.push(0); i += 2; continue; }
+        i++;
+        continue;
+      }
+      if (c === '/' && n === '/') { while (i < s.length && s[i] !== '\n') i++; continue; }
+      if (c === '/' && n === '*') { const end = s.indexOf('*/', i + 2); i = end < 0 ? s.length : end + 2; continue; }
+      if (c === '"' || c === "'") { i++; while (i < s.length && s[i] !== c && s[i] !== '\n') { if (s[i] === '\\') i++; i++; } i++; out += '""'; continue; }
+      if (c === '`') { stack.push('tpl'); i++; continue; }
+      if (typeof top === 'number') {
+        if (c === '{') stack[stack.length - 1]++;
+        else if (c === '}') { if (top === 0) { stack.pop(); i++; continue; } stack[stack.length - 1]--; }
+      }
+      out += c;
+      i++;
+    }
+    return out;
+  };
+  const count = text => {
+    const s = strip(text);
+    const n = re => (s.match(re) || []).length;
+    return {
+      'if': n(/\bif\s*\(/g),
+      'case': n(/\bcase\b/g),
+      'loops': n(/\b(?:for|while)\s*\(/g),
+      'catch': n(/\bcatch\b/g),
+      '&&': n(/&&(?!=)/g),
+      '||': n(/\|\|(?!=)/g),
+      '??': n(/\?\?(?!=)/g),
+      '?:': n(/(?<!\?)\?(?![?.])/g),   // not ?? and not ?.
+      '&&= ||= ??=': n(/(?:&&|\|\||\?\?)=/g),
+    };
+  };
+  const update = () => {
+    const found = count(src.value);
+    const total = 1 + Object.values(found).reduce((a, b) => a + b, 0);
+    val.textContent = total;
+    const pct = Math.min(100, total / 20 * 100);
+    fill.style.width = pct + '%';
+    fill.style.background = total > 15 ? 'var(--before)' : total > 10 ? 'var(--warn-line)' : 'var(--ok)';
+    verdict.textContent = total > 15 ? 'Refused by the Nyerat build (limit 15).' : total > 10 ? 'Allowed, but worth a second look.' : total > 5 ? 'Fine.' : 'Simple.';
+    chips.replaceChildren(...Object.entries(found).filter(([, n]) => n).map(([k, n]) => { const e = document.createElement('span'); e.textContent = `${k} × ${n}`; return e; }));
+  };
+  src.addEventListener('input', update);
+  for (const b of document.querySelectorAll('[data-sample]')) b.addEventListener('click', () => { src.value = SAMPLES[b.dataset.sample]; update(); });
+  src.value = SAMPLES.before;
+  update();
+})();
+
+// ---------- Write queue simulation ----------
+(() => {
+  const oldTrack = document.getElementById('q-old'), newTrack = document.getElementById('q-new'), result = document.getElementById('q-result');
+  // Bars are collected first, then drawn on a scale that fits the longest lane.
+  let pending = [];
+  const bar = (track, cls, from, to, label, row = 0, title = '') => pending.push({ track, cls, from, to, label, row, title });
+  const draw = () => {
+    const scale = Math.max(...pending.map(b => b.to)) * 1.02;
+    for (const { track, cls, from, to, label, row, title } of pending) {
+      const e = document.createElement('div');
+      e.className = 'job ' + cls;
+      e.style.top = (4 + row * 22) + 'px';
+      e.style.left = (from / scale * 100) + '%';
+      e.style.width = Math.max(2, (to - from) / scale * 100) + '%';
+      e.textContent = label;
+      e.title = title || `${label}: ${Math.round(from)}–${Math.round(to)} ms`;
+      track.append(e);
+    }
+    pending = [];
+  };
+  const run = () => {
+    oldTrack.replaceChildren(); newTrack.replaceChildren();
+    const requests = [0, 40, 80].map((at, k) => ({ v: k + 1, at, takes: 60 + Math.random() * 140 }));
+    // Without a queue: every write starts at its request; the last one to finish decides the file.
+    let lastOld = null;
+    for (const r of requests) {
+      bar(oldTrack, 'v' + r.v, r.at, r.at + r.takes, 'v' + r.v, r.v - 1);   // one row per write: they run at the same time
+      if (!lastOld || r.at + r.takes > lastOld.end) lastOld = { v: r.v, end: r.at + r.takes };
+    }
+    // Queue per path: one running write and at most one waiting; a newer request replaces the waiting one.
+    let running = null, waiting = null, lastNew = 0, writes = 0;
+    const start = (r, at) => { running = { v: r.v, end: at + r.takes }; bar(newTrack, 'v' + r.v, at, running.end, 'v' + r.v); writes++; };
+    const advance = until => {
+      while (running && running.end <= until) {
+        lastNew = running.v;
+        const at = running.end;
+        running = null;
+        if (waiting) { start(waiting, at); waiting = null; }
+      }
+    };
+    for (const r of requests) {
+      advance(r.at);
+      if (!running) { start(r, r.at); continue; }
+      if (waiting) bar(newTrack, 'merged', waiting.at, r.at, 'v' + waiting.v + ' ✕', 1, `v${waiting.v} waited and was replaced by v${r.v}`);   // below the running write
+      waiting = r;
+    }
+    advance(Infinity);
+    draw();
+    const bad = lastOld.v !== 3;
+    result.innerHTML = `Start at once: the file ends as <span class="${bad ? 'bad' : 'good'}">v${lastOld.v}</span>${bad ? ' — an older version overwrote the newest' : ' (this time the order happened to be right)'}. ` +
+      `Queue: the file ends as <span class="good">v${lastNew}</span>, with ${writes} write${writes === 1 ? '' : 's'} for 3 requests.`;
+  };
+  document.getElementById('q-run').addEventListener('click', run);
+  run();
+})();
+</script>
+</body>
+</html>

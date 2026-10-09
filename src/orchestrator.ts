@@ -7,7 +7,7 @@ import GLib from 'gi://GLib';
 import { assignCard, cardMeta, moveCard, updateCard, type Board, type Position } from './markdown/kanban.js';
 import {
     buildPrompt, cardWikiLinks, checkProjectFolder, describeReply, endsWithQuestion, HARNESSES, locateCard, PiReader, resultNote, rpcGetState,
-    rpcPrompt, rpcSteer, rpcUiResponse, RunQueue, stageColumn, type HarnessAsk, type HarnessReply, type HarnessSpec, type LinkedNote, type PiSignal, type Run,
+    rpcPrompt, rpcSteer, rpcUiResponse, RunQueue, stageColumn, type HarnessReply, type HarnessSpec, type LinkedNote, type PiSignal, type Run,
 } from './agent/harness.js';
 import type { WikiLink } from './markdown/wikilink.js';
 import { _, fmt } from './i18n.js';
@@ -221,8 +221,7 @@ export class Orchestrator {
             } else {
                 // Not replied to: the run finishes as usual with pi's last answer.
                 run.trace.add('note', _('Ended without replying'));
-                run.status = 'working';
-                run.ask = null;
+                this.queue.resume(run);
                 live.proc.closeInput();
                 this.host.changed(run, null);
                 return null;
@@ -231,8 +230,7 @@ export class Orchestrator {
             if (!live.proc.write(rpcUiResponse(ask.id!, reply))) return 'pi no longer accepts input';
             run.trace.add('note', fmt(_('Answer: {reply}'), { reply: describeReply(ask, reply) }), ask.title);
         }
-        run.status = 'working';
-        run.ask = null;
+        this.queue.resume(run);
         this.host.changed(run, null);
         return null;
     }
@@ -311,7 +309,7 @@ export class Orchestrator {
         const spec = HARNESSES[run.agent];
         if (signal.type === 'rejected') { live.proc.closeInput(); return; }
         if (signal.type === 'ask') {
-            this.wait(run, signal.ask);
+            this.queue.wait(run, signal.ask);
             // The harness answers by itself with the default value after its timeout; follow along so the status does not go stale.
             if (signal.ask.timeout) {
                 const ask = signal.ask;
@@ -319,8 +317,7 @@ export class Orchestrator {
                 live.askTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ask.timeout!, () => {
                     live.askTimer = 0;
                     if (run.ask === ask) {
-                        run.ask = null;
-                        run.status = 'working';
+                        this.queue.resume(run);
                         run.trace.add('note', _('Answer time ran out'), fmt(_('{agent} used its default answer for: {question}'), { agent: spec.label, question: ask.title }));
                         this.host.changed(run, null);
                     }
@@ -332,37 +329,32 @@ export class Orchestrator {
         }
         // Turn finished: a question → wait for the user's reply; otherwise close stdin and let the harness exit.
         if (!live.stopped && endsWithQuestion(live.reader.answer)) {
-            this.wait(run, { kind: 'question', id: null, title: fmt(_('{label} asks'), { label: spec.label }), message: live.reader.answer, options: [], prefill: '', timeout: null });
+            this.queue.wait(run, { kind: 'question', id: null, title: fmt(_('{label} asks'), { label: spec.label }), message: live.reader.answer, options: [], prefill: '', timeout: null });
             this.host.changed(run, fmt(_('{agent} asked about “{title}”'), { agent: spec.label, title: run.title }));
         } else live.proc.closeInput();
-    }
-
-    private wait(run: Run, ask: HarnessAsk): void {
-        run.status = 'waiting';
-        run.ask = ask;
     }
 
     private finish(run: Run, status: number, stderr: string): void {
         const live = this.live.get(run.id);
         if (!live || run.result) return;
         if (live.askTimer) { GLib.source_remove(live.askTimer); live.askTimer = 0; }
-        run.result = live.reader.finish(status, stderr, live.stopped);
-        const next = this.queue.end(run, live.stopped ? 'stopped' : run.result.ok ? 'done' : 'failed');
+        const result = live.reader.finish(status, stderr, live.stopped);
+        const next = this.queue.end(run, live.stopped ? 'stopped' : result.ok ? 'done' : 'failed', result);
         this.live.delete(run.id);
         if (this.disposed) return;
         const spec = HARNESSES[run.agent];
         if (!live.stopped) {
-            const note = resultNote(spec.label, run.result, this.stamp());
+            const note = resultNote(spec.label, result, this.stamp());
             const error = this.editCard(run.board, run.card, (b, pos) => {
                 const card = b.columns[pos.column].cards[pos.index];
                 const noted = updateCard(b, pos, { notes: [...card.notes, note] });
                 const review = stageColumn(noted, 'review');
-                return run.result!.ok && review >= 0 && review !== pos.column ? moveCard(noted, pos, { column: review, index: Infinity }) : noted;
+                return result.ok && review >= 0 && review !== pos.column ? moveCard(noted, pos, { column: review, index: Infinity }) : noted;
             });
             if (error) run.trace.add('note', _('Board not updated'), error);
         }
         const message = live.stopped ? `${spec.label} stopped: “${run.title}”`
-            : run.result.ok ? `${spec.label} finished: “${run.title}”` : `${spec.label} failed: ${run.result.error}`;
+            : result.ok ? `${spec.label} finished: “${run.title}”` : `${spec.label} failed: ${result.error}`;
         this.host.changed(run, message);
         if (next) this.launch(next);
     }

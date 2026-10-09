@@ -3,7 +3,7 @@
 
 import GLib from 'gi://GLib';
 import { after, type Awaitable } from '../gtkutil.js';
-import { readTextFile, writeTextFile, waitForWrites, fileExists } from '../files.js';
+import { readTextFile, writeTextFile, flushWrites, fileExists } from '../files.js';
 import { commitsBetween } from '../git.js';
 import { readActivity, recordActivity } from '../activity.js';
 import { promptDialog } from '../ui/dialogs.js';
@@ -108,7 +108,7 @@ export class JournalController {
         try {
             if (doc) doc.editor.replaceText(addNote(doc.editor.getText(), clock(now), note));
             else {
-                waitForWrites(path);
+                flushWrites(path);
                 const text = fileExists(path) ? readTextFile(path) : newJournal(this.title(date));
                 GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
                 writeTextFile(path, addNote(text, clock(now), note));

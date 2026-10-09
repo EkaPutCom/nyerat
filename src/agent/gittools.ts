@@ -63,12 +63,8 @@ const COMMIT = /^(?:[0-9a-f]{4,40}|HEAD(?:~\d{1,4}|\^{1,4})?)$/i;
 
 // Errors are returned as strings so the model can fix its arguments.
 export function parseGitCall(name: string, rawArguments: string): GitRequest | string {
-    let a: Record<string, unknown> = {};
-    try {
-        const parsed = JSON.parse(rawArguments || '{}');
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw Error();
-        a = parsed;
-    } catch { return 'The arguments are not a valid JSON object.'; }
+    const a = parseObject(rawArguments);
+    if (!a) return 'The arguments are not a valid JSON object.';
     const rawFile = asString(a.file);
     const file = rawFile ? cleanNewName(rawFile) : null;
     if (rawFile && file !== rawFile) return `File "${rawFile}" is not valid: use a relative Markdown path as in list_files.`;
@@ -76,7 +72,18 @@ export function parseGitCall(name: string, rawArguments: string): GitRequest | s
         const limit = typeof a.max === 'number' && Number.isFinite(a.max) ? Math.min(Math.max(Math.trunc(a.max), 1), MAX_LOG) : 15;
         return { kind: 'log', file, limit };
     }
-    const commit = asString(a.commit);
+    return commitRequest(name, asString(a.commit), file);
+}
+
+function parseObject(raw: string): Record<string, unknown> | null {
+    try {
+        const parsed = JSON.parse(raw || '{}');
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch { return null; }
+}
+
+// show_commit and file_at_commit: a valid commit reference, and a file for file_at_commit.
+function commitRequest(name: string, commit: string, file: string | null): GitRequest | string {
     if (!COMMIT.test(commit)) return `Commit "${commit}" is not valid. Use a hash from git_log or HEAD, HEAD~1, …`;
     if (name === 'show_commit') return { kind: 'show', commit, file };
     if (name === 'file_at_commit') return file ? { kind: 'file', commit, file } : 'The "file" argument is required.';

@@ -14,13 +14,14 @@ import type { MenuEntry } from '../ui/menu.js';
 import { harnessActivity, type ActivityKind } from '../markdown/journal.js';
 import { assignCard, cardMeta, updateCard, type Board, type Card, type Position } from '../markdown/kanban.js';
 import { noteSection, resolveWikiLink, type WikiLink } from '../markdown/wikilink.js';
-import { listMarkdownFiles } from '../agent/project.js';
+import type { WorkspaceRepository } from '../workspace.js';
 import { _, fmt } from '../i18n.js';
 import { docFor, type DocumentHost } from './doc.js';
 
 export interface HarnessHost extends DocumentHost {
     readonly settings: AppSettings;
     readonly board: KanbanBoard;
+    readonly workspace: WorkspaceRepository;
     boardShown(file: string): boolean;    // the board in `file` is the one on screen
     updateBoardFile(file: string, edit: (board: Board) => Board): string | null;
     record(kind: ActivityKind, text: string): void;
@@ -71,7 +72,7 @@ export class HarnessController {
         const workspace = this.host.root();
         const root = workspace && boardFile.startsWith(`${workspace}/`) ? workspace : GLib.path_get_dirname(boardFile);
         const from = boardFile.slice(root.length + 1);
-        const files = listMarkdownFiles(root);
+        const files = this.host.workspace.names(root);
         return links.map(link => {
             const file = resolveWikiLink(link.target, files, from);
             if (!file) return { link, file: null, text: null };
@@ -88,22 +89,37 @@ export class HarnessController {
 
     // Card menu entries to assign, stop, and monitor harnesses.
     menu(card: Card, at: Position): MenuEntry[] {
-        const board = this.host.board;
         const file = this.host.active().file;
         const run = file ? this.orchestrator.queue.find(file, card.text) : null;
         const active = run && isActive(run.status) ? run : null;
-        const agent = cardMeta(card.text).agent;
-        const entries: MenuEntry[] = Object.values(HARNESSES).map(spec => ({
+        return [...this.assignEntries(card, at, !!file && !active), ...(run ? this.runEntries(run, active) : []), ...this.cardEntries(card, at, !active)];
+    }
+
+    // "Work on it with …" for every harness; only on a saved board, for a card that is not done or already running.
+    private assignEntries(card: Card, at: Position, free: boolean): MenuEntry[] {
+        return Object.values(HARNESSES).map(spec => ({
             label: fmt(_('Work on it with {label}'), { label: spec.label }),
-            enabled: !!file && !active && card.done !== true,
+            enabled: free && card.done !== true,
             run: () => this.run(at, spec.name),
         }));
+    }
+
+    // The card's run: answer or steer it while it is going, reply after it finished, stop it, and view its log.
+    private runEntries(run: Run, active: Run | null): MenuEntry[] {
+        const entries: MenuEntry[] = [];
         if (active?.status === 'waiting') entries.push({ label: fmt(_('Answer {agent}…'), { agent: active.agent }), run: () => this.answer(active) });
         if (active?.status === 'working') entries.push({ label: fmt(_('Steer {agent}…'), { agent: active.agent }), run: () => this.steer(active) });
-        if (run && !active && run.result?.sessionId) entries.push({ label: fmt(_('Reply to {agent}…'), { agent: run.agent }), run: () => this.reply(run) });
+        if (!active && run.result?.sessionId) entries.push({ label: fmt(_('Reply to {agent}…'), { agent: run.agent }), run: () => this.reply(run) });
         if (active) entries.push({ label: active.status === 'queued' ? _('Cancel Queue') : fmt(_('Stop {agent}'), { agent: active.agent }), run: () => this.orchestrator.stop(active) });
-        if (run) entries.push({ label: fmt(_('View {agent} Log'), { agent: run.agent }), run: () => this.showLog(run) });
-        if (agent && !active) entries.push({ label: _('Remove Assignment'), run: () => board.commit(updateCard(board.getBoard(), at, { text: assignCard(card.text, null) })) });
+        entries.push({ label: fmt(_('View {agent} Log'), { agent: run.agent }), run: () => this.showLog(run) });
+        return entries;
+    }
+
+    // Removing an assignment (when nothing runs) and changing the card's remembered project folder.
+    private cardEntries(card: Card, at: Position, idle: boolean): MenuEntry[] {
+        const board = this.host.board;
+        const entries: MenuEntry[] = [];
+        if (cardMeta(card.text).agent && idle) entries.push({ label: _('Remove Assignment'), run: () => board.commit(updateCard(board.getBoard(), at, { text: assignCard(card.text, null) })) });
         const project = cardProject(board.getBoard(), card);
         if (project && this.host.settings.projects[project]) entries.push({ label: _('Change Project Folder…'), run: () => this.chooseProjectFolder(project) });
         return entries;

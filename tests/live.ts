@@ -14,7 +14,7 @@ import System from 'system';
 import { systemKeyStore } from '../src/agent/apikey.js';
 import { DEEPSEEK_MODELS, DeepSeek } from '../src/agent/deepseek.js';
 import { DEFAULT_BUDGET } from '../src/agent/context.js';
-import { readProject } from '../src/agent/project.js';
+import { WorkspaceRepository } from '../src/workspace.js';
 import { ChatSession } from '../src/agent/session.js';
 import { DIM, GREEN, RED, RESET, ROOT, optVal, opt, setRoot } from './framework.js';
 
@@ -48,7 +48,7 @@ async function main(): Promise<boolean> {
     }
 
     const root = GLib.build_filenamev([ROOT, 'tests', 'samples', 'sample-book']);
-    const book = readProject(root, null);
+    const book = new WorkspaceRepository().files(root);
     if (!book.length) {
         print(`${RED}The sample manuscript was not found in  ${root}${RESET}`);
         return false;

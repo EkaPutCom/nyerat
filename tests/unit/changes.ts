@@ -21,6 +21,15 @@ const plan = (name: string, args: object, over: SourceFile[] = files) => planCha
 export function changeTests(): void {
     section('Agent: change proposals');
 
+    test('tool and kanban action names never reach inherited object properties', () => {
+        for (const name of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+            const r = plan(name, { name: 'plan', reason: 'x' });
+            ok(!r.ok && r.summary === 'unknown tool', `${name}: ${JSON.stringify(r)}`);
+            const k = kanban({ action: name });
+            ok(!k.ok && k.summary === 'invalid action', `action ${name}: ${JSON.stringify(k)}`);
+        }
+    });
+
     test('edit_file: replaces one exact piece and produces the new contents', () => {
         const r = plan('edit_file', { name: 'plan', old_text: '- Revision: November', new_text: '- Revision: December', reason: 'schedule shifted' });
         ok(r.ok, 'rejected');
