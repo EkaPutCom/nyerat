@@ -55,8 +55,8 @@
 <p>The work plan is restored too, together with the <em>Resume work</em> button. Unsaved editor changes still follow the editor's save rules.</p>
 
 <h2 id="agent-log">The agent log</h2>
-<p>The terminal button in the panel header opens the <em>Agent log</em> window: a timeline of every turn that updates live while the agent works.</p>
-<figure><img src="../assets/agent-log.png" width="760" height="640" loading="lazy" alt="The Agent log window: a turn with the context that was sent, then the model rounds and the tool calls set_work, propose_batch, and verify_work with their durations"><figcaption>The agent log of one job: 6 model rounds and 5 tool calls</figcaption></figure>
+<p>The terminal button in the panel header opens the <em>Agent log</em> window: a tree of every turn on the left and the details of the selected step on the right, updated live while the agent works.</p>
+<figure><img src="../assets/agent-log.png" width="980" height="660" loading="lazy" alt="The Agent log window: a tree of one turn with its six model rounds and the tool calls set_work, propose_batch, and verify_work on the left, and the details of the selected step on the right"><figcaption>The agent log of one job: 6 model rounds and 5 tool calls</figcaption></figure>
 
 <ul>
   <li>Model rounds: the number of messages, the tools offered, and the tokens in/cached/out</li>
@@ -64,6 +64,7 @@
   <li>Every tool call with its JSON arguments, the result returned, the status, and the duration</li>
   <li>Errors and stops</li>
 </ul>
+<p>Folding a round hides its steps. Selecting a step shows its metrics (duration, result size, share of the turn's time, tokens) and the tabs <em>Summary</em>, <em>Arguments</em>, <em>Result</em>, and <em>Raw</em>; the detail follows the newest step until you pick one yourself.</p>
 <p>The filters <em>All</em>, <em>Tools</em>, <em>Reasoning</em>, and <em>Model</em>, plus the <em>Copy all</em> and <em>Clear</em> buttons. The log only exists in memory while the app runs (at most 2,000 events), is not sent to the model, is not written to a file, and is emptied by <em>New conversation</em>. The same window is used for the <a href="orchestrator.html#log">pi log</a>.</p>
 </main>
 <aside class="toc" id="toc" aria-label="Table of contents"></aside>

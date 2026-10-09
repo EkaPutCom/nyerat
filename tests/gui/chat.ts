@@ -2,6 +2,8 @@
 
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
+import { AgentTrace } from '../../src/agent/trace.js';
+import { LogViewer } from '../../src/ui/logviewer.js';
 import type { KeyStore } from '../../src/agent/apikey.js';
 import { chatsDir, listChats } from '../../src/agent/chatstore.js';
 import { readTextFile } from '../../src/files.js';
@@ -126,16 +128,48 @@ export function chatTests(c: GuiContext): void {
         panel.showLog();
         const viewer = panel.logViewer!;
         ok(viewer, 'the log window did not open');
-        const text = () => { const out: string[] = []; const walk = (x: Gtk.Widget) => { if (x instanceof Gtk.Label) out.push(x.get_text()); if (x instanceof Gtk.Expander && x.get_child()) walk(x.get_child()!); childrenOf(x).forEach(walk); }; walk(viewer.list); return out.join('\n'); };
+        const rows = () => { const out: string[] = []; const walk = (x: Gtk.Widget) => { if (x instanceof Gtk.Label) out.push(x.get_text()); childrenOf(x).forEach(walk); }; walk(viewer.list); return out.join('\n'); };
+        const detail = () => { const out: string[] = []; const walk = (x: Gtk.Widget) => { if (x instanceof Gtk.Label) out.push(x.get_text()); childrenOf(x).forEach(walk); }; walk(viewer.detail.widget); return out.join('\n'); };
         for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); }
-        contains(text(), 'Calling the model');
-        contains(text(), 'Model reasoning');
-        contains(text(), 'Looking through the manuscript.');
-        panel.session.trace.add('note', 'New event');
-        for (let i = 0; i < 30 && !text().includes('New event'); i++) { pump(); GLib.usleep(10000); }
-        contains(text(), 'New event');
+        contains(rows(), 'Round 1');
+        contains(rows(), 'Reasoning');
+        contains(rows(), 'Answer');
+        contains(detail(), 'Model and tools');   // the summary of the finished turn
+        panel.session.trace.add('error', 'New event');
+        for (let i = 0; i < 30 && !rows().includes('New event'); i++) { pump(); GLib.usleep(10000); }
+        contains(rows(), 'New event');
+        // The detail follows the newest step until the user picks one.
+        contains(detail(), 'New event');
+        viewer.list.select_row(viewer.list.get_row_at_index(1));
+        pump();
+        panel.session.trace.add('error', 'Later event');
+        for (let i = 0; i < 30; i++) { pump(); GLib.usleep(10000); }
+        ok(!detail().includes('Later event'), 'the detail jumped away from what the user chose');
         viewer.window.destroy();
         panel.logViewer = null;
+    });
+
+    test('the agent log detail shows the metrics, arguments, and result of a selected tool call', () => {
+        const trace = new AgentTrace();
+        trace.add('turn', 'New turn: q', 'Question:\nq', { items: ['a.md'] });
+        trace.begin('round', '1', 'Calling the model (round 1/10)', '', 1);
+        trace.begin('tool', '1:a', 'Tool: read_file', '', 1, { args: '{\n  "path": "a.md"\n}' });
+        trace.finish('tool', '1:a', 'ok', undefined, undefined, { result: '# A\nbody text' });
+        trace.finish('round', '1', 'ok', 'Tokens', undefined, { usage: { prompt: 1200, cached: 0, completion: 30 } });
+        const viewer = new LogViewer(null, trace);
+        viewer.show();
+        pump();
+        const labels = (): string => { const out: string[] = []; const walk = (x: Gtk.Widget) => { if (x instanceof Gtk.Label) out.push(x.get_text()); childrenOf(x).forEach(walk); }; walk(viewer.detail.widget); return out.join('\n'); };
+        viewer.list.select_row(viewer.list.get_row_at_index(2));
+        pump();
+        for (const text of ['read_file', 'Tool call', 'Result size', '"path": "a.md"', '# A', 'Copy arguments']) contains(labels(), text);
+        viewer.list.select_row(viewer.list.get_row_at_index(1));
+        pump();
+        contains(labels(), 'Tokens in');
+        contains(labels(), '1.2k');
+        const shot = optVal('shot-log');
+        if (shot) { viewer.list.select_row(viewer.list.get_row_at_index(2)); for (let i = 0; i < 20; i++) { pump(); GLib.usleep(10000); } widgetPixbuf(viewer.window)?.savev(`${shot}-log.png`, 'png', [], []); }
+        viewer.window.destroy();
     });
 
     test('the second question carries the history and the context is not repeated in old turns', () => {

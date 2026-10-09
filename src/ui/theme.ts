@@ -41,6 +41,7 @@ const buildCss = (p: Palette): string => `
     .chat-step { color: alpha(currentColor, 0.55); font-size: 12px; }
     .chat-proposal { background-color: @card_bg_color; color: @card_fg_color; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
     .chat-diff { font-family: monospace; font-size: 12px; }
+    .log-block { background-color: alpha(currentColor, 0.06); border-radius: 6px; padding: 8px; }
     .chat-error { color: @error_color; font-size: 12px; }
     .history-text, .history-text text { background-color: @view_bg_color; color: @view_fg_color; font-size: 13px; }
     .md-table { border-top: 1px solid alpha(${p.fg}, 0.28); border-left: 1px solid alpha(${p.fg}, 0.28); }

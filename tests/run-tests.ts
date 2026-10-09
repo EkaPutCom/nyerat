@@ -8,6 +8,7 @@
 //   gjs -m dist/run-tests.js --shot-proposal=/tmp/p  save screenshots of the agent proposal review window (/tmp/p-<n>-review.png and -main.png)
 //   gjs -m dist/run-tests.js --shot-inbox=/tmp/i     save screenshots of the inbox light/dark (/tmp/i-light.png, /tmp/i-dark.png)
 //   gjs -m dist/run-tests.js --shot-harness=/tmp/h   save screenshots of the board with pi cards working/queued and the pi log (/tmp/h-board.png, -log.png)
+//   gjs -m dist/run-tests.js --shot-log=/tmp/l       save a screenshot of the agent log with a tool call selected (/tmp/l-log.png)
 //   gjs -m dist/run-tests.js --shot-tree-menu=/tmp/m  save screenshots of the file tree right-click menu and a new kanban board (/tmp/m-menu.png, -board.png)
 //   gjs -m dist/run-tests.js --shot-wikilink=/tmp/w   save screenshots of [[note]] suggestions light/dark (/tmp/w-light.png, -light-suggest.png, -dark*.png)
 //   gjs -m dist/run-tests.js --shot-gnome=/tmp/g      save screenshots of the narrow window, shortcuts dialog, light/dark theme (/tmp/g-narrow.png, -shortcuts.png, -light.png, -dark.png)

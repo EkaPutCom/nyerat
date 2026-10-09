@@ -159,8 +159,9 @@ export function harnessTests(): void {
         ok(Math.abs(result.cost - 0.0015) < 1e-9, `cost ${result.cost}`);
         const tool = trace.events.find(e => e.kind === 'tool')!;
         eq([tool.title, tool.status], ['bash', 'ok']);
-        contains(tool.detail, '"command": "ls"');
-        contains(tool.detail, 'a.ts');
+        contains(tool.args!, '"command": "ls"');
+        contains(tool.result!, 'a.ts');
+        eq(tool.detail, '', 'arguments and result are not mixed into the detail');
         ok(trace.events.some(e => e.kind === 'reasoning' && e.detail === 'Check first.'), 'reasoning recorded');
         ok(trace.events.some(e => e.kind === 'note' && e.detail === 'not json'), 'a non-JSON line is recorded');
         contains(trace.events.find(e => e.title === 'pi session')!.detail, 'pi --session session-1');

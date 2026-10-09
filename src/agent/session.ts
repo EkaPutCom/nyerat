@@ -162,7 +162,7 @@ class TurnRun {
 
     async run(): Promise<TurnResult> {
         const { session, input } = this;
-        session.trace.add('turn', `New turn: ${input.question.split('\n')[0].slice(0, 120)}`, this.turnDetail());
+        session.trace.add('turn', `New turn: ${input.question.split('\n')[0].slice(0, 120)}`, this.turnDetail(), { items: this.built.items.map(i => i.label) });
         try {
             for (let round = 0; round < MAX_ROUNDS && !this.cancelled; round++) {
                 if (!await this.runRound(round)) break;
@@ -281,7 +281,7 @@ class TurnRun {
         this.messages.push({ role: 'assistant', content: roundText, reasoning: result.reasoning || undefined, toolCalls: result.toolCalls });
         for (const call of result.toolCalls) {
             if (this.cancellable?.is_cancelled()) { this.cancelled = true; return false; }
-            trace.begin('tool', `${this.round}:${call.id}`, `Tool: ${call.name}`, `Arguments:\n${prettyArguments(call.arguments)}`, this.round);
+            trace.begin('tool', `${this.round}:${call.id}`, `Tool: ${call.name}`, '', this.round, { args: prettyArguments(call.arguments) });
             await this.runTool(call, useTools);
         }
         return true;
@@ -304,7 +304,7 @@ class TurnRun {
     private addUsage(result: ChatResult): void {
         const u = result.usage;
         const outcome = `Result: ${result.cancelled ? 'stopped' : result.toolCalls.length ? `asked for ${result.toolCalls.length} tools` : 'final answer'}`;
-        this.session.trace.finish('round', `${this.round}`, 'ok', u ? `Tokens: ${u.prompt} in (${u.cached} from cache) · ${u.completion} out\n${outcome}` : outcome);
+        this.session.trace.finish('round', `${this.round}`, 'ok', u ? `Tokens: ${u.prompt} in (${u.cached} from cache) · ${u.completion} out\n${outcome}` : outcome, undefined, u ? { usage: { prompt: u.prompt, cached: u.cached, completion: u.completion } } : {});
         if (!u) return;
         const sum = this.usage;
         this.usage = { prompt: (sum?.prompt ?? 0) + u.prompt, cached: (sum?.cached ?? 0) + u.cached, completion: (sum?.completion ?? 0) + u.completion };
@@ -323,7 +323,7 @@ class TurnRun {
 
     private answer(id: string, content: string, ok = true): void {
         this.messages.push({ role: 'tool', toolCallId: id, content });
-        this.session.trace.finish('tool', `${this.round}:${id}`, ok ? 'ok' : 'failed', `Result for the model:\n${content}`);
+        this.session.trace.finish('tool', `${this.round}:${id}`, ok ? 'ok' : 'failed', undefined, undefined, { result: content });
     }
 
     private record(id: string, tool: string, changes: Change[] = []): ActionEvent {

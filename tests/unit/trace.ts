@@ -2,6 +2,7 @@
 import { AgentTrace } from '../../src/agent/trace.js';
 import { ChatSession } from '../../src/agent/session.js';
 import type { ChatResult, Provider, ToolCall } from '../../src/agent/provider.js';
+import { traceTree, descendants, traceStats, turnEvents, formatMs, formatSize } from '../../src/agent/tracetree.js';
 import { section, test, eq, ok, contains, settle } from '../framework.js';
 
 const files = [{ name: 'a.md', text: '# A\nRelease November 15\n' }];
@@ -17,12 +18,14 @@ export function traceTests(): void {
         trace.append('reasoning', 1, 'manuscript');
         eq(trace.events.length, 1);
         eq(trace.events[0].detail, 'Check manuscript');
-        trace.begin('tool', '1:x', 'Tool: read', 'Arguments:\n{}', 1);
+        trace.begin('tool', '1:x', 'Tool: read', '', 1, { args: '{}' });
         eq(trace.events[1].status, 'running');
-        trace.finish('tool', '1:x', 'ok', 'content');
+        trace.finish('tool', '1:x', 'ok', undefined, undefined, { result: 'content' });
         eq(trace.events[1].status, 'ok');
         eq(trace.events[1].ms, 50);
-        contains(trace.events[1].detail, 'content');
+        eq([trace.events[1].args, trace.events[1].result, trace.events[1].detail], ['{}', 'content', '']);
+        contains(AgentTrace.format(trace.events[1]), 'Arguments:\n{}');
+        contains(AgentTrace.format(trace.events[1]), 'Result:\ncontent');
         trace.finish('tool', '1:x', 'failed', 'double');   // without a pair: ignored
         eq(trace.events[1].status, 'ok');
     });
@@ -51,10 +54,12 @@ export function traceTests(): void {
         eq(events.filter(e => e.kind === 'round').length, 2);
         const tool = events.find(e => e.kind === 'tool')!;
         eq(tool.status, 'ok');
-        contains(tool.detail, '"query": "release"');
-        contains(tool.detail, 'Result for the model');
+        contains(tool.args!, '"query": "release"');
+        ok((tool.result ?? '').length > 0, 'the result was not recorded');
         contains(events.find(e => e.kind === 'round')!.detail, 'search_text');
         contains(events.filter(e => e.kind === 'round')[1].detail, '150 in (100 from cache)');
+        eq(events.filter(e => e.kind === 'round')[1].usage, { prompt: 150, cached: 100, completion: 8 });
+        ok(events.find(e => e.kind === 'turn')!.items !== undefined, 'the context sources of the turn were not recorded');
         contains(events.find(e => e.kind === 'reasoning')!.detail, 'look up the word release');
         session.clear();
         eq(session.trace.events.length, 0);
@@ -69,5 +74,32 @@ export function traceTests(): void {
         eq(last.kind, 'error');
         contains(last.detail, 'connection dropped');
         eq(session.trace.events.find(e => e.kind === 'round')?.status, 'failed');
+    });
+    test('the tree: a turn holds rounds, a round holds its steps, loose notes stay under the turn', () => {
+        const t = new AgentTrace(() => 0, () => '2026-10-05T10:00:00');
+        t.add('note', 'orphan');
+        t.add('turn', 'New turn: q', '', { items: ['a.md'] });
+        t.begin('round', '1', 'Calling', '', 1);
+        t.append('reasoning', 1, 'think');
+        t.begin('tool', '1:x', 'Tool: read', '', 1, { args: '{}' });
+        t.finish('round', '1', 'ok', '', undefined, { usage: { prompt: 10, cached: 0, completion: 2 } });
+        t.finish('tool', '1:x', 'failed', undefined, undefined, { result: 'no' });
+        t.begin('round', '2', 'Calling', '', 2);
+        t.append('text', 2, 'answer');
+        t.add('note', 'Turn finished');
+        t.add('turn', 'New turn: second');
+        const nodes = traceTree(t.events);
+        eq(nodes.map(n => n.depth), [0, 0, 1, 2, 2, 1, 2, 1, 0]);
+        eq(nodes[3].parent, nodes[2].event.seq);
+        eq(nodes[7].parent, nodes[1].event.seq);
+        eq(descendants(nodes, nodes[1].event.seq).length, 6);
+        eq(descendants(nodes, nodes[2].event.seq).map(e => e.kind), ['reasoning', 'tool']);
+        eq(turnEvents(nodes, nodes[4].event.seq).length, 7);
+        const stats = traceStats(turnEvents(nodes, nodes[4].event.seq));
+        eq([stats.rounds, stats.tools, stats.failed, stats.prompt, stats.completion], [2, 1, 1, 10, 2]);
+    });
+    test('durations and sizes are shown short', () => {
+        eq([formatMs(7), formatMs(1800), formatMs(75000)], ['7 ms', '1.8 s', '1 min 15 s']);
+        eq([formatSize(500), formatSize(3500)], ['500 B', '3.4 KB']);
     });
 }

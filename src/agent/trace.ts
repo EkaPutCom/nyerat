@@ -10,10 +10,18 @@ export interface TraceEvent {
     kind: TraceKind;
     round?: number;        // model round (from 1) in which this event happened
     title: string;
-    detail: string;        // full contents (reasoning, arguments, result), already truncated to MAX_DETAIL
+    detail: string;        // full contents (reasoning, answer, token line, error), already truncated to MAX_DETAIL
     status?: 'running' | 'ok' | 'failed';
     ms?: number;           // duration of the event, if any
+    args?: string;         // tool call: the arguments, as neat JSON
+    result?: string;       // tool call: what came back
+    usage?: TraceUsage;    // model round: tokens
+    items?: string[];      // turn: the context sources that were sent
 }
+
+export interface TraceUsage { prompt: number; cached: number; completion: number }
+type StartFields = Partial<Pick<TraceEvent, 'round' | 'status' | 'ms' | 'args' | 'items'>>;
+type EndFields = Partial<Pick<TraceEvent, 'result' | 'usage'>>;
 
 const MAX_DETAIL = 20000;
 const MAX_EVENTS = 2000;
@@ -42,8 +50,9 @@ export class AgentTrace {
         this.onChange();
     }
 
-    add(kind: TraceKind, title: string, detail = '', extra: Partial<Pick<TraceEvent, 'round' | 'status' | 'ms'>> = {}): TraceEvent {
+    add(kind: TraceKind, title: string, detail = '', extra: StartFields = {}): TraceEvent {
         const event: TraceEvent = { seq: ++this.seq, time: this.stamp(), kind, title, detail: clip(detail), ...extra };
+        if (event.args !== undefined) event.args = clip(event.args);
         this.events.push(event);
         if (this.events.length > MAX_EVENTS) {
             this.events.splice(0, this.events.length - MAX_EVENTS);
@@ -54,13 +63,13 @@ export class AgentTrace {
     }
 
     // Start an event whose completion follows (tool call, model round); completed through finish() with the same key.
-    begin(kind: TraceKind, key: string, title: string, detail = '', round?: number): void {
-        const event = this.add(kind, title, detail, { round, status: 'running' });
+    begin(kind: TraceKind, key: string, title: string, detail = '', round?: number, extra: StartFields = {}): void {
+        const event = this.add(kind, title, detail, { round, status: 'running', ...extra });
         this.open.set(`${kind}:${key}`, this.events.indexOf(event));
         this.starts.set(`${kind}:${key}`, this.now());
     }
 
-    finish(kind: TraceKind, key: string, status: 'ok' | 'failed', detail?: string, title?: string): void {
+    finish(kind: TraceKind, key: string, status: 'ok' | 'failed', detail?: string, title?: string, extra: EndFields = {}): void {
         const k = `${kind}:${key}`;
         const index = this.open.get(k);
         const started = this.starts.get(k);
@@ -72,6 +81,8 @@ export class AgentTrace {
         event.status = status;
         if (detail !== undefined) event.detail = clip(event.detail ? `${event.detail}\n\n${detail}` : detail);
         if (title) event.title = title;
+        if (extra.result !== undefined) event.result = clip(extra.result);
+        if (extra.usage) event.usage = extra.usage;
         if (started !== undefined) event.ms = this.now() - started;
         this.onChange();
     }
@@ -90,7 +101,8 @@ export class AgentTrace {
     // One event as plain text, to copy or export.
     static format(e: TraceEvent): string {
         const head = `[${e.time.slice(11)}]${e.round ? ` round ${e.round} ·` : ''} ${e.title}${e.ms !== undefined ? ` (${e.ms} ms)` : ''}${e.status === 'failed' ? ' — FAILED' : ''}`;
-        return e.detail ? `${head}\n${e.detail}` : head;
+        const parts = [head, e.args !== undefined ? `Arguments:\n${e.args}` : '', e.detail, e.result !== undefined ? `Result:\n${e.result}` : ''];
+        return parts.filter(Boolean).join('\n');
     }
 
     text(): string {

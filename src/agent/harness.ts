@@ -304,8 +304,8 @@ export class PiReader {
             else if (m.type === 'thinking_delta') this.trace.append('reasoning', this.turn, m.delta);
         },
         message_end: e => { if (typeof e.message === 'object' && e.message?.role === 'assistant') this.assistantMessage(e.message); },   // message may be null
-        tool_execution_start: e => { this.trace.begin('tool', e.toolCallId ?? '', `${e.toolName ?? 'tool'}`, prettyArguments(JSON.stringify(e.args ?? {})), this.turn); },
-        tool_execution_end: e => { this.trace.finish('tool', e.toolCallId ?? '', e.isError ? 'failed' : 'ok', contentText(e.result?.content)); },
+        tool_execution_start: e => { this.trace.begin('tool', e.toolCallId ?? '', `${e.toolName ?? 'tool'}`, '', this.turn, { args: prettyArguments(JSON.stringify(e.args ?? {})) }); },
+        tool_execution_end: e => { this.trace.finish('tool', e.toolCallId ?? '', e.isError ? 'failed' : 'ok', undefined, undefined, { result: contentText(e.result?.content) }); },
         compaction_start: e => { this.trace.add('note', 'pi summarized the context', e.reason ?? ''); },
         agent_settled: () => {
             this.settled = true;
