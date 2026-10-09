@@ -1,0 +1,159 @@
+// Conversation life cycle without widgets: ChatController with a recording view and fake providers.
+
+import GLib from 'gi://GLib';
+import type Gio from 'gi://Gio';
+import { ChatController, FOLDER_CHANGED, type ChatControllerHost, type ChatView, type TurnOutcome } from '../../src/agent/chatcontroller.js';
+import type { KeyStore } from '../../src/agent/apikey.js';
+import type { Change } from '../../src/agent/changes.js';
+import type { ChatResult, Provider } from '../../src/agent/provider.js';
+import type { ProposalResult } from '../../src/agent/session.js';
+import { section, test, eq, ok, settle, tmp } from '../framework.js';
+
+const KEY: KeyStore = { get: async () => ({ key: 'test', source: 'env' }), set: async () => 'env', clear: async () => {} };
+const answer = (text: string): Provider => ({
+    async chat(req) { req.onText(text); return { usage: { prompt: 10, cached: 0, completion: 2 }, cancelled: false, toolCalls: [], reasoning: '' }; },
+});
+
+// Records what the controller asks the view to show.
+function recordingView() {
+    const log: string[] = [];
+    const outcomes: TurnOutcome[] = [];
+    let decide: (change: Change | Change[], apply: (c: Change | Change[]) => string | null) => ProposalResult = () => ({ applied: false });
+    const view: ChatView = {
+        noKey: () => log.push('noKey'),
+        saveFailed: error => log.push(`saveFailed ${error}`),
+        busyChanged: busy => log.push(`busy ${busy}`),
+        startTurn: question => {
+            log.push(`turn ${question}`);
+            let text = '';
+            return {
+                context: () => {}, reasoning: () => {}, step: () => {}, work: () => {},
+                text: delta => { text += delta; },
+                end: outcome => { outcomes.push(outcome); log.push(`end ${'error' in outcome ? `error ${outcome.error}` : outcome.cancelled ? 'cancelled' : text}`); },
+            };
+        },
+        review: async (change, apply, _cancelled: Gio.Cancellable) => { log.push('review'); return decide(change, apply); },
+    };
+    return { view, log, outcomes, decideWith: (fn: typeof decide) => { decide = fn; } };
+}
+
+export function chatControllerTests(): void {
+    section('Chat controller (no GTK)');
+    let n = 0;
+    const folder = () => {
+        const root = GLib.build_filenamev([tmp, `chatctl-${++n}`]);
+        GLib.mkdir_with_parents(root, 0o755);
+        return root;
+    };
+    const setup = (root: string | null) => {
+        const rec = recordingView();
+        const c = new ChatController(rec.view);
+        const state = { root };
+        const disk = new Map([['notes.md', 'Release 15 November\n']]);
+        const host: ChatControllerHost = {
+            active: () => null, selection: () => '', root: () => state.root,
+            files: () => [...disk].map(([name, text]) => ({ name, text })),
+            applyBatch: changes => { for (const ch of changes) disk.set(ch.file, ch.after); return null; },
+            applyChange: ch => { disk.set(ch.file, ch.after); return null; },
+        };
+        c.host = host;
+        c.keyStore = KEY;
+        return { c, ...rec, state, disk };
+    };
+
+    test('without a key nothing is sent and the view asks for one', () => {
+        const { c, log } = setup(null);
+        c.keyStore = { ...KEY, get: async () => null };
+        settle(c.send('hello'));
+        eq(log, ['noKey']);
+    });
+
+    test('a turn is shown, saved to the folder, and can be reopened and deleted', () => {
+        const root = folder();
+        const { c, log } = setup(root);
+        c.makeProvider = () => answer('Hi.');
+        settle(c.send('  hello  '));
+        eq(log, ['turn hello', 'busy true', 'end Hi.', 'busy false']);
+        const chats = c.chats()!;
+        eq(chats.length, 1, 'saved conversations');
+        eq(chats[0].title, 'hello');
+
+        const other = setup(root).c;
+        const chat = other.open(chats[0].path);
+        ok(chat, 'the conversation did not open');
+        eq(other.session.history.map(t => t.content), ['hello', 'Hi.']);
+        other.makeProvider = () => answer('Again.');
+        settle(other.send('more'));
+        eq(other.chats()!.length, 1, 'the continuation is appended to the same file');
+        other.deleteChat(chats[0].path);
+        eq(other.chats()!.length, 0, 'deleted');
+    });
+
+    test('a proposal after the work folder changed is refused without asking the user', () => {
+        const { c, log, state, decideWith } = setup(folder());
+        decideWith(() => { throw new Error('the user must not be asked'); });
+        const replies: string[] = [];
+        let round = 0;
+        c.makeProvider = () => ({
+            async chat(req): Promise<ChatResult> {
+                for (const m of req.messages) if (m.role === 'tool') replies.push(m.content);
+                if (++round === 1) {
+                    state.root = folder();   // the user opened another folder while the model was thinking
+                    return { usage: null, cancelled: false, reasoning: '', toolCalls: [{ id: 't1', name: 'edit_file', arguments: JSON.stringify({ name: 'notes.md', old_text: '15 November', new_text: '22 November', reason: 'x' }) }] };
+                }
+                req.onText('ok');
+                return { usage: null, cancelled: false, reasoning: '', toolCalls: [] };
+            },
+        });
+        settle(c.send('change the date'));
+        ok(!log.includes('review'), 'the review was shown');
+        ok(replies.some(r => r.includes(FOLDER_CHANGED)), replies.join('\n'));
+    });
+
+    test('an approved proposal is applied through the host and can be undone', () => {
+        const { c, disk, decideWith } = setup(folder());
+        let applied: Change | Change[] | null = null;
+        decideWith((change, apply) => { applied = change; const error = apply(change); return error ? { applied: false, error } : { applied: true }; });
+        let round = 0;
+        c.makeProvider = () => ({
+            async chat(req): Promise<ChatResult> {
+                if (++round === 1) return { usage: null, cancelled: false, reasoning: '', toolCalls: [{ id: 't1', name: 'edit_file', arguments: JSON.stringify({ name: 'notes.md', old_text: '15 November', new_text: '22 November', reason: 'x' }) }] };
+                req.onText('done');
+                return { usage: null, cancelled: false, reasoning: '', toolCalls: [] };
+            },
+        });
+        settle(c.send('change the date'));
+        eq(disk.get('notes.md'), 'Release 22 November\n');
+        ok(applied && !Array.isArray(applied), 'single change');
+        eq(c.undo([applied as Change]), null, 'undo error');
+        eq(disk.get('notes.md'), 'Release 15 November\n');
+        eq(c.session.events[0].status, 'reverted');
+    });
+
+    test('stop cancels the running turn; busy ends', () => {
+        const { c, log } = setup(null);
+        c.makeProvider = () => ({
+            chat: req => new Promise(resolve => { req.cancellable?.connect(() => resolve({ usage: null, cancelled: true, toolCalls: [], reasoning: '' })); }),
+        });
+        const sending = c.send('slow');
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { ok(c.busy, 'not busy while sending'); c.stop(); return GLib.SOURCE_REMOVE; });
+        settle(sending);
+        eq(log, ['turn slow', 'busy true', 'end cancelled', 'busy false']);
+        ok(!c.busy, 'still busy');
+    });
+
+    test('reset during a turn drops its late result', () => {
+        const { c, log } = setup(null);
+        let finish: (r: ChatResult) => void = () => {};
+        c.makeProvider = () => ({ chat: req => new Promise(resolve => { finish = r => { req.onText('late'); resolve(r); }; }) });
+        const sending = c.send('first');
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            c.reset();
+            finish({ usage: null, cancelled: false, toolCalls: [], reasoning: '' });
+            return GLib.SOURCE_REMOVE;
+        });
+        settle(sending);
+        eq(log, ['turn first', 'busy true', 'busy false'], 'no end for the dropped turn');
+        eq(c.session.history.length, 0, 'history cleared');
+    });
+}

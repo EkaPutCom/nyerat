@@ -1,6 +1,7 @@
 // The Assistant panel on the right side: a chat with a model (DeepSeek) that knows the manuscript contents.
-// The panel does not know how to get the manuscript; the window provides it through `host`. Context composition
-// is in agent/context.ts, and calling the model goes through the Provider (agent/provider.ts).
+// The panel only draws: the conversation's life cycle (sending, stopping, saving, reopening, undo) is in
+// agent/chatcontroller.ts, which tells the panel what to show through ChatView. The window provides the manuscript
+// through `host`. Context composition is in agent/context.ts, and calling the model goes through the Provider.
 //
 //   ┌ ASSISTANT               ⌫ ⚙ ┐
 //   │ (messages, newest below)     │
@@ -15,15 +16,13 @@ import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
-import { systemKeyStore, type KeySource, type KeyStore } from '../agent/apikey.js';
-import { buildContext, DEFAULT_BUDGET, findMentions, type BuiltContext, type ContextOptions, type SourceFile } from '../agent/context.js';
-import { deleteChat, listChats, loadChat, nowStamp, saveChat, titleFrom } from '../agent/chatstore.js';
-import { DEEPSEEK_MODELS, DeepSeek } from '../agent/deepseek.js';
-import type { Freshness } from '../workspace.js';
+import type { KeySource, KeyStore } from '../agent/apikey.js';
+import type { BuiltContext, ContextOptions } from '../agent/context.js';
+import { ChatController, type ChatControllerHost, type ChatView, type TurnOutcome, type TurnView } from '../agent/chatcontroller.js';
+import { DEEPSEEK_MODELS } from '../agent/deepseek.js';
 import type { Provider, Usage } from '../agent/provider.js';
-import { ChatSession, type ProposalResult, type ToolStep } from '../agent/session.js';
-import { diffPreview, describeChange, invertChange, type Change } from '../agent/changes.js';
-import type { GitAnswer, GitRequest } from '../agent/gittools.js';
+import type { ChatSession, ProposalResult, ToolStep } from '../agent/session.js';
+import { diffPreview, describeChange, type Change } from '../agent/changes.js';
 import { ProposalViewer } from './proposalviewer.js';
 import { LogViewer } from './logviewer.js';
 import { chatMarkup } from '../markdown/chatmarkup.js';
@@ -33,17 +32,9 @@ import { childrenOf, onKeyPress, pack, uiTemplate } from '../gtkutil.js';
 import template from './chat.ui?raw';
 import { _, fmt, ngettext } from '../i18n.js';
 
-// What the panel needs to know from the window.
-export interface ChatHost {
-    active(): { name: string; text: string; cursorLine: number } | null;   // the open document (buffer contents, not disk)
-    selection(): string;
-    files(freshness?: Freshness): SourceFile[];                                            // other files in the project folder (default cached)
-    // Apply a change the user has approved. Returns an error message, or null on success.
-    applyChange?(change: Change): string | null;
-    applyBatch?(changes: Change[]): string | null;
-    window?(): Gtk.Window | null;                                           // parent of the proposal review window
-    git?(request: GitRequest): Promise<GitAnswer>;                          // read-only Git history tools in the work folder
-    root(): string | null;                                                  // the manuscript folder; where conversation history is saved
+// What the panel needs to know from the window: the controller's host plus a parent for its windows.
+export interface ChatHost extends ChatControllerHost {
+    window?(): Gtk.Window | null;                                           // parent of the proposal review and log windows
 }
 
 const SOURCE_TEXT: Record<KeySource, string> = {
@@ -75,7 +66,7 @@ interface Bubble {
     markdown: boolean;
 }
 
-export class ChatPanel extends Gtk.Box {
+export class ChatPanel extends Gtk.Box implements ChatView {
     static {
         GObject.registerClass({
             GTypeName: 'NyeratChatPanel',
@@ -116,26 +107,17 @@ export class ChatPanel extends Gtk.Box {
     declare private readonly _contextSelection: Gtk.CheckButton;
     declare private readonly _contextProject: Gtk.CheckButton;
 
-    readonly session = new ChatSession();
+    readonly controller = new ChatController(this);
+    private chatHost: ChatHost = { active: () => null, selection: () => '', files: () => [], root: () => null };
 
-    host: ChatHost = { active: () => null, selection: () => '', files: () => [], root: () => null };
-    // Replaced in tests with a fake provider.
-    makeProvider: (key: string) => Provider = key => new DeepSeek(key);
-    keyStore: KeyStore = systemKeyStore;
-    model = DEEPSEEK_MODELS[0];   // the model is sent to the API as is; setModel() normalizes it
     onModelChanged: (model: string) => void = () => {};
     onThinkingChanged: (thinking: boolean) => void = () => {};
     onSaveChanged: (save: boolean) => void = () => {};
-    saveChats = true;   // save every turn to <folder>/.nyerat/chats
-    options: ContextOptions = { activeDocument: true, selection: true, project: true };
-    budget = DEFAULT_BUDGET;
 
     private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#1c71d8', mark: '#fff3a3' };
     private readonly bubbles: Bubble[] = [];
     readonly empty: Gtk.Box;           // initial hint; shown while the conversation is empty
-    private generation = 0;
     logViewer: LogViewer | null = null;   // the agent log monitor window, if open
-    private cancellable: Gio.Cancellable | null = null;
     private renderTimer = 0;
     private dark = false;
     private cardsBox: Gtk.Box | null = null;   // where the proposal cards of the running turn live
@@ -143,11 +125,6 @@ export class ChatPanel extends Gtk.Box {
     private stickIdle = 0;
     private stick = true;            // stay stuck to the bottom as long as the user has not scrolled up
     private summaryTimer = 0;
-    // The conversation currently shown on disk: its file (null = not written yet), the folder it came from, and its title.
-    private chatPath: string | null = null;
-    private chatRoot: string | null = null;
-    private chatTitle = '';
-    private chatCreated = '';
     private readonly stepLabels = new Map<string, Gtk.Label>();   // tool call id → its step row
 
     constructor() {
@@ -240,9 +217,23 @@ export class ChatPanel extends Gtk.Box {
         this.stickIdle = 0;
     }
 
-    get busy(): boolean {
-        return this.cancellable !== null;
-    }
+    // The conversation state lives in the controller; these pass through for the window and tests.
+    get session(): ChatSession { return this.controller.session; }
+    get host(): ChatHost { return this.chatHost; }
+    set host(host: ChatHost) { this.chatHost = host; this.controller.host = host; }
+    get makeProvider(): (key: string) => Provider { return this.controller.makeProvider; }
+    set makeProvider(make: (key: string) => Provider) { this.controller.makeProvider = make; }
+    get keyStore(): KeyStore { return this.controller.keyStore; }
+    set keyStore(store: KeyStore) { this.controller.keyStore = store; }
+    get model(): string { return this.controller.model; }   // sent to the API as is; setModel() normalizes it
+    set model(model: string) { this.controller.model = model; }
+    get saveChats(): boolean { return this.controller.saveChats; }
+    set saveChats(save: boolean) { this.controller.saveChats = save; }
+    get options(): ContextOptions { return this.controller.options; }
+    set options(options: ContextOptions) { this.controller.options = options; }
+    get budget(): number { return this.controller.budget; }
+    set budget(budget: number) { this.controller.budget = budget; }
+    get busy(): boolean { return this.controller.busy; }
 
     setPalette(palette: Palette): void {
         this.dark = palette.dark;
@@ -253,7 +244,7 @@ export class ChatPanel extends Gtk.Box {
 
     // An old or unknown model name (e.g. from a settings version) is replaced with the default model.
     setModel(model: string): void {
-        this.model = DEEPSEEK_MODELS.includes(model) ? model : DEEPSEEK_MODELS[0];
+        this.controller.setModel(model);
         this.modelDrop.set_selected(DEEPSEEK_MODELS.indexOf(this.model));
     }
 
@@ -274,19 +265,20 @@ export class ChatPanel extends Gtk.Box {
     // ---------- Conversation ----------
 
     reset(): void {
-        this.generation++;
-        this.stop();
-        this.session.clear();
-        this.chatPath = null;
+        this.controller.reset();
+        this.clearMessages();
+        this.updateContextSummary();
+    }
+
+    private clearMessages(): void {
         this.stepLabels.clear();   // the labels are discarded below; the same tool id must not reuse them
         this.bubbles.length = 0;
         for (const child of childrenOf(this.messages)) if (child !== this.empty) this.messages.remove(child);
         this.empty.show();
-        this.updateContextSummary();
     }
 
     stop(): void {
-        this.cancellable?.cancel();
+        this.controller.stop();
     }
 
     // Open (or focus) the agent log monitor window.
@@ -302,121 +294,76 @@ export class ChatPanel extends Gtk.Box {
         return send ? this.send() : Promise.resolve();
     }
 
-    async send(): Promise<void> {
-        const question = this.input.buffer.text.trim();
-        if (!question || this.busy) return;
-        const generation = this.generation;
-        const found = await this.keyStore.get();
-        if (generation !== this.generation || this.busy) return;
-        if (!found) {
-            this.addNote('There is no DeepSeek API key yet. Open the settings (gear icon), paste the key, then send again.', true);
-            this.settingsButton.get_popover()?.popup();
-            return;
-        }
+    send(): Promise<void> {
+        return this.controller.send(this.input.buffer.text);
+    }
 
+    // ---------- ChatView: what the controller shows ----------
+
+    noKey(): void {
+        this.addNote('There is no DeepSeek API key yet. Open the settings (gear icon), paste the key, then send again.', true);
+        this.settingsButton.get_popover()?.popup();
+    }
+
+    saveFailed(error: string): void {
+        this.addNote(fmt(_('Conversation history was not saved: {error}'), { error }), true);
+    }
+
+    busyChanged(busy: boolean): void {
+        this.updateSendButton();
+        if (!busy) this.updateContextSummary();
+    }
+
+    startTurn(question: string): TurnView {
         this.input.buffer.set_text('', -1);
         this.empty.hide();
         this.addUser(question);
         const answer = this.addAssistant();
         this.cardsBox = answer.cards;
-        this.cancellable = new Gio.Cancellable();
-        this.updateSendButton();
         this.stick = true;
-
-        const requestRoot = this.host.root();
-        const started = GLib.get_monotonic_time();
-        const elapsed = () => (GLib.get_monotonic_time() - started) / 1e6;
         let reasoning = '';
-        try {
-            const result = await this.session.ask(this.turnInput(question, 'current'), this.makeProvider(found.key), this.model, {
-                onContext: built => {
-                    this.setContextSummary(built);
-                    answer.meta.set_text(this.describe(built));
-                    answer.meta.show();
-                },
-                onText: delta => { answer.bubble.text += delta; this.queueRender(answer.bubble); },
-                onReasoning: delta => {
-                    reasoning += delta;
-                    answer.thinking.show();
-                    answer.thinkingLabel.set_text(reasoning.trim());
-                },
-                currentFiles: () => {
-                    if (requestRoot !== this.host.root()) throw Error('The work folder changed during the request');
-                    const active = this.options.activeDocument ? this.host.active() : null;
-                    return [...this.host.files('fresh').filter(f => f.name !== active?.name), ...(active ? [{ name: active.name, text: active.text }] : [])];
-                },
-                onState: () => {
-                    if (generation !== this.generation) return;
-                    this.persist();
-                    if (this.session.work) { answer.work.update(this.session.work, true, elapsed()); answer.work.widget.show(); }
-                },
-                // A valid plan is already shown as a checklist; its step row does not need repeating.
-                onTool: step => { if (!(step.label === 'Work plan' && this.session.work && step.summary !== 'invalid plan')) this.showStep(answer.steps, step); },
-                onBatchProposal: this.host.applyBatch ? changes => requestRoot === this.host.root() ? this.propose(changes) : Promise.resolve({ applied: false, error: 'The work folder changed during the request' }) : undefined,
-                onProposal: change => requestRoot === this.host.root() ? this.propose(change) : Promise.resolve({ applied: false, error: 'The work folder changed during the request' }),
-                git: this.host.git ? request => requestRoot === this.host.root() ? this.host.git!(request) : Promise.resolve({ ok: false, message: 'The work folder changed during the request' }) : undefined,
-            }, this.cancellable);
-            if (generation !== this.generation) return;
-            this.render(answer.bubble);
-            if (answer.work.widget.get_visible() && this.session.work) answer.work.update(this.session.work, false, elapsed());
-            if (result.cancelled) answer.footer.set_text(answer.bubble.text || result.toolCalls ? _('Stopped') : _('Stopped before any answer'));
-            else if (result.usage) answer.footer.set_text(usageText(result.usage, result.toolCalls, result.applied));
-            answer.footer.set_visible(!!answer.footer.get_text());
-            this.persist();
-        } catch (e) {
-            if (generation !== this.generation) return;
-            if (this.session.work) this.session.work.status = 'failed';
-            this.persist();
-            if (answer.work.widget.get_visible() && this.session.work) answer.work.update(this.session.work, false, elapsed());
-            this.render(answer.bubble);
-            answer.footer.set_markup(`<span foreground="#c9372c">${escapeMarkup(e instanceof Error ? e.message : String(e))}</span>`);
-            answer.footer.show();
-            if (!answer.bubble.text) answer.bubble.label.hide();
-        } finally {
-            this.cancellable = null;
-            this.updateSendButton();
-            this.updateContextSummary();
-        }
+        return {
+            context: built => {
+                this.setContextSummary(built);
+                answer.meta.set_text(this.describe(built));
+                answer.meta.show();
+            },
+            text: delta => { answer.bubble.text += delta; this.queueRender(answer.bubble); },
+            reasoning: delta => {
+                reasoning += delta;
+                answer.thinking.show();
+                answer.thinkingLabel.set_text(reasoning.trim());
+            },
+            step: step => this.showStep(answer.steps, step),
+            work: (work, running, elapsed) => {
+                answer.work.update(work, running, elapsed);
+                answer.work.widget.show();
+            },
+            end: (outcome: TurnOutcome) => {
+                this.render(answer.bubble);
+                if ('error' in outcome) {
+                    answer.footer.set_markup(`<span foreground="#c9372c">${escapeMarkup(outcome.error)}</span>`);
+                    answer.footer.show();
+                    if (!answer.bubble.text) answer.bubble.label.hide();
+                    return;
+                }
+                if (outcome.cancelled) answer.footer.set_text(answer.bubble.text || outcome.toolCalls ? _('Stopped') : _('Stopped before any answer'));
+                else if (outcome.usage) answer.footer.set_text(usageText(outcome.usage, outcome.toolCalls, outcome.applied));
+                answer.footer.set_visible(!!answer.footer.get_text());
+            },
+        };
     }
 
     // ---------- History on disk ----------
 
-    // Write the conversation to <folder>/.nyerat/chats after every turn. Without a folder, or when turned off, nothing is written.
-    private persist(): void {
-        const root = this.host.root();
-        const history = this.session.history;
-        if (!this.saveChats || !root || !history.length && !this.session.work && !this.session.events.length) return;
-        if (root !== this.chatRoot) {
-            // Switching folders in the middle of a conversation: the continuation is written as a new file in the new folder.
-            this.chatRoot = root;
-            this.chatPath = null;
-        }
-        if (!this.chatPath) {
-            this.chatCreated = nowStamp();
-            this.chatTitle = titleFrom(history.find(t => t.role === 'user')?.content ?? this.session.work?.goal ?? this.session.events[0]?.question ?? '');
-        }
-        try {
-            this.chatPath = saveChat(root, { title: this.chatTitle, model: this.model, created: this.chatCreated, turns: [...history], work: this.session.work, events: this.session.events }, this.chatPath);
-        } catch (e) {
-            this.addNote(fmt(_('Conversation history was not saved: {error}'), { error: e instanceof Error ? e.message : String(e) }), true);
-        }
-    }
-
     // Show a saved conversation and continue from there: the next turns are appended to the same file.
     openChat(path: string): boolean {
-        const chat = loadChat(path);
+        const chat = this.controller.open(path);
         if (!chat) {
             this.addNote('The conversation file could not be read.', true);
             return false;
         }
-        this.reset();
-        this.session.restore(chat.turns);
-        this.session.work = chat.work ?? null;
-        this.session.events.push(...chat.events ?? []);
-        this.chatPath = path;
-        this.chatRoot = this.host.root();
-        this.chatTitle = chat.title;
-        this.chatCreated = chat.created;
+        this.clearMessages();
         this.empty.hide();
         for (const turn of chat.turns) {
             if (turn.role === 'user') {
@@ -434,7 +381,7 @@ export class ChatPanel extends Gtk.Box {
                 const review = new Gtk.Button({ label: fmt(_('View diff · {count} files'), { count: event.changes.length }), tooltip_text: event.changes.map(c => c.file).join('\n') });
                 review.connect('clicked', () => new ProposalViewer(this.host.window?.() ?? null, event.changes, this.dark, () => _('History is read-only'), true).show());
                 row.append(review);
-                if (event.status === 'applied' && this.host.applyBatch) row.append(this.undoButton(event.changes, null));
+                if (event.status === 'applied' && this.controller.canUndo) row.append(this.undoButton(event.changes, null));
                 this.messages.append(row);
             }
         }
@@ -461,9 +408,8 @@ export class ChatPanel extends Gtk.Box {
             l.show();
             this.chatList.append(l);
         };
-        const root = this.host.root();
-        if (!root) return note('Open a work folder to save and open conversation history.');
-        const chats = listChats(root);
+        const chats = this.controller.chats();
+        if (!chats) return note('Open a work folder to save and open conversation history.');
         if (!chats.length) return note('There are no saved conversations in this folder yet.');
         const popover = this.historyButton.get_popover();
         for (const chat of chats) {
@@ -485,11 +431,10 @@ export class ChatPanel extends Gtk.Box {
             remove.set_tooltip_text(_('Move to the Trash'));
             remove.connect('clicked', () => {
                 try {
-                    deleteChat(chat.path);
+                    this.controller.deleteChat(chat.path);
                 } catch (e) {
                     this.addNote(e instanceof Error ? e.message : String(e), true);
                 }
-                if (chat.path === this.chatPath) this.chatPath = null;
                 this.refreshChatList();
             });
             pack(row, open, true);
@@ -500,22 +445,9 @@ export class ChatPanel extends Gtk.Box {
 
     // ---------- Context ----------
 
-    // A turn walks the folder again so it sees outside changes at once; the preview while typing uses the snapshot.
-    private turnInput(question: string, freshness: Freshness = 'cached') {
-        return {
-            question,
-            active: this.host.active(),
-            selection: this.host.selection(),
-            files: this.host.files(freshness),
-            mentions: findMentions(question),
-            options: { ...this.options },
-            budget: this.budget,
-        };
-    }
-
     // Builds the context for the text being typed, without sending anything.
     previewContext(): BuiltContext {
-        return buildContext({ ...this.turnInput(this.input.buffer.text), recent: this.session.questions });
+        return this.controller.preview(this.input.buffer.text);
     }
 
     // A one-line summary of what is sent: the document, selection, attachments, and the number of excerpts per file.
@@ -697,8 +629,7 @@ export class ChatPanel extends Gtk.Box {
     // Change proposal: the review window (like a Git history diff) opens automatically; in the panel a compact card
     // is left behind with the status and a button to open it again. Files are not touched before Apply; closing
     // the window, Reject, or stopping the turn is the same as rejecting.
-    private propose(change: Change | Change[]): Promise<ProposalResult> {
-        const proposalRoot = this.host.root();
+    review(change: Change | Change[], apply: (change: Change | Change[]) => string | null, cancelled: Gio.Cancellable): Promise<ProposalResult> {
         const changes = Array.isArray(change) ? change : [change];
         const description = Array.isArray(change) ? fmt(_('Change batch · {count} files'), { count: changes.length }) : describeChange(change);
         const reasonText = changes.map(c => `${c.file}: ${c.reason}`).join('\n');
@@ -740,17 +671,16 @@ export class ChatPanel extends Gtk.Box {
             const open = () => {
                 if (done) return;
                 if (this.viewer) { this.viewer.show(); return; }
-                const viewer = new ProposalViewer(this.host.window?.() ?? null, change, this.dark,
-                    c => proposalRoot !== this.host.root() ? 'The work folder changed since the proposal was made' : Array.isArray(c) ? this.host.applyBatch ? this.host.applyBatch(c) : 'applying batches is not available' : this.host.applyChange ? this.host.applyChange(c) : 'applying is not available');
+                const viewer = new ProposalViewer(this.host.window?.() ?? null, change, this.dark, apply);
                 viewer.onDecision = applied => {
                     const note = viewer.note ? { note: viewer.note } : {};
                     if (applied && viewer.accepted) {
                         const kept = viewer.accepted.map(i => changes[i]);
                         finish({ applied: true, accepted: viewer.accepted, ...note }, fmt(_('Applied {applied} of {count} files.'), { applied: kept.length, count: changes.length }));
-                        if (this.host.applyBatch) card.append(this.undoButton(kept, status));
+                        if (this.controller.canUndo) card.append(this.undoButton(kept, status));
                     } else if (applied) {
                         finish({ applied: true, ...note }, _('Applied.'));
-                        if (this.host.applyBatch) card.append(this.undoButton(changes, status));
+                        if (this.controller.canUndo) card.append(this.undoButton(changes, status));
                     } else if (viewer.error) finish({ applied: false, error: viewer.error, ...note }, fmt(_('Failed to apply: {error}'), { error: viewer.error }), true);
                     else finish({ applied: false, ...note }, viewer.note ? fmt(_('Rejected: {note}'), { note: viewer.note }) : _('Rejected.'));
                 };
@@ -758,7 +688,7 @@ export class ChatPanel extends Gtk.Box {
                 viewer.show();
             };
             review.connect('clicked', open);
-            this.cancellable?.connect(() => {
+            cancelled.connect(() => {
                 const viewer = this.viewer;
                 finish({ applied: false }, _('Cancelled.'));
                 viewer?.close();
@@ -767,26 +697,15 @@ export class ChatPanel extends Gtk.Box {
         });
     }
 
-    // The Undo button for agent changes that were already applied: applies the inverse through the same preflight,
-    // so it fails (without overwriting anything) if the file has been edited again since. The journal records it so the
-    // agent knows that change no longer applies.
+    // The Undo button for agent changes that were already applied (see ChatController.undo).
     private undoButton(changes: Change[], status: Gtk.Label | null): Gtk.Button {
         const button = new Gtk.Button({ label: _('Undo'), halign: Gtk.Align.START, tooltip_text: _('Restore the files to their contents before this change') });
         button.connect('clicked', () => {
             if (this.busy) { this.addNote('Wait for the agent to finish before undoing the change.', true); return; }
-            const root = this.host.root();
-            const error = this.host.applyBatch ? this.host.applyBatch([...changes].reverse().map(invertChange)) : 'applying is not available';
+            const error = this.controller.undo(changes);
             if (error) { this.addNote(fmt(_('Cannot be undone: {error}'), { error }), true); return; }
             button.hide();
             status?.set_text(_('Undone.'));
-            for (const event of this.session.events) {
-                if (event.status !== 'applied' || !event.changes.some(c => changes.includes(c))) continue;
-                event.status = 'reverted';
-                event.summary = 'Undone by the user from the panel; the files are back to their previous contents.';
-            }
-            const work = this.session.work;
-            if (work) { delete work.verification; if (work.status === 'complete') work.status = 'paused'; }
-            if (root === this.host.root()) this.persist();
         });
         return button;
     }

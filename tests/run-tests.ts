@@ -43,6 +43,7 @@ import { gitLogTests } from './unit/gitlog.js';
 import { fileOpsTests } from './unit/fileops.js';
 import { fileWriteTests } from './unit/files.js';
 import { workspaceTests } from './unit/workspace.js';
+import { chatControllerTests } from './unit/chatcontroller.js';
 import { agentTests, apiKeyTests, toolTests } from './unit/agent.js';
 import { transcriptTests } from './unit/transcript.js';
 import { agenticTests } from './unit/agentic.js';
@@ -99,6 +100,7 @@ function runUnitTests(): void {
     fileOpsTests();
     fileWriteTests();
     workspaceTests();
+    chatControllerTests();
     agentTests();
     apiKeyTests();
     toolTests();

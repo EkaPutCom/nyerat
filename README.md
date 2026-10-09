@@ -396,6 +396,7 @@ src/
 │   ├── tools.ts          pure: browsing tools for the model (list_files, search_documents, search_text, read_file)
 │   ├── context.ts        pure: splitting the manuscript per heading, BM25 search, building the context within a token budget, trimming the history
 │   ├── session.ts        pure: one conversation (history) and the one-turn agent loop (model ↔ tools, including waiting for approval of proposals)
+│   ├── chatcontroller.ts the conversation life cycle without widgets: send/stop, folder-change guards, saving and reopening history, undo, context preview; drives the panel through ChatView
 │   ├── changes.ts        pure: the proposal tools (create, edit, insert, delete, move, kanban), validation into a `Change`, change inversion and preflight, diff preview; never writes
 │   ├── gittools.ts       pure: the agent's Git history tools (git_log, show_commit, file_at_commit): argument validation and output tidying
 │   ├── work.ts           pure: goal, plan, work status and the set_work tool
@@ -469,7 +470,7 @@ src/
     ├── kanban.ts         kanban board view: lists, cards, menus, drag and drop
     ├── inbox.ts          inbox view: quick capture, note list, age, tags
     ├── home.ts           Home tab: Continue card, agent, deadlines, inbox, recent files
-    ├── chat.ts           Assistant panel on the right: messages, the Context button, key and model settings
+    ├── chat.ts           Assistant panel on the right: draws messages, proposal cards, the Context button, key and model settings (implements ChatView)
     └── theme.ts          fonts and CSS from the palette in colors.ts (named Adwaita colors for the interface, the system accent if available)
 tests/
 ├── run-tests.ts          entry point and registration of unit/GUI tests
@@ -523,7 +524,7 @@ The code is divided into layers. Each layer may only use the layers below it, ne
         └─ settings.ts, files.ts, workspace.ts, git.ts, gitlog.ts, config.ts, colors.ts
 ```
 
-- **`agent/`** is also free of GTK. `ui/chat.ts` uses it, and the window only gives it a way to fetch the manuscript (`ChatHost`: the active document, the selection, project files, the manuscript folder). `agent/` knows nothing about the editor or widgets.
+- **`agent/`** is also free of GTK. `ui/chat.ts` uses it, and the window only gives it a way to fetch the manuscript (`ChatHost`: the active document, the selection, project files, the manuscript folder). `agent/` knows nothing about the editor or widgets. The panel only draws: `agent/chatcontroller.ts` owns the conversation's life cycle and tells the panel what to show through the `ChatView` interface, so sending, stopping, a folder change mid-request, and reopening a saved conversation are tested without GTK (`tests/unit/chatcontroller.ts`).
 - **`markdown/`** does not import GTK at all. It only contains string → data functions, so it is the easiest to study and test.
 - **`editor/`** knows nothing about files, menus, or the sidebar. `MarkdownView` only reports through callbacks (`onHighlighted`, `onCursorMoved`, `onMessage`).
 - **`ui/`** holds self-contained components. `Outline` does not know the editor; it only receives a list of headings and calls `onJump(line)` when clicked. `FileTree` is the same: it only displays folders and calls `onOpenFile(path)`; the window decides how to open the file (a new tab, switching to an existing tab, or reusing an empty document).
