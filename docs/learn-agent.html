@@ -309,7 +309,7 @@ input[type=text] { width: 100%; }
   <p class="lede">In two days, the Nyerat assistant grew from a chat panel with <b>4 read tools</b> into an agent with <b>16 tools</b>. It can now plan work, propose batches of changes, check the result, and pick the work back up after an interruption. One principle has been held since the first commit: <b>the agent may read freely, but every file change must be approved by the user first</b>. The last chapter shows the next step: Nyerat assigns kanban cards to another agent (pi) that works in a separate project folder, while Nyerat only holds the board. This page explains how that principle is kept at every stage. It covers data structures, the loop flow, safety limits, costs, and small simulations you can try yourself.</p>
   <div class="kpis">
     <div class="kpi"><div class="what">Tools offered to the model</div><div class="big">16</div><div class="from">from 4 · f6a4cc7 → 8d0cdec</div></div>
-    <div class="kpi"><div class="what">Assistant tests (unit + GUI)</div><div class="big">191</div><div class="from">from 65 · all without a paid API</div></div>
+    <div class="kpi"><div class="what">Assistant tests (unit + GUI)</div><div class="big">192</div><div class="from">from 65 · all without a paid API</div></div>
     <div class="kpi"><div class="what">Code in <code>src/agent/</code></div><div class="big">3,078 lines</div><div class="from">from 1,099 lines in 8 files → 20 files</div></div>
     <div class="kpi"><div class="what">Work folder writes without approval</div><div class="big">0</div><div class="from">all through <code>Change</code> + preflight; the external harness only in another project folder (Chapter 9)</div></div>
   </div>
@@ -354,6 +354,7 @@ input[type=text] { width: 100%; }
     <li><span class="h">8d0cdec</span><span><b>Chapter 9f</b> · A <code>[[note]]</code> on a card becomes pi prompt context: the note contents from the work folder are copied into the prompt, limited per note and in total.</span></li>
     <li><span class="h">b31556d</span><span><b>Chapter 5d</b> · The <code>set_work</code> plan is shown as a checklist (<code>WorkList</code>): progress, a spinner on the step being worked on, turn duration; tidied to GNOME idioms in 4a35bc8 (<code>Adw.Spinner</code>, accessible labels).</span></li>
     <li><span class="h">a8dd69a</span><span><b>Chapter 5d</b> · The Assistant message box: the send button inside the message frame (6037ab4), the context summary appears immediately when the panel is open from the start.</span></li>
+    <li><span class="h">9d6ea05</span><span><b>Chapter 8d</b> · The Git tools always answer: a watchdog in <code>runGit</code> ends a run whose result the runtime lost, or a git that hangs, as a failure the model can read.</span></li>
   </ol>
 </section>
 
@@ -763,6 +764,18 @@ TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
     <img src="assets/proposal-kanban.png" alt="The review window for a kanban board change proposal" loading="lazy">
     <figcaption>Kanban board changes also go through the same review window. Board serialization may tidy the spacing elsewhere, and that is shown as it is in the diff.</figcaption>
   </figure>
+  <h3>8d. A tool must always answer: the Git result that never came</h3>
+  <p>The agent loop waits for every tool call before the next round. A read tool that never returns does not fail; it freezes the whole turn, with the spinner still turning. That is what an occasional timeout of the test <code>agentGit in a real repository</code> turned out to be. The log of a failing run showed:</p>
+<pre><code>Gjs-CRITICAL: Attempting to run a JS callback during garbage collection … it has been blocked.
+The offending callback was AsyncReadyCallback().</code></pre>
+  <p><code>runGit()</code> (<code>git.ts</code>) starts git with <code>Gio.Subprocess</code> and waits for <code>communicate_utf8_async()</code>. Git had exited (GLib had already reaped it) and timers still ran, but GJS 1.80 blocked the completion callback because it arrived during a garbage collection, so the Promise behind <code>git_log</code> never settled. This is the same runtime guard described in <code>bench/GC-DIAGNOSIS.md</code>; it is rare (about a third of the test runs with every CPU core busy, and now and then without load) and cannot be fixed from the app.</p>
+<pre><code>runGit(cwd, args):  start git, wait for communicate_utf8_async()
+  watchdog every 500 ms:
+    git has exited and no result after 5 s   → failure "git finished but its result was lost; try again"
+    git still running after 120 s             → stop git, failure "git did not finish within 120 seconds"
+  the first of (callback, watchdog) settles the run; the other is ignored</code></pre>
+  <p>Both endings are ordinary failures: <code>formatGit()</code> turns them into a message the model reads, and it can call the tool again. The run is <b>not repeated automatically</b>, because the same <code>runGit()</code> also commits for the History tab, and a commit whose result was lost may already have happened. The second limit covers a git that waits for input that will never come, such as a signing passphrase. The test replaces <code>Gio.Subprocess.prototype.communicate_utf8_async</code> with a function that never calls back, exactly what the runtime does, and also runs a git alias that sleeps longer than the limit; with the watchdog disabled, the test times out.</p>
+  <div class="lesson"><b>Lesson</b>Every wait in an agent loop needs an end that does not depend on the thing being waited for. A failure the model can read is recoverable; a tool that never answers is not.</div>
   <div class="lesson"><b>Lesson</b>Investing in the right structure early (changes as data, one change per file, preflight) makes later features such as partial approval and Undo small and safe. A new feature does not need to make its own write path.</div>
 </section>
 
@@ -1011,6 +1024,7 @@ Not decided yet.</textarea>
       <tr><td data-k="Pattern">A return channel for the delegated agent</td><td data-k="Structure">requests with an id are answered exactly; text questions are guessed + a way out</td><td data-k="In Nyerat"><code>HarnessAsk</code>, <code>answer</code>, <code>resume</code></td></tr>
       <tr><td data-k="Pattern">Context sent as contents, not access</td><td data-k="Structure">links in the data are resolved by the host, the contents copied with limits</td><td data-k="In Nyerat"><code>linkedNotes</code>, <code>linkedNotesSection</code></td></tr>
       <tr><td data-k="Pattern">One writer per resource</td><td data-k="Structure">a queue per key (folder)</td><td data-k="In Nyerat"><code>RunQueue</code></td></tr>
+      <tr><td data-k="Pattern">Every wait has its own end</td><td data-k="Structure">a watchdog that does not depend on the awaited callback; the first to finish wins</td><td data-k="In Nyerat"><code>runGit</code>, <code>gitLimits</code></td></tr>
     </tbody>
   </table>
   </div>
@@ -1122,6 +1136,7 @@ const journey = [
   { c: '8d0cdec', t: '[[ ]] notes into the pi prompt', read: 7, propose: 7, control: 2, tests: 189, lines: 3078, files: 20 },
   { c: 'b31556d', t: 'plan as a checklist', read: 7, propose: 7, control: 2, tests: 189, lines: 3078, files: 20 },
   { c: 'a8dd69a', t: 'message box + context summary', read: 7, propose: 7, control: 2, tests: 191, lines: 3078, files: 20 },
+  { c: '9d6ea05', t: 'Git tools always answer', read: 7, propose: 7, control: 2, tests: 192, lines: 3086, files: 20 },
 ];
 function toolsChart() {
   const svg = $('#chart-tools');
