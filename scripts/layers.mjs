@@ -50,7 +50,6 @@ const MAX_COMPLEXITY = 20;
 // Functions that were already above the limit when it was introduced, with their complexity then. They may not
 // grow; split them when they are touched, and remove the entry once a function is at or below the limit.
 const COMPLEXITY_ALLOWED = {
-    'src/agent/transcript.ts parseChat': 42,
     'scripts/capture.ts main': 42,
     'src/agent/context.ts buildContext': 36,
     'src/markdown/lint.ts scanDocument': 30,

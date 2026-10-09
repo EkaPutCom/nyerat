@@ -65,62 +65,95 @@ export function serializeChat(chat: SavedChat): string {
 // null if it is not a conversation file (without a single turn).
 export function parseChat(text: string): SavedChat | null {
     const lines = text.replace(/\r\n/g, '\n').split('\n');
-    const meta: Record<string, string> = {};
-    let start = 0;
-    if (lines[0] === '---') {
-        const end = lines.indexOf('---', 1);
-        if (end > 0) {
-            for (const line of lines.slice(1, end)) {
-                const m = /^([a-z]+):\s*(.*)$/.exec(line);
-                if (m) meta[m[1]] = m[2];
-            }
-            start = end + 1;
-        }
-    }
-    const turns: Turn[] = [];
-    let current: { role: Turn['role']; lines: string[] } | null = null;
-    const close = () => {
-        if (current) turns.push({ role: current.role, content: current.lines.join('\n').replace(/^\n+|\n+$/g, '') });
-    };
-    for (const line of lines.slice(start)) {
-        const m = MARKER.exec(line);
-        if (m && !m[1]) {
-            close();
-            current = { role: m[2] === 'You' ? 'user' : 'assistant', lines: [] };
-        } else if (current) {
-            current.lines.push(unescapeLine(line));
-        }
-    }
-    close();
-    let work: WorkState | null = null;
-    try {
-        const a = JSON.parse(meta.work ?? 'null');
-        if (a) {
-            work = parseWork(JSON.stringify({ goal: a.goal, steps: a.steps.map((s: any) => ({ text: s.text, status: s.status })), note: a.note }));
-            if (work && Number.isInteger(a.actionStart) && a.actionStart >= 0) work.actionStart = a.actionStart;
-            if (work && a.verification && typeof a.verification.passed === 'boolean' && Array.isArray(a.verification.checks)) {
-                const checks = a.verification.checks.filter((c: any) => c && typeof c.file === 'string' && typeof c.label === 'string' && typeof c.passed === 'boolean');
-                if (checks.length === a.verification.checks.length) work.verification = { passed: checks.length > 0 && checks.every((c: any) => c.passed), checks };
-            }
-            if (work && ['running', 'paused', 'failed', 'complete'].includes(a.status)) work.status = a.status === 'running' || a.status === 'complete' && (!work.verification?.passed || !work.steps.every(s => s.status === 'done')) ? 'paused' : a.status;
-        }
-    } catch { /* Broken metadata does not block the conversation text. */ }
-    let events: ActionEvent[] = [];
-    try { events = parseEvents(JSON.parse(meta.actions ?? '[]')); } catch { /* A broken journal is skipped. */ }
+    const { meta, start } = parseFrontmatter(lines);
+    const turns = parseTurns(lines.slice(start));
+    const work = parseSavedWork(meta.work);
+    const events = parseSavedEvents(meta.actions);
     if (!turns.length && !work && !events.length) return null;
-    let title = meta.title ?? '';
-    try {
-        if (title.startsWith('"')) title = JSON.parse(title);
-    } catch (e) {
-        // broken title (edited by hand): use the first question
-        title = '';
-    }
     return {
-        title: title || titleFrom(turns.find(t => t.role === 'user')?.content ?? ''),
+        title: parseTitle(meta.title) || titleFrom(turns.find(t => t.role === 'user')?.content ?? ''),
         model: meta.model ?? '',
         created: meta.created ?? '',
         turns,
         ...(work ? { work } : {}),
         ...(events.length ? { events } : {}),
     };
+}
+
+// "key: value" lines between the opening and closing ---; start = the first line after them (0 without frontmatter).
+function parseFrontmatter(lines: string[]): { meta: Record<string, string>; start: number } {
+    const meta: Record<string, string> = {};
+    const end = lines[0] === '---' ? lines.indexOf('---', 1) : -1;
+    if (end <= 0) return { meta, start: 0 };
+    for (const line of lines.slice(1, end)) {
+        const m = /^([a-z]+):\s*(.*)$/.exec(line);
+        if (m) meta[m[1]] = m[2];
+    }
+    return { meta, start: end + 1 };
+}
+
+// The turns under "## You" and "## Assistant" headings; text before the first heading is ignored.
+function parseTurns(lines: string[]): Turn[] {
+    const turns: Turn[] = [];
+    let current: { role: Turn['role']; lines: string[] } | null = null;
+    const close = () => {
+        if (current) turns.push({ role: current.role, content: current.lines.join('\n').replace(/^\n+|\n+$/g, '') });
+    };
+    for (const line of lines) {
+        const m = MARKER.exec(line);
+        if (m && !m[1]) {
+            close();
+            current = { role: m[2] === 'You' ? 'user' : 'assistant', lines: [] };
+        } else {
+            current?.lines.push(unescapeLine(line));
+        }
+    }
+    close();
+    return turns;
+}
+
+// The saved work plan, validated again: a file edited by hand must not bring in a state the app would not produce.
+function parseSavedWork(raw: string | undefined): WorkState | null {
+    let work: WorkState | null = null;
+    try {
+        const a = JSON.parse(raw ?? 'null');
+        if (!a) return null;
+        work = parseWork(JSON.stringify({ goal: a.goal, steps: a.steps.map((s: any) => ({ text: s.text, status: s.status })), note: a.note }));
+        if (!work) return null;
+        if (Number.isInteger(a.actionStart) && a.actionStart >= 0) work.actionStart = a.actionStart;
+        const verification = savedVerification(a.verification);
+        if (verification) work.verification = verification;
+        const status = savedStatus(a.status, work);
+        if (status) work.status = status;
+    } catch { /* Broken metadata does not block the conversation text. */ }
+    return work;
+}
+
+// A verification is kept only if every check is well formed; it passes only with at least one check, all passed.
+function savedVerification(v: any): WorkState['verification'] | null {
+    if (!v || typeof v.passed !== 'boolean' || !Array.isArray(v.checks)) return null;
+    const checks = v.checks.filter((c: any) => c && typeof c.file === 'string' && typeof c.label === 'string' && typeof c.passed === 'boolean');
+    if (checks.length !== v.checks.length) return null;
+    return { passed: checks.length > 0 && checks.every((c: any) => c.passed), checks };
+}
+
+// A run that was still going is paused when reopened; "complete" stands only with a passed verification and all steps done.
+function savedStatus(status: unknown, work: WorkState): WorkState['status'] | null {
+    if (status !== 'running' && status !== 'paused' && status !== 'failed' && status !== 'complete') return null;
+    const unfinished = status === 'complete' && (!work.verification?.passed || !work.steps.every(s => s.status === 'done'));
+    return status === 'running' || unfinished ? 'paused' : status;
+}
+
+function parseSavedEvents(raw: string | undefined): ActionEvent[] {
+    try { return parseEvents(JSON.parse(raw ?? '[]')); } catch { return []; /* A broken journal is skipped. */ }
+}
+
+// A JSON-quoted title; a broken one (edited by hand) gives '' so the first question is used instead.
+function parseTitle(raw: string | undefined): string {
+    const title = raw ?? '';
+    try {
+        return title.startsWith('"') ? JSON.parse(title) : title;
+    } catch (e) {
+        return '';
+    }
 }
