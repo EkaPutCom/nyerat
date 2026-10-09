@@ -127,6 +127,12 @@ export function harnessTests(): void {
         eq(locateCard(dup, 'X'), null, 'duplicate cards are not picked arbitrarily');
     });
 
+    test('PiReader: JSON that is not an event, a null message, and inherited names are ignored', () => {
+        const r = new PiReader(new AgentTrace(() => 0, () => '2026-10-05T10:00:00'));
+        for (const l of ['null', '5', '"text"', '[]', '{"type":"toString"}', '{"type":"constructor"}', '{"type":"message_end","message":null}']) eq(r.line(l), null, l);
+        eq(r.finish(0, '').error, 'pi finished without an answer');
+    });
+
     test('PiReader: tools, answers, cost, and session become the log and the result', () => {
         const trace = new AgentTrace(() => 0, () => '2026-10-05T10:00:00');
         const r = new PiReader(trace);
