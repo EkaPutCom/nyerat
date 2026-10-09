@@ -1,5 +1,5 @@
-// The main window: composes the components, connects the callbacks between components,
-// and handles documents (open, save, export).
+// The main window: composes the components and connects the callbacks between components. The open
+// documents (tabs, open/save, the Home tab) are kept by window/documents.ts; the window shows them.
 //
 //   ┌ HeaderBar ─────────────────────────────────────┐
 //   │ Sidebar   │ TabBar (if ≥ 2 documents)          │
@@ -24,7 +24,7 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import { APP_ID, APP_NAME } from './config.js';
 import { addBundledIcons, after, type Awaitable } from './gtkutil.js';
 import { type AppSettings } from './settings.js';
-import { readTextFile, writeTextFile, flushWrites, fileExists } from './files.js';
+import { readTextFile, writeTextFile, flushWrites } from './files.js';
 import { markdownToHtml } from './markdown/html.js';
 import { WELCOME } from './welcome.js';
 import { MarkdownView, type Mode } from './editor/view.js';
@@ -44,27 +44,24 @@ import { TabBar } from './ui/tabbar.js';
 import { HeaderBar } from './ui/headerbar.js';
 import type { Palette } from './colors.js';
 import { applyTheme, systemPrefersDark } from './ui/theme.js';
-import { chooseFile, askSaveChanges, showError } from './ui/dialogs.js';
+import { chooseFile, showError } from './ui/dialogs.js';
 import { registerActions, TEXT_ACTIONS, type Option } from './actions.js';
 import { ImageViewer } from './ui/imageviewer.js';
 import { KanbanBoard } from './ui/kanban.js';
 import { InboxView } from './ui/inbox.js';
 import { HomeView } from './ui/home.js';
-import { moveRecent, rememberRecent } from './markdown/home.js';
+import { moveRecent } from './markdown/home.js';
 import { isInbox, newInbox, parseInbox, serializeInbox, type Inbox } from './markdown/inbox.js';
 import { countCards, isKanban, newBoard, parseBoard, serializeBoard, type Board } from './markdown/kanban.js';
-import { _, fmt, ngettext } from './i18n.js';
+import { _, fmt } from './i18n.js';
 import { errorMessage, type Doc } from './window/doc.js';
 import { Autosaver, type AutosaveHost } from './window/autosave.js';
 import { JournalController, type JournalHost } from './window/journal.js';
 import { HarnessController, type HarnessHost } from './window/harness.js';
 import { HomeController, type HomeHost } from './window/home.js';
+import { DocumentController, UNTITLED, type DocumentsHost } from './window/documents.js';
 import { applyChange, applyChangeBatch, type AgentWriteHost } from './window/agentwrites.js';
 
-const UNTITLED = _('Untitled');
-const HOME = _('Home');
-// The marker of the Home tab in the saved tab list (not a file path).
-const HOME_TAB = 'nyerat:home';
 // Actions that are meaningless on Home (there is no text to save or undo).
 const DOCUMENT_ACTIONS = ['save', 'save-as', 'export-html', 'undo', 'redo', 'kanban-view'];
 // The saved window size may be larger than the screen (for example after moving
@@ -109,13 +106,10 @@ export class MainWindow {
     readonly header: HeaderBar;
     readonly win: Adw.ApplicationWindow;
 
-    private docs: Doc[] = [];
-    private doc: Doc;                 // the active document
+    readonly documents: DocumentController;
     // The Markdown files of the work folder; documents with unsaved changes are read from their editor.
     readonly workspace = new WorkspaceRepository(() => new Map(this.docs
         .filter(d => d.file && d.editor.buffer.get_modified()).map(d => [d.file!, d.editor.getText()])));
-    private nextId = 1;
-    private restoring = false;        // a tab from the last session is being reopened: do not record it as newly opened
     private palette: Palette | null = null;
     dark: boolean;
     private colorScheme: boolean | null = null;   // the last choice applied by setDark (null = follow the system)
@@ -147,7 +141,8 @@ export class MainWindow {
         this.harness = new HarnessController(this.host);
         this.homePage = new HomeController(this.host);
 
-        this.doc = this.addDoc();
+        this.documents = new DocumentController(this.documentsHost());
+        this.documents.start();
         this.doc.editor.modes.focus = settings.focus;
         this.doc.editor.modes.typewriter = settings.typewriter;
         this.findBar = new FindBar(this.doc.editor.buffer, this.doc.editor.view);
@@ -213,14 +208,14 @@ export class MainWindow {
             if (this.file) new HistoryViewer(this.win, this.file, commit, this.dark).show();
         };
         // Only save file documents that have changes; without a file, do not bring up a save dialog.
-        this.history.beforeCommit = () => this.saveOpenFiles();
+        this.history.beforeCommit = () => this.documents.saveOpenFiles();
         this.history.onCommitted = () => {
             this.toast(_('Committed successfully'));
             this.syncHistory(true);
         };
         this.history.onOpenChanges = file => {
             const viewer = new HistoryViewer(this.win, file, null, this.dark);
-            viewer.beforeCommit = () => this.saveOpenFiles();
+            viewer.beforeCommit = () => this.documents.saveOpenFiles();
             viewer.onCommitted = () => {
                 this.toast(_('Committed successfully'));
                 this.syncHistory(true);
@@ -338,7 +333,7 @@ export class MainWindow {
         else if (settings.folder && isDirectory(settings.folder)) this.openFolder(settings.folder, false);
         if (path && !isDirectory(path)) {
             this.load(path);
-        } else if (!path && this.restoreTabs()) {
+        } else if (!path && this.documents.restoreTabs()) {
             // the last tabs are restored
         } else if (!settings.welcomed) {
             this.editor.setText(WELCOME);
@@ -376,7 +371,7 @@ export class MainWindow {
             docs: () => this.docs,
             openInTab: path => this.openInTab(path),
             toast: message => this.toast(message),
-            write: (path, text) => this.write(path, text),
+            write: (path, text) => this.documents.write(path, text),
             refreshTree: () => { if (this.fileTree.root) this.fileTree.refresh(this.fileTree.root); },
             refreshHome: () => this.refreshHome(),
             refreshTitle: doc => this.refreshTitle(doc),
@@ -409,10 +404,67 @@ export class MainWindow {
         return this.docs.length;
     }
 
-    // Create an empty document together with its editor, without activating it.
-    private addDoc(): Doc {
-        const editor = new MarkdownView();
-        const doc: Doc = { id: this.nextId++, editor, file: null, home: false, textOverride: false, boardText: '', reloadQueued: false, autosaveTimer: 0, lastChange: 0, changes: 0 };
+    // The active document and all open documents (kept by the document controller).
+    private get doc(): Doc {
+        return this.documents.active;
+    }
+
+    private get docs(): readonly Doc[] {
+        return this.documents.all;
+    }
+
+    private activate(doc: Doc): void {
+        this.documents.activate(doc);
+    }
+
+    // What follows the documents on screen.
+    private documentsHost(): DocumentsHost {
+        const w = this;
+        return {
+            get win() { return w.win; },
+            get settings() { return w.settings; },
+            get autosaver() { return w.autosaver; },
+            root: () => this.fileTree.root,
+            toast: message => this.toast(message),
+            attach: doc => this.attach(doc),
+            detach: doc => {
+                this.tabBar.remove(doc.id);
+                doc.editor.destroy();
+                this.content.remove(doc.editor.widget);
+            },
+            activated: doc => {
+                this.findBar.setTarget(doc.editor.buffer, doc.editor.view);
+                this.tabBar.setActive(doc.id);
+                this.outline.update(doc.editor.headings);
+                this.syncMode();
+                this.updateTitle();
+                this.fileTree.reveal(doc.file);
+                this.syncHistory();
+                if (this.chatSplit.show_sidebar) this.chat.updateContextSummary();
+            },
+            contentChanged: doc => {
+                this.syncMode();
+                this.updateTitle();
+                this.fileTree.reveal(doc.file);
+                if (!doc.home) this.syncHistory();
+            },
+            refreshTitle: doc => this.refreshTitle(doc),
+            setIcon: (doc, icon) => this.tabBar.setIcon(doc.id, icon),
+            tabOrder: () => this.tabBar.ids(),
+            refreshHome: () => this.refreshHome(),
+            openFolder: path => this.openFolder(path),
+            fileSaved: path => {
+                // Show the new file in the tree without waiting for the disk monitor.
+                this.fileTree.refresh(GLib.path_get_dirname(path));
+                this.fileTree.reveal(path);
+                this.syncHistory();
+            },
+        };
+    }
+
+    // Connect a new document's editor, and add its page and tab.
+    private attach(doc: Doc): void {
+        const editor = doc.editor;
         // Editor callbacks only apply while their document is active; background ones do not touch the outline and status bar.
         editor.onHighlighted = ({ headings, words, characters }) => {
             if (doc !== this.doc) return;
@@ -446,113 +498,18 @@ export class MainWindow {
             for (const mode of Object.keys(MODE_LABELS) as Mode[]) if (this.doc.editor.modes[mode]) editor.setMode(mode, true);
         }
         if (this.palette) editor.setPalette(this.palette);
-        this.docs.push(doc);
         this.content.add_named(editor.widget, `doc-${doc.id}`);
         this.tabBar.add(doc.id, UNTITLED);
-        return doc;
-    }
-
-    // Make doc the active document: all components follow it.
-    private activate(doc: Doc): void {
-        if (doc === this.doc) return;
-        const previous = this.doc;
-        this.doc = doc;
-        this.autosave(previous);   // leaving a tab = a safe point to save
-        this.findBar.setTarget(doc.editor.buffer, doc.editor.view);
-        this.tabBar.setActive(doc.id);
-        if (doc.file) this.rememberRecent(doc.file);
-        this.outline.update(doc.editor.headings);
-        this.syncMode();
-        this.updateTitle();
-        this.fileTree.reveal(doc.file);
-        this.syncHistory();
-        if (this.chatSplit.show_sidebar) this.chat.updateContextSummary();
-    }
-
-    // Tab name/title for a document.
-    private nameOf(doc: Doc): string {
-        if (doc.home) return HOME;
-        return doc.file ? GLib.path_get_basename(doc.file) : UNTITLED;
-    }
-
-    // A document without a file and without changes has no contents that need to be kept,
-    // so it may be reused for the next file that is opened.
-    private isPristine(doc: Doc): boolean {
-        return !doc.home && !doc.file && !doc.editor.buffer.get_modified();
     }
 
     // The tab after/before the active one (wraps around).
     switchTab(step: number): void {
-        const ids = this.tabBar.ids();
-        const at = ids.indexOf(this.doc.id);
-        const doc = this.docs.find(d => d.id === ids[(at + step + ids.length) % ids.length]);
-        if (doc) this.activate(doc);
+        this.documents.switchTab(step);
     }
 
     // Close a tab (asks if there are changes). Closing the only tab empties its document.
     closeTab(doc: Doc = this.doc): Awaitable<boolean> {
-        return after(this.confirmDiscard(doc), yes => yes && this.docs.includes(doc) && this.removeTab(doc));
-    }
-
-    private removeTab(doc: Doc): boolean {
-        if (this.docs.length === 1) {
-            if (doc.home && this.settings.home) return true;
-            this.resetDocument(doc);
-            if (this.settings.home) this.makeHome(doc);
-            return true;
-        }
-        const index = this.docs.indexOf(doc);
-        this.autosaver.cancel(doc);
-        this.docs.splice(index, 1);
-        this.tabBar.remove(doc.id);
-        // Move first, then destroy: the search and other components still point at this editor.
-        if (doc === this.doc) this.activate(this.docs[Math.min(index, this.docs.length - 1)]);
-        doc.editor.destroy();
-        this.content.remove(doc.editor.widget);
-        return true;
-    }
-
-    // ---------- Tab restoration ----------
-
-    // Record file tabs (ordered like the tab row) together with their cursors for the next launch.
-    // Documents without a file are not recorded: their contents are not on disk to be read again.
-    private rememberTabs(): void {
-        const docs = this.tabBar.ids()
-            .map(id => this.docs.find(d => d.id === id))
-            .filter((d): d is Doc => !!d && (!!d.file || d.home));
-        this.settings.tabs = docs.map(d => ({ file: d.home ? HOME_TAB : d.file!, cursor: d.home ? 0 : d.editor.cursorOffset }));
-        this.settings.activeTab = docs.indexOf(this.doc);
-    }
-
-    // Reopen tabs from the settings. Files that have gone missing are skipped (not recreated).
-    // true = some tabs were restored.
-    private restoreTabs(): boolean {
-        const saved = Array.isArray(this.settings.tabs) ? this.settings.tabs : [];
-        const opened: [Doc, number][] = [];
-        let active: Doc | null = null;
-        let missing = 0;
-        this.restoring = true;
-        for (const [i, tab] of saved.entries()) {
-            if (tab?.file === HOME_TAB) {
-                this.openHome();
-                opened.push([this.doc, 0]);
-                if (i === this.settings.activeTab) active = this.doc;
-                continue;
-            }
-            if (typeof tab?.file !== 'string' || !fileExists(tab.file) || isDirectory(tab.file)) {
-                missing++;
-                continue;
-            }
-            if (!this.openInTab(tab.file)) continue;
-            opened.push([this.doc, Number(tab.cursor) || 0]);
-            if (i === this.settings.activeTab) active = this.doc;
-        }
-        this.restoring = false;
-        if (!opened.length) return false;
-        for (const [doc, cursor] of opened) doc.editor.restoreCursor(cursor);
-        this.activate(active ?? opened[opened.length - 1][0]);
-        if (missing) this.toast(fmt(ngettext('{missing} file from the last session was not found', '{missing} files from the last session were not found', missing), { missing }));
-        return true;
+        return this.documents.closeTab(doc);
     }
 
     // ---------- View settings ----------
@@ -741,12 +698,12 @@ export class MainWindow {
 
     // A new document containing an empty kanban board.
     newBoardDocument(): void {
-        this.resetDocument(this.blankDocument(), serializeBoard(newBoard()));
+        this.documents.reset(this.documents.blank(), serializeBoard(newBoard()));
     }
 
     // A new document containing an empty inbox.
     newInboxDocument(): void {
-        this.resetDocument(this.blankDocument(), serializeInbox(newInbox()));
+        this.documents.reset(this.documents.blank(), serializeInbox(newInbox()));
         this.inbox.focusCapture();
     }
 
@@ -754,34 +711,12 @@ export class MainWindow {
 
     // Alt+Home: switch to the Home tab, or open it if there is none (using the active empty tab if there is one).
     openHome(): void {
-        const open = this.docs.find(d => d.home);
-        if (open) {
-            if (open === this.doc) this.refreshHome();
-            else this.activate(open);
-            return;
-        }
-        this.makeHome(this.isPristine(this.doc) ? this.doc : this.addDoc());
-    }
-
-    private makeHome(doc: Doc): void {
-        doc.home = true;
-        doc.file = null;
-        doc.textOverride = false;
-        this.tabBar.setIcon(doc.id, 'user-home-symbolic');
-        this.activate(doc);
-        this.syncMode();
-        this.updateTitle();
-        this.fileTree.reveal(null);
+        this.documents.openHome();
     }
 
     // Redraw Home if it is shown; the data is recomputed from the files every time.
     refreshHome(): void {
         if (this.doc.home && this.homeMode) this.home.render(this.homePage.data());
-    }
-
-    private rememberRecent(path: string): void {
-        if (this.restoring) return;
-        this.settings.recentFiles = rememberRecent(this.settings.recentFiles, path, Math.floor(Date.now() / 1000));
     }
 
     // ---------- Git history ----------
@@ -905,13 +840,12 @@ export class MainWindow {
     // ---------- Documents ----------
 
     get documentName(): string {
-        return this.nameOf(this.doc);
+        return this.documents.nameOf(this.doc);
     }
 
     // Suggested file name from the first heading.
     suggestName(): string {
-        const h = this.editor.headings[0];
-        return h?.text ? h.text.replace(/[\/\\:*?"<>|]/g, '').slice(0, 60) : UNTITLED;
+        return this.documents.suggestName();
     }
 
     updateTitle(): void {
@@ -922,7 +856,7 @@ export class MainWindow {
     private refreshTitle(doc: Doc): void {
         if (!this.docs.includes(doc)) return;
         const mark = doc.editor.buffer.get_modified() ? '• ' : '';
-        const name = this.nameOf(doc);
+        const name = this.documents.nameOf(doc);
         this.tabBar.setTitle(doc.id, `${mark}${name}`, doc.file);
         if (doc !== this.doc) return;
         if (doc.home) {
@@ -935,118 +869,23 @@ export class MainWindow {
     }
 
     // If there are changes, ask first. true = it is fine to go on and discard this document.
-    // Without changes that need asking about, the answer is immediate (without a Promise).
     confirmDiscard(doc: Doc = this.doc): Awaitable<boolean> {
-        if (this.autosave(doc)) return true;
-        this.activate(doc);   // the user needs to see which document is being asked about
-        return askSaveChanges(this.win, this.nameOf(doc)).then(answer => {
-            if (answer !== 'save') return answer === 'discard';
-            this.activate(doc);
-            return this.save();
-        });
-    }
-
-    // Ask about documents one by one; stop at the first Cancel answer.
-    private confirmDiscardAll(docs: Doc[]): Awaitable<boolean> {
-        for (let i = 0; i < docs.length; i++) {
-            const answer = this.confirmDiscard(docs[i]);
-            if (answer === false) return false;
-            if (answer !== true) return answer.then(yes => yes && this.confirmDiscardAll(docs.slice(i + 1)));
-        }
-        return true;
-    }
-
-    // Save all changed file documents (before a git commit). Documents without a file are not touched.
-    private saveOpenFiles(): boolean {
-        for (const doc of this.docs) {
-            if (!doc.file || !doc.editor.buffer.get_modified()) continue;
-            if (!this.write(doc.file, doc.editor.getText())) return false;
-            doc.editor.buffer.set_modified(false);
-            this.autosaver.cancel(doc);
-        }
-        return true;
-    }
-
-    // The document that may be overwritten: the active one if it has no contents that need to be kept, otherwise a new tab.
-    private blankDocument(): Doc {
-        const doc = this.isPristine(this.doc) ? this.doc : this.addDoc();
-        this.activate(doc);
-        return doc;
-    }
-
-    // Empty doc (or fill it with text) as a new document without a file.
-    private resetDocument(doc: Doc, text = ''): void {
-        this.activate(doc);
-        doc.file = null;
-        doc.home = false;
-        this.tabBar.setIcon(doc.id, null);
-        doc.editor.setText(text);
-        doc.textOverride = false;
-        this.syncMode();
-        this.updateTitle();
-        this.fileTree.reveal(null);
-        this.syncHistory();
+        return this.documents.confirmDiscard(doc);
     }
 
     // Ctrl+N: an empty document in a new tab.
     newDocument(): void {
-        this.resetDocument(this.blankDocument());
+        this.documents.reset(this.documents.blank());
     }
 
-    // Fill the active document with the absolute file that has been read (text).
-    private show(absolute: string, text: string): void {
-        // this.file is set before setText(): relative image paths are resolved from its folder.
-        this.file = absolute;
-        this.rememberRecent(absolute);
-        this.editor.setText(text);
-        this.doc.textOverride = false;
-        this.syncMode();
-        this.updateTitle();
-        this.fileTree.reveal(absolute);
-        this.syncHistory();
-    }
-
-    private read(absolute: string): string | null {
-        try {
-            return fileExists(absolute) ? readTextFile(absolute) : '';  // a new file if it does not exist yet
-        } catch (e) {
-            void showError(this.win, fmt(_('Failed to open the file:\n{error}'), { error: errorMessage(e) }));
-            return null;
-        }
-    }
-
-    // Open a file in the active document, replacing its contents. If the path turns out to be a folder (for example chosen
-    // through the Open File dialog, or given on the command line), that folder is opened in the Files tab.
+    // Open a file in the active document, replacing its contents (a folder opens in the Files tab).
     load(path: string): boolean {
-        const absolute = Gio.File.new_for_path(path).get_path() ?? path;
-        if (isDirectory(absolute)) {
-            this.openFolder(absolute);
-            return true;
-        }
-        const text = this.read(absolute);
-        if (text === null) return false;
-        this.show(absolute, text);
-        return true;
+        return this.documents.load(path);
     }
 
-    // Open a file in a tab: switch to its tab if already open, use the active empty document if there is one,
-    // otherwise open a new tab.
+    // Open a file in a tab: its own tab if already open, the active empty document, or a new tab.
     openInTab(path: string): boolean {
-        const absolute = Gio.File.new_for_path(path).get_path() ?? path;
-        if (isDirectory(absolute)) {
-            this.openFolder(absolute);
-            return true;
-        }
-        const open = this.docs.find(d => d.file === absolute);
-        if (open) {
-            this.activate(open);
-            return true;
-        }
-        const text = this.read(absolute);
-        if (text === null) return false;
-        this.activate(this.isPristine(this.doc) ? this.doc : this.addDoc());
-        this.show(absolute, text);
-        return true;
+        return this.documents.openInTab(path);
     }
 
     // Open the file chosen in the file tree.
@@ -1090,47 +929,13 @@ export class MainWindow {
         if (path) this.openInTab(path);
     }
 
-    private write(path: string, text: string): boolean {
-        try {
-            writeTextFile(path, text);
-            return true;
-        } catch (e) {
-            void showError(this.win, fmt(_('Failed to save:\n{error}'), { error: errorMessage(e) }));
-            return false;
-        }
-    }
-
     // A file document is saved instantly (a boolean result); a new document waits for the Save As dialog.
     save(): Awaitable<boolean> {
-        if (this.doc.home) return true;
-        if (!this.file) return this.saveAs();
-        if (!this.write(this.file, this.editor.getText())) return false;
-        this.editor.buffer.set_modified(false);
-        this.autosaver.cancel(this.doc);
-        this.toast(_('Saved'));
-        return true;
+        return this.documents.save();
     }
 
-    async saveAs(): Promise<boolean> {
-        const doc = this.doc;
-        if (doc.home) return false;
-        let path = await chooseFile(this.win, {
-            title: _('Save Markdown'), save: true, filters: ['markdown', 'all'],
-            name: this.file ? this.documentName : `${this.suggestName()}.md`,
-            // A new document is saved in the folder that is currently open.
-            folder: this.file ? null : this.fileTree.root,
-        });
-        if (!path || !this.docs.includes(doc)) return false;
-        if (!/\.[^/]+$/.test(GLib.path_get_basename(path))) path += '.md';
-        this.activate(doc);
-        this.file = path;
-        this.updateTitle();
-        if (!this.save()) return false;
-        // Show the new file in the tree without waiting for the disk monitor.
-        this.fileTree.refresh(GLib.path_get_dirname(path));
-        this.fileTree.reveal(path);
-        this.syncHistory();
-        return true;
+    saveAs(): Promise<boolean> {
+        return this.documents.saveAs();
     }
 
     async exportHtml(): Promise<void> {
@@ -1143,7 +948,7 @@ export class MainWindow {
         });
         if (!path) return;
         const html = markdownToHtml(text, title);
-        if (this.write(path, html)) this.toast(fmt(_('Exported to {name}'), { name: GLib.path_get_basename(path) }));
+        if (this.documents.write(path, html)) this.toast(fmt(_('Exported to {name}'), { name: GLib.path_get_basename(path) }));
     }
 
     // Insert ![name](path). The path is made relative to the file if possible.
@@ -1161,14 +966,14 @@ export class MainWindow {
 
     // true = the window may be closed. Every changed document is asked about one by one.
     onClose(): Awaitable<boolean> {
-        return after(this.confirmDiscardAll([...this.docs]), yes => yes && this.rememberWindow());
+        return after(this.documents.confirmDiscardAll(), yes => yes && this.rememberWindow());
     }
 
     private rememberWindow(): true {
         // Closed while narrow: save the panel settings for the wide layout, not the collapsed state.
         for (const [key, value] of this.widePanels) this.settings.gsettings.set_boolean(key, value);
         // After confirmation: a new document saved through a dialog already has a file.
-        this.rememberTabs();
+        this.documents.rememberTabs();
         // In GTK 4 the default size follows the current window size.
         const [width, height] = this.win.get_default_size();
         Object.assign(this.settings, { width, height });

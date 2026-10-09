@@ -370,14 +370,15 @@ src/
 ├── gtkutil.ts            GTK 4 helpers for all layers: line iterators, widget children, click/key handlers, modal dialogs without a nested main loop (modal(), after()), pack(), pixbuf ↔ Gdk.Texture, icons from dist/
 ├── i18n.ts               gettext: _(), fmt(), pgettext(), ngettext(); the domain is bound before the other modules are evaluated
 ├── app.ts                creates the Gtk.Application and the window
-├── window.ts             MainWindow: assembles the components, manages documents/tabs, open/save/export
+├── window.ts             MainWindow: assembles the components and connects them; shows the documents kept by window/documents.ts; export
 ├── window/               feature controllers of the window, each given a narrow host instead of MainWindow
 │   ├── doc.ts            the open document record (Doc) and the shared DocumentHost
 │   ├── journal.ts        today's journal, quick capture, end-of-day summary, the activity log
 │   ├── harness.ts        @pi cards: card menu, project folders, answer/steer/reply, run logs; owns the Orchestrator
 │   ├── home.ts           the data behind the Home tab and the actions taken from it
 │   ├── agentwrites.ts    applying approved Assistant changes (editor for open files, disk otherwise, rollback)
-│   └── autosave.ts       autosave timers and quiet saves
+│   ├── autosave.ts       autosave timers and quiet saves
+│   └── documents.ts      DocumentController: the open documents/tabs, the active one, open/save/Save As, asking before discarding, the Home tab, restoring tabs
 ├── actions.ts            all the app's Gio.Actions and their shortcuts (setting toggles use Gio.Settings.create_action); sees the window only as `ActionHost`
 ├── colors.ts             the document color palettes (pure data, shared by editor/ and ui/)
 ├── config.ts             app name, ID, version, and fonts
@@ -516,7 +517,7 @@ The code is divided into layers. Each layer may only use the layers below it, ne
 ```
  app.ts
    └─ window.ts ── actions.ts
-        ├─ window/*        feature controllers (journal, harness, Home, agent writes, autosave)
+        ├─ window/*        feature controllers (documents, journal, harness, Home, agent writes, autosave)
         ├─ ui/*            interface components
         ├─ editor/*        the editor engine
         │    └─ markdown/* Markdown rules (no GTK)
@@ -528,7 +529,7 @@ The code is divided into layers. Each layer may only use the layers below it, ne
 - **`markdown/`** does not import GTK at all. It only contains string → data functions, so it is the easiest to study and test.
 - **`editor/`** knows nothing about files, menus, or the sidebar. `MarkdownView` only reports through callbacks (`onHighlighted`, `onCursorMoved`, `onMessage`).
 - **`ui/`** holds self-contained components. `Outline` does not know the editor; it only receives a list of headings and calls `onJump(line)` when clicked. `FileTree` is the same: it only displays folders and calls `onOpenFile(path)`; the window decides how to open the file (a new tab, switching to an existing tab, or reusing an empty document).
-- **`window.ts`** is the only place where components are connected to each other. For example: after highlighting, the editor calls `onHighlighted`, and then the window passes the headings to `Outline` and the text to `StatusBar`. Features that span several components (the journal, harness runs, Home, applying agent changes, autosave) live in `window/*` controllers; each receives a narrow host interface built by the window from closures, never `MainWindow` itself, so they do not import `window.ts`. `actions.ts` likewise types the window as `ActionHost`.
+- **`window.ts`** is the only place where components are connected to each other. For example: after highlighting, the editor calls `onHighlighted`, and then the window passes the headings to `Outline` and the text to `StatusBar`. The open documents (tabs, open/save, the Home tab, restoring tabs) are kept by `window/documents.ts`, which tells the window what must follow a document on screen through `DocumentsHost`. Features that span several components (the journal, harness runs, Home, applying agent changes, autosave) live in `window/*` controllers too; each receives a narrow host interface built by the window from closures, never `MainWindow` itself, so they do not import `window.ts`. `actions.ts` likewise types the window as `ActionHost`.
 - **Lower layers do not reach up.** `editor/` takes the `Palette` type from `colors.ts`, not from `ui/theme.ts`; `git.ts` takes the agent's Git request types from `gitlog.ts`, not from `agent/`.
 - **The rules are checked.** [`scripts/layers.mjs`](scripts/layers.mjs) runs in `npm run build` and `npm run typecheck` and fails on a forbidden import: GI or anything outside `markdown/` in `markdown/`, GTK or `ui/`/`editor/`/`window/` in `agent/`, `ui/`/`window/`/`agent/` in `editor/`, `window.ts` in `ui/`, `window/`, or `actions.ts`, and any upper layer in the base modules.
 
