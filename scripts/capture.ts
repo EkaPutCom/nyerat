@@ -18,7 +18,7 @@ import { isKanban, moveCard, parseBoard } from '../src/markdown/kanban.js';
 import type { Provider } from '../src/agent/provider.js';
 import { listChats, saveChat } from '../src/agent/chatstore.js';
 import { iterAtLine } from '../src/gtkutil.js';
-import { widgetPixbuf } from '../tests/widgets.js';
+import { whenDialogReady, widgetPixbuf } from '../tests/widgets.js';
 import { editCardDialog, findDialog, harnessAskDialog } from '../src/ui/dialogs.js';
 import { findEntry } from '../src/ui/menu.js';
 import { localDate } from '../src/markdown/home.js';
@@ -752,10 +752,9 @@ function main(app: Adw.Application): void {
 
     // ───────── The kanban card dialog (a due date with a calendar) ─────────
     load(BOARD, false, 0, false);
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
-        const dialog = findDialog('Edit Card');
-        if (dialog) { widgetPixbuf(dialog)?.savev(`${OUT}/kanban-card.png`, 'png', [], []); dialog.close(); }
-        return GLib.SOURCE_REMOVE;
+    whenDialogReady(() => findDialog('Edit Card'), dialog => {
+        widgetPixbuf(dialog)?.savev(`${OUT}/kanban-card.png`, 'png', [], []);
+        dialog.close();
     });
     waitPromise(editCardDialog(w.win, { text: 'User research #research @{2026-10-10 09:00}', notes: ['Interview five active users.'] }));
 
@@ -809,10 +808,9 @@ function main(app: Adw.Application): void {
     shot('pi-waiting');
     const ask = runOf('Tidy up the README')?.ask;
     if (ask) {
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-            const dialog = findDialog('Answer pi');
-            if (dialog) { widgetPixbuf(dialog)?.savev(`${OUT}/pi-answer.png`, 'png', [], []); dialog.close(); }
-            return GLib.SOURCE_REMOVE;
+        whenDialogReady(() => findDialog('Answer pi'), dialog => {
+            widgetPixbuf(dialog)?.savev(`${OUT}/pi-answer.png`, 'png', [], []);
+            dialog.close();
         });
         waitPromise(harnessAskDialog(w.win, ask, 'pi'));
     }

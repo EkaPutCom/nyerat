@@ -7,7 +7,7 @@ import { readTextFile } from '../../src/files.js';
 import { parseBoard } from '../../src/markdown/kanban.js';
 import { findEntry } from '../../src/ui/menu.js';
 import { findDialog, harnessAskDialog } from '../../src/ui/dialogs.js';
-import { descendants, widgetPixbuf } from '../widgets.js';
+import { descendants, whenDialogReady, widgetPixbuf } from '../widgets.js';
 import { section, test, eq, ok, contains, tmp, optVal, settle } from '../framework.js';
 import type { HarnessAsk, HarnessReply } from '../../src/agent/harness.js';
 import type { GuiContext } from './context.js';
@@ -275,10 +275,9 @@ export function harnessTests(c: GuiContext): void {
             widgetPixbuf(w.win)?.savev(`${shot}-waiting.png`, 'png', [], []);
             // The real answer dialog (modal): captured from a timer while shown, then closed ("Later").
             const capture = (ask: HarnessAsk, name: string) => {
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
-                    const dialog = findDialog('Answer pi');
-                    if (dialog) { widgetPixbuf(dialog)?.savev(`${shot}-${name}.png`, 'png', [], []); dialog.close(); }
-                    return GLib.SOURCE_REMOVE;
+                whenDialogReady(() => findDialog('Answer pi'), dialog => {
+                    widgetPixbuf(dialog)?.savev(`${shot}-${name}.png`, 'png', [], []);
+                    dialog.close();
                 });
                 settle(harnessAskDialog(w.win, ask, 'pi'));
             };

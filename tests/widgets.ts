@@ -1,6 +1,8 @@
 // Helpers for GTK 4 GUI tests: widget screenshots, walking widget children, and triggering
 // clicks without a real mouse. Also used by scripts/capture.ts.
 
+import Adw from 'gi://Adw?version=1';
+import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gdk from 'gi://Gdk?version=4.0';
 import Graphene from 'gi://Graphene';
@@ -82,4 +84,27 @@ export function countPointerEvents(widget: Gtk.Widget): { presses: number; motio
     });
     widget.add_controller(legacy);
     return counts;
+}
+
+// Run `act` on a modal dialog once it can take an answer. libadwaita 1.5 drops a close that arrives before the
+// dialog has been drawn twice after it is mapped, including the close that follows a button response: the dialog
+// then stays the window's visible dialog forever and covers the window for every later test. On a busy machine a
+// fixed delay is not enough, so this polls from a timer (it also works while the caller waits in settle()) and asks
+// for frames so the count advances. Gives up after `timeoutMs`.
+export function whenDialogReady(find: () => Adw.Dialog | null, act: (dialog: Adw.Dialog) => void, timeoutMs = 5000): void {
+    const start = GLib.get_monotonic_time();
+    let dialog: Adw.Dialog | null = null, mappedAt = -1;
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 20, () => {
+        if ((GLib.get_monotonic_time() - start) / 1000 > timeoutMs) return GLib.SOURCE_REMOVE;
+        dialog ??= find();
+        const clock = dialog?.get_mapped() ? dialog.get_frame_clock() : null;
+        if (!dialog || !clock) return GLib.SOURCE_CONTINUE;
+        if (mappedAt < 0) mappedAt = clock.get_frame_counter();
+        if (clock.get_frame_counter() < mappedAt + 2) {
+            dialog.queue_draw();
+            return GLib.SOURCE_CONTINUE;
+        }
+        act(dialog);
+        return GLib.SOURCE_REMOVE;
+    });
 }

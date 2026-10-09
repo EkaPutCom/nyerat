@@ -5,7 +5,7 @@ import GLib from 'gi://GLib';
 import Adw from 'gi://Adw?version=1';
 import Gtk from 'gi://Gtk?version=4.0';
 import Gio from 'gi://Gio';
-import { descendants } from '../widgets.js';
+import { descendants, whenDialogReady } from '../widgets.js';
 import { section, test, eq, ok, settle } from '../framework.js';
 import { PreferencesDialog } from '../../src/ui/preferences.js';
 import { CommandPalette } from '../../src/ui/palette.js';
@@ -16,24 +16,22 @@ export function dialogTests(c: GuiContext): void {
     const { w } = c;
     section('libadwaita dialogs');
 
-    // Run `act` after the dialog `title` appears (retried repeatedly), then return the result of `open`.
+    // An answered dialog must really leave: one left open covers the window for the tests after this one,
+    // so it is closed by force here and the test that left it fails.
+    const closed = (): boolean => {
+        for (let i = 0; i < 100 && w.win.get_visible_dialog(); i++) { c.pump(); GLib.usleep(20000); }
+        const left = w.win.get_visible_dialog();
+        left?.force_close();
+        return !left;
+    };
+    // Run `act` once the dialog `title` is ready for an answer, then return the result of `open`.
     const drive = <T>(title: string, open: () => Promise<T>, act: (dialog: Adw.Dialog) => void): T => {
-        let tries = 0;
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-            const dialog = findDialog(title);
-            if (dialog) { act(dialog); return GLib.SOURCE_REMOVE; }
-            return ++tries < 100 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
-        });
-        return settle(open());
+        whenDialogReady(() => findDialog(title), act);
+        const value = settle(open());
+        ok(closed(), `the "${title}" dialog closed`);
+        return value;
     };
-    // close() during the open animation is ignored by Adw.Dialog; repeat until the dialog is really closed.
-    const closeWhenReady = (dialog: Adw.Dialog): void => {
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-            if (!dialog.get_mapped()) return GLib.SOURCE_REMOVE;
-            dialog.close();
-            return GLib.SOURCE_CONTINUE;
-        });
-    };
+    const close = (dialog: Adw.Dialog): void => { dialog.close(); };
     const button = (root: Gtk.Widget, label: string) => descendants(root).find(x => x instanceof Gtk.Button && x.label === label) as Gtk.Button;
 
     test('prompt: the OK button returns the input, Enter in the entry also accepts', () => {
@@ -49,29 +47,24 @@ export function dialogTests(c: GuiContext): void {
 
     test('prompt: Cancel and Escape (close) return null', () => {
         eq(drive('Name',  () => promptDialog(w.win, { title: 'Name', label: 'x', value: 'a' }), d => button(d, 'Cancel').emit('clicked')), null);
-        eq(drive('Name',  () => promptDialog(w.win, { title: 'Name', label: 'x', value: 'a' }), closeWhenReady), null);
+        eq(drive('Name',  () => promptDialog(w.win, { title: 'Name', label: 'x', value: 'a' }), close), null);
     });
 
-    // A dialog that has just been answered is still visible during the close animation; do not answer it twice.
+    // Do not answer the same dialog twice.
     let answered: Adw.Dialog | null = null;
     test('confirm: the Delete button is marked destructive; Cancel and closing = false', () => {
         const pick = (response: string): boolean => {
-            let tries = 0;
-            let target: Adw.AlertDialog | null = null;
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            whenDialogReady(() => {
                 const dialog = w.win.get_visible_dialog();
-                if (!target && dialog instanceof Adw.AlertDialog && dialog !== answered) answered = target = dialog;
-                if (target) {
-                    if (response !== 'close') {
-                        button(target, response).emit('clicked');
-                        return GLib.SOURCE_REMOVE;
-                    }
-                    closeWhenReady(target);
-                    return GLib.SOURCE_REMOVE;
-                }
-                return ++tries < 100 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
+                return dialog instanceof Adw.AlertDialog && dialog !== answered ? dialog : null;
+            }, dialog => {
+                answered = dialog;
+                if (response === 'close') dialog.close();
+                else button(dialog, response).emit('clicked');
             });
-            return settle(confirmDialog(w.win, 'Delete this card?', 'This cannot be undone.'));
+            const value = settle(confirmDialog(w.win, 'Delete this card?', 'This cannot be undone.'));
+            ok(closed(), `the confirm dialog closed after ${response}`);
+            return value;
         };
         eq(pick('Delete'), true, 'Delete');
         eq(pick('Cancel'), false, 'Cancel');
@@ -132,8 +125,7 @@ export function dialogTests(c: GuiContext): void {
         const before = w.settings.focus;
         search.emit('activate'); settleP();
         eq(w.settings.focus, !before, 'the action ran');
-        for (let i = 0; i < 100 && w.win.get_visible_dialog(); i++) { c.pump(); GLib.usleep(20000); }
-        eq(w.win.get_visible_dialog(), null, 'the palette closed after choosing');
+        ok(closed(), 'the palette closed after choosing');
         w.settings.focus = before; settleP();
 
         // A disabled action is not shown in the palette.

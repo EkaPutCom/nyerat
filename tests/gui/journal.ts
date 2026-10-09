@@ -17,7 +17,7 @@ import type { ChatRequest, Provider } from '../../src/agent/provider.js';
 import type { KeyStore } from '../../src/agent/apikey.js';
 import type { HarnessResult } from '../../src/agent/harness.js';
 import { promptDialog } from '../../src/ui/dialogs.js';
-import { descendants, widgetPixbuf } from '../widgets.js';
+import { descendants, whenDialogReady, widgetPixbuf } from '../widgets.js';
 import type { GuiContext } from './context.js';
 
 export function journalTests(c: GuiContext): void {
@@ -223,10 +223,9 @@ export function journalTests(c: GuiContext): void {
     win.setDark(false);
     win.openHome(); save('home');
     // The real quick-capture dialog, captured and then closed from a timer.
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+    whenDialogReady(() => win.win.get_visible_dialog(), dialog => {
         widgetPixbuf(win.win)?.savev(`${shot}-capture.png`, 'png', [], []);
-        win.win.get_visible_dialog()?.close();
-        return GLib.SOURCE_REMOVE;
+        dialog.close();
     });
     settlePromise(promptDialog(win.win, { title: 'Add to Journal', label: "Recorded in today's journal with the current time.", accept: 'Add' }));
     close(win);

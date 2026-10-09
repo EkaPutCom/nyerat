@@ -8,7 +8,7 @@ import { KanbanBoard } from '../../src/ui/kanban.js';
 import { dueField, editCardDialog, findDialog } from '../../src/ui/dialogs.js';
 import { findEntry, type MenuEntry } from '../../src/ui/menu.js';
 import { childrenOf } from '../../src/gtkutil.js';
-import { descendants, widgetPixbuf } from '../widgets.js';
+import { descendants, whenDialogReady, widgetPixbuf } from '../widgets.js';
 import { section, test, eq, ok, tmp, optVal, settle } from '../framework.js';
 import { BOARD } from '../fixtures.js';
 import type { GuiContext } from './context.js';
@@ -366,10 +366,9 @@ export function kanbanBoardTests(c: GuiContext): void {
         if (shot) {
             for (const dark of [false, true]) {
                 w.setOption('dark', dark);
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
-                    const dialog = findDialog('Add Card');
-                    if (dialog) { widgetPixbuf(dialog)?.savev(`${shot}-dialog${dark ? '-dark' : ''}.png`, 'png', [], []); dialog.close(); }
-                    return GLib.SOURCE_REMOVE;
+                whenDialogReady(() => findDialog('Add Card'), dialog => {
+                    widgetPixbuf(dialog)?.savev(`${shot}-dialog${dark ? '-dark' : ''}.png`, 'png', [], []);
+                    dialog.close();
                 });
                 settle(editCardDialog(w.win, { text: 'Write report #work @{2026-10-20}', notes: ['Follow the decision in [[Meeting Notes]].'] }, 'Add Card', () => ['Meeting Notes.md']));
             }
