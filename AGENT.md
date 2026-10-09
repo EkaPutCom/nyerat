@@ -71,6 +71,10 @@ Language: code comments, commit messages, interface text, test names, and docume
 - The page teaches UI, so it is illustration-first: every chapter draws the widgets it describes as Adwaita-style HTML mock-ups (`.mock`, `.m-header`, `.m-row`, `.m-boxed`, … with the `--m-*` color tokens for light and dark). When the window layout changes, update the window anatomy (`#anatomy`: the mock-up and the widget tree must match the "Layout" block of `MainWindow`'s constructor). A new widget or view gets a drawn illustration (a card in the Chapter 7 gallery for a new `Adw.*` widget; an inspector mock-up with `data-w="Type .css-class"` labels for a new view), not only a table row. Keep mock-up strings, icons, and button order the same as in the real `.ui`/`.ts` files.
 - After changing it, open the page through a local server, run its simulations, and make sure there is no console error and no horizontal scroll at a width of 375 px.
 
+## The clean code learning documentation must be updated
+
+- **Every time the structure of the code changes, also update `docs/learn-clean-code.html`** (linked from `docs/index.html`), the learning document for developers about keeping Nyerat easy to change. What counts: a new or changed rule in `scripts/layers.mjs` (layers, the complexity limit, `COMPLEXITY_ALLOWED`), a new controller or host interface, splitting a large function or class, moving the ownership of state, and a refactor proved with a comparison against the old version. Add its commit to the journey list, update the numbers in the hero and the tables (functions and their complexity, imports and cycles, classes and LCOM4) from a fresh measurement, and keep the before/after code excerpts in step with the code they quote. After changing it, open the page in a browser: no console error and no horizontal scroll at a width of 375 px.
+
 ## User documentation
 
 - `docs/index.html` is a landing page that **only shows the agent features**. Editor features and other workspace features are not added there, but to the documentation pages.
