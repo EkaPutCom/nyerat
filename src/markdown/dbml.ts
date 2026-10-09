@@ -353,8 +353,16 @@ export function dbmlToMermaid(src: string): string {
     const alias = new Map<string, string>();
     for (const t of schema.tables) if (t.alias) alias.set(t.alias, t.name);
     const resolve = (name: string): string => alias.get(name) ?? name;
+    markForeignKeys(schema, resolve);
+    return [
+        'erDiagram',
+        ...schema.tables.flatMap(tableLines),
+        ...schema.relations.map(r => `    ${quote(resolve(r.from))} ${CARDINALITY[r.op]} ${quote(resolve(r.to))} : ${quote((r.op === '<' ? r.toCol : r.fromCol) || ' ')}`),
+    ].join('\n');
+}
 
-    // A column on the "many" side of a relation is a foreign key.
+// A column on the "many" side of a relation is a foreign key.
+function markForeignKeys(schema: Schema, resolve: (name: string) => string): void {
     const byName = new Map(schema.tables.map(t => [t.name, t]));
     const mark = (table: string, col: string): void => {
         const c = byName.get(resolve(table))?.columns.find(c => c.name === col);
@@ -364,19 +372,13 @@ export function dbmlToMermaid(src: string): string {
         if (r.op === '>') mark(r.from, r.fromCol);
         else if (r.op === '<') mark(r.to, r.toCol);
     }
+}
 
-    const out = ['erDiagram'];
-    for (const t of schema.tables) {
-        out.push(`    ${quote(t.name)} {`);
-        for (const c of t.columns) {
-            const keys = [c.pk ? 'PK' : '', c.fk ? 'FK' : '', c.unique && !c.pk ? 'UK' : ''].filter(Boolean).join(', ');
-            out.push(`        ${ident(c.type)} ${ident(c.name)}${keys ? ` ${keys}` : ''}${c.note ? ` ${quote(c.note.replace(/\s+/g, ' '))}` : ''}`);
-        }
-        out.push('    }');
-    }
-    for (const r of schema.relations) {
-        const label = r.op === '<' ? r.toCol : r.fromCol;
-        out.push(`    ${quote(resolve(r.from))} ${CARDINALITY[r.op]} ${quote(resolve(r.to))} : ${quote(label || ' ')}`);
-    }
-    return out.join('\n');
+// One entity block: a line per column with its type, name, keys, and note.
+function tableLines(t: Table): string[] {
+    const column = (c: Column): string => {
+        const keys = [c.pk ? 'PK' : '', c.fk ? 'FK' : '', c.unique && !c.pk ? 'UK' : ''].filter(Boolean).join(', ');
+        return `        ${ident(c.type)} ${ident(c.name)}${keys ? ` ${keys}` : ''}${c.note ? ` ${quote(c.note.replace(/\s+/g, ' '))}` : ''}`;
+    };
+    return [`    ${quote(t.name)} {`, ...t.columns.map(column), '    }'];
 }

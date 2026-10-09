@@ -173,17 +173,18 @@ export function runTool(name: string, rawArguments: string, files: SourceFile[])
 export function describeCall(name: string, rawArguments: string): string {
     let a: Record<string, unknown> = {};
     try { a = JSON.parse(rawArguments || '{}') ?? {}; } catch (e) { /* show only the tool name */ }
-    switch (name) {
-        case 'list_files': return 'Viewing the file list';
-        case 'search_documents': return `Searching “${asString(a.query)}”`;
-        case 'search_text': return `Searching text “${asString(a.text)}”${asString(a.file) ? ` in ${asString(a.file)}` : ''}`;
-        case 'read_file': return `Reading ${asString(a.name) || 'file'}${asInt(a.from_line) ? ` (from line ${asInt(a.from_line)})` : ''}`;
-        case 'create_file': return `Proposing new file ${asString(a.name)}`;
-        case 'edit_file': return `Proposing changes to ${asString(a.name)}`;
-        case 'edit_kanban': return `Proposing changes to board ${asString(a.name)}`;
-        case 'insert_text': return `Proposing an insertion in ${asString(a.name)}`;
-        case 'delete_file': return `Proposing to delete ${asString(a.name)}`;
-        case 'move_file': return `Proposing to move ${asString(a.name)} to ${asString(a.destination)}`;
-        default: return name;
-    }
+    return Object.hasOwn(DESCRIBE, name) ? DESCRIBE[name](a) : name;
 }
+
+const DESCRIBE: Record<string, (a: Record<string, unknown>) => string> = {
+    list_files: () => 'Viewing the file list',
+    search_documents: a => `Searching “${asString(a.query)}”`,
+    search_text: a => `Searching text “${asString(a.text)}”${asString(a.file) ? ` in ${asString(a.file)}` : ''}`,
+    read_file: a => `Reading ${asString(a.name) || 'file'}${asInt(a.from_line) ? ` (from line ${asInt(a.from_line)})` : ''}`,
+    create_file: a => `Proposing new file ${asString(a.name)}`,
+    edit_file: a => `Proposing changes to ${asString(a.name)}`,
+    edit_kanban: a => `Proposing changes to board ${asString(a.name)}`,
+    insert_text: a => `Proposing an insertion in ${asString(a.name)}`,
+    delete_file: a => `Proposing to delete ${asString(a.name)}`,
+    move_file: a => `Proposing to move ${asString(a.name)} to ${asString(a.destination)}`,
+};

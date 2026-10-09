@@ -120,6 +120,61 @@ interface CachedLine {
     images: Omit<ImageRef, 'line'>[];
 }
 
+// The text of lines first..last of the buffer, split like the parser splits it.
+function editedLines(buffer: Gtk.TextBuffer, first: number, last: number): string[] {
+    const more = last + 1 < buffer.get_line_count();
+    const raw = buffer.get_text(iterAtLine(buffer, first), more ? iterAtLine(buffer, last + 1) : buffer.get_end_iter(), true);
+    return (more ? raw.slice(0, -1) : raw).split('\n');
+}
+
+// The old snapshot with old lines startLine..endLine replaced by `part`; everything after them shifts by `shift` lines.
+function merge(old: Parsed, lines: string[], part: Parsed, startLine: number, endLine: number, shift: number): Parsed {
+    const afterOld = endLine + 1;
+    const base = old.starts[startLine];
+    const oldLength = (old.starts[afterOld] ?? old.characters) - base;
+    const delta = part.characters + (afterOld < old.lines.length ? 1 : 0) - oldLength;
+    let oldWords = 0;
+    for (let i = startLine; i < afterOld; i++) oldWords += old.lineWords[i];
+    let text: string | null = null;
+    return {
+        get text() { return text ??= lines.join('\n'); },
+        lines,
+        starts: splice(old.starts, startLine, afterOld, part.starts.map(n => n + base), n => n + delta),
+        lineWords: splice(old.lineWords, startLine, afterOld, part.lineWords),
+        reparsed: [startLine, endLine + shift],
+        words: old.words - oldWords + part.words,
+        characters: old.characters + delta,
+        spans: splice(old.spans, startLine, afterOld, part.spans),
+        checkpoints: splice(old.checkpoints, lowerBound(old.checkpoints, startLine), lowerBound(old.checkpoints, afterOld),
+            part.checkpoints.map(n => n + startLine), n => n + shift),
+        markers: mergeMarkers(old.markers, part.markers, startLine, afterOld, base, delta, shift),
+        headings: spliceByLine(old.headings, startLine, afterOld, shift, part.headings.map(h => ({ ...h, line: h.line + startLine }))),
+        images: spliceByLine(old.images, startLine, afterOld, shift, part.images.map(img => ({ ...img, line: img.line + startLine }))),
+        tables: [...old.tables.filter(t => t.end < startLine),
+            ...part.tables.map(t => ({ start: t.start + startLine, end: t.end + startLine })),
+            ...old.tables.filter(t => t.start >= afterOld).map(t => ({ start: t.start + shift, end: t.end + shift }))],
+        codeBlocks: [...old.codeBlocks.filter(b => b.endLine < startLine),
+            ...part.codeBlocks.map(b => ({ ...b, start: b.start + base, startLine: b.startLine + startLine, endLine: b.endLine + startLine })),
+            ...old.codeBlocks.filter(b => b.startLine >= afterOld).map(b => ({ ...b, start: b.start + delta, startLine: b.startLine + shift, endLine: b.endLine + shift }))],
+    };
+}
+
+// Markers are ordered by their line, so the old section boundary is found with a binary search.
+// Markers after the parsed section are shifted in place: the old snapshot is no longer used
+// and a long document can have tens of thousands of markers.
+function mergeMarkers(old: Marker[], part: Marker[], startLine: number, afterOld: number, base: number, delta: number, shift: number): Marker[] {
+    const markerAt = (line: number) => lowerBoundBy(old, line, m => m[4]);
+    const tail = markerAt(afterOld);
+    if (delta || shift) {
+        for (let i = tail; i < old.length; i++) {
+            const m = old[i];
+            m[0] += delta; m[1] += delta; m[2] += shift; m[3] += shift; m[4] += shift;
+        }
+    }
+    return splice(old, markerAt(startLine), tail,
+        part.map(([a, b, first, last, line]): Marker => [a + base, b + base, first + startLine, last + startLine, line + startLine]));
+}
+
 // Only keep the lines of the current document, not the whole edit history. The cache
 // holds relative offsets; offsets and block context are recomputed after the text shifts.
 export class HighlightCache {
@@ -132,77 +187,38 @@ export class HighlightCache {
     update(buffer: Gtk.TextBuffer, tags: Tags, edited?: [number, number] | null): Parsed {
         const old = this.snapshot;
         this.parsedLines = 0;
-        if (!old || edited === undefined) {
-            const [start, end] = buffer.get_bounds();
-            const result = parseLines(buffer.get_text(start, end, true).split('\n'), tags, this);
-            this.parsedLines = result.lines.length;
-            return this.snapshot = result;
-        }
+        if (!old || edited === undefined) return this.full(buffer, tags);
         if (!edited) return old;
         const [first, last] = edited;
         const shift = buffer.get_line_count() - old.lines.length;
         const afterOldEdit = last + 1 - shift;
-        const from = iterAtLine(buffer, first);
-        const to = last + 1 < buffer.get_line_count() ? iterAtLine(buffer, last + 1) : buffer.get_end_iter();
-        const raw = buffer.get_text(from, to, true);
-        const changed = (last + 1 < buffer.get_line_count() ? raw.slice(0, -1) : raw).split('\n');
+        const changed = editedLines(buffer, first, last);
         if (afterOldEdit < first || changed.length !== last - first + 1)
-            return this.update(buffer, tags);  // delimiter that does not match the JS line splitting
+            return this.full(buffer, tags);  // delimiter that does not match the JS line splitting
         const lines = splice(old.lines, first, afterOldEdit, changed);
         const before = lowerBound(old.checkpoints, first);
         const startLine = before > 0 ? old.checkpoints[before - 1] : 0;
-        const after = lowerBound(old.checkpoints, afterOldEdit);
-        let endLine = old.checkpoints[after] ?? old.lines.length - 1;
-        let part: Parsed;
+        const { part, endLine } = this.parseRange(lines, old, tags, startLine, old.checkpoints[lowerBound(old.checkpoints, afterOldEdit)] ?? old.lines.length - 1, shift);
+        return this.snapshot = merge(old, lines, part, startLine, endLine, shift);
+    }
+
+    private full(buffer: Gtk.TextBuffer, tags: Tags): Parsed {
+        const [start, end] = buffer.get_bounds();
+        const result = parseLines(buffer.get_text(start, end, true).split('\n'), tags, this);
+        this.parsedLines = result.lines.length;
+        return this.snapshot = result;
+    }
+
+    // Parse old lines startLine..endLine (now shifted by `shift`). A new fence can change the context far below:
+    // while the part ends inside an open code block, expand geometrically so paragraphs are not re-parsed one by one.
+    private parseRange(lines: string[], old: Parsed, tags: Tags, startLine: number, endLine: number, shift: number): { part: Parsed; endLine: number } {
         for (;;) {
-            part = parseLines(lines.slice(startLine, endLine + shift + 1), tags, this);
+            const part = parseLines(lines.slice(startLine, endLine + shift + 1), tags, this);
             this.parsedLines += part.lines.length;
-            if (endLine === old.lines.length - 1 || !part.codeBlocks.some(b => !b.closed)) break;
-            // A new fence can change the context far below. Expand
-            // geometrically so paragraphs are not re-parsed one by one.
+            if (endLine === old.lines.length - 1 || !part.codeBlocks.some(b => !b.closed)) return { part, endLine };
             const next = lowerBound(old.checkpoints, endLine + Math.max(16, endLine - startLine + 1));
             endLine = old.checkpoints[next] ?? old.lines.length - 1;
         }
-        const afterOld = endLine + 1;
-        const base = old.starts[startLine];
-        const oldLength = (old.starts[afterOld] ?? old.characters) - base;
-        const delta = part.characters + (afterOld < old.lines.length ? 1 : 0) - oldLength;
-        const starts = splice(old.starts, startLine, afterOld, part.starts.map(n => n + base), n => n + delta);
-        const lineWords = splice(old.lineWords, startLine, afterOld, part.lineWords);
-        let oldWords = 0;
-        for (let i = startLine; i < afterOld; i++) oldWords += old.lineWords[i];
-        // Markers are ordered by their line, so the old section boundary is found with a binary search.
-        // Markers after the parsed section are shifted in place: the old snapshot is no longer used
-        // and a long document can have tens of thousands of markers.
-        const markerAt = (line: number) => lowerBoundBy(old.markers, line, m => m[4]);
-        const markerTail = markerAt(afterOld);
-        if (delta || shift) {
-            for (let i = markerTail; i < old.markers.length; i++) {
-                const m = old.markers[i];
-                m[0] += delta; m[1] += delta; m[2] += shift; m[3] += shift; m[4] += shift;
-            }
-        }
-        let text: string | null = null;
-        const result: Parsed = {
-            get text() { return text ??= lines.join('\n'); },
-            lines, starts, lineWords, reparsed: [startLine, endLine + shift],
-            words: old.words - oldWords + part.words,
-            characters: old.characters + delta,
-            spans: splice(old.spans, startLine, afterOld, part.spans),
-            checkpoints: splice(old.checkpoints, lowerBound(old.checkpoints, startLine), lowerBound(old.checkpoints, afterOld),
-                part.checkpoints.map(n => n + startLine), n => n + shift),
-            markers: splice(old.markers, markerAt(startLine), markerTail,
-                part.markers.map(([a, b, first, last, line]): Marker => [a + base, b + base, first + startLine, last + startLine, line + startLine])),
-            headings: spliceByLine(old.headings, startLine, afterOld, shift, part.headings.map(h => ({ ...h, line: h.line + startLine }))),
-            images: spliceByLine(old.images, startLine, afterOld, shift, part.images.map(img => ({ ...img, line: img.line + startLine }))),
-            tables: [...old.tables.filter(t => t.end < startLine),
-                ...part.tables.map(t => ({ start: t.start + startLine, end: t.end + startLine })),
-                ...old.tables.filter(t => t.start >= afterOld).map(t => ({ start: t.start + shift, end: t.end + shift }))],
-            codeBlocks: [...old.codeBlocks.filter(b => b.endLine < startLine),
-                ...part.codeBlocks.map(b => ({ ...b, start: b.start + base, startLine: b.startLine + startLine, endLine: b.endLine + startLine })),
-                ...old.codeBlocks.filter(b => b.startLine >= afterOld).map(b => ({ ...b, start: b.start + delta, startLine: b.startLine + shift, endLine: b.endLine + shift }))],
-        };
-        return this.snapshot = result;
     }
 
     begin(): void { this.current = new Map(); this.length = 0; }

@@ -162,20 +162,38 @@ class TurnRun {
 
     async run(): Promise<TurnResult> {
         const { session, input } = this;
-        session.trace.add('turn', `New turn: ${input.question.split('\n')[0].slice(0, 120)}`, `Question:\n${input.question}\n\nModel: ${this.model}${session.thinking ? ' · deep thinking' : ''}\nContext: ≈${this.built.tokens} tokens${this.built.items.length ? ` (${this.built.items.map(i => i.label).join(', ')})` : ''}\nTools available: ${this.hasTools ? 'yes' : 'no'}`);
+        session.trace.add('turn', `New turn: ${input.question.split('\n')[0].slice(0, 120)}`, this.turnDetail());
         try {
             for (let round = 0; round < MAX_ROUNDS && !this.cancelled; round++) {
                 if (!await this.runRound(round)) break;
             }
         } catch (e) {
             if (this.stale() || e instanceof StaleTurn) return this.dropped();
-            session.trace.finish('round', `${this.round}`, 'failed', String(e instanceof Error ? e.message : e));
-            session.trace.add('error', 'Turn failed', e instanceof Error ? e.message : String(e), { status: 'failed' });
-            if (session.work) session.work.status = 'failed';
-            this.handlers.onState?.();
+            this.failed(e);
             throw e;
         }
-        const { text, usage, cancelled, toolCalls, applied } = this;
+        return this.finish();
+    }
+
+    // The trace entry that opens the turn: the question, model, context, and whether tools are offered.
+    private turnDetail(): string {
+        const { built, session, input } = this;
+        const items = built.items.length ? ` (${built.items.map(i => i.label).join(', ')})` : '';
+        return `Question:\n${input.question}\n\nModel: ${this.model}${session.thinking ? ' · deep thinking' : ''}\nContext: ≈${built.tokens} tokens${items}\nTools available: ${this.hasTools ? 'yes' : 'no'}`;
+    }
+
+    // A failed round fails the turn and its work plan; the error is thrown on to the caller.
+    private failed(e: unknown): void {
+        const message = e instanceof Error ? e.message : String(e);
+        this.session.trace.finish('round', `${this.round}`, 'failed', message);
+        this.session.trace.add('error', 'Turn failed', message, { status: 'failed' });
+        if (this.session.work) this.session.work.status = 'failed';
+        this.handlers.onState?.();
+    }
+
+    // The turn ended (an answer, or stopped): keep the exchange if there is text, and pause a running plan.
+    private finish(): TurnResult {
+        const { session, input, text, usage, cancelled, toolCalls, applied } = this;
         session.trace.add('note', cancelled ? 'Turn stopped' : 'Turn finished', `${toolCalls} lookups · ${applied} changes applied${usage ? ` · total ${usage.prompt} in, ${usage.completion} out` : ''}`);
         if (text.trim()) session.history.push({ role: 'user', content: input.question }, { role: 'assistant', content: text });
         if (session.work?.status === 'running') session.work.status = 'paused';

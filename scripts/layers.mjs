@@ -46,7 +46,7 @@ for (const file of files) {
 // McCabe, counted like ESLint's `complexity` rule: 1 + if, ?:, &&, ||, ??, &&=, ||=, ??=, a case with a test, for,
 // for-in, for-of, while, do-while, catch. A nested function (callback, arrow) is counted on its own.
 // Optional chaining and default parameters are not counted.
-const MAX_COMPLEXITY = 20;
+const MAX_COMPLEXITY = 15;
 // Exceptions, as 'path name': complexity. Empty since every function that was above the limit when it was
 // introduced has been split. An entry may not grow and has to go once its function is at or below the limit.
 const COMPLEXITY_ALLOWED = {};
@@ -73,6 +73,19 @@ function functionName(node, parents, source) {
     return '(anonymous)';
 }
 
+// How much a node adds to the complexity of the function it is in: 1 for a decision, otherwise 0.
+const decisions = node =>
+    BRANCH.has(node.type) || node.type === 'SwitchCase' && !!node.test
+    || (node.type === 'LogicalExpression' || node.type === 'AssignmentExpression') && LOGICAL.has(node.operator) ? 1 : 0;
+
+// The child nodes of an ESTree node, in source order.
+function* children(node) {
+    for (const value of Object.values(node)) {
+        if (Array.isArray(value)) { for (const child of value) if (child && typeof child.type === 'string') yield child; }
+        else if (value && typeof value.type === 'string') yield value;
+    }
+}
+
 function complexities(file, source) {
     const found = [];
     const visit = (node, parents, current) => {
@@ -80,14 +93,10 @@ function complexities(file, source) {
             current = { name: functionName(node, parents, source), line: source.slice(0, node.start).split('\n').length, cc: 1 };
             found.push(current);
         } else if (current) {
-            if (BRANCH.has(node.type) || node.type === 'SwitchCase' && node.test) current.cc++;
-            else if ((node.type === 'LogicalExpression' || node.type === 'AssignmentExpression') && LOGICAL.has(node.operator)) current.cc++;
+            current.cc += decisions(node);
         }
         parents.push(node);
-        for (const value of Object.values(node)) {
-            if (Array.isArray(value)) { for (const child of value) if (child && typeof child.type === 'string') visit(child, parents, current); }
-            else if (value && typeof value.type === 'string') visit(value, parents, current);
-        }
+        for (const child of children(node)) visit(child, parents, current);
         parents.pop();
     };
     visit(parseAst(source, { lang: /\.tsx?$/.test(file) ? 'ts' : 'js' }, file), [], null);
