@@ -61,7 +61,6 @@ const COMPLEXITY_ALLOWED = {
     'src/markdown/html.ts blocksHtml': 23,
     'src/editor/highlighter.ts parseLines': 22,
     'src/editor/highlighter.ts parseLine': 22,
-    'src/agent/changes.ts diffOps': 21,
     'src/editor/tagsync.ts LineTagger.run': 21,
 };
 

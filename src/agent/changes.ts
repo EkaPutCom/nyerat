@@ -446,33 +446,54 @@ const splitLines = (text: string): string[] => text ? text.replace(/\n$/, '').sp
 // A middle part too large for LCS falls back to a single delete block followed by an add block.
 function diffOps(before: string, after: string): Op[] {
     const a = splitLines(before), b = splitLines(after);
+    const { head, tail } = commonEnds(a, b);
+    return [
+        ...a.slice(0, head).map(text => ({ sign: ' ' as const, text })),
+        ...middleOps(a.slice(head, a.length - tail), b.slice(head, b.length - tail)),
+        ...a.slice(a.length - tail).map(text => ({ sign: ' ' as const, text })),
+    ];
+}
+
+// The number of equal lines at the start (head) and, after that, at the end (tail) of a and b.
+function commonEnds(a: string[], b: string[]): { head: number; tail: number } {
     let head = 0;
     while (head < a.length && head < b.length && a[head] === b[head]) head++;
     let tail = 0;
     while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
-    const ma = a.slice(head, a.length - tail), mb = b.slice(head, b.length - tail);
+    return { head, tail };
+}
 
-    const ops: Op[] = a.slice(0, head).map(text => ({ sign: ' ' as const, text }));
+// The changed middle part: through LCS, or one delete block and one add block if it is empty on one side or too large.
+function middleOps(ma: string[], mb: string[]): Op[] {
     const n = ma.length, m = mb.length;
     if (!n || !m || (n + 1) * (m + 1) > MAX_LCS_CELLS) {
-        ops.push(...ma.map(text => ({ sign: '-' as const, text })), ...mb.map(text => ({ sign: '+' as const, text })));
-    } else {
-        // lcs[i][j] = LCS length of ma[i..] and mb[j..]
-        const w = m + 1;
-        const lcs = new Int32Array((n + 1) * w);
-        for (let i = n - 1; i >= 0; i--) {
-            for (let j = m - 1; j >= 0; j--) {
-                lcs[i * w + j] = ma[i] === mb[j] ? lcs[(i + 1) * w + j + 1] + 1 : Math.max(lcs[(i + 1) * w + j], lcs[i * w + j + 1]);
-            }
-        }
-        let i = 0, j = 0;
-        while (i < n || j < m) {
-            if (i < n && j < m && ma[i] === mb[j]) { ops.push({ sign: ' ', text: ma[i] }); i++; j++; }
-            else if (i < n && (j === m || lcs[(i + 1) * w + j] >= lcs[i * w + j + 1])) ops.push({ sign: '-', text: ma[i++] });   // delete first, then add (like git)
-            else ops.push({ sign: '+', text: mb[j++] });
+        return [...ma.map(text => ({ sign: '-' as const, text })), ...mb.map(text => ({ sign: '+' as const, text }))];
+    }
+    return walkLcs(ma, mb, lcsTable(ma, mb));
+}
+
+// lcs[i * (m + 1) + j] = LCS length of ma[i..] and mb[j..]
+function lcsTable(ma: string[], mb: string[]): Int32Array {
+    const n = ma.length, m = mb.length, w = m + 1;
+    const lcs = new Int32Array((n + 1) * w);
+    for (let i = n - 1; i >= 0; i--) {
+        for (let j = m - 1; j >= 0; j--) {
+            lcs[i * w + j] = ma[i] === mb[j] ? lcs[(i + 1) * w + j + 1] + 1 : Math.max(lcs[(i + 1) * w + j], lcs[i * w + j + 1]);
         }
     }
-    ops.push(...a.slice(a.length - tail).map(text => ({ sign: ' ' as const, text })));
+    return lcs;
+}
+
+// Follow the LCS table from the start: equal lines are kept; otherwise delete first, then add (like git).
+function walkLcs(ma: string[], mb: string[], lcs: Int32Array): Op[] {
+    const n = ma.length, m = mb.length, w = m + 1;
+    const ops: Op[] = [];
+    let i = 0, j = 0;
+    while (i < n || j < m) {
+        if (i < n && j < m && ma[i] === mb[j]) { ops.push({ sign: ' ', text: ma[i] }); i++; j++; }
+        else if (i < n && (j === m || lcs[(i + 1) * w + j] >= lcs[i * w + j + 1])) ops.push({ sign: '-', text: ma[i++] });
+        else ops.push({ sign: '+', text: mb[j++] });
+    }
     return ops;
 }
 
