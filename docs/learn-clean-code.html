@@ -421,7 +421,7 @@ export interface ViewHost extends DocumentHost {
     </tbody>
   </table></div>
   <h3>The same shape for a small feature</h3>
-  <p>The commit message writer (3fc49f5) needs git, the API key, the model client, and the chosen model. None of those is imported. The function lists them as a parameter, and the composition root fills it in:</p>
+  <p>The commit message writer (1bac3b8) needs git, the API key, the model client, and the chosen model. None of those is imported. The function lists them as a parameter, and the composition root fills it in:</p>
 <pre><code>// agent/commitmessage.ts: only type imports
 export interface CommitSources {
     keyStore: KeyStore;
@@ -543,7 +543,7 @@ if (open) host.fileMoved(open, to);</code></pre></div>
     <li><span class="h">a8dc264</span><span>Limit lowered to 15; eleven more functions split.</span></li>
     <li><span class="h">84dccdd</span><span><code>ChatPanel</code> split into its parts; every class with LCOM4 above 1 reviewed.</span></li>
     <li><span class="h">85f18bb</span><span>One owner per piece of document state; <code>RunQueue</code> owns run status (chapter 6).</span></li>
-    <li><span class="h">3fc49f5</span><span>A new feature built to the rules from the start: <code>CommitSources</code> filled by the composition root, one button shared by two views through callbacks, and no function above complexity 7 (chapter 5).</span></li>
+    <li><span class="h">1bac3b8</span><span>A new feature built to the rules from the start: <code>CommitSources</code> filled by the composition root, one button shared by two views through callbacks, and no function above complexity 7 (chapter 5).</span></li>
   </ol>
 </div>
 </section>

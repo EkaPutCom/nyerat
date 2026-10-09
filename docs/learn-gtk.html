@@ -529,7 +529,7 @@ svg.ic { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor
   <p class="lede">Nyerat began as a single <code>GtkSourceView</code> in a GTK 3 window that hid Markdown syntax. Five days later it is a GNOME app on <b>GTK 4 + libadwaita</b> with tabs, panels that fold on narrow windows, dialogs that return a Promise, GSettings, list models, <code>.ui</code> templates, translations, and a Flatpak manifest. This page follows that path commit by commit. For each Nyerat feature it names the GTK pieces it uses and explains why. It also covers the third of the code that <b>never touches GTK</b>, which is why most of the app can be tested without a window.</p>
   <p class="lede" style="font-size:1rem">Because this page is about <b>building interfaces</b>, every chapter draws the widgets it talks about: Adwaita-style mock-ups you can click, resize, and inspect, with the GTK type of every part named next to it. Start with the <a href="#anatomy">window anatomy</a>, which maps each region of Nyerat's window to the widget that draws it.</p>
   <div class="kpis">
-    <div class="kpi"><div class="what">Lines in files that import GTK/Adw</div><div class="big">11,521</div><div class="from">from 1,235 · 6a0f03d → 3fc49f5</div></div>
+    <div class="kpi"><div class="what">Lines in files that import GTK/Adw</div><div class="big">11,521</div><div class="from">from 1,235 · 6a0f03d → 1bac3b8</div></div>
     <div class="kpi"><div class="what">Lines without any GTK import</div><div class="big">5,055</div><div class="from">pure TypeScript in <code>markdown/</code>, <code>agent/</code>, …; plus 3,397 lines that use only Gio/GLib</div></div>
     <div class="kpi"><div class="what"><code>Adw.*</code> references in <code>src/</code></div><div class="big">125</div><div class="from">from 0 before c85aa0d (October 6)</div></div>
     <div class="kpi"><div class="what">Layouts written as <code>.ui</code> templates</div><div class="big">6</div><div class="from">header bar, status bar, find bar, chat, palette, preferences</div></div>
@@ -599,7 +599,7 @@ svg.ic { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor
     <li><span class="h">f74d5b5</span><span><span class="era">Adw</span><b>Chapter 13</b> · Home reads boards and inboxes past the first 300 files.</span></li>
     <li><span class="h">1c44423</span><span><span class="era">Adw</span><b>Chapter 5</b> · Files dropped from a file manager: the tree's <code>Gtk.DropTarget</code> also accepts <code>Gdk.FileList</code> and copies them in with <code>Gdk.DragAction.COPY</code>.</span></li>
     <li><span class="h">de2924f</span><span><span class="era">Adw</span><b>Layers, Chapter 13</b> · Journal, harness, Home, agent writes, and autosave leave <code>window.ts</code> for <code>window/</code> controllers that import only GLib/Gio; shared types move down (<code>colors.ts</code>, <code>gitlog.ts</code>) so no lower layer imports an upper one.</span></li>
-    <li><span class="h">3fc49f5</span><span><span class="era">Adw</span><b>Chapter 12</b> · The assistant writes the commit message: a shared <code>MessageWriter</code> button whose <code>Gtk.Stack</code> swaps a bundled symbolic icon for a spinner with a stop mark, a capture-phase key controller for Ctrl+Z, and a status <code>Gtk.Label</code> with the <code>error</code> class and a markup link.</span></li>
+    <li><span class="h">1bac3b8</span><span><span class="era">Adw</span><b>Chapter 12</b> · The assistant writes the commit message: a shared <code>MessageWriter</code> button whose <code>Gtk.Stack</code> swaps a bundled symbolic icon for a spinner with a stop mark, a capture-phase key controller for Ctrl+Z, and a status <code>Gtk.Label</code> with the <code>error</code> class and a markup link.</span></li>
   </ol>
 </section>
 
@@ -1390,7 +1390,7 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
 
 <!-- ============================================================ -->
 <section class="chapter" id="ch12">
-  <div class="chapnum">Chapter 12 · commits 36ae571, e87b422, 222dc97, 79ad33d, 5877392, c237d7c, 3fc49f5</div>
+  <div class="chapnum">Chapter 12 · commits 36ae571, e87b422, 222dc97, 79ad33d, 5877392, c237d7c, 1bac3b8</div>
   <h2>Workbench features: each one is a pure model plus a thin view</h2>
   <p>The newest features follow one recipe. A pure module in <code>markdown/</code> parses and serializes the file; a view in <code>ui/</code> draws it and reports changes through a callback; the window writes the change back into the buffer as one undo step. The GTK part is the smallest part.</p>
   <table class="data cards">
@@ -1631,7 +1631,7 @@ const layers = [
   ['5877392', 'Oct 8', 'Adw', 'Journal', 11298, 1712, 4664, 121, 6],
   ['f74d5b5', 'Oct 8', 'Adw', 'Home past 300 files', 11316, 1723, 4668, 121, 6],
   ['de2924f', 'Oct 9', 'Adw', 'window/ controllers', 10945, 2384, 4703, 123, 6],
-  ['3fc49f5', 'Oct 9', 'Adw', 'Commit message writer', 11521, 3397, 5055, 125, 6],
+  ['1bac3b8', 'Oct 9', 'Adw', 'Commit message writer', 11521, 3397, 5055, 125, 6],
 ];
 function fit(svg, H) {
   const W = Math.max(300, Math.round(svg.parentNode.clientWidth || 900));
