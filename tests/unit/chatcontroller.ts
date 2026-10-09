@@ -7,6 +7,7 @@ import type { KeyStore } from '../../src/agent/apikey.js';
 import type { Change } from '../../src/agent/changes.js';
 import type { ChatResult, Provider } from '../../src/agent/provider.js';
 import type { ProposalResult } from '../../src/agent/session.js';
+import { chatLogPath } from '../../src/agent/chatstore.js';
 import { section, test, eq, ok, settle, tmp } from '../framework.js';
 
 const KEY: KeyStore = { get: async () => ({ key: 'test', source: 'env' }), set: async () => 'env', clear: async () => {} };
@@ -78,15 +79,22 @@ export function chatControllerTests(): void {
         eq(chats.length, 1, 'saved conversations');
         eq(chats[0].title, 'hello');
 
+        const logFile = chatLogPath(chats[0].path);
+        ok(GLib.file_test(logFile, GLib.FileTest.EXISTS), 'the agent log was not saved next to the conversation');
+        eq(chats.length, 1, 'the log file is not listed as a conversation');
+
         const other = setup(root).c;
         const chat = other.open(chats[0].path);
         ok(chat, 'the conversation did not open');
         eq(other.session.history.map(t => t.content), ['hello', 'Hi.']);
+        eq(other.session.trace.events.map(e => e.kind), c.session.trace.events.map(e => e.kind), 'the agent log came back with the conversation');
+        ok(other.session.trace.events.some(e => e.kind === 'turn' && e.title.includes('hello')), 'the turn is missing from the restored log');
         other.makeProvider = () => answer('Again.');
         settle(other.send('more'));
         eq(other.chats()!.length, 1, 'the continuation is appended to the same file');
         other.deleteChat(chats[0].path);
         eq(other.chats()!.length, 0, 'deleted');
+        ok(!GLib.file_test(logFile, GLib.FileTest.EXISTS), 'the log stayed behind after deleting the conversation');
     });
 
     test('a proposal after the work folder changed is refused without asking the user', () => {

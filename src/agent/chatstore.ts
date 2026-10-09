@@ -42,6 +42,24 @@ export function saveChat(root: string, chat: SavedChat, path: string | null): st
     return target;
 }
 
+// The agent log of a conversation is saved next to it: chats/<name>.log.jsonl, one event per line.
+export const chatLogPath = (path: string): string => path.replace(/\.md$/, '') + '.log.jsonl';
+
+// jsonl = '' removes the file (an empty log leaves nothing behind).
+export function saveChatLog(path: string, jsonl: string): void {
+    const file = chatLogPath(path);
+    if (jsonl) writeTextFile(file, jsonl);
+    else if (GLib.file_test(file, GLib.FileTest.EXISTS)) GLib.unlink(file);
+}
+
+export function loadChatLog(path: string): string {
+    try {
+        return readTextFile(chatLogPath(path));
+    } catch (e) {
+        return '';
+    }
+}
+
 export function loadChat(path: string): SavedChat | null {
     try {
         return parseChat(readTextFile(path));
@@ -75,4 +93,6 @@ export function listChats(root: string): ChatSummary[] {
 
 export function deleteChat(path: string): void {
     trashEntry(path);
+    const log = chatLogPath(path);
+    if (GLib.file_test(log, GLib.FileTest.EXISTS)) trashEntry(log);
 }

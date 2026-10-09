@@ -732,7 +732,7 @@ TraceKind = 'turn' | 'round' | 'reasoning' | 'text'
     </div>
     <div class="panel">
       <p style="margin-top:0;font-size:.9rem">Every model round records the number of messages, the tools offered, and the tokens (input / from cache / output). Every tool records its tidied JSON arguments and <b>the exact result returned to the model</b>. Details are cut off at 20,000 characters.</p>
-      <p style="margin-bottom:0;font-size:.9rem">The log <b>exists only in memory</b>: it is not sent to the model, not written to the conversation file, and it is cleared by a New conversation.</p>
+      <p style="margin-bottom:0;font-size:.9rem">The log is <b>not sent to the model</b> and is not part of the conversation's Markdown file. The assistant's log is saved beside it as <code>&lt;name&gt;.log.jsonl</code> and restored when the conversation is reopened; a New conversation starts an empty one. The pi log only exists in memory.</p>
     </div>
   </div>
   <div class="lesson"><b>Lesson</b>Observability for developers and context for the model are two different channels. If the log is sent to the model too, the model will "read itself" and the tokens will balloon. Separate the two from the start, and make sure the log is bounded.</div>

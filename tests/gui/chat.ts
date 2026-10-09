@@ -447,6 +447,7 @@ export function chatTests(c: GuiContext): void {
         const first = savedFiles().find(c => c.title === 'History question one')!;
         ok(panel.openChat(first.path), 'openChat() failed');
         eq(panel.session.history.length, 4);
+        ok(panel.session.trace.events.some(e => e.kind === 'turn' && e.title.includes('History question one')), 'the agent log did not come back with the conversation');
         contains(all(), 'History question one');
         contains(all(), 'Follow-up one');
         contains(all(), 'Laras hid the letter.');

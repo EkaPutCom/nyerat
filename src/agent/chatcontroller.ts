@@ -7,7 +7,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { systemKeyStore, type KeyStore } from './apikey.js';
 import { buildContext, DEFAULT_BUDGET, findMentions, type BuiltContext, type ContextOptions, type SourceFile } from './context.js';
-import { deleteChat, listChats, loadChat, nowStamp, saveChat, titleFrom, type ChatSummary } from './chatstore.js';
+import { deleteChat, listChats, loadChat, loadChatLog, nowStamp, saveChat, saveChatLog, titleFrom, type ChatSummary } from './chatstore.js';
+import { AgentTrace } from './trace.js';
 import { DEEPSEEK_MODELS, DeepSeek } from './deepseek.js';
 import type { Provider, Usage } from './provider.js';
 import { ChatSession, type ProposalResult, type ToolStep, type TurnInput } from './session.js';
@@ -209,6 +210,7 @@ export class ChatController {
         }
         try {
             this.chatPath = saveChat(root, { title: this.chatTitle, model: this.model, created: this.chatCreated, turns: [...history], work: this.session.work, events: this.session.events }, this.chatPath);
+            saveChatLog(this.chatPath, this.session.trace.jsonl());
         } catch (e) {
             this.view.saveFailed(e instanceof Error ? e.message : String(e));
         }
@@ -223,6 +225,7 @@ export class ChatController {
         this.session.restore(chat.turns);
         this.session.work = chat.work ?? null;
         this.session.events.push(...chat.events ?? []);
+        this.session.trace.restore(AgentTrace.parse(loadChatLog(path)));
         this.chatPath = path;
         this.chatRoot = this.host.root();
         this.chatTitle = chat.title;

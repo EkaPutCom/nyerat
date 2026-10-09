@@ -102,4 +102,27 @@ export function traceTests(): void {
         eq([formatMs(7), formatMs(1800), formatMs(75000)], ['7 ms', '1.8 s', '1 min 15 s']);
         eq([formatSize(500), formatSize(3500)], ['500 B', '3.4 KB']);
     });
+    test('a saved log comes back as it was, damaged lines are skipped, and a running event is marked as unfinished', () => {
+        const t = new AgentTrace(() => 0, () => '2026-10-05T10:00:00');
+        t.add('turn', 'New turn: q', 'Question', { items: ['a.md'] });
+        t.begin('round', '1', 'Calling', '', 1);
+        t.begin('tool', '1:x', 'Tool: read', '', 1, { args: '{}' });
+        t.finish('tool', '1:x', 'ok', undefined, undefined, { result: 'content' });
+        t.finish('round', '1', 'ok', 'Tokens', undefined, { usage: { prompt: 5, cached: 1, completion: 2 } });
+        t.begin('round', '2', 'Calling', '', 2);   // never finished: the app was closed
+        const text = t.jsonl() + 'not json\n{"seq":"x"}\n{"seq":99,"time":"t","kind":"bogus","title":"x"}\n';
+        const back = AgentTrace.parse(text);
+        eq(back.length, 4);
+        const canon = (events: typeof back) => events.map(e => JSON.stringify(Object.fromEntries(Object.entries(e).sort())));
+        eq(canon(back.slice(0, 3)), canon(t.events.slice(0, 3)));
+        eq(back[3].status, 'failed');
+        const fresh = new AgentTrace();
+        let changes = 0;
+        fresh.onChange = () => changes++;
+        fresh.restore(back);
+        eq(fresh.events.length, 4);
+        eq(changes, 1);
+        fresh.add('note', 'next');
+        eq(fresh.events[4].seq, back[3].seq + 1, 'new events continue the numbering');
+    });
 }

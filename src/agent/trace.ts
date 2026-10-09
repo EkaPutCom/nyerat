@@ -34,6 +34,39 @@ export function prettyArguments(raw: string): string {
     try { return JSON.stringify(JSON.parse(raw), null, 2); } catch { return raw; }
 }
 
+const KINDS: ReadonlySet<string> = new Set(['turn', 'round', 'reasoning', 'text', 'tool', 'usage', 'note', 'error']);
+const num = (v: unknown): number | undefined => typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+const str = (v: unknown): string | undefined => typeof v === 'string' ? v : undefined;
+
+function sanitizeUsage(raw: unknown): TraceUsage | undefined {
+    const u = typeof raw === 'object' && raw !== null ? raw as Record<string, unknown> : {};
+    const prompt = num(u.prompt), cached = num(u.cached), completion = num(u.completion);
+    return prompt !== undefined && cached !== undefined && completion !== undefined ? { prompt, cached, completion } : undefined;
+}
+
+const clipped = (v: unknown): string | undefined => str(v) === undefined ? undefined : clip(str(v)!);
+
+// The optional fields of a saved event; each one only when it is well-formed.
+function sanitizeOptional(r: Record<string, unknown>): Partial<TraceEvent> {
+    return {
+        round: num(r.round), ms: num(r.ms), args: clipped(r.args), result: clipped(r.result), usage: sanitizeUsage(r.usage),
+        items: Array.isArray(r.items) ? r.items.filter((i): i is string => typeof i === 'string').slice(0, 100) : undefined,
+        // An event that was still running when the file was written never finished.
+        status: r.status === 'ok' ? 'ok' : r.status === 'failed' || r.status === 'running' ? 'failed' : undefined,
+    };
+}
+
+// One line of a saved log, from a file that anybody may have edited: only well-formed fields are kept.
+function sanitize(raw: unknown): TraceEvent | null {
+    if (typeof raw !== 'object' || raw === null) return null;
+    const r = raw as Record<string, unknown>;
+    const seq = num(r.seq), time = str(r.time), title = str(r.title);
+    if (seq === undefined || time === undefined || title === undefined || typeof r.kind !== 'string' || !KINDS.has(r.kind)) return null;
+    const event: TraceEvent = { seq, time, kind: r.kind as TraceKind, title: clip(title), detail: clip(str(r.detail) ?? '') };
+    for (const [key, value] of Object.entries(sanitizeOptional(r))) if (value !== undefined) Object.assign(event, { [key]: value });
+    return event;
+}
+
 export class AgentTrace {
     readonly events: TraceEvent[] = [];
     private seq = 0;
@@ -96,6 +129,29 @@ export class AgentTrace {
         } else {
             this.add(kind, kind === 'reasoning' ? 'Model reasoning' : 'Model answer', delta, { round });
         }
+    }
+
+    // The events of a saved log (one JSON object per line, see jsonl()); lines that are not valid events are skipped.
+    static parse(text: string): TraceEvent[] {
+        const events: TraceEvent[] = [];
+        for (const line of text.split('\n')) {
+            if (!line.trim()) continue;
+            try {
+                const event = sanitize(JSON.parse(line));
+                if (event) events.push(event);
+            } catch { /* a damaged line */ }
+        }
+        return events.slice(-MAX_EVENTS);
+    }
+
+    // Replace the log with a saved one (in place: the log window keeps watching the same object).
+    restore(events: readonly TraceEvent[]): void {
+        this.events.length = 0;
+        this.events.push(...events);
+        this.seq = events.reduce((max, e) => Math.max(max, e.seq), 0);
+        this.open.clear();
+        this.starts.clear();
+        this.onChange();
     }
 
     // One event as plain text, to copy or export.

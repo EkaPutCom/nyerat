@@ -65,7 +65,7 @@
   <li>Errors and stops</li>
 </ul>
 <p>Folding a round hides its steps. Selecting a step shows its metrics (duration, result size, share of the turn's time, tokens) and the tabs <em>Summary</em>, <em>Arguments</em>, <em>Result</em>, and <em>Raw</em>; the detail follows the newest step until you pick one yourself.</p>
-<p>The filters <em>All</em>, <em>Tools</em>, <em>Reasoning</em>, and <em>Model</em>, plus the <em>Copy all</em> and <em>Clear</em> buttons. The log only exists in memory while the app runs (at most 2,000 events), is not sent to the model, is not written to a file, and is emptied by <em>New conversation</em>. The same window is used for the <a href="orchestrator.html#log">pi log</a>.</p>
+<p>The filters <em>All</em>, <em>Tools</em>, <em>Reasoning</em>, and <em>Model</em>, plus the <em>Copy all</em> and <em>Clear</em> buttons. The log keeps at most 2,000 events and is not sent to the model. For the assistant it is saved next to the conversation (<code>.nyerat/chats/&lt;name&gt;.log.jsonl</code>) and comes back when you reopen that conversation; <em>New conversation</em> empties the view. The pi log only exists while the app runs. The same window is used for the <a href="orchestrator.html#log">pi log</a>.</p>
 </main>
 <aside class="toc" id="toc" aria-label="Table of contents"></aside>
 </div>
