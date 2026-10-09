@@ -206,7 +206,7 @@ export function historyTests(c: GuiContext): void {
             viewer.commitButton.emit('clicked');
             ok(viewer.status.get_text().includes('message'), 'an empty message was not rejected');
             eq(done, 0, 'commit without a message');
-            viewer.messageEntry.set_text('Add line five');
+            viewer.message.text = 'Add line five';
             viewer.commitButton.emit('clicked');
             ok(waitFor(() => done === 1), `commit failed: ${viewer.closed ? '' : viewer.status.get_text()}`);
         } finally {
@@ -222,7 +222,7 @@ export function historyTests(c: GuiContext): void {
         let done = 0;
         viewer.onCommitted = () => { done++; };
         try {
-            viewer.messageEntry.set_text('Add a new note');
+            viewer.message.text = 'Add a new note';
             viewer.commitButton.emit('clicked');
             ok(waitFor(() => done === 1), `commit failed: ${viewer.closed ? '' : viewer.status.get_text()}`);
         } finally {
@@ -283,13 +283,13 @@ export function historyTests(c: GuiContext): void {
         ok(w.history.commitStatus.get_text().includes('message'), 'an empty message was not rejected');
         let done = 0;
         w.history.onCommitted = () => { done++; };
-        w.history.messageEntry.set_text('Commit b and c');
+        w.history.message.text = 'Commit b and c';
         w.history.commitButton.emit('clicked');
         ok(waitFor(() => done === 1), `commit failed: ${w.history.commitStatus.get_text()}`);
         w.history.refresh();
         ok(waitFor(() => names().join() === 'e.md'), `rest of the list: ${names()}`);
         ok(!check('e.md').active, 'the e.md check vanished after reloading');
-        eq(w.history.messageEntry.get_text(), '', 'the message was not cleared');
+        eq(w.history.message.text, '', 'the message was not cleared');
         git('add', '-A');
         git('commit', '-q', '-m', 'Clean up e');
         w.history.onCommitted = () => {};
@@ -307,6 +307,33 @@ export function historyTests(c: GuiContext): void {
         ok(waitFor(() => listRows(w.history.changedList).length === 0), 'the list was not emptied without a folder');
     });
 
+    test('the message box wraps a long message in the sidebar and keeps it on one line', () => {
+        const box = w.history.message;
+        const height = () => box.widget.measure(Gtk.Orientation.VERTICAL, 210)[1];
+        const placeholder = () => box.widget.get_last_child()!.get_visible();
+        try {
+            box.text = '';
+            for (let i = 0; i < 20; i++) { pump(); GLib.usleep(5000); }
+            const empty = height();
+            ok(placeholder(), 'the placeholder is hidden while the box is empty');
+            // Two lines fit the empty box; this one needs three or more at the sidebar's width.
+            box.text = 'docs(samples): misspell the first heading so the editor shows a spelling mark, and fix the second one';
+            for (let i = 0; i < 20; i++) { pump(); GLib.usleep(5000); }
+            ok(height() > empty, `a long message does not grow the box (${empty} → ${height()})`);
+            ok(!placeholder(), 'the placeholder is shown over the text');
+            box.text = '';
+            box.view.buffer.insert_at_cursor('Fix the date\nin the plan', -1);
+            eq(box.text, 'Fix the date in the plan', 'a pasted line break stayed');
+            let activated = 0;
+            const before = box.onActivate;
+            box.onActivate = () => { activated++; };
+            box.onActivate();
+            box.onActivate = before;
+            eq(activated, 1);
+        } finally {
+            box.text = '';
+        }
+    });
     test('the assistant writes the message from the checked files, streaming it into the box', () => {
         const writer = w.history.writer;
         const real = writer.write;
@@ -327,29 +354,29 @@ export function historyTests(c: GuiContext): void {
             return new Promise(resolve => { finish = resolve; });
         };
         try {
-            w.history.messageEntry.set_text('my draft');
+            w.history.message.text = 'my draft';
             writer.button.emit('clicked');
             eq(calls, [[e]], 'the files sent');
             onText('Add a line');
-            eq(w.history.messageEntry.get_text(), 'Add a line', 'the streamed text');
-            ok(!w.history.messageEntry.sensitive && !w.history.commitButton.sensitive, 'the box and Commit are not locked');
+            eq(w.history.message.text, 'Add a line', 'the streamed text');
+            ok(!w.history.message.sensitive && !w.history.commitButton.sensitive, 'the box and Commit are not locked');
             const check = listRows(w.history.changedList)[0].get_child()!.get_first_child() as Gtk.CheckButton;
             ok(!check.sensitive, 'the checkbox is not locked');
             eq(writer.button.get_tooltip_text(), 'Stop writing');
             eq(w.history.commitStatus.get_text(), 'Writing from the changes in e.md…');
             shot('writing');
             finish({ ok: true, message: 'Add a line to E', shortened: false, cancelled: false });
-            ok(waitFor(() => w.history.messageEntry.sensitive), 'still locked');
-            eq(w.history.messageEntry.get_text(), 'Add a line to E');
+            ok(waitFor(() => w.history.message.sensitive), 'still locked');
+            eq(w.history.message.text, 'Add a line to E');
             ok(w.history.commitButton.sensitive && check.sensitive, 'not unlocked');
             eq(w.history.commitStatus.get_text(), 'Written by the assistant from 1 file. Check it before committing.');
-            const [, start, end] = w.history.messageEntry.get_selection_bounds();
+            const [start, end] = w.history.message.selection();
             eq([start, end], [0, 'Add a line to E'.length], 'the message is not selected');
             shot('done');
             if (shotPrefix) { const dark = w.dark; w.setDark(true); shot('done-dark'); w.setDark(dark); }
             // Ctrl+Z right after puts back the draft; GTK's own undo does not see text set by the program.
             ok((writer as unknown as { undo(k: number, s: number): boolean }).undo(Gdk.KEY_z, Gdk.ModifierType.CONTROL_MASK), 'Ctrl+Z was not handled');
-            eq(w.history.messageEntry.get_text(), 'my draft');
+            eq(w.history.message.text, 'my draft');
 
             // Stop keeps what was written so far.
             writer.button.emit('clicked');
@@ -358,16 +385,16 @@ export function historyTests(c: GuiContext): void {
             ok(cancellable!.is_cancelled(), 'Stop did not cancel');
             finish({ ok: true, message: 'Half', shortened: false, cancelled: true });
             ok(waitFor(() => !writer.busy), 'still busy');
-            eq(w.history.messageEntry.get_text(), 'Half');
+            eq(w.history.message.text, 'Half');
             ok(w.history.commitStatus.get_text().startsWith('Stopped'), w.history.commitStatus.get_text());
 
             // A failure puts back the text and says why; no key links to the settings.
-            w.history.messageEntry.set_text('typed');
+            w.history.message.text = 'typed';
             writer.button.emit('clicked');
             onText('Partial');
             finish({ ok: false, reason: 'failed', message: 'Cannot connect to DeepSeek.' });
             ok(waitFor(() => !writer.busy), 'still busy');
-            eq(w.history.messageEntry.get_text(), 'typed');
+            eq(w.history.message.text, 'typed');
             ok(w.history.commitStatus.has_css_class('error'), 'the failure is not an error');
             ok(w.history.commitStatus.get_text().includes('Cannot connect to DeepSeek. The box'), w.history.commitStatus.get_text());
             writer.button.emit('clicked');
@@ -386,13 +413,16 @@ export function historyTests(c: GuiContext): void {
             writer.locked = false;
             ok(writer.button.sensitive, 'the button stays locked after the commit');
 
+            w.history.message.text = 'docs(samples): misspell the first heading so the editor shows a spelling mark';
+            shot('long');
+
             check.active = false;
             ok(!writer.button.sensitive, 'the button can write without checked files');
             eq(writer.button.get_tooltip_text(), 'Check the files to describe first');
             check.active = true;
         } finally {
             writer.write = real;
-            w.history.messageEntry.set_text('');
+            w.history.message.text = '';
             setStatus(w.history.commitStatus, '');
         }
         git('add', '-A');
@@ -410,7 +440,7 @@ export function historyTests(c: GuiContext): void {
             ok(viewer.writer.button.get_visible() && viewer.writer.button.sensitive, 'the button is not usable');
             viewer.writer.button.emit('clicked');
             ok(waitFor(() => !viewer.writer.busy), 'still busy');
-            eq(viewer.messageEntry.get_text(), 'Add line six');
+            eq(viewer.message.text, 'Add line six');
             eq(calls, [[a]]);
             ok(viewer.status.get_text().includes('from 1 file'), viewer.status.get_text());
             if (shotPrefix) { viewer.show(); shot('viewer', viewer.window); }

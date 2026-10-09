@@ -10,6 +10,7 @@ import { commitFiles, fileLog, repoChanges, workingState, type GitFailure } from
 import { relativeTime, type ChangeKind, type Commit, type FileChange } from '../gitlog.js';
 import { pack, removeChildren } from '../gtkutil.js';
 import { _, fmt, ngettext } from '../i18n.js';
+import { MessageBox } from './messagebox.js';
 import { MessageWriter, setStatus } from './messagewriter.js';
 
 // Commits loaded per request; a long history is loaded incrementally.
@@ -44,7 +45,7 @@ export class History {
     private readonly unchecked = new Set<string>();   // list files that are not committed; the rest are checked
     private readonly checks = new Map<string, Gtk.CheckButton>();
     readonly commitBar: Gtk.Box;
-    readonly messageEntry: Gtk.Entry;
+    readonly message: MessageBox;              // wraps, so the whole message fits the narrow sidebar
     readonly commitButton: Gtk.Button;
     readonly commitStatus: Gtk.Label;
     readonly writer: MessageWriter;            // the assistant button next to the message
@@ -95,23 +96,25 @@ export class History {
             hscrollbar_policy: Gtk.PolicyType.NEVER, propagate_natural_height: true, max_content_height: 240,
         });
         changedScroll.set_child(this.changedList);
-        this.messageEntry = new Gtk.Entry({ placeholder_text: _('Commit message') });
+        this.message = new MessageBox(_('Commit message'));
         this.commitButton = new Gtk.Button({ label: _('Commit') });
         this.commitButton.add_css_class('suggested-action');
         this.commitStatus = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 24, visible: false });
         this.commitStatus.add_css_class('dim-label');
         this.commitButton.connect('clicked', () => this.commitSelected());
-        this.messageEntry.connect('activate', () => this.commitSelected());
-        this.writer = new MessageWriter(this.messageEntry, this.commitStatus, () => this.selected(),
+        this.message.onActivate = () => void this.commitSelected();
+        this.writer = new MessageWriter(this.message, this.commitStatus, () => this.selected(),
             _('Write the message with the assistant (reads the checked changes)'));
         this.writer.onBusy = () => this.updateCommitButton();
-        const messageRow = new Gtk.Box({ spacing: 6 });
-        pack(messageRow, this.messageEntry, true);
-        messageRow.append(this.writer.button);
-        messageRow.set_hexpand(false);   // the entry fills the row; the row does not pass that up to the sidebar
+        // The message takes the full width; the assistant button sits beside Commit.
+        const commitRow = new Gtk.Box({ spacing: 6 });
+        pack(commitRow, this.commitButton, true);
+        commitRow.append(this.writer.button);
+        commitRow.set_hexpand(false);   // Commit fills the row; the row does not pass that up to the sidebar
+        this.message.widget.set_hexpand(false);
         this.commitBar = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: 8 });
-        this.commitBar.append(messageRow);
-        this.commitBar.append(this.commitButton);
+        this.commitBar.append(this.message.widget);
+        this.commitBar.append(commitRow);
         this.commitBar.append(this.commitStatus);
         const changedContent = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
         changedContent.append(changedScroll);
@@ -238,7 +241,7 @@ export class History {
     private async commitSelected(): Promise<void> {
         if (this.writer.busy) return;
         const files = this.selected();
-        const message = this.messageEntry.get_text().trim();
+        const message = this.message.text.trim();
         if (!files.length) return this.showCommitStatus('Select the files to commit');
         if (!message) return this.showCommitStatus('Enter a commit message first');
         if (!this.beforeCommit()) return this.showCommitStatus('The document failed to save; the commit was cancelled');
@@ -248,7 +251,7 @@ export class History {
         this.writer.locked = false;
         this.updateCommitButton();
         if (!result.ok) return this.showCommitStatus(fmt(_('Commit failed: {message}'), { message: result.message }));
-        this.messageEntry.set_text('');
+        this.message.text = '';
         this.commitStatus.set_visible(false);
         this.onCommitted();
     }

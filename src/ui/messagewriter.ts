@@ -10,6 +10,7 @@ import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
 import type { WriteResult } from '../agent/commitmessage.js';
 import { onKeyPress } from '../gtkutil.js';
+import type { MessageBox } from './messagebox.js';
 import { _, fmt, ngettext } from '../i18n.js';
 
 export const SPARKLE_ICON = 'com.ekaput.Nyerat-sparkle-symbolic';
@@ -41,7 +42,7 @@ export class MessageWriter {
     private held = false;                           // a commit is running: no new message until it ends
 
     // files: what would be committed now. idleTip: the button's tooltip when it can write.
-    constructor(private readonly entry: Gtk.Entry, private readonly status: Gtk.Label,
+    constructor(private readonly box: MessageBox, private readonly status: Gtk.Label,
         private readonly files: () => string[], private readonly idleTip: string) {
         this.pages = new Gtk.Stack({ hhomogeneous: true, vhomogeneous: true });
         this.pages.add_named(new Gtk.Image({ icon_name: SPARKLE_ICON }), 'idle');
@@ -51,8 +52,8 @@ export class MessageWriter {
         this.button = new Gtk.Button({ child: this.pages, visible: false, valign: Gtk.Align.CENTER });
         this.button.connect('clicked', () => this.busy ? this.stop() : void this.run());
         this.status.connect('activate-link', () => { this.onOpenSettings(); return true; });
-        onKeyPress(entry, (keyval, state) => this.undo(keyval, state), Gtk.PropagationPhase.CAPTURE);
-        entry.connect('changed', () => { if (!this.busy && entry.get_text() !== this.written) this.before = null; });
+        onKeyPress(box.view, (keyval, state) => this.undo(keyval, state), Gtk.PropagationPhase.CAPTURE);
+        box.onChanged(() => { if (!this.busy && box.text !== this.written) this.before = null; });
         this.update();
     }
 
@@ -83,7 +84,7 @@ export class MessageWriter {
     private async run(): Promise<void> {
         const files = this.files();
         if (!this.write || !files.length || this.busy || this.held) return;
-        const before = this.entry.get_text();
+        const before = this.box.text;
         this.cancellable = new Gio.Cancellable();
         this.setBusy(true);
         setStatus(this.status, files.length === 1
@@ -91,7 +92,7 @@ export class MessageWriter {
             : fmt(ngettext('Writing from the changes in {n} file…', 'Writing from the changes in {n} files…', files.length), { n: files.length }));
         let result: WriteResult;
         try {
-            result = await this.write(files, message => this.entry.set_text(message), this.cancellable);
+            result = await this.write(files, message => { this.box.text = message; }, this.cancellable);
         } catch (e) {
             result = { ok: false, reason: 'failed', message: e instanceof Error ? e.message : String(e) };
         } finally {
@@ -103,7 +104,7 @@ export class MessageWriter {
 
     private finish(result: WriteResult, before: string, count: number): void {
         if (!result.ok) {
-            this.entry.set_text(before);
+            this.box.text = before;
             if (result.reason === 'no-key') {
                 setStatus(this.status, `${GLib.markup_escape_text(_('There is no DeepSeek API key yet.'), -1)} <a href="settings">${GLib.markup_escape_text(_('Open the Assistant settings'), -1)}</a>`, true, true);
             } else {
@@ -112,14 +113,14 @@ export class MessageWriter {
             return;
         }
         if (!result.message) {
-            this.entry.set_text(before);
+            this.box.text = before;
             return setStatus(this.status, result.cancelled ? _('Stopped before any text was written') : _('The assistant returned no message; try again'), !result.cancelled);
         }
-        this.entry.set_text(result.message);
+        this.box.text = result.message;
         this.before = before;
         this.written = result.message;
-        this.entry.grab_focus();
-        this.entry.select_region(0, -1);
+        this.box.grabFocus();
+        this.box.selectAll();
         setStatus(this.status, result.cancelled ? _('Stopped; the message so far was kept. Check it before committing.')
             : result.shortened ? fmt(ngettext('Written from {n} file; the changes were too long to send whole, so they were shortened. Check the message.',
                 'Written from {n} files; the changes were too long to send whole, so the largest were shortened. Check the message.', count), { n: count })
@@ -129,7 +130,7 @@ export class MessageWriter {
 
     private setBusy(busy: boolean): void {
         this.pages.visible_child_name = busy ? 'busy' : 'idle';
-        this.entry.set_sensitive(!busy);
+        this.box.sensitive = !busy;
         this.update();
         this.onBusy(busy);
     }
@@ -138,11 +139,11 @@ export class MessageWriter {
     private undo(keyval: number, state: number): boolean {
         const ctrl = (state & Gdk.ModifierType.CONTROL_MASK) !== 0 && (state & Gdk.ModifierType.SHIFT_MASK) === 0;
         if (!ctrl || (keyval !== Gdk.KEY_z && keyval !== Gdk.KEY_Z) || this.before === null) return false;
-        if (this.entry.get_text() !== this.written) return false;
+        if (this.box.text !== this.written) return false;
         const before = this.before;
         this.before = null;
-        this.entry.set_text(before);
-        this.entry.set_position(-1);
+        this.box.text = before;
+        this.box.cursorToEnd();
         return true;
     }
 }

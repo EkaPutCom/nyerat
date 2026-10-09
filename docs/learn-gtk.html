@@ -1458,31 +1458,31 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
     <p class="note">The board's <code>Gtk.Overlay</code> holds a <code>Gtk.Fixed</code> on top, where the ghost image of a dragged card (a <code>Gtk.WidgetPaintable</code> of the card) follows the pointer (Chapter 5).</p>
   </div>
   <div class="ill">
-    <h3>Illustration: the commit form with the assistant button <span class="kind">widget names from <code>ui/history.ts</code>, <code>ui/messagewriter.ts</code></span></h3>
+    <h3>Illustration: the commit form with the assistant button <span class="kind">widget names from <code>ui/history.ts</code>, <code>ui/messagebox.ts</code>, <code>ui/messagewriter.ts</code></span></h3>
     <p class="note">The first form is before writing, the second while the model writes. Only the <code>Gtk.Stack</code> page changes; the box, the checkboxes, and Commit are made insensitive by the owner through <code>onBusy</code>. The Inspector button above also labels these.</p>
     <div class="grid2">
       <div class="mock inspect v-mock" style="background:var(--m-side,var(--m-view))">
         <div data-w="Gtk.Box (commitBar)" style="padding:14px 8px 8px;display:grid;gap:8px">
-          <div data-w="Gtk.Box (message row) · hexpand false" style="display:flex;gap:6px;padding-top:12px">
-            <div class="m-entry" data-w="Gtk.Entry · hexpand" style="flex:1">Commit message</div>
+          <div class="m-entry" data-w="MessageBox: Gtk.Overlay › Gtk.ScrolledWindow › Gtk.TextView (wraps)" style="height:52px;align-items:flex-start;padding-top:7px;margin-top:12px">Commit message</div>
+          <div data-w="Gtk.Box (commit row) · hexpand false" style="display:flex;gap:6px">
+            <span class="m-btn suggested" data-w="Gtk.Button .suggested-action · hexpand" style="height:30px;flex:1">Commit 2 files</span>
             <span class="m-btn raised" data-w="Gtk.Button › Gtk.Stack 'idle'" style="width:30px;height:30px"><svg class="ic"><use href="#i-sparkle"/></svg></span>
           </div>
-          <span class="m-btn suggested" data-w="Gtk.Button .suggested-action" style="height:30px">Commit 2 files</span>
           <div class="m-dim m-small" data-w="Gtk.Label (status) .dim-label" style="padding-top:12px">Written by the assistant from 2 files. Check it before committing.</div>
         </div>
       </div>
       <div class="mock inspect v-mock" style="background:var(--m-side,var(--m-view))">
         <div data-w="Gtk.Box (commitBar)" style="padding:14px 8px 8px;display:grid;gap:8px">
-          <div data-w="Gtk.Box (message row)" style="display:flex;gap:6px;padding-top:12px">
-            <div class="m-entry dis" data-w="Gtk.Entry · insensitive" style="flex:1;opacity:.55;color:var(--m-fg)">Move the public release to 22 Nov</div>
+          <div class="m-entry dis" data-w="MessageBox · insensitive" style="height:52px;align-items:flex-start;padding-top:7px;margin-top:12px;opacity:.55;color:var(--m-fg)">Move the public release to 22 November</div>
+          <div data-w="Gtk.Box (commit row)" style="display:flex;gap:6px">
+            <span class="m-btn suggested" data-w="Gtk.Button · insensitive" style="height:30px;flex:1;opacity:.45">Commit 2 files</span>
             <span class="m-btn raised" data-w="Gtk.Stack 'busy' › Gtk.Overlay" style="width:30px;height:30px"><svg class="ic"><use href="#i-stop"/></svg></span>
           </div>
-          <span class="m-btn suggested" data-w="Gtk.Button · insensitive" style="height:30px;opacity:.45">Commit 2 files</span>
           <div class="m-dim m-small" data-w="Gtk.Label (status)" style="padding-top:12px">Writing from the changes in 2 files…</div>
         </div>
       </div>
     </div>
-    <p class="note">The message row is a horizontal <code>Gtk.Box</code> in which the entry has <code>hexpand</code>. GTK 4 passes <code>hexpand</code> up to the parents, which made the sidebar widen and failed an existing test; an explicit <code>set_hexpand(false)</code> on the row stops it there (see Pitfalls).</p>
+    <p class="note">The message is a <code>Gtk.TextView</code> that wraps, not a <code>Gtk.Entry</code>: a 72-character subject did not fit a one-line entry in the narrow sidebar. <code>MessageBox</code> keeps it one line (Enter commits from a capture-phase key handler; a pasted line break becomes a space) and draws the placeholder as a dim <code>Gtk.Label</code> in a <code>Gtk.Overlay</code>, since a TextView has none. The commit row is a horizontal <code>Gtk.Box</code> in which Commit has <code>hexpand</code>. GTK 4 passes <code>hexpand</code> up to the parents, which would widen the sidebar; an explicit <code>set_hexpand(false)</code> on the row stops it there (see Pitfalls).</p>
   </div>
   <figure><img src="assets/home.gif" alt="The Home tab with folder cards, due dates, and inbox items" loading="lazy" width="1200" height="750"><figcaption>Home: <code>Adw.Clamp</code> keeps the column readable, <code>Gtk.FlowBox</code> wraps the folder cards.</figcaption></figure>
   <div class="lesson"><b>Lesson</b>“The Markdown text is the only source of truth” is a GTK design rule too: the board and inbox never hold state that the buffer does not have, so undo, autosave, Git, and the agent all keep working without knowing those views exist.</div>
@@ -1550,7 +1550,7 @@ new Gtk.ListView({ model: selection, factory });</code></pre>
       <tr><td>Answer cut off in the chat panel</td><td data-k="Cause" class="wrap"><code>set_value()</code> inside an adjustment's <code>changed</code> during allocation</td><td data-k="Rule" class="wrap">Scroll from an idle (<code>stickIdle</code>)</td></tr>
       <tr><td>Gtk-CRITICAL when dragging a file</td><td data-k="Cause" class="wrap">A widget as <code>GtkDragIcon</code></td><td data-k="Rule" class="wrap"><code>DragSource.set_icon()</code> with a paintable</td></tr>
       <tr><td>GLib-CRITICAL on exit</td><td data-k="Cause" class="wrap"><code>Gtk.AlertDialog</code> / <code>destroy_with_parent</code></td><td data-k="Rule" class="wrap"><code>Adw.AlertDialog</code> through <code>alert()</code></td></tr>
-      <tr><td>Ctrl+Z does not bring back the user's draft after the program filled the entry</td><td data-k="Cause" class="wrap"><code>Gtk.Entry.set_text()</code> (and <code>insert_text()</code>) is not recorded in the entry's undo history; only typing is</td><td data-k="Rule" class="wrap">Keep the one step yourself: a capture-phase <code>EventControllerKey</code> restores the saved text while the entry still holds what was set, and forgets it on the first edit (<code>MessageWriter</code>)</td></tr>
+      <tr><td>Ctrl+Z does not bring back the user's draft after the program filled the box</td><td data-k="Cause" class="wrap"><code>Gtk.TextBuffer.set_text()</code> (like <code>Gtk.Entry.set_text()</code>) is an irreversible action for the undo history; only typing is recorded</td><td data-k="Rule" class="wrap">Keep the one step yourself: a capture-phase <code>EventControllerKey</code> restores the saved text while the entry still holds what was set, and forgets it on the first edit (<code>MessageWriter</code>)</td></tr>
       <tr><td>A bundled SVG icon shows as “missing” in tests</td><td data-k="Cause" class="wrap">No SVG loader for gdk-pixbuf (librsvg) on the test machine, although <code>IconTheme.has_icon()</code> is true</td><td data-k="Rule" class="wrap">Check the icon's shape separately and report it as not visually verified; never conclude the icon is wrong from that screenshot</td></tr>
       <tr><td>Gdk-CRITICAL <code>gdk_monitor_get_geometry</code> in tests</td><td data-k="Cause" class="wrap">A popover from a button outside the Xvfb monitor</td><td data-k="Rule" class="wrap">Keep test windows within 1280×800</td></tr>
     </tbody>
