@@ -7,10 +7,11 @@
   "license": "MIT",
   "author": "Eka Putra <eka@ekaput.com>",
   "scripts": {
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && node scripts/layers.mjs && vite build",
     "dev": "node scripts/dev.mjs",
     "watch": "vite build --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && node scripts/layers.mjs",
+    "layers": "node scripts/layers.mjs",
     "start": "npm run build && gjs -m dist/nyerat.js",
     "test": "npm run build && xvfb-run -a -s '-screen 0 1280x800x24' env GDK_BACKEND=x11 LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 gjs -m dist/run-tests.js --with-kanban-mouse",
     "test:ui": "npm run build && env GDK_BACKEND=x11 gjs -m dist/run-tests.js --with-kanban-mouse",

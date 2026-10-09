@@ -354,6 +354,7 @@ package.json              npm scripts and development dependencies
 tsconfig.json             TypeScript type-checking settings
 vite.config.ts            Vite build settings
 scripts/dev.mjs           npm run dev: rebuild + reopen the app + type check
+scripts/layers.mjs        npm run layers (also in build/typecheck): forbidden imports between layers
 scripts/capture.ts        capture the editor and make the PNG/GIF files for docs/assets/
 scripts/gifenc.d.ts       gifenc type declarations for the capture script
 scripts/pot.sh            npm run pot: the translation template po/nyerat.pot
@@ -528,6 +529,7 @@ The code is divided into layers. Each layer may only use the layers below it, ne
 - **`ui/`** holds self-contained components. `Outline` does not know the editor; it only receives a list of headings and calls `onJump(line)` when clicked. `FileTree` is the same: it only displays folders and calls `onOpenFile(path)`; the window decides how to open the file (a new tab, switching to an existing tab, or reusing an empty document).
 - **`window.ts`** is the only place where components are connected to each other. For example: after highlighting, the editor calls `onHighlighted`, and then the window passes the headings to `Outline` and the text to `StatusBar`. Features that span several components (the journal, harness runs, Home, applying agent changes, autosave) live in `window/*` controllers; each receives a narrow host interface built by the window from closures, never `MainWindow` itself, so they do not import `window.ts`. `actions.ts` likewise types the window as `ActionHost`.
 - **Lower layers do not reach up.** `editor/` takes the `Palette` type from `colors.ts`, not from `ui/theme.ts`; `git.ts` takes the agent's Git request types from `gitlog.ts`, not from `agent/`.
+- **The rules are checked.** [`scripts/layers.mjs`](scripts/layers.mjs) runs in `npm run build` and `npm run typecheck` and fails on a forbidden import: GI or anything outside `markdown/` in `markdown/`, GTK or `ui/`/`editor/`/`window/` in `agent/`, `ui/`/`window/`/`agent/` in `editor/`, `window.ts` in `ui/`, `window/`, or `actions.ts`, and any upper layer in the base modules.
 
 ### The editor workflow
 
