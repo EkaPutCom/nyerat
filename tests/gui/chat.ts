@@ -277,7 +277,7 @@ export function chatTests(c: GuiContext): void {
     });
 
     test('the selected model is saved to the settings', () => {
-        panel.setModel('deepseek-v4-pro');
+        panel.settings.setModel('deepseek-v4-pro');
         eq(panel.model, 'deepseek-v4-pro');
         panel.modelDrop.set_selected(0);  // deepseek-flash
         eq(w.settings.chatModel, 'deepseek-flash');
@@ -310,7 +310,7 @@ export function chatTests(c: GuiContext): void {
     });
 
     test('the old model is normalized; the thinking mode is saved and passed on to the session', () => {
-        panel.setModel('deepseek-chat');   // name from the settings of a previous version
+        panel.settings.setModel('deepseek-chat');   // name from the settings of a previous version
         eq(panel.model, 'deepseek-flash');
         panel.thinkingCheck.set_active(true);
         eq(panel.session.thinking, true);

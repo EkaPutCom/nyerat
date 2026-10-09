@@ -200,16 +200,16 @@ export class MainWindow {
             };
             viewer.show();
         };
-        this.chat.setModel(settings.chatModel);
-        this.chat.setThinking(settings.chatThinking);
-        this.chat.onModelChanged = model => {
+        this.chat.settings.setModel(settings.chatModel);
+        this.chat.settings.setThinking(settings.chatThinking);
+        this.chat.settings.onModelChanged = model => {
             this.settings.chatModel = model;
         };
-        this.chat.setSaveChats(settings.chatSave);
-        this.chat.onSaveChanged = save => {
+        this.chat.settings.setSaveChats(settings.chatSave);
+        this.chat.settings.onSaveChanged = save => {
             this.settings.chatSave = save;
         };
-        this.chat.onThinkingChanged = thinking => {
+        this.chat.settings.onThinkingChanged = thinking => {
             this.settings.chatThinking = thinking;
         };
         this.chat.host = {
@@ -638,9 +638,9 @@ export class MainWindow {
             if (dark instanceof Gio.SimpleAction) dark.set_state(GLib.Variant.new_boolean(this.dark));
         } else if (key === 'focus' || key === 'typewriter') for (const doc of this.docs) doc.editor.setMode(key, s[key]);
         else if (key === 'autosave') { if (s.autosave) for (const doc of this.docs) this.autosaver.queue(doc); }
-        else if (key === 'chat-model') this.chat.setModel(s.chatModel);
-        else if (key === 'chat-thinking') this.chat.setThinking(s.chatThinking);
-        else if (key === 'chat-save') this.chat.setSaveChats(s.chatSave);
+        else if (key === 'chat-model') this.chat.settings.setModel(s.chatModel);
+        else if (key === 'chat-thinking') this.chat.settings.setThinking(s.chatThinking);
+        else if (key === 'chat-save') this.chat.settings.setSaveChats(s.chatSave);
     }
 
     // ---------- Auto save ----------

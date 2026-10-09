@@ -473,7 +473,11 @@ src/
     ├── kanban.ts         kanban board view: lists, cards, menus, drag and drop
     ├── inbox.ts          inbox view: quick capture, note list, age, tags
     ├── home.ts           Home tab: Continue card, agent, deadlines, inbox, recent files
-    ├── chat.ts           Assistant panel on the right: draws messages, proposal cards, the Context button, key and model settings (implements ChatView)
+    ├── chat.ts           Assistant panel on the right: draws the messages and the input (implements ChatView)
+    ├── chatsettings.ts   its settings popover: API key, model, thinking mode, saving conversations
+    ├── chathistory.ts    its history popover: saved conversations to reopen or delete
+    ├── chatcontext.ts    its Context button and popover: token estimate, parts, switches
+    ├── proposalcard.ts   change proposal cards, the review window they open, and Undo
     └── theme.ts          fonts and CSS from the palette in colors.ts (named Adwaita colors for the interface, the system accent if available)
 tests/
 ├── run-tests.ts          entry point and registration of unit/GUI tests

@@ -16,19 +16,22 @@ import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
-import type { KeySource, KeyStore } from '../agent/apikey.js';
+import type { KeyStore } from '../agent/apikey.js';
 import type { BuiltContext, ContextOptions } from '../agent/context.js';
 import { ChatController, type ChatControllerHost, type ChatView, type TurnOutcome, type TurnView } from '../agent/chatcontroller.js';
-import { DEEPSEEK_MODELS } from '../agent/deepseek.js';
 import type { Provider, Usage } from '../agent/provider.js';
 import type { ChatSession, ProposalResult, ToolStep } from '../agent/session.js';
-import { diffPreview, describeChange, type Change } from '../agent/changes.js';
-import { ProposalViewer } from './proposalviewer.js';
+import type { Change } from '../agent/changes.js';
+import type { ProposalViewer } from './proposalviewer.js';
+import { ChatSettings } from './chatsettings.js';
+import { ChatHistoryList } from './chathistory.js';
+import { ContextPreview, describeContext, fmtTokens } from './chatcontext.js';
+import { ProposalCards } from './proposalcard.js';
 import { LogViewer } from './logviewer.js';
 import { chatMarkup } from '../markdown/chatmarkup.js';
 import { escapeMarkup, type MarkupColors } from '../markdown/pango.js';
 import type { Palette } from '../colors.js';
-import { childrenOf, onKeyPress, pack, uiTemplate } from '../gtkutil.js';
+import { childrenOf, onKeyPress, uiTemplate } from '../gtkutil.js';
 import template from './chat.ui?raw';
 import { _, fmt, ngettext } from '../i18n.js';
 
@@ -37,21 +40,11 @@ export interface ChatHost extends ChatControllerHost {
     window?(): Gtk.Window | null;                                           // parent of the proposal review and log windows
 }
 
-const SOURCE_TEXT: Record<KeySource, string> = {
-    env: _('Using the key from the DEEPSEEK_API_KEY environment variable.'),
-    keyring: _('The key is stored in the system keyring.'),
-    file: _('The key is stored in ~/.config/nyerat/deepseek.key (keyring unavailable).'),
-};
-
 const SUGGESTIONS = [
     _('Summarize this document in a few points'),
     _('What is unfinished or out of sync in this folder?'),
     _('Draft a plan for the next steps from my notes'),
 ];
-
-const KIND_LABEL = { map: _('Map'), active: _('Document'), selection: _('Selection'), mention: _('Attachment'), excerpt: _('Excerpt') };
-
-const fmtTokens = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
 
 const usageText = (u: Usage, toolCalls: number, applied = 0): string => [
     fmt(u.cached ? _('{prompt} in ({cached} from cache)') : _('{prompt} in'), { prompt: fmtTokens(u.prompt), cached: fmtTokens(u.cached) }),
@@ -110,9 +103,6 @@ export class ChatPanel extends Gtk.Box implements ChatView {
     readonly controller = new ChatController(this);
     private chatHost: ChatHost = { active: () => null, selection: () => '', files: () => [], root: () => null };
 
-    onModelChanged: (model: string) => void = () => {};
-    onThinkingChanged: (thinking: boolean) => void = () => {};
-    onSaveChanged: (save: boolean) => void = () => {};
 
     private colors: MarkupColors = { code: '#c7254e', codeBg: '#f3f4f4', link: '#1c71d8', mark: '#fff3a3' };
     private readonly bubbles: Bubble[] = [];
@@ -121,7 +111,9 @@ export class ChatPanel extends Gtk.Box implements ChatView {
     private renderTimer = 0;
     private dark = false;
     private cardsBox: Gtk.Box | null = null;   // where the proposal cards of the running turn live
-    viewer: ProposalViewer | null = null;   // the proposal review window waiting for a decision
+    readonly settings: ChatSettings;   // API key, model, thinking mode, saving conversations
+    private readonly contextPart: ContextPreview;
+    private readonly proposals: ProposalCards;
     private stickIdle = 0;
     private stick = true;            // stay stuck to the bottom as long as the user has not scrolled up
     private summaryTimer = 0;
@@ -131,28 +123,16 @@ export class ChatPanel extends Gtk.Box implements ChatView {
         super();
         this._clearButton.connect('clicked', () => this.reset());
         this._logButton.connect('clicked', () => this.showLog());
-        this._historyPopover.connect('show', () => this.refreshChatList());
-
-        // Settings: API key and model.
-        this._settingsPopover.connect('show', () => void this.refreshKeyStatus());
-        this._saveKeyButton.connect('clicked', () => void this.saveKey());
-        this.keyEntry.connect('activate', () => void this.saveKey());
-        this._forgetKeyButton.connect('clicked', () => void this.forgetKey());
-        this.modelDrop.set_model(Gtk.StringList.new(DEEPSEEK_MODELS));
-        this.modelDrop.connect('notify::selected', () => {
-            const id = DEEPSEEK_MODELS[this.modelDrop.get_selected()];
-            if (!id || id === this.model) return;
-            this.model = id;
-            this.onModelChanged(id);
-        });
-        this.thinkingCheck.connect('toggled', () => {
-            this.session.thinking = this.thinkingCheck.active;
-            this.onThinkingChanged(this.thinkingCheck.active);
-        });
-        this.saveCheck.active = this.saveChats;
-        this.saveCheck.connect('toggled', () => {
-            this.saveChats = this.saveCheck.active;
-            this.onSaveChanged(this.saveChats);
+        new ChatHistoryList(this.historyButton, this._historyPopover, this.chatList, this.controller, path => this.openChat(path), message => this.addNote(message, true));
+        this.settings = new ChatSettings({
+            popover: this._settingsPopover, keyEntry: this.keyEntry, keyStatus: this.keyStatus, saveKeyButton: this._saveKeyButton,
+            forgetKeyButton: this._forgetKeyButton, modelDrop: this.modelDrop, thinkingCheck: this.thinkingCheck, saveCheck: this.saveCheck,
+        }, this.controller);
+        this.proposals = new ProposalCards({
+            controller: this.controller,
+            window: () => this.host.window?.() ?? null,
+            dark: () => this.dark,
+            note: (text, error) => this.addNote(text, error),
         });
 
         // Messages
@@ -172,14 +152,10 @@ export class ChatPanel extends Gtk.Box implements ChatView {
         vadj.connect('value-changed', () => { this.stick = vadj.get_upper() - vadj.get_page_size() - vadj.get_value() < 24; });
 
         // Context: which choices are sent.
-        const checks: [Gtk.CheckButton, keyof ContextOptions][] = [
-            [this._contextDocument, 'activeDocument'], [this._contextSelection, 'selection'], [this._contextProject, 'project'],
-        ];
-        for (const [check, key] of checks) {
-            check.active = this.options[key];
-            check.connect('toggled', () => { this.options[key] = check.active; this.updateContextPreview(); });
-        }
-        this._contextPopover.connect('show', () => this.updateContextPreview());
+        this.contextPart = new ContextPreview({
+            button: this.contextButton, popover: this._contextPopover, list: this.contextList,
+            checks: [[this._contextDocument, 'activeDocument'], [this._contextSelection, 'selection'], [this._contextProject, 'project']],
+        }, () => this.options, () => this.previewContext(), () => this.budget);
 
         // Input. CAPTURE phase: before the TextView itself inserts a new line for Enter.
         onKeyPress(this.input, (keyval, state) => this.onInputKey(keyval, state), Gtk.PropagationPhase.CAPTURE);
@@ -234,28 +210,13 @@ export class ChatPanel extends Gtk.Box implements ChatView {
     get budget(): number { return this.controller.budget; }
     set budget(budget: number) { this.controller.budget = budget; }
     get busy(): boolean { return this.controller.busy; }
+    get viewer(): ProposalViewer | null { return this.proposals.viewer; }   // the review window waiting for a decision
 
     setPalette(palette: Palette): void {
         this.dark = palette.dark;
-        this.viewer?.setDark(palette.dark);
+        this.proposals.viewer?.setDark(palette.dark);
         this.colors = { code: palette.codeFg, codeBg: palette.codeBg, link: palette.accent, mark: palette.markBg };
         for (const b of this.bubbles) this.render(b);
-    }
-
-    // An old or unknown model name (e.g. from a settings version) is replaced with the default model.
-    setModel(model: string): void {
-        this.controller.setModel(model);
-        this.modelDrop.set_selected(DEEPSEEK_MODELS.indexOf(this.model));
-    }
-
-    setThinking(thinking: boolean): void {
-        this.thinkingCheck.set_active(thinking);
-        this.session.thinking = thinking;
-    }
-
-    setSaveChats(save: boolean): void {
-        this.saveCheck.set_active(save);
-        this.saveChats = save;
     }
 
     focusInput(): void {
@@ -324,8 +285,8 @@ export class ChatPanel extends Gtk.Box implements ChatView {
         let reasoning = '';
         return {
             context: built => {
-                this.setContextSummary(built);
-                answer.meta.set_text(this.describe(built));
+                this.contextPart.setSummary(built);
+                answer.meta.set_text(describeContext(built));
                 answer.meta.show();
             },
             text: delta => { answer.bubble.text += delta; this.queueRender(answer.bubble); },
@@ -376,14 +337,7 @@ export class ChatPanel extends Gtk.Box implements ChatView {
         }
         if (this.session.events.length) {
             this.addNote(journalText(this.session.events));
-            for (const event of this.session.events.filter(e => e.changes.length).slice(-20)) {
-                const row = new Gtk.Box({ spacing: 6, halign: Gtk.Align.START });
-                const review = new Gtk.Button({ label: fmt(_('View diff · {count} files'), { count: event.changes.length }), tooltip_text: event.changes.map(c => c.file).join('\n') });
-                review.connect('clicked', () => new ProposalViewer(this.host.window?.() ?? null, event.changes, this.dark, () => _('History is read-only'), true).show());
-                row.append(review);
-                if (event.status === 'applied' && this.controller.canUndo) row.append(this.undoButton(event.changes, null));
-                this.messages.append(row);
-            }
+            for (const event of this.session.events.filter(e => e.changes.length).slice(-20)) this.messages.append(this.proposals.historyRow(event));
         }
         if (this.session.work) {
             const list = new WorkList();
@@ -400,76 +354,11 @@ export class ChatPanel extends Gtk.Box implements ChatView {
         return true;
     }
 
-    private refreshChatList(): void {
-        for (const child of childrenOf(this.chatList)) this.chatList.remove(child);
-        const note = (text: string) => {
-            const l = new Gtk.Label({ label: text, xalign: 0, wrap: true, max_width_chars: 36 });
-            l.add_css_class('side-meta');
-            l.show();
-            this.chatList.append(l);
-        };
-        const chats = this.controller.chats();
-        if (!chats) return note('Open a work folder to save and open conversation history.');
-        if (!chats.length) return note('There are no saved conversations in this folder yet.');
-        const popover = this.historyButton.get_popover();
-        for (const chat of chats) {
-            const row = new Gtk.Box({ spacing: 2 });
-            const open = new Gtk.Button({ has_frame: false, tooltip_text: fmt(_('{date} · {turns} Q&A'), { date: chat.created.replace('T', ' '), turns: chat.turns / 2 | 0 }) });
-            const text = new Gtk.Label({ label: chat.title, xalign: 0, ellipsize: 3, max_width_chars: 30 });
-            const date = new Gtk.Label({ label: chat.created.slice(0, 10), xalign: 0 });
-            date.add_css_class('side-meta');
-            const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL });
-            column.append(text);
-            column.append(date);
-            open.set_child(column);
-            open.connect('clicked', () => {
-                popover?.popdown();
-                this.openChat(chat.path);
-            });
-            const remove = Gtk.Button.new_from_icon_name('user-trash-symbolic');
-            remove.set_has_frame(false);
-            remove.set_tooltip_text(_('Move to the Trash'));
-            remove.connect('clicked', () => {
-                try {
-                    this.controller.deleteChat(chat.path);
-                } catch (e) {
-                    this.addNote(e instanceof Error ? e.message : String(e), true);
-                }
-                this.refreshChatList();
-            });
-            pack(row, open, true);
-            row.append(remove);
-            this.chatList.append(row);
-        }
-    }
-
     // ---------- Context ----------
 
     // Builds the context for the text being typed, without sending anything.
     previewContext(): BuiltContext {
         return this.controller.preview(this.input.buffer.text);
-    }
-
-    // A one-line summary of what is sent: the document, selection, attachments, and the number of excerpts per file.
-    private describe(built: BuiltContext): string {
-        const parts = [fmt(_('≈{tokens} tokens'), { tokens: fmtTokens(built.tokens) })];
-        const excerpts = new Map<string, number>();
-        for (const item of built.items) {
-            if (item.kind === 'excerpt') {
-                const file = item.label.split(' › ')[0];
-                excerpts.set(file, (excerpts.get(file) ?? 0) + 1);
-            } else if (item.kind !== 'map') {
-                parts.push(item.label);
-            }
-        }
-        for (const [file, n] of excerpts) parts.push(fmt(ngettext('{count} excerpt from {file}', '{count} excerpts from {file}', n), { count: n, file }));
-        if (built.unknownMentions.length) parts.push(fmt(_('not found: {names}'), { names: built.unknownMentions.map(m => `@${m}`).join(', ') }));
-        return fmt(_('Context: {parts}'), { parts: parts.join(' · ') });
-    }
-
-    private setContextSummary(built: BuiltContext): void {
-        // No arrow of its own: a labeled GTK 4 MenuButton already shows its popover direction arrow.
-        this.contextButton.set_label(fmt(_('Context · ≈{tokens} tokens'), { tokens: fmtTokens(built.tokens) }));
     }
 
     // Building the context touches the whole project, so the summary is only updated while the panel is visible
@@ -485,47 +374,7 @@ export class ChatPanel extends Gtk.Box implements ChatView {
 
     updateContextSummary(): void {
         if (this.busy) return;
-        this.setContextSummary(this.previewContext());
-    }
-
-    private updateContextPreview(): void {
-        for (const child of childrenOf(this.contextList)) this.contextList.remove(child);
-        const built = this.previewContext();
-        const add = (text: string, dim = false) => {
-            const l = new Gtk.Label({ label: text, xalign: 0, wrap: true, max_width_chars: 40, ellipsize: 3 });
-            if (dim) l.add_css_class('side-meta');
-            l.show();
-            this.contextList.append(l);
-        };
-        if (!built.items.length) add('No document context is being sent.', true);
-        for (const item of built.items) add(`${KIND_LABEL[item.kind]}: ${item.label} · ${fmtTokens(item.tokens)}`);
-        add(fmt(_('Total ≈{tokens} tokens of the {budget} budget'), { tokens: fmtTokens(built.tokens), budget: fmtTokens(this.budget) }), true);
-        for (const m of built.unknownMentions) add(fmt(_('File @{name} was not found in the project folder.'), { name: m }), true);
-        this.setContextSummary(built);
-    }
-
-    // ---------- API key ----------
-
-    private async refreshKeyStatus(): Promise<void> {
-        const found = await this.keyStore.get();
-        this.keyStatus.set_text(found ? SOURCE_TEXT[found.source] : _('No key yet. Create one at platform.deepseek.com.'));
-    }
-
-    private async saveKey(): Promise<void> {
-        const key = this.keyEntry.text.trim();
-        if (!key) return;
-        try {
-            const source = await this.keyStore.set(key);
-            this.keyEntry.set_text('');
-            this.keyStatus.set_text(SOURCE_TEXT[source]);
-        } catch (e) {
-            this.keyStatus.set_text(fmt(_('Failed to save: {error}'), { error: e instanceof Error ? e.message : String(e) }));
-        }
-    }
-
-    private async forgetKey(): Promise<void> {
-        await this.keyStore.clear();
-        await this.refreshKeyStatus();
+        this.contextPart.setSummary(this.previewContext());
     }
 
     // ---------- Messages ----------
@@ -626,88 +475,14 @@ export class ChatPanel extends Gtk.Box implements ChatView {
         box.show();
     }
 
-    // Change proposal: the review window (like a Git history diff) opens automatically; in the panel a compact card
-    // is left behind with the status and a button to open it again. Files are not touched before Apply; closing
-    // the window, Reject, or stopping the turn is the same as rejecting.
+    // Change proposal: a card in the panel and the review window (see ProposalCards).
     review(change: Change | Change[], apply: (change: Change | Change[]) => string | null, cancelled: Gio.Cancellable): Promise<ProposalResult> {
-        const changes = Array.isArray(change) ? change : [change];
-        const description = Array.isArray(change) ? fmt(_('Change batch · {count} files'), { count: changes.length }) : describeChange(change);
-        const reasonText = changes.map(c => `${c.file}: ${c.reason}`).join('\n');
-        const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 });
-        card.add_css_class('chat-proposal');
-        const title = new Gtk.Label({ xalign: 0, wrap: true, max_width_chars: 44, use_markup: true, selectable: true });
-        title.set_markup(`<b>${escapeMarkup(description)}</b>`);
-        card.append(title);
-        if (reasonText.trim()) {
-            const reason = new Gtk.Label({ label: reasonText.trim(), xalign: 0, wrap: true, max_width_chars: 44, selectable: true });
-            reason.add_css_class('side-meta');
-            card.append(reason);
-        }
-        const diff = changes.map(c => diffPreview(c.before, c.after)).reduce((a, b) => ({ added: a.added + b.added, removed: a.removed + b.removed }), { added: 0, removed: 0 });
-        const status = new Gtk.Label({ label: fmt(_('+{added} −{removed} · waiting for your decision'), { added: diff.added, removed: diff.removed }), xalign: 0, wrap: true, max_width_chars: 44 });
-        status.add_css_class('side-meta');
-        const review = new Gtk.Button({ label: _('Review changes'), halign: Gtk.Align.START });
-        review.add_css_class('suggested-action');
-        card.append(status);
-        card.append(review);
+        const { widget, start } = this.proposals.card(change, apply, cancelled);
         this.empty.hide();
-        (this.cardsBox ?? this.messages).append(card);
+        (this.cardsBox ?? this.messages).append(widget);
         this.cardsBox?.show();
         this.stick = true;
-
-        return new Promise<ProposalResult>(resolve => {
-            let done = false;
-            const finish = (result: ProposalResult, text: string, error = false) => {
-                if (done) return;
-                done = true;
-                this.viewer = null;
-                review.hide();
-                status.set_text(text);
-                status.remove_css_class('side-meta');
-                status.remove_css_class('chat-error');
-                status.add_css_class(error ? 'chat-error' : 'side-meta');
-                resolve(result);
-            };
-            const open = () => {
-                if (done) return;
-                if (this.viewer) { this.viewer.show(); return; }
-                const viewer = new ProposalViewer(this.host.window?.() ?? null, change, this.dark, apply);
-                viewer.onDecision = applied => {
-                    const note = viewer.note ? { note: viewer.note } : {};
-                    if (applied && viewer.accepted) {
-                        const kept = viewer.accepted.map(i => changes[i]);
-                        finish({ applied: true, accepted: viewer.accepted, ...note }, fmt(_('Applied {applied} of {count} files.'), { applied: kept.length, count: changes.length }));
-                        if (this.controller.canUndo) card.append(this.undoButton(kept, status));
-                    } else if (applied) {
-                        finish({ applied: true, ...note }, _('Applied.'));
-                        if (this.controller.canUndo) card.append(this.undoButton(changes, status));
-                    } else if (viewer.error) finish({ applied: false, error: viewer.error, ...note }, fmt(_('Failed to apply: {error}'), { error: viewer.error }), true);
-                    else finish({ applied: false, ...note }, viewer.note ? fmt(_('Rejected: {note}'), { note: viewer.note }) : _('Rejected.'));
-                };
-                this.viewer = viewer;
-                viewer.show();
-            };
-            review.connect('clicked', open);
-            cancelled.connect(() => {
-                const viewer = this.viewer;
-                finish({ applied: false }, _('Cancelled.'));
-                viewer?.close();
-            });
-            open();
-        });
-    }
-
-    // The Undo button for agent changes that were already applied (see ChatController.undo).
-    private undoButton(changes: Change[], status: Gtk.Label | null): Gtk.Button {
-        const button = new Gtk.Button({ label: _('Undo'), halign: Gtk.Align.START, tooltip_text: _('Restore the files to their contents before this change') });
-        button.connect('clicked', () => {
-            if (this.busy) { this.addNote('Wait for the agent to finish before undoing the change.', true); return; }
-            const error = this.controller.undo(changes);
-            if (error) { this.addNote(fmt(_('Cannot be undone: {error}'), { error }), true); return; }
-            button.hide();
-            status?.set_text(_('Undone.'));
-        });
-        return button;
+        return start();
     }
 
     private addNote(text: string, error = false, cssClass = 'side-meta'): void {
