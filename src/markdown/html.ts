@@ -71,118 +71,155 @@ interface ListItem {
 // Parses a list starting at line i. Result: [html, index of the line after the list].
 function parseList(lines: string[], i: number): [string, number] {
     const first = RE.list.exec(lines[i])!;
-    const ordered = /\d/.test(first[2]);
-    const base = indentWidth(first[1]);
-    const items: ListItem[] = [];
-    let loose = false;
-    while (i < lines.length) {
-        const m = RE.list.exec(lines[i]);
-        if (m && indentWidth(m[1]) === base && /\d/.test(m[2]) === ordered) {
-            const contentIndent = base + m[2].length + Math.max(1, m[3].length);
-            items.push({ num: parseInt(m[2]), task: m[4] ? /x/i.test(m[4]) : null,
-                lines: [lines[i].slice(m[0].length)], ci: contentIndent });
-            i++;
-            continue;
-        }
-        const it = items[items.length - 1];
-        if (!lines[i].trim()) {
-            let j = i;
-            while (j < lines.length && !lines[j].trim()) j++;
-            if (j >= lines.length) break;
-            const nm = RE.list.exec(lines[j]);
-            const ind = indentOf(lines[j]);
-            if ((nm && ind === base) || ind > base) {
-                loose = true;
+    const list = new ListReader(lines, indentWidth(first[1]), /\d/.test(first[2]));
+    const next = list.read(i);
+    return [list.html(), next];
+}
+
+// The items of one list level: an item marker at the base indentation with the same kind (ordered or not) starts an
+// item; deeper lines, blank lines followed by more of the list, and lazy continuation lines belong to the last item.
+class ListReader {
+    readonly items: ListItem[] = [];
+    private loose = false;   // items separated by blank lines are wrapped in <p>
+
+    constructor(private readonly lines: string[], private readonly base: number, private readonly ordered: boolean) {}
+
+    // Returns the index of the first line after the list.
+    read(i: number): number {
+        const lines = this.lines;
+        while (i < lines.length) {
+            if (this.startItem(i)) { i++; continue; }
+            const it = this.items[this.items.length - 1];
+            if (!lines[i].trim()) {
+                const j = this.blankRunEnd(i);
+                if (j < 0) break;
+                this.loose = true;
                 for (; i < j; i++) it.lines.push('');
                 continue;
             }
-            break;
-        }
-        const ind = indentOf(lines[i]);
-        if (ind > base) {
-            it.lines.push(lines[i].replace(/^[ \t]*/, ' '.repeat(Math.max(0, ind - it.ci))));
+            const ind = indentOf(lines[i]);
+            if (ind > this.base) it.lines.push(lines[i].replace(/^[ \t]*/, ' '.repeat(Math.max(0, ind - it.ci))));
+            else if (isLazyContinuation(lines[i])) it.lines.push(lines[i]);
+            else break;
             i++;
-        } else if (!RE.list.test(lines[i]) && !RE.fence.test(lines[i]) && !RE.heading.test(lines[i]) &&
-                   !RE.hr.test(lines[i]) && !/^[ \t]*>/.test(lines[i])) {
-            it.lines.push(lines[i]);  // continuation line (lazy)
-            i++;
-        } else {
-            break;
         }
+        return i;
     }
-    const tag = ordered ? 'ol' : 'ul';
-    const start = ordered && items[0].num !== 1 ? ` start="${items[0].num}"` : '';
-    const body = items.map((it): string => {
-        let html: string = blocksHtml(it.lines);
-        if (!loose) html = html.replace(/^<p>([\s\S]*?)<\/p>/, '$1');
-        if (it.task !== null)
-            return `<li class="task"><input type="checkbox" disabled${it.task ? ' checked' : ''}> ${html}</li>`;
-        return `<li>${html}</li>`;
-    }).join('\n');
-    return [`<${tag}${start}>\n${body}\n</${tag}>`, i];
+
+    // A marker of this list at line i starts a new item.
+    private startItem(i: number): boolean {
+        const m = RE.list.exec(this.lines[i]);
+        if (!m || indentWidth(m[1]) !== this.base || /\d/.test(m[2]) !== this.ordered) return false;
+        const contentIndent = this.base + m[2].length + Math.max(1, m[3].length);
+        this.items.push({ num: parseInt(m[2]), task: m[4] ? /x/i.test(m[4]) : null, lines: [this.lines[i].slice(m[0].length)], ci: contentIndent });
+        return true;
+    }
+
+    // Blank lines inside the list: the index of the next non-blank line if the list goes on after them, otherwise -1.
+    private blankRunEnd(i: number): number {
+        const lines = this.lines;
+        let j = i;
+        while (j < lines.length && !lines[j].trim()) j++;
+        if (j >= lines.length) return -1;
+        const ind = indentOf(lines[j]);
+        return (RE.list.test(lines[j]) && ind === this.base) || ind > this.base ? j : -1;
+    }
+
+    html(): string {
+        const tag = this.ordered ? 'ol' : 'ul';
+        const start = this.ordered && this.items[0].num !== 1 ? ` start="${this.items[0].num}"` : '';
+        const body = this.items.map((it): string => {
+            let html: string = blocksHtml(it.lines);
+            if (!this.loose) html = html.replace(/^<p>([\s\S]*?)<\/p>/, '$1');
+            if (it.task !== null)
+                return `<li class="task"><input type="checkbox" disabled${it.task ? ' checked' : ''}> ${html}</li>`;
+            return `<li>${html}</li>`;
+        }).join('\n');
+        return `<${tag}${start}>\n${body}\n</${tag}>`;
+    }
 }
+
+// A line that continues the previous item's paragraph without indentation (not the start of another block).
+const isLazyContinuation = (line: string): boolean =>
+    !RE.list.test(line) && !RE.fence.test(line) && !RE.heading.test(line) && !RE.hr.test(line) && !/^[ \t]*>/.test(line);
+
+// A block reader looks at line i: null = not its kind of block, otherwise its HTML and the line after it.
+type BlockReader = (lines: string[], i: number, inParagraph: boolean) => [string, number] | null;
+
+// In this order: the first reader that recognizes a line wins; other lines are paragraph text.
+const BLOCK_READERS: BlockReader[] = [
+    (lines, i) => {
+        const m = RE.fence.exec(lines[i]);
+        return m ? codeBlock(lines, i, m) : null;
+    },
+    (lines, i) => {
+        const m = /^(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/.exec(lines[i]);
+        if (!m) return null;
+        const t = m[2] || '';
+        return [`<h${m[1].length} id="${slug(t)}">${inlineHtml(t)}</h${m[1].length}>`, i + 1];
+    },
+    (lines, i) => RE.hr.test(lines[i]) ? ['<hr>', i + 1] : null,
+    (lines, i) => {
+        if (!/^[ \t]*>/.test(lines[i])) return null;
+        const q = [];
+        while (i < lines.length && /^[ \t]*>/.test(lines[i])) q.push(lines[i++].replace(/^[ \t]*>[ \t]?/, ''));
+        return [`<blockquote>\n${blocksHtml(q)}\n</blockquote>`, i];
+    },
+    (lines, i) => startsTable(lines, i) ? tableHtml(lines, i) : null,
+    // Inside a paragraph, only a list item with text after its marker starts a list.
+    (lines, i, inParagraph) => RE.list.test(lines[i]) && (!inParagraph || RE.list.exec(lines[i])![3]) ? parseList(lines, i) : null,
+];
 
 function blocksHtml(lines: string[]): string {
     const out: string[] = [];
-    let para: string[] = [], i = 0, m: RegExpExecArray | null;
+    let para: string[] = [], i = 0;
     const flush = () => { if (para.length) { out.push(`<p>${inlineHtml(para.join('\n'))}</p>`); para = []; } };
     while (i < lines.length) {
-        const line = lines[i];
-        if ((m = RE.fence.exec(line))) {
-            flush();
-            const ch = m[2][0], n = m[2].length, lang = m[3].trim(), code = [];
-            for (i++; i < lines.length; i++) {
-                const c = RE.fence.exec(lines[i]);
-                if (c && c[2][0] === ch && c[2].length >= n && !c[3].trim()) { i++; break; }
-                code.push(lines[i]);
-            }
-            // Mermaid diagrams are drawn by a script in <head> when the page is opened (see markdownToHtml).
-            if (lang.split(/\s+/)[0].toLowerCase() === 'mermaid') { out.push(`<pre class="mermaid">${esc(code.join('\n'))}</pre>`); continue; }
-            // DBML is translated to a Mermaid ER diagram; invalid syntax shows as a plain code block.
-            if (lang.split(/\s+/)[0].toLowerCase() === 'dbml') {
-                try { out.push(`<pre class="mermaid">${esc(dbmlToMermaid(code.join('\n')))}</pre>`); continue; } catch { /* fall back to a code block */ }
-            }
-            out.push(`<pre><code${lang ? ` class="language-${esc(lang)}"` : ''}>${esc(code.join('\n'))}</code></pre>`);
-            continue;
-        }
-        if (!line.trim()) { flush(); i++; continue; }
-        if ((m = /^(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/.exec(line))) {
-            flush();
-            const t = m[2] || '';
-            out.push(`<h${m[1].length} id="${slug(t)}">${inlineHtml(t)}</h${m[1].length}>`);
-            i++; continue;
-        }
-        if (RE.hr.test(line)) { flush(); out.push('<hr>'); i++; continue; }
-        if (/^[ \t]*>/.test(line)) {
-            flush();
-            const q = [];
-            while (i < lines.length && /^[ \t]*>/.test(lines[i])) q.push(lines[i++].replace(/^[ \t]*>[ \t]?/, ''));
-            out.push(`<blockquote>\n${blocksHtml(q)}\n</blockquote>`);
-            continue;
-        }
-        if (startsTable(lines, i)) {
-            flush();
-            const end = tableEnd(lines, i);
-            const table = parseTable(lines.slice(i, end + 1));
-            const cell = (tag: string, text: string, col: number) =>
-                `<${tag}${table.aligns[col] ? ` style="text-align:${table.aligns[col]}"` : ''}>${inlineHtml(text)}</${tag}>`;
-            const row = (tag: string, cells: string[]) => `<tr>${cells.map((c, k) => cell(tag, c, k)).join('')}</tr>`;
-            out.push(`<table>\n<thead>${row('th', table.header)}</thead>\n<tbody>\n${table.rows.map(r => `${row('td', r)}\n`).join('')}</tbody>\n</table>`);
-            i = end + 1;
-            continue;
-        }
-        if (RE.list.test(line) && (para.length === 0 || RE.list.exec(line)![3])) {
-            flush();
-            const [html, ni] = parseList(lines, i);
-            out.push(html);
-            i = ni;
-            continue;
-        }
-        para.push(line);
-        i++;
+        if (!lines[i].trim()) { flush(); i++; continue; }
+        const block = readBlock(lines, i, para.length > 0);
+        if (!block) { para.push(lines[i++]); continue; }
+        flush();
+        out.push(block[0]);
+        i = block[1];
     }
     flush();
     return out.join('\n');
+}
+
+function readBlock(lines: string[], i: number, inParagraph: boolean): [string, number] | null {
+    for (const read of BLOCK_READERS) {
+        const block = read(lines, i, inParagraph);
+        if (block) return block;
+    }
+    return null;
+}
+
+// A fenced code block from line i to its closing fence (or the end of the document).
+function codeBlock(lines: string[], i: number, m: RegExpExecArray): [string, number] {
+    const ch = m[2][0], n = m[2].length, lang = m[3].trim(), code = [];
+    for (i++; i < lines.length; i++) {
+        const c = RE.fence.exec(lines[i]);
+        if (c && c[2][0] === ch && c[2].length >= n && !c[3].trim()) { i++; break; }
+        code.push(lines[i]);
+    }
+    const text = code.join('\n');
+    const kind = lang.split(/\s+/)[0].toLowerCase();
+    // Mermaid diagrams are drawn by a script in <head> when the page is opened (see markdownToHtml).
+    if (kind === 'mermaid') return [`<pre class="mermaid">${esc(text)}</pre>`, i];
+    // DBML is translated to a Mermaid ER diagram; invalid syntax shows as a plain code block.
+    if (kind === 'dbml') {
+        try { return [`<pre class="mermaid">${esc(dbmlToMermaid(text))}</pre>`, i]; } catch { /* fall back to a code block */ }
+    }
+    return [`<pre><code${lang ? ` class="language-${esc(lang)}"` : ''}>${esc(text)}</code></pre>`, i];
+}
+
+function tableHtml(lines: string[], i: number): [string, number] {
+    const end = tableEnd(lines, i);
+    const table = parseTable(lines.slice(i, end + 1));
+    const cell = (tag: string, text: string, col: number) =>
+        `<${tag}${table.aligns[col] ? ` style="text-align:${table.aligns[col]}"` : ''}>${inlineHtml(text)}</${tag}>`;
+    const row = (tag: string, cells: string[]) => `<tr>${cells.map((c, k) => cell(tag, c, k)).join('')}</tr>`;
+    return [`<table>\n<thead>${row('th', table.header)}</thead>\n<tbody>\n${table.rows.map(r => `${row('td', r)}\n`).join('')}</tbody>\n</table>`, end + 1];
 }
 
 export function markdownToHtml(src: string, title: string): string {

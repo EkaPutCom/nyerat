@@ -222,162 +222,208 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags, tagger: LineTagger
 }
 
 function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed {
-    const text = lines.join('\n');
-    // All positions below are in UTF-16 (JS strings); converted when touching the buffer.
-    const toCp = makeCpMap(text);
-    const spans: LineSpan[][] = lines.map(() => []);
-    cache?.begin();
-    const starts: number[] = [];
-    // Each tag is applied on the line being processed (`row`, starting at offset `rowStart`).
-    let row = 0, rowStart = 0;
-    const apply = (name: TagName, a: number, b: number) => {
-        if (b > a) spans[row].push([tags[name], toCp(a) - rowStart, toCp(b) - rowStart]);
-    };
-    const markers: Marker[] = [];
-    const hide = (a: number, b: number, l0: number, l1: number, line = l0) => { if (b > a) markers.push([toCp(a), toCp(b), l0, l1, line]); };
-    const headings: Heading[] = [];
+    return new LineParser(lines, tags, cache).parse();
+}
 
-    const images: ImageRef[] = [];
+type Fence = { line: number; ch: string; len: number; a: number; b: number; lang: string };
 
-    // withImages = false for table rows: an image below a table row breaks its layout.
-    const inline = (base: number, s: string, line: number, withImages = true) => {
-        const { tags: found, marks, images: imgs } = parseInline(s);
-        for (const [n, a, b] of found) apply(n, base + a, base + b);
-        for (const [a, b] of marks) hide(base + a, base + b, line, line);
-        if (!withImages) return;
-        for (const img of imgs) {
-            images.push({ line, url: img.url, alt: img.alt });
-            // On an inactive line, the whole ![alt](url) is hidden
-            // and only the image is visible (see editor/images.ts).
-            hide(base + img.start, base + img.end, line, line);
-        }
-    };
-
+// One parse of a range of lines. Positions are in UTF-16 (JS strings) and converted to code points when recorded.
+class LineParser {
+    private readonly text: string;
+    private readonly toCp: (offset: number) => number;
+    private readonly spans: LineSpan[][];
+    private readonly starts: number[] = [];
+    private readonly markers: Marker[] = [];
+    private readonly headings: Heading[] = [];
+    private readonly images: ImageRef[] = [];
+    private readonly codeBlocks: CodeBlock[] = [];
     // Tables are recognized first from the parsing range, so the rules are the same as
     // those used by the edit commands and HTML export (markdown/table.ts).
-    const tables = findTables(lines);
-    const tableOf = new Map<number, TableRange>();
-    for (const t of tables) for (let l = t.start; l <= t.end; l++) tableOf.set(l, t);
+    private readonly tables: TableRange[];
+    private readonly tableOf = new Map<number, TableRange>();
+    private fence: Fence | null = null;
+    // Each tag is applied on the line being processed (`row`, starting at code point `rowStart`).
+    private row = 0;
+    private rowStart = 0;
 
-    let off = 0;
-    let fence: { line: number; ch: string; len: number; a: number; b: number; lang: string } | null = null;
-    const codeBlocks: CodeBlock[] = [];
+    constructor(private readonly lines: string[], private readonly tags: Tags, private readonly cache: HighlightCache) {
+        this.text = lines.join('\n');
+        this.toCp = makeCpMap(this.text);
+        this.spans = lines.map(() => []);
+        this.tables = findTables(lines);
+        for (const t of this.tables) for (let l = t.start; l <= t.end; l++) this.tableOf.set(l, t);
+    }
+
+    parse(): Parsed {
+        const { lines, cache } = this;
+        cache?.begin();
+        for (let i = 0, off = 0; i < lines.length; off += lines[i].length + 1, i++) {
+            this.row = i;
+            this.rowStart = this.toCp(off);
+            this.starts.push(this.rowStart);
+            this.line(i, off);
+        }
+        const fence = this.fence;
+        if (fence) {
+            this.hide(fence.a, fence.b, fence.line, lines.length - 1);
+            this.closeBlock(fence, lines.length);  // an unclosed block continues to the end of the document
+        }
+        cache?.end();
+        const { text, markers, headings, images, codeBlocks, tables, starts, spans } = this;
+        const lineWords = lines.map(countWords);
+        return { text, lines, markers, headings, images, codeBlocks, tables, starts, spans, lineWords, reparsed: [0, lines.length - 1],
+            words: lineWords.reduce((a, b) => a + b, 0), characters: cpLength(text),
+            checkpoints: checkpoints(lines, codeBlocks, tables) };
+    }
+
+    private apply(name: TagName, a: number, b: number): void {
+        if (b > a) this.spans[this.row].push([this.tags[name], this.toCp(a) - this.rowStart, this.toCp(b) - this.rowStart]);
+    }
+
+    private hide(a: number, b: number, l0: number, l1: number, line = l0): void {
+        if (b > a) this.markers.push([this.toCp(a), this.toCp(b), l0, l1, line]);
+    }
+
+    // withImages = false for table rows: an image below a table row breaks its layout.
+    private inline(base: number, s: string, line: number, withImages = true): void {
+        const { tags: found, marks, images } = parseInline(s);
+        for (const [n, a, b] of found) this.apply(n, base + a, base + b);
+        for (const [a, b] of marks) this.hide(base + a, base + b, line, line);
+        if (!withImages) return;
+        for (const img of images) {
+            this.images.push({ line, url: img.url, alt: img.alt });
+            // On an inactive line, the whole ![alt](url) is hidden
+            // and only the image is visible (see editor/images.ts).
+            this.hide(base + img.start, base + img.end, line, line);
+        }
+    }
+
     // The code block ends at line lastLine (exclusive): record its contents.
-    const closeBlock = (f: NonNullable<typeof fence>, lastLine: number) =>
-        codeBlocks.push({
-            lang: f.lang, start: toCp(f.b), text: lines.slice(f.line + 1, lastLine).join('\n'),
+    private closeBlock(f: Fence, lastLine: number): void {
+        const lines = this.lines;
+        this.codeBlocks.push({
+            lang: f.lang, start: this.toCp(f.b), text: lines.slice(f.line + 1, lastLine).join('\n'),
             startLine: f.line, endLine: Math.min(lastLine, lines.length - 1), closed: lastLine < lines.length,
         });
-    for (let i = 0; i < lines.length; off += lines[i].length + 1, i++) {
-        const line = lines[i];
-        const lineEnd = off + line.length;
-        row = i;
-        rowStart = toCp(off);
-        starts.push(rowStart);
-        const nl = i < lines.length - 1 ? 1 : 0;
-        let m: RegExpExecArray | null;
+    }
 
-        // Inside a code block: no other formatting, look for the closing fence.
-        if (fence) {
-            m = RE.fence.exec(line);
-            apply('codeblock', off, lineEnd + nl);
-            if (m && m[2][0] === fence.ch && m[2].length >= fence.len && !m[3].trim()) {
-                apply('fence', off, lineEnd);
-                hide(fence.a, fence.b, fence.line, i);
-                hide(off, lineEnd + nl, fence.line, i, i);
-                closeBlock(fence, i);
-                fence = null;
-            }
-            continue;
-        }
-        if ((m = RE.fence.exec(line)) && !(m[2][0] === '`' && m[3].includes('`'))) {
-            fence = { line: i, ch: m[2][0], len: m[2].length, a: off, b: lineEnd + nl, lang: m[3].trim().split(/\s+/)[0] ?? '' };
-            apply('codeblock', off, lineEnd + nl);
-            apply('fence', off, lineEnd);
-            continue;
-        }
-        const table = tableOf.get(i);
+    private line(i: number, off: number): void {
+        const line = this.lines[i];
+        const lineEnd = off + line.length;
+        const nl = i < this.lines.length - 1 ? 1 : 0;
+        if (this.codeFence(i, off, lineEnd, nl)) return;
+        const table = this.tableOf.get(i);
         const role = !table ? '' : i === table.start ? 'head' : i === table.start + 1 ? 'separator' : 'body';
         const key = `${nl}:${role}\0${line}`;
-        const cached = cache?.get(key);
-        if (cached) {
-            spans[i] = cached.spans;
-            for (const [a, b] of cached.markers) markers.push([rowStart + a, rowStart + b, i, i, i]);
-            for (const h of cached.headings) headings.push({ ...h, line: i });
-            for (const img of cached.images) images.push({ ...img, line: i });
-            cache!.put(key, cached);
-            continue;
-        }
-        const markerStart = markers.length, headingStart = headings.length, imageStart = images.length;
-        const parseLine = () => {
-            if ((m = RE.heading.exec(line))) {
-                const lvl = m[1].length, pl = m[0].length;
-                apply(`h${lvl}` as TagName, off, lineEnd);  // lvl is always 1–6
-                apply('marker', off, off + pl);
-                hide(off, off + pl, i, i);
-                inline(off + pl, line.slice(pl), i);
-                headings.push({ level: lvl, text: line.slice(pl).replace(/\s+#+\s*$/, '').trim(), line: i });
-                return;
-            }
-            if (RE.hr.test(line)) { apply('hr', off, lineEnd); return; }
-            if (table) {
-                apply('table', off, lineEnd);
-                if (i === table.start) apply('tablehead', off, lineEnd);
-                else if (i === table.start + 1 && isTableSeparator(line)) apply('tablesep', off, lineEnd);
-                for (let k = 0; k < line.length; k++) if (line[k] === '|') apply('marker', off + k, off + k + 1);
-                inline(off, line, i, false);
-                return;
-            }
-
-            // Quote, may be followed by a list: "> - item"
-            let p = 0;
-            if ((m = RE.quote.exec(line))) {
-                p = m[0].length;
-                const depth = (m[0].match(/>/g) ?? []).length;
-                apply('quote', off, lineEnd);
-                if (depth >= 2) apply(depth >= 3 ? 'quote3' : 'quote2', off, lineEnd);
-                apply('marker', off, off + p);
-                hide(off, off + p, i, i);
-            }
-            const rest = line.slice(p);
-            if ((m = RE.list.exec(rest))) {
-                const bs = off + p + m[1].length;
-                apply('bullet', bs, bs + m[2].length);
-                const q = p + m[0].length;
-                // Continuation lines (from wrapping) line up with the item text. In a quote
-                // the left margin is already set by the quote tag, so it is skipped.
-                const hanging = p === 0 ? listIndentFor(tags) : undefined;
-                if (hanging && lineEnd > off) {
-                    const tag = hanging.tag(m[1], m[2], m[3], m[4]?.slice(0, 3) ?? '', m[4]?.slice(3) ?? '');
-                    spans[row].push([tag, 0, toCp(lineEnd) - rowStart]);
-                }
-                if (m[4]) {
-                    const ts = off + p + m[1].length + m[2].length + m[3].length;
-                    const checked = /x/i.test(m[4]);
-                    apply(checked ? 'taskdone' : 'task', ts, ts + 3);
-                    if (checked) apply('done', off + q, lineEnd);
-                }
-                inline(off + q, line.slice(q), i);
-                return;
-            }
-            inline(off + p, rest, i);
-        };
-        parseLine();
-        cache?.put(key, {
-            spans: spans[i],
-            markers: markers.slice(markerStart).map(([a, b]) => [a - rowStart, b - rowStart]),
-            headings: headings.slice(headingStart).map(({ level, text }) => ({ level, text })),
-            images: images.slice(imageStart).map(({ url, alt }) => ({ url, alt })),
+        if (this.fromCache(key, i)) return;
+        const markerStart = this.markers.length, headingStart = this.headings.length, imageStart = this.images.length;
+        this.content(i, off, lineEnd, table);
+        const rowStart = this.rowStart;
+        this.cache?.put(key, {
+            spans: this.spans[i],
+            markers: this.markers.slice(markerStart).map(([a, b]) => [a - rowStart, b - rowStart]),
+            headings: this.headings.slice(headingStart).map(({ level, text }) => ({ level, text })),
+            images: this.images.slice(imageStart).map(({ url, alt }) => ({ url, alt })),
         });
     }
-    if (fence) {
-        hide(fence.a, fence.b, fence.line, lines.length - 1);
-        closeBlock(fence, lines.length);  // an unclosed block continues to the end of the document
+
+    // Inside a code block: no other formatting, look for the closing fence. Also opens a block. true = handled.
+    private codeFence(i: number, off: number, lineEnd: number, nl: number): boolean {
+        const m = RE.fence.exec(this.lines[i]);
+        const fence = this.fence;
+        if (fence) {
+            this.apply('codeblock', off, lineEnd + nl);
+            if (m && m[2][0] === fence.ch && m[2].length >= fence.len && !m[3].trim()) {
+                this.apply('fence', off, lineEnd);
+                this.hide(fence.a, fence.b, fence.line, i);
+                this.hide(off, lineEnd + nl, fence.line, i, i);
+                this.closeBlock(fence, i);
+                this.fence = null;
+            }
+            return true;
+        }
+        if (!m || m[2][0] === '`' && m[3].includes('`')) return false;
+        this.fence = { line: i, ch: m[2][0], len: m[2].length, a: off, b: lineEnd + nl, lang: m[3].trim().split(/\s+/)[0] ?? '' };
+        this.apply('codeblock', off, lineEnd + nl);
+        this.apply('fence', off, lineEnd);
+        return true;
     }
 
-    cache?.end();
-    const lineWords = lines.map(countWords);
-    return { text, lines, markers, headings, images, codeBlocks, tables, starts, spans, lineWords, reparsed: [0, lines.length - 1],
-        words: lineWords.reduce((a, b) => a + b, 0), characters: cpLength(text),
-        checkpoints: checkpoints(lines, codeBlocks, tables) };
+    // A line already parsed with the same text and block context: reuse its result, shifted to this line.
+    private fromCache(key: string, i: number): boolean {
+        const cached = this.cache?.get(key);
+        if (!cached) return false;
+        this.spans[i] = cached.spans;
+        for (const [a, b] of cached.markers) this.markers.push([this.rowStart + a, this.rowStart + b, i, i, i]);
+        for (const h of cached.headings) this.headings.push({ ...h, line: i });
+        for (const img of cached.images) this.images.push({ ...img, line: i });
+        this.cache!.put(key, cached);
+        return true;
+    }
+
+    // A line outside code blocks: a heading, a rule, a table row, or text (possibly quoted, possibly a list item).
+    private content(i: number, off: number, lineEnd: number, table: TableRange | undefined): void {
+        const line = this.lines[i];
+        const heading = RE.heading.exec(line);
+        if (heading) this.heading(i, off, lineEnd, heading[0].length, heading[1].length);
+        else if (RE.hr.test(line)) this.apply('hr', off, lineEnd);
+        else if (table) this.tableRow(i, off, lineEnd, table);
+        else this.body(i, off, lineEnd, this.quote(line, off, lineEnd, i));
+    }
+
+    private heading(i: number, off: number, lineEnd: number, pl: number, lvl: number): void {
+        const line = this.lines[i];
+        this.apply(`h${lvl}` as TagName, off, lineEnd);  // lvl is always 1–6
+        this.apply('marker', off, off + pl);
+        this.hide(off, off + pl, i, i);
+        this.inline(off + pl, line.slice(pl), i);
+        this.headings.push({ level: lvl, text: line.slice(pl).replace(/\s+#+\s*$/, '').trim(), line: i });
+    }
+
+    private tableRow(i: number, off: number, lineEnd: number, table: TableRange): void {
+        const line = this.lines[i];
+        this.apply('table', off, lineEnd);
+        if (i === table.start) this.apply('tablehead', off, lineEnd);
+        else if (i === table.start + 1 && isTableSeparator(line)) this.apply('tablesep', off, lineEnd);
+        for (let k = 0; k < line.length; k++) if (line[k] === '|') this.apply('marker', off + k, off + k + 1);
+        this.inline(off, line, i, false);
+    }
+
+    // A quote prefix ("> ", "> > "): tagged by depth and hidden. Returns its length (0 = not a quote).
+    private quote(line: string, off: number, lineEnd: number, i: number): number {
+        const m = RE.quote.exec(line);
+        if (!m) return 0;
+        const p = m[0].length;
+        const depth = (m[0].match(/>/g) ?? []).length;
+        this.apply('quote', off, lineEnd);
+        if (depth >= 2) this.apply(depth >= 3 ? 'quote3' : 'quote2', off, lineEnd);
+        this.apply('marker', off, off + p);
+        this.hide(off, off + p, i, i);
+        return p;
+    }
+
+    // Text after the quote prefix (length p), which may be a list item: "> - item".
+    private body(i: number, off: number, lineEnd: number, p: number): void {
+        const line = this.lines[i];
+        const rest = line.slice(p);
+        const m = RE.list.exec(rest);
+        if (!m) { this.inline(off + p, rest, i); return; }
+        const bs = off + p + m[1].length;
+        this.apply('bullet', bs, bs + m[2].length);
+        const q = p + m[0].length;
+        // Continuation lines (from wrapping) line up with the item text. In a quote
+        // the left margin is already set by the quote tag, so it is skipped.
+        const hanging = p === 0 ? listIndentFor(this.tags) : undefined;
+        if (hanging && lineEnd > off) {
+            const tag = hanging.tag(m[1], m[2], m[3], m[4]?.slice(0, 3) ?? '', m[4]?.slice(3) ?? '');
+            this.spans[this.row].push([tag, 0, this.toCp(lineEnd) - this.rowStart]);
+        }
+        if (m[4]) {
+            const ts = off + p + m[1].length + m[2].length + m[3].length;
+            const checked = /x/i.test(m[4]);
+            this.apply(checked ? 'taskdone' : 'task', ts, ts + 3);
+            if (checked) this.apply('done', off + q, lineEnd);
+        }
+        this.inline(off + q, line.slice(q), i);
+    }
 }

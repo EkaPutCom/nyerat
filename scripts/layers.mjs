@@ -47,20 +47,9 @@ for (const file of files) {
 // for-in, for-of, while, do-while, catch. A nested function (callback, arrow) is counted on its own.
 // Optional chaining and default parameters are not counted.
 const MAX_COMPLEXITY = 20;
-// Functions that were already above the limit when it was introduced, with their complexity then. They may not
-// grow; split them when they are touched, and remove the entry once a function is at or below the limit.
-const COMPLEXITY_ALLOWED = {
-    'scripts/capture.ts main': 42,
-    'src/agent/context.ts buildContext': 36,
-    'src/markdown/lint.ts scanDocument': 30,
-    'src/markdown/dbml.ts tokenize': 29,
-    'src/agent/verification.ts (callback of a.checks.map)': 27,
-    'src/markdown/html.ts parseList': 23,
-    'src/markdown/html.ts blocksHtml': 23,
-    'src/editor/highlighter.ts parseLines': 22,
-    'src/editor/highlighter.ts parseLine': 22,
-    'src/editor/tagsync.ts LineTagger.run': 21,
-};
+// Exceptions, as 'path name': complexity. Empty since every function that was above the limit when it was
+// introduced has been split. An entry may not grow and has to go once its function is at or below the limit.
+const COMPLEXITY_ALLOWED = {};
 
 const FUNCTION = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression', 'StaticBlock']);
 const BRANCH = new Set(['IfStatement', 'ConditionalExpression', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'CatchClause']);

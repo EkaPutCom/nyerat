@@ -181,47 +181,66 @@ export class LineTagger {
     // Visit lines lineAt(0..count-1) (ascending) and make their tags match spansOf.
     // skipDeferred: skip unknown deferred lines (see defer()).
     private run(count: number, lineAt: (k: number) => number, spansOf: (line: number) => LineSpan[], starts: number[], skipDeferred: boolean): void {
-        const buf = this.buffer;
-        const total = buf.get_char_count();
-        const span = new IterPair(buf);
-        const lines = (first: number, last: number) => span.at(starts[first] ?? total, starts[last + 1] ?? total);
-        const deferred = (line: number) => skipDeferred && line >= this.deferFrom && !this.applied[line];
+        const total = this.buffer.get_char_count();
+        const span = new IterPair(this.buffer);
+        const pass: Pass = {
+            count, lineAt, spansOf, starts, span,
+            lines: (first, last) => span.at(starts[first] ?? total, starts[last + 1] ?? total),
+            deferred: line => skipDeferred && line >= this.deferFrom && !this.applied[line],
+        };
         for (let k = 0; k < count; k++) {
             const i = lineAt(k);
-            if (deferred(i)) continue;
+            if (pass.deferred(i)) continue;
             const want = spansOf(i);
             const prev = this.applied[i];
-            if (prev && (prev === want || sameSpans(prev, want))) continue;
-            if (!prev) {
-                // Consecutive unknown lines are cleared at once (e.g. after setText).
-                let n = k;
-                while (n + 1 < count && lineAt(n + 1) === lineAt(n) + 1 && !this.applied[lineAt(n + 1)] && !deferred(lineAt(n + 1))) n++;
-                const j = lineAt(n);
-                const [s, e] = lines(i, j);
-                for (const tag of j - i < FEW_LINES ? this.tagsIn(s, e) : this.allTags) buf.remove_tag(tag, s, e);
-                // When opening/pasting a document, merge tag ranges that meet
-                // so GTK does not receive thousands of operations for a long code block.
-                const ranges = new Map<Gtk.TextTag, Range[]>();
-                for (let line = i; line <= j; line++) {
-                    const spans = line === i ? want : spansOf(line);
-                    for (const [tag, a, b] of spans) {
-                        if (!ranges.has(tag)) ranges.set(tag, []);
-                        ranges.get(tag)!.push([starts[line] + a, starts[line] + b]);
-                    }
-                    this.applied[line] = spans;
-                }
-                for (const [tag, wanted] of ranges)
-                    for (const [a, b] of normalize(wanted))
-                        buf.apply_tag(tag, ...span.at(a, b));
-                k = n;
-                continue;
-            } else {
-                const [s, e] = lines(i, i);
-                for (const tag of new Set(prev.map(p => p[0]))) buf.remove_tag(tag, s, e);
-            }
-            for (const [tag, a, b] of want)
-                buf.apply_tag(tag, ...span.at(starts[i] + a, starts[i] + b));
-            this.applied[i] = want;
+            if (!prev) k = this.fillUnknown(pass, k, want);
+            else if (prev !== want && !sameSpans(prev, want)) this.retag(pass, i, prev, want);
         }
     }
+
+    // Lines from lineAt(k) whose tags are unknown: cleared and tagged at once (e.g. after setText). Returns the
+    // index of the last line handled.
+    private fillUnknown(pass: Pass, k: number, want: LineSpan[]): number {
+        const { lineAt, spansOf, starts, span } = pass;
+        let n = k;
+        while (n + 1 < pass.count && lineAt(n + 1) === lineAt(n) + 1 && !this.applied[lineAt(n + 1)] && !pass.deferred(lineAt(n + 1))) n++;
+        const i = lineAt(k), j = lineAt(n);
+        const [s, e] = pass.lines(i, j);
+        for (const tag of j - i < FEW_LINES ? this.tagsIn(s, e) : this.allTags) this.buffer.remove_tag(tag, s, e);
+        // When opening/pasting a document, merge tag ranges that meet
+        // so GTK does not receive thousands of operations for a long code block.
+        const ranges = new Map<Gtk.TextTag, Range[]>();
+        for (let line = i; line <= j; line++) {
+            const spans = line === i ? want : spansOf(line);
+            for (const [tag, a, b] of spans) {
+                if (!ranges.has(tag)) ranges.set(tag, []);
+                ranges.get(tag)!.push([starts[line] + a, starts[line] + b]);
+            }
+            this.applied[line] = spans;
+        }
+        for (const [tag, wanted] of ranges)
+            for (const [a, b] of normalize(wanted))
+                this.buffer.apply_tag(tag, ...span.at(a, b));
+        return n;
+    }
+
+    // A known line whose tags changed: remove its old tags and apply the new ones.
+    private retag(pass: Pass, i: number, prev: LineSpan[], want: LineSpan[]): void {
+        const [s, e] = pass.lines(i, i);
+        for (const tag of new Set(prev.map(p => p[0]))) this.buffer.remove_tag(tag, s, e);
+        for (const [tag, a, b] of want)
+            this.buffer.apply_tag(tag, ...pass.span.at(pass.starts[i] + a, pass.starts[i] + b));
+        this.applied[i] = want;
+    }
+}
+
+// One run() over a set of lines.
+interface Pass {
+    count: number;
+    lineAt: (k: number) => number;
+    spansOf: (line: number) => LineSpan[];
+    starts: number[];
+    span: IterPair;
+    lines: (first: number, last: number) => [Gtk.TextIter, Gtk.TextIter];   // the range of lines first..last
+    deferred: (line: number) => boolean;
 }
