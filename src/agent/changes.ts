@@ -134,172 +134,233 @@ export function cleanNewName(raw: string): string | null {
 
 // Turn a tool call into a Change, or an error message the model can use to fix its proposal.
 export function planChange(name: string, rawArguments: string, files: SourceFile[]): PlanResult {
-    let args: Record<string, unknown>;
-    try {
-        const parsed = JSON.parse(rawArguments || '{}');
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
-        args = parsed;
-    } catch (e) {
-        return fail('The arguments are not a valid JSON object.', 'invalid arguments');
-    }
+    const args = parseArguments(rawArguments);
+    if (!args) return fail('The arguments are not a valid JSON object.', 'invalid arguments');
     const reason = asText(args.reason).trim();
+    if (name === 'create_file') return planCreate(args, reason, files);
+
+    const plan = lookup(EXISTING_FILE_TOOLS, name);
+    if (!plan) return fail(`Tool "${name}" is not recognized.`, 'unknown tool');
     const raw = asText(args.name);
-
-    if (name === 'create_file') {
-        const file = cleanNewName(raw);
-        if (!file) return fail(`The name "${raw}" is not valid. Use a relative path without "..", without a leading dot or "/".`, 'invalid name');
-        const taken = files.find(f => f.name.toLowerCase() === file.toLowerCase());
-        if (taken) return fail(`File "${taken.name}" already exists. Use edit_file to change it, or choose another name.`, 'already exists');
-        const text = asText(args.content);
-        if (!text.trim()) return fail('The "content" argument is required.', 'empty content');
-        if (text.length > MAX_NEW_FILE_CHARS) return fail('The content is too long for a single proposed file. Split it into several files.', 'too long');
-        return { ok: true, change: { kind: 'create', file, before: '', after: text.endsWith('\n') ? text : `${text}\n`, reason } };
-    }
-
-    if (!isChangeTool(name)) return fail(`Tool "${name}" is not recognized.`, 'unknown tool');
     if (!raw.trim()) return fail('The "name" argument is required.', 'empty name');
     const file = matchMention(raw, files);
     if (!file) return fail(`File "${raw}" was not found. Call list_files to see the existing names${name === 'edit_file' || name === 'insert_text' ? ', or use create_file for a new file' : ''}.`, 'file not found');
-    const edit = (after: string): PlanResult => after === file.text
-        ? fail('Nothing changed.', 'no change')
-        : { ok: true, change: { kind: 'edit', file: file.name, before: file.text, after, reason } };
+    return plan({ args, reason, file, files, edit: after => editResult(file, after, reason) });
+}
 
-    if (name === 'edit_file') {
-        const oldText = asText(args.old_text);
-        if (!oldText) return fail('The "old_text" argument is required (the exact piece being replaced).', 'empty old_text');
-        const count = file.text.split(oldText).length - 1;
-        if (!count) return fail(`old_text was not found in ${file.name}. Re-read that part with read_file and copy it exactly, without line numbers.`, 'text does not match');
-        const all = args.all === true;
-        if (count > 1 && !all) return fail(`old_text appears ${count} times in ${file.name}. Extend it with surrounding lines until it is unique, or use all=true if every occurrence really has to be replaced.`, 'not unique');
-        const newText = asText(args.new_text);
-        if (newText === oldText) return fail('new_text is the same as old_text; nothing changes.', 'no change');
-        if (all) return edit(file.text.split(oldText).join(newText));
-        const at = file.text.indexOf(oldText);
-        return edit(file.text.slice(0, at) + newText + file.text.slice(at + oldText.length));
+// What a tool that works on an existing file gets: its arguments, the file, and `edit` for a contents change.
+interface FileTarget {
+    args: Record<string, unknown>;
+    reason: string;
+    file: SourceFile;
+    files: SourceFile[];
+    edit: (after: string) => PlanResult;
+}
+
+const EXISTING_FILE_TOOLS: Record<string, (t: FileTarget) => PlanResult> = {
+    edit_file: planEdit,
+    insert_text: planInsert,
+    delete_file: ({ file, reason }) => ({ ok: true, change: { kind: 'delete', file: file.name, before: file.text, after: '', reason } }),
+    move_file: planMove,
+    edit_kanban: ({ args, reason, file }) => planKanban(args, reason, file),
+};
+
+// A handler from a table by a name the model chose; never an inherited property such as "toString".
+const lookup = <T>(table: Record<string, T>, key: string): T | undefined => Object.hasOwn(table, key) ? table[key] : undefined;
+
+function parseArguments(rawArguments: string): Record<string, unknown> | null {
+    try {
+        const parsed = JSON.parse(rawArguments || '{}');
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch (e) {
+        return null;
     }
+}
 
-    if (name === 'insert_text') {
-        const text = asText(args.text).replace(/\n+$/, '');
-        if (!text.trim()) return fail('The "text" argument is required.', 'empty text');
-        const lines = file.text ? file.text.split('\n') : [];
-        // A trailing blank line is just the end of the file, not a line that can be followed.
-        const count = file.text.endsWith('\n') ? lines.length - 1 : lines.length;
-        // A file without a newline at the end gets one only if the text is added at its end.
-        const insertAt = (index: number): PlanResult => edit([...lines.slice(0, index), ...text.split('\n'), ...lines.slice(index)].join('\n') + (index === count && count === lines.length ? '\n' : ''));
-        const position = asText(args.position);
-        if (position === 'start') {
-            const front = /^---\n[\s\S]*?\n---(?:\n|$)/.exec(file.text);
-            return insertAt(front ? front[0].replace(/\n$/, '').split('\n').length : 0);
-        }
-        if (position === 'end') return insertAt(count);
-        if (position === 'after_line') {
-            const line = typeof args.line === 'number' && Number.isInteger(args.line) ? args.line : 0;
-            if (line < 1 || line > count) return fail(`The "line" argument must be 1–${count} for ${file.name}.`, 'invalid line');
-            if (typeof args.line_text !== 'string') return fail('The "line_text" argument is required for after_line: copy the contents of that line from read_file.', 'empty line_text');
-            const actual = lines[line - 1];
-            if (actual.trim() !== args.line_text.trim()) {
-                const near = lines.map((l, i) => l.trim() === (args.line_text as string).trim() ? i + 1 : 0).filter(n => n).slice(0, 5);
-                return fail(`Line ${line} in ${file.name} contains "${actual.slice(0, 200)}", not line_text.${near.length ? ` line_text is on ${near.length === 1 ? "line" : "lines"} ${near.join(', ')}.` : ' Re-read the file with read_file.'}`, 'line does not match');
-            }
-            return insertAt(line);
-        }
-        return fail('The "position" argument must be one of: start, end, after_line.', 'invalid position');
+const editResult = (file: SourceFile, after: string, reason: string): PlanResult => after === file.text
+    ? fail('Nothing changed.', 'no change')
+    : { ok: true, change: { kind: 'edit', file: file.name, before: file.text, after, reason } };
+
+function planCreate(args: Record<string, unknown>, reason: string, files: SourceFile[]): PlanResult {
+    const raw = asText(args.name);
+    const file = cleanNewName(raw);
+    if (!file) return fail(`The name "${raw}" is not valid. Use a relative path without "..", without a leading dot or "/".`, 'invalid name');
+    const taken = files.find(f => f.name.toLowerCase() === file.toLowerCase());
+    if (taken) return fail(`File "${taken.name}" already exists. Use edit_file to change it, or choose another name.`, 'already exists');
+    const text = asText(args.content);
+    if (!text.trim()) return fail('The "content" argument is required.', 'empty content');
+    if (text.length > MAX_NEW_FILE_CHARS) return fail('The content is too long for a single proposed file. Split it into several files.', 'too long');
+    return { ok: true, change: { kind: 'create', file, before: '', after: text.endsWith('\n') ? text : `${text}\n`, reason } };
+}
+
+function planEdit({ args, file, edit }: FileTarget): PlanResult {
+    const oldText = asText(args.old_text);
+    if (!oldText) return fail('The "old_text" argument is required (the exact piece being replaced).', 'empty old_text');
+    const count = file.text.split(oldText).length - 1;
+    if (!count) return fail(`old_text was not found in ${file.name}. Re-read that part with read_file and copy it exactly, without line numbers.`, 'text does not match');
+    const all = args.all === true;
+    if (count > 1 && !all) return fail(`old_text appears ${count} times in ${file.name}. Extend it with surrounding lines until it is unique, or use all=true if every occurrence really has to be replaced.`, 'not unique');
+    const newText = asText(args.new_text);
+    if (newText === oldText) return fail('new_text is the same as old_text; nothing changes.', 'no change');
+    if (all) return edit(file.text.split(oldText).join(newText));
+    const at = file.text.indexOf(oldText);
+    return edit(file.text.slice(0, at) + newText + file.text.slice(at + oldText.length));
+}
+
+function planInsert({ args, file, edit }: FileTarget): PlanResult {
+    const text = asText(args.text).replace(/\n+$/, '');
+    if (!text.trim()) return fail('The "text" argument is required.', 'empty text');
+    const lines = file.text ? file.text.split('\n') : [];
+    // A trailing blank line is just the end of the file, not a line that can be followed.
+    const count = file.text.endsWith('\n') ? lines.length - 1 : lines.length;
+    // A file without a newline at the end gets one only if the text is added at its end.
+    const insertAt = (index: number): PlanResult => edit([...lines.slice(0, index), ...text.split('\n'), ...lines.slice(index)].join('\n') + (index === count && count === lines.length ? '\n' : ''));
+    const position = asText(args.position);
+    if (position === 'start') {
+        const front = /^---\n[\s\S]*?\n---(?:\n|$)/.exec(file.text);
+        return insertAt(front ? front[0].replace(/\n$/, '').split('\n').length : 0);
     }
+    if (position === 'end') return insertAt(count);
+    if (position !== 'after_line') return fail('The "position" argument must be one of: start, end, after_line.', 'invalid position');
+    const line = checkLine(args, file.name, lines, count);
+    return typeof line === 'number' ? insertAt(line) : line;
+}
 
-    if (name === 'delete_file') return { ok: true, change: { kind: 'delete', file: file.name, before: file.text, after: '', reason } };
+// after_line: the line number must exist and its contents must match line_text, a guard against miscounting.
+function checkLine(args: Record<string, unknown>, name: string, lines: string[], count: number): number | PlanResult {
+    const line = typeof args.line === 'number' && Number.isInteger(args.line) ? args.line : 0;
+    if (line < 1 || line > count) return fail(`The "line" argument must be 1–${count} for ${name}.`, 'invalid line');
+    const wanted = args.line_text;
+    if (typeof wanted !== 'string') return fail('The "line_text" argument is required for after_line: copy the contents of that line from read_file.', 'empty line_text');
+    const actual = lines[line - 1];
+    if (actual.trim() === wanted.trim()) return line;
+    const near = lines.map((l, i) => l.trim() === wanted.trim() ? i + 1 : 0).filter(n => n).slice(0, 5);
+    const hint = near.length ? ` line_text is on ${near.length === 1 ? 'line' : 'lines'} ${near.join(', ')}.` : ' Re-read the file with read_file.';
+    return fail(`Line ${line} in ${name} contains "${actual.slice(0, 200)}", not line_text.${hint}`, 'line does not match');
+}
 
-    if (name === 'move_file') {
-        const rawTarget = asText(args.destination);
-        const to = cleanNewName(rawTarget);
-        if (!to) return fail(`The destination "${rawTarget}" is not valid. Use a relative path without "..", without a leading dot or "/".`, 'invalid destination');
-        if (to === file.name) return fail('The destination is the same as the current name.', 'no change');
-        const taken = files.find(f => f.name.toLowerCase() === to.toLowerCase() && f !== file);
-        if (taken) return fail(`File "${taken.name}" already exists; choose another destination.`, 'destination already exists');
-        return { ok: true, change: { kind: 'move', file: file.name, to, before: file.text, after: file.text, reason } };
-    }
-
-    return planKanban(args, reason, file);
+function planMove({ args, reason, file, files }: FileTarget): PlanResult {
+    const rawTarget = asText(args.destination);
+    const to = cleanNewName(rawTarget);
+    if (!to) return fail(`The destination "${rawTarget}" is not valid. Use a relative path without "..", without a leading dot or "/".`, 'invalid destination');
+    if (to === file.name) return fail('The destination is the same as the current name.', 'no change');
+    const taken = files.find(f => f.name.toLowerCase() === to.toLowerCase() && f !== file);
+    if (taken) return fail(`File "${taken.name}" already exists; choose another destination.`, 'destination already exists');
+    return { ok: true, change: { kind: 'move', file: file.name, to, before: file.text, after: file.text, reason } };
 }
 
 // ---------- Kanban board ----------
 
-function planKanban(args: Record<string, unknown>, reason: string, file: SourceFile): PlanResult {
-    if (!isKanban(file.text)) return fail(`${file.name} is not a kanban board (frontmatter without "kanban: true"). Use edit_file for ordinary files.`, 'not a board');
-    const board = parseBoard(file.text);
-    const titles = board.columns.map(c => c.title).join(', ') || '(no lists yet)';
-    const action = asText(args.action);
-    const cardText = asText(args.card).trim();
-    const newText = asText(args.new_text).trim();
-    const listName = asText(args.list);
+// One edit_kanban call on a parsed board: the arguments and lookups every action uses.
+class KanbanTarget {
+    readonly titles: string;
+    readonly cardText: string;
+    readonly newText: string;
+    readonly listName: string;
 
-    const findColumn = (wanted: string): number | string => {
+    constructor(readonly board: Board, readonly args: Record<string, unknown>, readonly fileName: string) {
+        this.titles = board.columns.map(c => c.title).join(', ') || '(no lists yet)';
+        this.cardText = asText(args.card).trim();
+        this.newText = asText(args.new_text).trim();
+        this.listName = asText(args.list);
+    }
+
+    // The list named by "list": an exact title, or else the only title that contains it; otherwise why not.
+    column(): number | PlanResult {
+        const wanted = this.listName;
         const w = wanted.trim().toLowerCase();
-        if (!w) return 'The "list" argument is required.';
-        const exact = board.columns.map((c, i) => c.title.toLowerCase() === w ? i : -1).filter(i => i >= 0);
-        const hits = exact.length ? exact : board.columns.map((c, i) => c.title.toLowerCase().includes(w) ? i : -1).filter(i => i >= 0);
+        if (!w) return fail('The "list" argument is required.', 'list does not match');
+        const columns = this.board.columns;
+        const exact = columns.map((c, i) => c.title.toLowerCase() === w ? i : -1).filter(i => i >= 0);
+        const hits = exact.length ? exact : columns.map((c, i) => c.title.toLowerCase().includes(w) ? i : -1).filter(i => i >= 0);
         if (hits.length === 1) return hits[0];
-        return `The list "${wanted}" ${hits.length ? 'matches more than one list' : 'does not exist'}. Lists on the board: ${titles}.`;
-    };
-    const findCard = (): Position | string => {
-        if (!cardText) return 'The "card" argument is required.';
+        return fail(`The list "${wanted}" ${hits.length ? 'matches more than one list' : 'does not exist'}. Lists on the board: ${this.titles}.`, 'list does not match');
+    }
+
+    // The only card whose text contains "card".
+    card(): Position | PlanResult {
+        const { board, cardText } = this;
+        if (!cardText) return fail('The "card" argument is required.', 'card does not match');
         const w = cardText.toLowerCase();
         const hits: Position[] = [];
         board.columns.forEach((c, column) => c.cards.forEach((card, index) => { if (card.text.toLowerCase().includes(w)) hits.push({ column, index }); }));
         if (hits.length === 1) return hits[0];
         const list = hits.slice(0, 5).map(p => `"${board.columns[p.column].cards[p.index].text}" (${board.columns[p.column].title})`).join('; ');
-        return hits.length ? `"${cardText}" matches ${hits.length} cards: ${list}. Extend the text until it is unique.` : `No card contains "${cardText}" in ${file.name}.`;
-    };
-
-    let next: Board;
-    if (action === 'add') {
-        if (!cardText) return fail('The "card" argument is required.', 'empty card');
-        const column = findColumn(listName);
-        if (typeof column === 'string') return fail(column, 'list does not match');
-        if (cardText.includes('\n')) return fail('The text of a new card must be a single line.', 'invalid card');
-        next = addCard(board, column, cardText);
-    } else if (action === 'move') {
-        const from = findCard();
-        if (typeof from === 'string') return fail(from, 'card does not match');
-        const column = findColumn(listName);
-        if (typeof column === 'string') return fail(column, 'list does not match');
-        if (column === from.column) return fail('That card is already in that list.', 'no change');
-        next = moveCard(board, from, { column, index: Infinity });
-    } else if (action === 'mark') {
-        const at = findCard();
-        if (typeof at === 'string') return fail(at, 'card does not match');
-        if (typeof args.done !== 'boolean') return fail('The "done" argument (true/false) is required for the mark action.', 'empty done');
-        if (board.columns[at.column].cards[at.index].done === args.done) return fail('That card already has that status.', 'no change');
-        next = updateCard(board, at, { done: args.done });
-    } else if (action === 'edit') {
-        const at = findCard();
-        if (typeof at === 'string') return fail(at, 'card does not match');
-        if (!newText || newText.includes('\n')) return fail('The "new_text" argument is required and must be a single line.', 'invalid new_text');
-        next = updateCard(board, at, { text: newText });
-    } else if (action === 'delete') {
-        const at = findCard();
-        if (typeof at === 'string') return fail(at, 'card does not match');
-        next = deleteCard(board, at);
-    } else if (action === 'add_list') {
-        const title = listName.trim();
-        if (!title || title.includes('\n')) return fail('The "list" argument must be filled with the name of the new list (a single line).', 'empty list');
-        if (board.columns.some(c => c.title.toLowerCase() === title.toLowerCase())) return fail(`The list "${title}" already exists. Lists on the board: ${titles}.`, 'list already exists');
-        next = addColumn(board, title);
-    } else if (action === 'rename_list') {
-        const column = findColumn(listName);
-        if (typeof column === 'string') return fail(column, 'list does not match');
-        if (!newText || newText.includes('\n')) return fail('The "new_text" argument must be filled with the new list name (a single line).', 'invalid new_text');
-        if (board.columns.some((c, i) => i !== column && c.title.toLowerCase() === newText.toLowerCase())) return fail(`The list "${newText}" already exists.`, 'list already exists');
-        next = renameColumn(board, column, newText);
-    } else if (action === 'delete_list') {
-        const column = findColumn(listName);
-        if (typeof column === 'string') return fail(column, 'list does not match');
-        // Cards must not silently disappear together with their list.
-        const cards = board.columns[column].cards.length;
-        if (cards) return fail(`The list "${board.columns[column].title}" still contains ${cards} cards. Move or delete the cards first.`, 'list is not empty');
-        next = deleteColumn(board, column);
-    } else {
-        return fail('The "action" argument must be one of: add, move, mark, edit, delete, add_list, rename_list, delete_list.', 'invalid action');
+        return fail(hits.length ? `"${cardText}" matches ${hits.length} cards: ${list}. Extend the text until it is unique.` : `No card contains "${cardText}" in ${this.fileName}.`, 'card does not match');
     }
+
+    hasList(title: string, except = -1): boolean {
+        return this.board.columns.some((c, i) => i !== except && c.title.toLowerCase() === title.toLowerCase());
+    }
+}
+
+const failed = (v: unknown): v is PlanResult => typeof v === 'object' && v !== null && 'ok' in v;
+const singleLine = (text: string): boolean => !!text && !text.includes('\n');
+
+// Each action returns the new board, or why it cannot be done.
+const KANBAN_ACTIONS: Record<string, (k: KanbanTarget) => Board | PlanResult> = {
+    add: k => {
+        if (!k.cardText) return fail('The "card" argument is required.', 'empty card');
+        const column = k.column();
+        if (failed(column)) return column;
+        if (k.cardText.includes('\n')) return fail('The text of a new card must be a single line.', 'invalid card');
+        return addCard(k.board, column, k.cardText);
+    },
+    move: k => {
+        const from = k.card();
+        if (failed(from)) return from;
+        const column = k.column();
+        if (failed(column)) return column;
+        if (column === from.column) return fail('That card is already in that list.', 'no change');
+        return moveCard(k.board, from, { column, index: Infinity });
+    },
+    mark: k => {
+        const at = k.card();
+        if (failed(at)) return at;
+        const done = k.args.done;
+        if (typeof done !== 'boolean') return fail('The "done" argument (true/false) is required for the mark action.', 'empty done');
+        if (k.board.columns[at.column].cards[at.index].done === done) return fail('That card already has that status.', 'no change');
+        return updateCard(k.board, at, { done });
+    },
+    edit: k => {
+        const at = k.card();
+        if (failed(at)) return at;
+        if (!singleLine(k.newText)) return fail('The "new_text" argument is required and must be a single line.', 'invalid new_text');
+        return updateCard(k.board, at, { text: k.newText });
+    },
+    delete: k => {
+        const at = k.card();
+        return failed(at) ? at : deleteCard(k.board, at);
+    },
+    add_list: k => {
+        const title = k.listName.trim();
+        if (!singleLine(title)) return fail('The "list" argument must be filled with the name of the new list (a single line).', 'empty list');
+        if (k.hasList(title)) return fail(`The list "${title}" already exists. Lists on the board: ${k.titles}.`, 'list already exists');
+        return addColumn(k.board, title);
+    },
+    rename_list: k => {
+        const column = k.column();
+        if (failed(column)) return column;
+        if (!singleLine(k.newText)) return fail('The "new_text" argument must be filled with the new list name (a single line).', 'invalid new_text');
+        if (k.hasList(k.newText, column)) return fail(`The list "${k.newText}" already exists.`, 'list already exists');
+        return renameColumn(k.board, column, k.newText);
+    },
+    delete_list: k => {
+        const column = k.column();
+        if (failed(column)) return column;
+        // Cards must not silently disappear together with their list.
+        const cards = k.board.columns[column].cards.length;
+        if (cards) return fail(`The list "${k.board.columns[column].title}" still contains ${cards} cards. Move or delete the cards first.`, 'list is not empty');
+        return deleteColumn(k.board, column);
+    },
+};
+
+function planKanban(args: Record<string, unknown>, reason: string, file: SourceFile): PlanResult {
+    if (!isKanban(file.text)) return fail(`${file.name} is not a kanban board (frontmatter without "kanban: true"). Use edit_file for ordinary files.`, 'not a board');
+    const action = lookup(KANBAN_ACTIONS, asText(args.action));
+    if (!action) return fail('The "action" argument must be one of: add, move, mark, edit, delete, add_list, rename_list, delete_list.', 'invalid action');
+    const next = action(new KanbanTarget(parseBoard(file.text), args, file.name));
+    if (failed(next)) return next;
     const after = serializeBoard(next);
     if (after === file.text) return fail('Nothing changed on the board.', 'no change');
     return { ok: true, change: { kind: 'edit', file: file.name, before: file.text, after, reason } };

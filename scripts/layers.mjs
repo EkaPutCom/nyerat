@@ -51,11 +51,9 @@ const MAX_COMPLEXITY = 20;
 // grow; split them when they are touched, and remove the entry once a function is at or below the limit.
 const COMPLEXITY_ALLOWED = {
     'src/agent/harness.ts PiReader.line': 54,
-    'src/agent/changes.ts planChange': 45,
     'src/agent/transcript.ts parseChat': 42,
     'scripts/capture.ts main': 42,
     'src/agent/context.ts buildContext': 36,
-    'src/agent/changes.ts planKanban': 34,
     'src/markdown/lint.ts scanDocument': 30,
     'src/markdown/dbml.ts tokenize': 29,
     'src/agent/verification.ts (callback of a.checks.map)': 27,
