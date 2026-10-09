@@ -2,6 +2,7 @@
 // user notes, Undo (the inverse of a change), Git history tools, and structure verification. Without a GUI and network,
 // except one test that runs real git in a temporary folder.
 
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import type { SourceFile } from '../../src/agent/context.js';
 import { changeState, invertChange, planChange, preflight, type Change } from '../../src/agent/changes.js';
@@ -12,7 +13,7 @@ import { verifyWork } from '../../src/agent/verification.js';
 import { ChatSession, type ProposalResult, type TurnHandlers } from '../../src/agent/session.js';
 import type { ChatRequest, ChatResult, Provider, ToolCall } from '../../src/agent/provider.js';
 import { localLinks, newIssues, resolveLink, structureIssues } from '../../src/markdown/lint.js';
-import { agentGit } from '../../src/git.js';
+import { agentGit, gitLimits, runGit } from '../../src/git.js';
 import { section, test, eq, ok, contains, settle, tmp } from '../framework.js';
 
 const NOTES = '---\ntitle: meeting\n---\n# Meeting\n\nRelease November 15.\nNote: November 15 final.\n';
@@ -290,5 +291,29 @@ export function agentActionTests(): void {
         ok(!show.content.includes('secret'), show.content);
         const old = formatGit({ kind: 'file', commit: 'HEAD~1', file: 'plan.md' }, settle(agentGit(root, { kind: 'file', commit: 'HEAD~1', file: 'plan.md' })));
         contains(old.content, '1│ Release November 15');
+    });
+
+    test('runGit: a result lost by the runtime, or a git that hangs, ends as a failure instead of waiting forever', () => {
+        const limits = { ...gitLimits };
+        const communicate = Gio.Subprocess.prototype.communicate_utf8_async;
+        try {
+            // What GJS does when it blocks the callback during garbage collection: git exits, nothing calls back.
+            Gio.Subprocess.prototype.communicate_utf8_async = (() => {}) as unknown as typeof communicate;   // a narrow cast: only the callback form is used
+            gitLimits.lostMs = 300;
+            const lost = settle(agentGit(tmp, { kind: 'log', file: null, limit: 10 }));
+            eq(lost.ok, false, 'a lost result is a failure');
+            if (!lost.ok) contains(lost.message, 'result was lost');
+            Gio.Subprocess.prototype.communicate_utf8_async = communicate;
+            gitLimits.runMs = 500;
+            const started = Date.now();
+            const hung = settle(runGit(tmp, ['-c', 'alias.wait=!sleep 3', 'wait']));
+            eq(hung?.status, -1, 'a hanging git is stopped');
+            contains(hung?.err ?? '', 'did not finish');
+            ok(Date.now() - started < 2500, `stopped after ${Date.now() - started} ms`);
+            eq(settle(runGit(tmp, ['--version']))?.status, 0, 'a normal run still answers');
+        } finally {
+            Gio.Subprocess.prototype.communicate_utf8_async = communicate;
+            Object.assign(gitLimits, limits);
+        }
     });
 }

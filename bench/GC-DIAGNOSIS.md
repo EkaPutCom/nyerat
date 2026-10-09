@@ -94,3 +94,21 @@ The next check that would best tell the guesses apart is to capture the internal
 GC state at a refused callback, or to test the old reproduction with a
 runtime that changes the scope of the sweeping flag. For the performance of 500 tables, the problem of the
 initial creation of all the grids needs to be profiled separately from the failure of the GC callbacks.
+
+## A blocked AsyncReadyCallback in the unit tests — 9 October 2026
+
+The same guard was caught with its message. The unit test `agentGit in a real repository` occasionally waited
+until the `settle()` timeout; in one `npm test` run without extra load the log showed
+`Gjs-CRITICAL: Attempting to run a JS callback during garbage collection … The offending callback was AsyncReadyCallback()`,
+with `settle()`'s nested `GLib.MainLoop.run()` on top of the JS stack. Instrumentation in another run showed git had
+exited (`Gio.Subprocess.get_identifier()` was `null`, `get_if_exited()` true) while neither the
+`communicate_utf8_async()` nor a parallel `wait_async()` callback had run after 3 seconds, although a JS timer did.
+With every CPU core busy it happened in about a third of the runs; standalone scripts with the same calls (300
+subprocesses, with and without allocation pressure) did not reproduce it, so heap size or GC timing from the
+earlier tests matters.
+
+The app cannot stop the runtime from blocking a callback, so `runGit()` now has a watchdog (`gitLimits`): a run
+whose git has exited without a callback for 5 seconds, or whose git is still running after 120 seconds, ends as an
+ordinary failure. The test in `tests/unit/agentactions.ts` replaces `communicate_utf8_async` with a method that never
+calls back to reproduce the lost result deterministically.
+

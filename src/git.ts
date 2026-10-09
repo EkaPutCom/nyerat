@@ -17,25 +17,55 @@ export type TextResult =
 
 interface Run { status: number; out: string; err: string }
 
+// GJS 1.80 can block an async callback that arrives while it is garbage collecting ("Attempting to run a JS
+// callback during garbage collection"): communicate_utf8_async() then never calls back although git has finished,
+// and whatever awaits it (the History tab, an agent Git tool) waits forever. A watchdog settles the run instead,
+// as a failure: the output is gone, and a commit must not be repeated blindly. It also stops a git that hangs,
+// e.g. on a signing passphrase prompt. Changeable by tests.
+export const gitLimits = {
+    lostMs: 5000,       // after git has exited without the callback arriving
+    runMs: 120000,      // for git to finish at all
+};
+
 // null = git cannot be run (not installed, or the folder does not exist).
-function runGit(cwd: string, args: string[]): Promise<Run | null> {
+export function runGit(cwd: string, args: string[]): Promise<Run | null> {
     return new Promise(resolve => {
+        let done = false, watchdog = 0;
+        const finish = (run: Run | null) => {
+            if (done) return;
+            done = true;
+            if (watchdog) GLib.source_remove(watchdog);
+            resolve(run);
+        };
         try {
             const launcher = new Gio.SubprocessLauncher({ flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE });
             launcher.set_cwd(cwd);
             // Do not compete for the index lock with another git the user is running.
             launcher.setenv('GIT_OPTIONAL_LOCKS', '0', true);
             const proc = launcher.spawnv(['git', '-c', 'core.quotePath=false', ...args]);
+            const started = GLib.get_monotonic_time();
+            let exitedAt = 0;
+            watchdog = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                const now = GLib.get_monotonic_time();
+                if (!exitedAt && proc.get_identifier() === null) exitedAt = now;   // reaped: git has exited
+                const lost = exitedAt > 0 && now - exitedAt > gitLimits.lostMs * 1000;
+                const hung = !exitedAt && now - started > gitLimits.runMs * 1000;
+                if (!lost && !hung) return GLib.SOURCE_CONTINUE;
+                watchdog = 0;
+                if (hung) proc.force_exit();
+                finish({ status: -1, out: '', err: lost ? 'git finished but its result was lost; try again' : `git did not finish within ${Math.round(gitLimits.runMs / 1000)} seconds and was stopped` });
+                return GLib.SOURCE_REMOVE;
+            });
             proc.communicate_utf8_async(null, null, (_proc, result) => {
                 try {
                     const [, out, err] = proc.communicate_utf8_finish(result);
-                    resolve({ status: proc.get_if_exited() ? proc.get_exit_status() : -1, out: out ?? '', err: err ?? '' });
+                    finish({ status: proc.get_if_exited() ? proc.get_exit_status() : -1, out: out ?? '', err: err ?? '' });
                 } catch (e) {
-                    resolve(null);
+                    finish(null);
                 }
             });
         } catch (e) {
-            resolve(null);
+            finish(null);
         }
     });
 }
