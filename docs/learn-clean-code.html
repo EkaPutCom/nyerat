@@ -190,8 +190,8 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
     <p class="lede">Clean code here means one practical thing: a change can be made by reading a small part of the code, and the build tells you when a change breaks a rule. Every chapter below starts from a real problem in Nyerat (a GTK 4 + GJS workbench in TypeScript), shows the code before and after, and states how we checked that the behavior did not change.</p>
     <div class="kpis">
       <div class="kpi"><div class="what">Highest cyclomatic complexity of a function</div><div class="big">15</div><div class="from">from 132 (<code>ChatSession.ask</code>) · limit checked by the build</div></div>
-      <div class="kpi"><div class="what">Functions in src/ and scripts/</div><div class="big">2,656</div><div class="from">median 1 · mean 2.45 · 90% at 5 or less</div></div>
-      <div class="kpi"><div class="what">Import cycles between modules</div><div class="big">0</div><div class="from">106 modules · 319 runtime imports</div></div>
+      <div class="kpi"><div class="what">Functions in src/ and scripts/</div><div class="big">2,709</div><div class="from">median 1 · mean 2.44 · 90% at 5 or less</div></div>
+      <div class="kpi"><div class="what">Import cycles between modules</div><div class="big">0</div><div class="from">108 modules · 324 runtime imports</div></div>
       <div class="kpi"><div class="what">Modules that write a document's file</div><div class="big">1</div><div class="from">from 5 · the others call named operations</div></div>
     </div>
     <ul class="toc">
@@ -389,7 +389,7 @@ export class LineCache { begin() get() put() end() }</code></pre></div>
       <tr><td><code>MainWindow</code></td><td class="num">60</td><td class="num">51</td><td>DocumentController, ViewController, NoteLinks</td></tr>
     </tbody>
   </table></div>
-  <p class="note">Today 52 of the 59 classes with three or more methods have LCOM4 1. The other seven are small and read fine: <code>StatusBar</code> has a left and a right half, <code>Sidebar</code> a page and its contents, <code>ProposalViewer</code> a dark-mode setter. One is the counter's own blind spot: <code>DocumentController.setFile</code> only calls a helper that does not touch <code>this</code>.</p>
+  <p class="note">Today 53 of the 60 classes with three or more methods have LCOM4 1. The other seven are small and read fine: <code>StatusBar</code> has a left and a right half, <code>Sidebar</code> a page and its contents, <code>ProposalViewer</code> a dark-mode setter. One is the counter's own blind spot: <code>DocumentController.setFile</code> only calls a helper that does not touch <code>this</code>.</p>
   <div class="lesson"><b>Lesson</b>When a class has two groups of methods that never meet, it is two classes. When a widget makes decisions, move the decisions behind an interface the widget implements; the decisions become testable and the widget becomes boring.</div>
 </div>
 </section>
@@ -398,7 +398,7 @@ export class LineCache { begin() get() put() end() }</code></pre></div>
 <div class="wrap">
   <div class="chapnum">Chapter 5</div>
   <h2>Coupling: a narrow host, and one place that knows everyone</h2>
-  <p>Nyerat has no import cycle. Its fan-out is concentrated where it belongs: <code>window.ts</code> imports 32 modules because it is the <b>composition root</b>, the one place that creates the widgets and connects their callbacks. Everything else stays narrow.</p>
+  <p>Nyerat has no import cycle. Its fan-out is concentrated where it belongs: <code>window.ts</code> imports 33 modules because it is the <b>composition root</b>, the one place that creates the widgets and connects their callbacks. Everything else stays narrow.</p>
   <p>A controller never receives <code>MainWindow</code>. It declares what it needs as a host interface, and the window builds that host from closures:</p>
 <pre><code>// window/views.ts
 export interface ViewHost extends DocumentHost {
@@ -413,12 +413,32 @@ export interface ViewHost extends DocumentHost {
   <div class="scroll-x"><table>
     <thead><tr><th>Module</th><th class="num">Fan-in</th><th class="num">Fan-out</th><th>Reading</th></tr></thead>
     <tbody>
-      <tr><td><code>gtkutil.ts</code></td><td class="num">33</td><td class="num">0</td><td>stable foundation: many depend on it, it depends on nothing</td></tr>
-      <tr><td><code>i18n.ts</code></td><td class="num">30</td><td class="num">0</td><td>same</td></tr>
-      <tr><td><code>window.ts</code></td><td class="num">1</td><td class="num">32</td><td>composition root (was 38 before views, notes, and file operations moved to controllers)</td></tr>
+      <tr><td><code>i18n.ts</code></td><td class="num">37</td><td class="num">0</td><td>stable foundation: many depend on it, it depends on nothing</td></tr>
+      <tr><td><code>gtkutil.ts</code></td><td class="num">36</td><td class="num">0</td><td>same</td></tr>
+      <tr><td><code>window.ts</code></td><td class="num">1</td><td class="num">33</td><td>composition root (was 38 before views, notes, and file operations moved to controllers)</td></tr>
+      <tr><td><code>agent/commitmessage.ts</code></td><td class="num">1</td><td class="num">0</td><td>a new feature with no runtime import at all: everything it needs comes in as <code>CommitSources</code></td></tr>
       <tr><td><code>markdown/*</code></td><td class="num">—</td><td class="num">—</td><td>every import stays inside markdown/: fully self-contained</td></tr>
     </tbody>
   </table></div>
+  <h3>The same shape for a small feature</h3>
+  <p>The commit message writer (3fc49f5) needs git, the API key, the model client, and the chosen model. None of those is imported. The function lists them as a parameter, and the composition root fills it in:</p>
+<pre><code>// agent/commitmessage.ts: only type imports
+export interface CommitSources {
+    keyStore: KeyStore;
+    makeProvider: (key: string) =&gt; Provider;
+    model: () =&gt; string;
+    diff: (file: string) =&gt; Promise&lt;…&gt;;
+    subjects: (file: string, limit: number) =&gt; Promise&lt;string[]&gt;;
+}
+
+// window.ts: the one place that knows the Assistant and git
+private connectWriter(writer: MessageWriter): void {
+    writer.write = (files, onText, cancellable) =&gt; writeCommitMessage({
+        keyStore: this.chat.keyStore, makeProvider: this.chat.makeProvider, model: () =&gt; this.chat.model,
+        diff: workingDiff, subjects: recentSubjects,
+    }, files, onText, cancellable);
+}</code></pre>
+  <p>The tests pass a fake key store and a fake provider, with no network and no repository. The button, <code>ui/messagewriter.ts</code>, is shared by the History tab and the single-file window. It knows neither of them: it gets an entry, a status label, and a <code>files()</code> getter, and reports back through <code>onBusy</code> so each owner locks its own form.</p>
   <div class="lesson"><b>Lesson</b>Let exactly one module know everybody, and keep it free of decisions. Give every other part an interface listing what it may use; the interface is the documentation of its coupling.</div>
 </div>
 </section>
@@ -523,6 +543,7 @@ if (open) host.fileMoved(open, to);</code></pre></div>
     <li><span class="h">a8dc264</span><span>Limit lowered to 15; eleven more functions split.</span></li>
     <li><span class="h">84dccdd</span><span><code>ChatPanel</code> split into its parts; every class with LCOM4 above 1 reviewed.</span></li>
     <li><span class="h">85f18bb</span><span>One owner per piece of document state; <code>RunQueue</code> owns run status (chapter 6).</span></li>
+    <li><span class="h">3fc49f5</span><span>A new feature built to the rules from the start: <code>CommitSources</code> filled by the composition root, one button shared by two views through callbacks, and no function above complexity 7 (chapter 5).</span></li>
   </ol>
 </div>
 </section>
