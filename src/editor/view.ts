@@ -31,7 +31,7 @@ import GLib from 'gi://GLib';
 import type GdkPixbuf from 'gi://GdkPixbuf';
 import { onClick, onKeyPress } from '../gtkutil.js';
 
-import { ListIndent, registerListIndent } from './listindent.js';
+import { ListIndent } from './listindent.js';
 import { createTags, paintTags, setTagMargins, SYNTAX_TAGS } from './tags.js';
 import { LineTagger } from './tagsync.js';
 import { highlight, HighlightCache } from './highlighter.js';
@@ -123,7 +123,7 @@ export class MarkdownView {
     private cursorKey = '';
     private highlightQueued = 0;
     private resetHighlight = false;
-    private highlightCache = new HighlightCache();
+    private highlightCache: HighlightCache;
     private cursorQueued = 0;
     private fillQueued = 0;
     private destroyed = false;
@@ -150,7 +150,7 @@ export class MarkdownView {
         const syntaxTags = SYNTAX_TAGS.map(n => this.tags[n]);
         // List indent tags are created on demand; LineTagger needs to know in order to clear them.
         this.listIndent = new ListIndent(this.view, this.buffer, tag => syntaxTags.push(tag));
-        registerListIndent(this.tags, this.listIndent);
+        this.highlightCache = new HighlightCache(this.listIndent);
         this.syntaxTagger = new LineTagger(this.buffer, syntaxTags);
         this.concealer = new MarkerConcealer(new LineTagger(this.buffer, [this.tags.hidden]), this.tags.hidden);
         this.dirtyStart = this.buffer.create_mark(null, this.buffer.get_start_iter(), true);

@@ -25,7 +25,7 @@ import { makeCpMap, cpLength, countWords } from './offsets.js';
 import { type TagName, type Tags } from './tags.js';
 import type { LineSpan, LineTagger } from './tagsync.js';
 import { iterAtLine } from '../gtkutil.js';
-import { listIndentFor } from './listindent.js';
+import type { ListIndent } from './listindent.js';
 
 // Syntax that may be hidden: [start, end, firstLine, lastLine, line].
 export type Marker = [start: number, end: number, firstLine: number, lastLine: number, line: number];
@@ -181,6 +181,9 @@ export class HighlightCache {
     parsedLines = 0;
     private readonly lineCache = new LineCache();
 
+    // indent: hanging indentation for wrapped list items (the editor's; none without a view to measure in).
+    constructor(private readonly indent?: ListIndent) {}
+
     update(buffer: Gtk.TextBuffer, tags: Tags, edited?: [number, number] | null): Parsed {
         const old = this.snapshot;
         this.parsedLines = 0;
@@ -201,7 +204,7 @@ export class HighlightCache {
 
     private full(buffer: Gtk.TextBuffer, tags: Tags): Parsed {
         const [start, end] = buffer.get_bounds();
-        const result = parseLines(buffer.get_text(start, end, true).split('\n'), tags, this.lineCache);
+        const result = parseLines(buffer.get_text(start, end, true).split('\n'), tags, this.lineCache, this.indent);
         this.parsedLines = result.lines.length;
         return this.snapshot = result;
     }
@@ -210,7 +213,7 @@ export class HighlightCache {
     // while the part ends inside an open code block, expand geometrically so paragraphs are not re-parsed one by one.
     private parseRange(lines: string[], old: Parsed, tags: Tags, startLine: number, endLine: number, shift: number): { part: Parsed; endLine: number } {
         for (;;) {
-            const part = parseLines(lines.slice(startLine, endLine + shift + 1), tags, this.lineCache);
+            const part = parseLines(lines.slice(startLine, endLine + shift + 1), tags, this.lineCache, this.indent);
             this.parsedLines += part.lines.length;
             if (endLine === old.lines.length - 1 || !part.codeBlocks.some(b => !b.closed)) return { part, endLine };
             const next = lowerBound(old.checkpoints, endLine + Math.max(16, endLine - startLine + 1));
@@ -245,8 +248,8 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags, tagger: LineTagger
     return result;
 }
 
-function parseLines(lines: string[], tags: Tags, cache: LineCache): Parsed {
-    return new LineParser(lines, tags, cache).parse();
+function parseLines(lines: string[], tags: Tags, cache: LineCache, indent?: ListIndent): Parsed {
+    return new LineParser(lines, tags, cache, indent).parse();
 }
 
 type Fence = { line: number; ch: string; len: number; a: number; b: number; lang: string };
@@ -270,7 +273,7 @@ class LineParser {
     private row = 0;
     private rowStart = 0;
 
-    constructor(private readonly lines: string[], private readonly tags: Tags, private readonly cache: LineCache) {
+    constructor(private readonly lines: string[], private readonly tags: Tags, private readonly cache: LineCache, private readonly indent?: ListIndent) {
         this.text = lines.join('\n');
         this.toCp = makeCpMap(this.text);
         this.spans = lines.map(() => []);
@@ -332,16 +335,15 @@ class LineParser {
     }
 
     private line(i: number, off: number): void {
-        const line = this.lines[i];
-        const lineEnd = off + line.length;
-        const nl = i < this.lines.length - 1 ? 1 : 0;
-        if (this.codeFence(i, off, lineEnd, nl)) return;
+        const text = this.lines[i];
+        const row: Row = { i, text, off, end: off + text.length, nl: i < this.lines.length - 1 ? 1 : 0 };
+        if (this.codeFence(row)) return;
         const table = this.tableOf.get(i);
         const role = !table ? '' : i === table.start ? 'head' : i === table.start + 1 ? 'separator' : 'body';
-        const key = `${nl}:${role}\0${line}`;
+        const key = `${row.nl}:${role}\0${text}`;
         if (this.fromCache(key, i)) return;
         const markerStart = this.markers.length, headingStart = this.headings.length, imageStart = this.images.length;
-        this.content(i, off, lineEnd, table);
+        this.content(row, table);
         const rowStart = this.rowStart;
         this.cache?.put(key, {
             spans: this.spans[i],
@@ -352,24 +354,24 @@ class LineParser {
     }
 
     // Inside a code block: no other formatting, look for the closing fence. Also opens a block. true = handled.
-    private codeFence(i: number, off: number, lineEnd: number, nl: number): boolean {
-        const m = RE.fence.exec(this.lines[i]);
+    private codeFence({ i, text, off, end, nl }: Row): boolean {
+        const m = RE.fence.exec(text);
         const fence = this.fence;
         if (fence) {
-            this.apply('codeblock', off, lineEnd + nl);
+            this.apply('codeblock', off, end + nl);
             if (m && m[2][0] === fence.ch && m[2].length >= fence.len && !m[3].trim()) {
-                this.apply('fence', off, lineEnd);
+                this.apply('fence', off, end);
                 this.hide(fence.a, fence.b, fence.line, i);
-                this.hide(off, lineEnd + nl, fence.line, i, i);
+                this.hide(off, end + nl, fence.line, i, i);
                 this.closeBlock(fence, i);
                 this.fence = null;
             }
             return true;
         }
         if (!m || m[2][0] === '`' && m[3].includes('`')) return false;
-        this.fence = { line: i, ch: m[2][0], len: m[2].length, a: off, b: lineEnd + nl, lang: m[3].trim().split(/\s+/)[0] ?? '' };
-        this.apply('codeblock', off, lineEnd + nl);
-        this.apply('fence', off, lineEnd);
+        this.fence = { line: i, ch: m[2][0], len: m[2].length, a: off, b: end + nl, lang: m[3].trim().split(/\s+/)[0] ?? '' };
+        this.apply('codeblock', off, end + nl);
+        this.apply('fence', off, end);
         return true;
     }
 
@@ -386,50 +388,47 @@ class LineParser {
     }
 
     // A line outside code blocks: a heading, a rule, a table row, or text (possibly quoted, possibly a list item).
-    private content(i: number, off: number, lineEnd: number, table: TableRange | undefined): void {
-        const line = this.lines[i];
-        const heading = RE.heading.exec(line);
-        if (heading) this.heading(i, off, lineEnd, heading[0].length, heading[1].length);
-        else if (RE.hr.test(line)) this.apply('hr', off, lineEnd);
-        else if (table) this.tableRow(i, off, lineEnd, table);
-        else this.body(i, off, lineEnd, this.quote(line, off, lineEnd, i));
+    private content(row: Row, table: TableRange | undefined): void {
+        const heading = RE.heading.exec(row.text);
+        if (heading) this.heading(row, heading[0].length, heading[1].length);
+        else if (RE.hr.test(row.text)) this.apply('hr', row.off, row.end);
+        else if (table) this.tableRow(row, table);
+        else this.body(row, this.quote(row));
     }
 
-    private heading(i: number, off: number, lineEnd: number, pl: number, lvl: number): void {
-        const line = this.lines[i];
-        this.apply(`h${lvl}` as TagName, off, lineEnd);  // lvl is always 1–6
+    // An ATX heading: the marker (length pl) of level lvl is hidden; the text is formatted and listed in the outline.
+    private heading({ i, text, off, end }: Row, pl: number, lvl: number): void {
+        this.apply(`h${lvl}` as TagName, off, end);  // lvl is always 1–6
         this.apply('marker', off, off + pl);
         this.hide(off, off + pl, i, i);
-        this.inline(off + pl, line.slice(pl), i);
-        this.headings.push({ level: lvl, text: line.slice(pl).replace(/\s+#+\s*$/, '').trim(), line: i });
+        this.inline(off + pl, text.slice(pl), i);
+        this.headings.push({ level: lvl, text: text.slice(pl).replace(/\s+#+\s*$/, '').trim(), line: i });
     }
 
-    private tableRow(i: number, off: number, lineEnd: number, table: TableRange): void {
-        const line = this.lines[i];
-        this.apply('table', off, lineEnd);
-        if (i === table.start) this.apply('tablehead', off, lineEnd);
-        else if (i === table.start + 1 && isTableSeparator(line)) this.apply('tablesep', off, lineEnd);
-        for (let k = 0; k < line.length; k++) if (line[k] === '|') this.apply('marker', off + k, off + k + 1);
-        this.inline(off, line, i, false);
+    private tableRow({ i, text, off, end }: Row, table: TableRange): void {
+        this.apply('table', off, end);
+        if (i === table.start) this.apply('tablehead', off, end);
+        else if (i === table.start + 1 && isTableSeparator(text)) this.apply('tablesep', off, end);
+        for (let k = 0; k < text.length; k++) if (text[k] === '|') this.apply('marker', off + k, off + k + 1);
+        this.inline(off, text, i, false);
     }
 
     // A quote prefix ("> ", "> > "): tagged by depth and hidden. Returns its length (0 = not a quote).
-    private quote(line: string, off: number, lineEnd: number, i: number): number {
-        const m = RE.quote.exec(line);
+    private quote({ i, text, off, end }: Row): number {
+        const m = RE.quote.exec(text);
         if (!m) return 0;
         const p = m[0].length;
         const depth = (m[0].match(/>/g) ?? []).length;
-        this.apply('quote', off, lineEnd);
-        if (depth >= 2) this.apply(depth >= 3 ? 'quote3' : 'quote2', off, lineEnd);
+        this.apply('quote', off, end);
+        if (depth >= 2) this.apply(depth >= 3 ? 'quote3' : 'quote2', off, end);
         this.apply('marker', off, off + p);
         this.hide(off, off + p, i, i);
         return p;
     }
 
     // Text after the quote prefix (length p), which may be a list item: "> - item".
-    private body(i: number, off: number, lineEnd: number, p: number): void {
-        const line = this.lines[i];
-        const rest = line.slice(p);
+    private body({ i, text, off, end }: Row, p: number): void {
+        const rest = text.slice(p);
         const m = RE.list.exec(rest);
         if (!m) { this.inline(off + p, rest, i); return; }
         const bs = off + p + m[1].length;
@@ -437,17 +436,27 @@ class LineParser {
         const q = p + m[0].length;
         // Continuation lines (from wrapping) line up with the item text. In a quote
         // the left margin is already set by the quote tag, so it is skipped.
-        const hanging = p === 0 ? listIndentFor(this.tags) : undefined;
-        if (hanging && lineEnd > off) {
+        const hanging = p === 0 ? this.indent : undefined;
+        if (hanging && end > off) {
             const tag = hanging.tag(m[1], m[2], m[3], m[4]?.slice(0, 3) ?? '', m[4]?.slice(3) ?? '');
-            this.spans[this.row].push([tag, 0, this.toCp(lineEnd) - this.rowStart]);
+            this.spans[this.row].push([tag, 0, this.toCp(end) - this.rowStart]);
         }
         if (m[4]) {
             const ts = off + p + m[1].length + m[2].length + m[3].length;
             const checked = /x/i.test(m[4]);
             this.apply(checked ? 'taskdone' : 'task', ts, ts + 3);
-            if (checked) this.apply('done', off + q, lineEnd);
+            if (checked) this.apply('done', off + q, end);
         }
-        this.inline(off + q, line.slice(q), i);
+        this.inline(off + q, text.slice(q), i);
     }
+}
+
+// The line being parsed: its index, text, and UTF-16 offsets of its start and end in the parsed range;
+// nl = 1 when a newline follows (not on the last line).
+interface Row {
+    i: number;
+    text: string;
+    off: number;
+    end: number;
+    nl: number;
 }
