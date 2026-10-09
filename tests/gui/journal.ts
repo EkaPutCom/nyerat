@@ -116,9 +116,8 @@ export function journalTests(c: GuiContext): void {
         const { win } = open();
         const before = readActivity(ws, today).length;
         const run = win.harness.orchestrator.queue.add({ board: board, card: 'Fix checkout @pi', title: 'Fix checkout', agent: 'pi', project: 'shop', folder: '/tmp/shop', prompt: '', session: null });
-        win.harness.orchestrator.queue.end(run, 'done');
         const result: HarnessResult = { ok: true, summary: 'Done', error: null, cost: 0, tokens: 0, sessionId: null };
-        run.result = result;
+        win.harness.orchestrator.queue.end(run, 'done', result);
         const host = (win.harness.orchestrator as unknown as { host: { changed: (r: typeof run, m: string | null) => void } }).host;
         host.changed(run, null);
         host.changed(run, null);

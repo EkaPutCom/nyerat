@@ -400,11 +400,14 @@ export interface Run {
     folder: string;         // project folder; one harness per folder at a time
     prompt: string;
     session: string | null; // the harness session being continued (a reply after finishing), null = new session
-    status: RunStatus;
-    ask: HarnessAsk | null; // what is awaited from the user while the status is 'waiting'
+    // Changed only through RunQueue (wait, resume, end), so the status, the question, and the result stay consistent.
+    readonly status: RunStatus;
+    readonly ask: HarnessAsk | null; // what is awaited from the user while the status is 'waiting'
     trace: AgentTrace;
-    result: HarnessResult | null;
+    readonly result: HarnessResult | null;
 }
+
+type MutableRun = { -readonly [K in keyof Run]: Run[K] };
 
 // A project folder is worked on by only one harness at a time so they do not overwrite each other; other cards wait.
 export class RunQueue {
@@ -429,14 +432,31 @@ export class RunQueue {
         return run && isActive(run.status) ? run : null;
     }
 
-    // Mark finished, then return the next run in the same folder (already marked working), if any.
-    end(run: Run, status: 'done' | 'failed' | 'stopped'): Run | null {
+    // The harness asks the user something; the run waits (its process stays alive and keeps the folder).
+    wait(run: Run, ask: HarnessAsk): void {
+        const r = run as MutableRun;
+        r.status = 'waiting';
+        r.ask = ask;
+    }
+
+    // The question was answered, skipped, or timed out: the harness works again.
+    resume(run: Run): void {
+        const r = run as MutableRun;
+        r.status = 'working';
+        r.ask = null;
+    }
+
+    // Mark finished (with the harness result, if it ran), then return the next run in the same folder (already
+    // marked working), if any.
+    end(run: Run, status: 'done' | 'failed' | 'stopped', result: HarnessResult | null = run.result): Run | null {
+        const r = run as MutableRun;
         const wasWorking = run.status === 'working' || run.status === 'waiting';
-        run.status = status;
-        run.ask = null;
+        r.status = status;
+        r.ask = null;
+        r.result = result;
         if (!wasWorking) return null;   // cancelling from the queue does not give a turn: that folder is still being worked on by another
-        const next = this.runs.find(r => r.folder === run.folder && r.status === 'queued');
-        if (next) next.status = 'working';
+        const next = this.runs.find(other => other.folder === run.folder && other.status === 'queued');
+        if (next) (next as MutableRun).status = 'working';
         return next ?? null;
     }
 

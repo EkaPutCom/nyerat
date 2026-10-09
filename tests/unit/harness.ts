@@ -251,7 +251,11 @@ export function harnessTests(): void {
         eq(q.find('/p.md', 'B')?.status, 'failed');
         const again = q.add({ ...base, card: 'B', folder: '/a' });
         eq(q.find('/p.md', 'B'), again, 'an active run takes precedence');
-        again.status = 'waiting';
+        q.wait(again, { kind: 'confirm', id: 'x', title: 'Allow?', message: '', options: [], prefill: '', timeout: null });
+        eq(again.status, 'waiting');
+        q.resume(again);
+        eq([again.status, again.ask], ['working', null], 'resume clears the question');
+        q.wait(again, { kind: 'confirm', id: 'y', title: 'Allow?', message: '', options: [], prefill: '', timeout: null });
         eq(q.add({ ...base, card: 'E', folder: '/a' }).status, 'queued', 'a run waiting for an answer still holds the folder');
         eq(q.active('/p.md', 'B'), again);
         eq(q.end(again, 'done')?.card, 'E', 'finishing the wait → the next turn');
