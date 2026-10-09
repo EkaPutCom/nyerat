@@ -175,14 +175,11 @@ function mergeMarkers(old: Marker[], part: Marker[], startLine: number, afterOld
         part.map(([a, b, first, last, line]): Marker => [a + base, b + base, first + startLine, last + startLine, line + startLine]));
 }
 
-// Only keep the lines of the current document, not the whole edit history. The cache
-// holds relative offsets; offsets and block context are recomputed after the text shifts.
+// The last parse of the whole document, updated by re-parsing only the lines around an edit.
 export class HighlightCache {
     private snapshot: Parsed | null = null;
     parsedLines = 0;
-    private previous = new Map<string, CachedLine>();
-    private current = new Map<string, CachedLine>();
-    private length = 0;
+    private readonly lineCache = new LineCache();
 
     update(buffer: Gtk.TextBuffer, tags: Tags, edited?: [number, number] | null): Parsed {
         const old = this.snapshot;
@@ -204,7 +201,7 @@ export class HighlightCache {
 
     private full(buffer: Gtk.TextBuffer, tags: Tags): Parsed {
         const [start, end] = buffer.get_bounds();
-        const result = parseLines(buffer.get_text(start, end, true).split('\n'), tags, this);
+        const result = parseLines(buffer.get_text(start, end, true).split('\n'), tags, this.lineCache);
         this.parsedLines = result.lines.length;
         return this.snapshot = result;
     }
@@ -213,13 +210,24 @@ export class HighlightCache {
     // while the part ends inside an open code block, expand geometrically so paragraphs are not re-parsed one by one.
     private parseRange(lines: string[], old: Parsed, tags: Tags, startLine: number, endLine: number, shift: number): { part: Parsed; endLine: number } {
         for (;;) {
-            const part = parseLines(lines.slice(startLine, endLine + shift + 1), tags, this);
+            const part = parseLines(lines.slice(startLine, endLine + shift + 1), tags, this.lineCache);
             this.parsedLines += part.lines.length;
             if (endLine === old.lines.length - 1 || !part.codeBlocks.some(b => !b.closed)) return { part, endLine };
             const next = lowerBound(old.checkpoints, endLine + Math.max(16, endLine - startLine + 1));
             endLine = old.checkpoints[next] ?? old.lines.length - 1;
         }
     }
+
+}
+
+// Parse results per line text and block context, so an unchanged line is not parsed again. Only the lines of the
+// current document are kept, not the whole edit history: a parse puts the lines it sees into a new generation
+// (begin … end) and the older one is dropped. The cache holds relative offsets; offsets and block context are
+// recomputed after the text shifts.
+export class LineCache {
+    private previous = new Map<string, CachedLine>();
+    private current = new Map<string, CachedLine>();
+    private length = 0;
 
     begin(): void { this.current = new Map(); this.length = 0; }
     get(key: string): CachedLine | undefined { return this.current.get(key) ?? this.previous.get(key); }
@@ -237,7 +245,7 @@ export function highlight(buffer: Gtk.TextBuffer, tags: Tags, tagger: LineTagger
     return result;
 }
 
-function parseLines(lines: string[], tags: Tags, cache: HighlightCache): Parsed {
+function parseLines(lines: string[], tags: Tags, cache: LineCache): Parsed {
     return new LineParser(lines, tags, cache).parse();
 }
 
@@ -262,7 +270,7 @@ class LineParser {
     private row = 0;
     private rowStart = 0;
 
-    constructor(private readonly lines: string[], private readonly tags: Tags, private readonly cache: HighlightCache) {
+    constructor(private readonly lines: string[], private readonly tags: Tags, private readonly cache: LineCache) {
         this.text = lines.join('\n');
         this.toCp = makeCpMap(this.text);
         this.spans = lines.map(() => []);

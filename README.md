@@ -521,6 +521,8 @@ The code is divided into layers. Each layer may only use the layers below it, ne
         ├─ ui/*            interface components
         ├─ editor/*        the editor engine
         │    └─ markdown/* Markdown rules (no GTK)
+        ├─ orchestrator.ts runs harness processes (pi) for window/harness.ts (GLib, no GTK)
+        │    └─ agent/harness.ts  prompts, RPC, the pi stream reader, the run queue
         ├─ agent/*         manuscript context and model client (no GTK)
         └─ settings.ts, files.ts, workspace.ts, git.ts, gitlog.ts, config.ts, colors.ts
 ```
@@ -530,6 +532,7 @@ The code is divided into layers. Each layer may only use the layers below it, ne
 - **`editor/`** knows nothing about files, menus, or the sidebar. `MarkdownView` only reports through callbacks (`onHighlighted`, `onCursorMoved`, `onMessage`).
 - **`ui/`** holds self-contained components. `Outline` does not know the editor; it only receives a list of headings and calls `onJump(line)` when clicked. `FileTree` is the same: it only displays folders and calls `onOpenFile(path)`; the window decides how to open the file (a new tab, switching to an existing tab, or reusing an empty document).
 - **`window.ts`** is the only place where components are connected to each other. For example: after highlighting, the editor calls `onHighlighted`, and then the window passes the headings to `Outline` and the text to `StatusBar`. The open documents (tabs, open/save, the Home tab, restoring tabs) are kept by `window/documents.ts`, which tells the window what must follow a document on screen through `DocumentsHost`. Features that span several components (the journal, harness runs, Home, applying agent changes, autosave) live in `window/*` controllers too; each receives a narrow host interface built by the window from closures, never `MainWindow` itself, so they do not import `window.ts`. `actions.ts` likewise types the window as `ActionHost`.
+- **`orchestrator.ts`** sits between `window/harness.ts` and `agent/harness.ts`: it spawns the harness process and moves cards, using the pure parts in `agent/` and translated strings, but no GTK and no widgets.
 - **Lower layers do not reach up.** `editor/` takes the `Palette` type from `colors.ts`, not from `ui/theme.ts`; `git.ts` takes the agent's Git request types from `gitlog.ts`, not from `agent/`.
 - **The rules are checked.** [`scripts/layers.mjs`](scripts/layers.mjs) runs in `npm run build` and `npm run typecheck` and fails on a forbidden import: GI or anything outside `markdown/` in `markdown/`, GTK or `ui/`/`editor/`/`window/` in `agent/`, `ui/`/`window/`/`agent/` in `editor/`, `window.ts` in `ui/`, `window/`, or `actions.ts`, and any upper layer in the base modules.
 - **Function complexity is checked too.** The same script parses `src/` and `scripts/` with the oxc parser that Vite already ships (`rolldown/parseAst`) and fails on a function whose cyclomatic complexity (counted like ESLint's `complexity` rule; nested functions on their own) is above 15 (lowered from 20 once every function met it). The functions that were above the limit have all been split, so `COMPLEXITY_ALLOWED` is empty; an exception listed there may not grow, and its entry has to go once the function is split.
